@@ -466,7 +466,8 @@ def extend_digest(digest, recipe, label, value):
 class Builder:
     # 'redact_patterns' is optional: most callers have no 'redact:'
     # section, and passing '[]' everywhere would be pure noise.
-    def __init__(self, distro, options, builderImage, redact_patterns=None):
+    def __init__(self, distro, options, builderImage, redact_patterns=None,
+                vault_defaults=None):
         self.builderImage = builderImage
         self.distro = distro
         self.options = options
@@ -527,6 +528,7 @@ class Builder:
         # Lazy: most builds sign nothing through the vault, and it starts
         # an ephemeral container (dev.DevVault) on first real use.
         self._vault_provider = None
+        self._vault_defaults = vault_defaults or {}
 
     # Cores for one package build: --parallel, or cores divided by how
     # many builds run at once.
@@ -546,9 +548,17 @@ class Builder:
     # One provider per Builder, not per call: an ephemeral dev instance
     # is a container, and for_build() starts a fresh one on every call.
     def _vault(self):
+        from seine import vault as _vault
         if self._vault_provider is None:
-            from seine import vault as _vault
-            self._vault_provider = _vault.for_build()
+            self._vault_provider = _vault.for_build(self._vault_defaults)
+        # Every Builder is its own instance (one per multiconfig group, at
+        # least), but for_build() hands back one process-wide dev vault --
+        # seeded from whichever Builder called it first. Fold this one's
+        # own defaults in every time, not just when *this* instance had
+        # already seen it before (same merge as BuildCmd._vault_lookup).
+        defaults = getattr(self._vault_provider, "_defaults", None)
+        if type(defaults) == type({}) and defaults is not self._vault_defaults:
+            defaults.update(self._vault_defaults)
         return self._vault_provider
 
     # Re-signs every module this build produced and fixes up .changes

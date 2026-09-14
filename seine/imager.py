@@ -811,7 +811,15 @@ class Imager:
     # timestamp is pinned to the build epoch, not faked.
     def _sign_uki_vault(self, workdir, epoch, name):
         from seine import vault as _vault
-        provider = _vault.for_build()
+        own_defaults = self.source._vault_defaults()
+        provider = _vault.for_build(own_defaults)
+        # for_build() only seeds a dev instance from whichever caller
+        # started it first -- a package build's own vault use, earlier in
+        # this same run, usually gets there before the imager does. Fold
+        # this image's own defaults in too (same as BuildCmd._vault_lookup).
+        defaults = getattr(provider, "_defaults", None)
+        if type(defaults) == type({}) and defaults is not own_defaults:
+            defaults.update(own_defaults)
         with open(os.path.join(workdir, "rebuilt.efi"), "rb") as f:
             signed = provider.sbsign_sign(name, f.read(), epoch)
         with open(os.path.join(workdir, "signed.efi"), "wb") as f:
