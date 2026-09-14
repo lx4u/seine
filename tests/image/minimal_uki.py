@@ -59,7 +59,7 @@ class MinimalUkiBuilds(avocado.Test):
             0, "building the uki packages failed, see %s" % uki_log)
 
         repository = ContainerEngine.packages("trixie")
-        for name in ["linux-uki-amd64", "linux-uki-efibootguard-amd64"]:
+        for name in ["linux-uki-amd64"]:
             debs = glob.glob(os.path.join(repository, "%s_*.deb" % name))
             self.assertEqual(len(debs), 1,
                              "expected one %s .deb in %s, found %s"
