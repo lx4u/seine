@@ -707,7 +707,7 @@ class CarriedCache(avocado.Test):
         # a root file-system this machine made for itself, and are current
         # all the same -- which is the whole point of what an image records
         # about its base.
-        for kind in ["bootstrap/", "builder/", "imager-kernel/", "transport-"]:
+        for kind in ["bootstrap/", "builder/", "imager-appliance/", "transport-"]:
             self.assertTrue(any(kind in name for name in images),
                             "no %s image was carried, only %s"
                             % (kind.rstrip("/"), sorted(images)))
