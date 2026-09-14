@@ -600,6 +600,7 @@ class EveryImageSaysWhatItIs(avocado.Test):
         from seine.transport_bootstrap import TransportBootstrap
         from seine.utils import BUILDER_KIND, IMAGER_KIND, ROOTFS_KIND
         from seine.utils import SOURCE_KIND, TOOLING_KIND, TRANSPORT_KIND
+        from seine.utils import VAULT_KIND
 
         for cls, kind in [(HostBootstrap, TOOLING_KIND),
                           (TargetBootstrap, ROOTFS_KIND),
@@ -615,7 +616,7 @@ class EveryImageSaysWhatItIs(avocado.Test):
         # is what its base was built from and not which bytes it came out as.
         self.assertEqual(sorted(CARRIED_KINDS),
                          sorted([TOOLING_KIND, BUILDER_KIND, IMAGER_KIND,
-                                 TRANSPORT_KIND, SOURCE_KIND]))
+                                 TRANSPORT_KIND, SOURCE_KIND, VAULT_KIND]))
         self.assertNotIn(ROOTFS_KIND, CARRIED_KINDS)
 
 # Which of a storage's images go into a tar, decided by what each says it is.

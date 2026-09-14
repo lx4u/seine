@@ -28,6 +28,7 @@ from seine.utils import TRANSPORT_KIND
 from seine.utils import ROOTFS_KIND
 from seine.utils import TOOLING_KIND
 from seine.utils import SOURCE_KIND
+from seine.utils import VAULT_KIND
 
 # Cache seine keeps between builds. Not needed for a build to succeed,
 # only saves repeated work, so removing any of it is safe.
@@ -74,7 +75,8 @@ INDEX_MEMBER = "index.json"
 # A base image with a registry is carried too, so import works with no
 # route to that registry; one with neither kind nor registry is cheap to
 # rebuild and skipped.
-CARRIED_KINDS = [TOOLING_KIND, BUILDER_KIND, IMAGER_KIND, TRANSPORT_KIND, SOURCE_KIND]
+CARRIED_KINDS = [TOOLING_KIND, BUILDER_KIND, IMAGER_KIND, TRANSPORT_KIND,
+                 SOURCE_KIND, VAULT_KIND]
 
 def images(with_image_rootfs=False):
     named = []

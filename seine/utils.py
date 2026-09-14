@@ -367,6 +367,7 @@ ROOTFS_KIND = "rootfs"        # what mmdebstrap made of the archive
 IMAGER_KIND = "imager"        # the kernel libguestfs boots, and its appliance
 TRANSPORT_KIND = "transport"  # a baseline plus what ansible needs
 SOURCE_KIND = "source"        # host-arch, dpkg-dev -- where sources are pulled
+VAULT_KIND = "vault"          # signing plugins on top of upstream openbao
 
 # sbuild's user-namespace backend needs no root, but nesting it inside
 # podman's own user namespace needs extra options a plain 'podman run'
