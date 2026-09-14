@@ -2,10 +2,13 @@
 # SPDX-License-Identifier Apache-2.0
 
 # A real-PC-sized disk chaining initrd -> UKI -> rootfs in one 'seine
-# build' call (multiconfig: after:, docs/building.md). Signed with a
-# throwaway test key ('keys/'); Secure Boot still needs to be off.
+# build' call (multiconfig: after:, docs/building.md). Secure Boot
+# still needs to be off; the UKI is signed through a vault key.
 #   seine build examples/pc-uki-image/main.yaml
 #   dd if=build/deploy/trixie/pc-uki.img of=/dev/sdX bs=4M status=progress conv=fsync
+
+requires:
+    - secure-boot-keys
 
 distribution:
     release: trixie
@@ -33,8 +36,7 @@ image:
     filename: pc-uki.img
     table: gpt
     secure-boot:
-        private-key: examples/pc-uki-image/keys/db.key
-        public-cert: examples/pc-uki-image/keys/db.crt
+        private-key: vault:pc-uki-secureboot
     partitions:
         - label: esp
           type: vfat
