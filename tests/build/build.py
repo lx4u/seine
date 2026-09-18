@@ -113,7 +113,7 @@ class RecordedDigestSurvivesTaskMutation(avocado.Test):
         # Stands in for what the real 'disk' task does mid-build, without
         # a real disk or a real partition table.
         def mutating_run(steps, jobs=1, resources=None, verbose=False,
-                         logs=None, display=None):
+                         logs=None, display=None, echo=False):
             self.build.image.partitionHandler.compute_sizes()
             for step in steps:
                 step.started = step.ended = time.time()
@@ -197,7 +197,7 @@ class AnImageLessSpecificationWithSomethingToBuild(avocado.Test):
         build = self.parsed()
 
         def fake_run(steps, jobs=1, resources=None, verbose=False,
-                    logs=None, display=None):
+                    logs=None, display=None, echo=False):
             for step in steps:
                 step.started = step.ended = time.time()
                 step.failed = False

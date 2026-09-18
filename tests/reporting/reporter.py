@@ -65,7 +65,7 @@ class ImageBuildTakesAReporter(avocado.Test):
         self.calls = []
 
         def fake_run(steps, jobs=1, resources=None, verbose=False,
-                    logs=None, display=None):
+                    logs=None, display=None, echo=False, **kwargs):
             for step in steps:
                 if display is not None:
                     display.started(step.name)
@@ -74,7 +74,7 @@ class ImageBuildTakesAReporter(avocado.Test):
                 if display is not None:
                     display.finished(step.name, failed=False)
             self.calls.append({"jobs": jobs, "verbose": verbose,
-                               "logs": logs, "display": display})
+                               "logs": logs, "display": display, "echo": echo})
         tasks.run = fake_run
 
         build = BuildCmd()
@@ -90,12 +90,14 @@ class ImageBuildTakesAReporter(avocado.Test):
         self.assertIsInstance(call["display"], Display)
         self.assertIsNotNone(call["logs"])
 
-    # '-v', one job, no reporter: the one combination that has never
-    # written a log directory, and still does not.
-    def test_verbose_single_job_still_gets_no_logs(self):
+    # '-v', one job, no reporter: logs are written and echo is enabled
+    # for live terminal output.
+    def test_verbose_single_job_enables_echo_and_logs(self):
         self.build.options["verbose"] = True
         self.build.build()
-        self.assertIsNone(self.calls[-1]["logs"])
+        call = self.calls[-1]
+        self.assertIsNotNone(call["logs"])
+        self.assertTrue(call["echo"])
 
     # A given reporter is what 'tasks.run()' is handed, and it always
     # gets a log directory -- a reporter has no terminal of its own to

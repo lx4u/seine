@@ -343,10 +343,9 @@ def run(groups_files, options):
         release = build.image.spec["distribution"]["release"]
         cache_index.Index().hit(cache_index.DOWNLOADS, release)
 
-    logs = None
-    if verbose == False or jobs > 1:
-        logs = _logs(groups_files)
-        print("output under %s" % logs)
+    logs = _logs(groups_files)
+    print("output under %s" % logs)
+    echo = verbose
 
     display = None
     if verbose == False:
@@ -381,7 +380,7 @@ def run(groups_files, options):
             with machine, (display if display is not None
                            else contextlib.nullcontext()):
                 tasks.run(all_tasks, jobs=jobs, resources=resources, logs=logs,
-                         verbose=verbose, display=display)
+                         verbose=verbose, display=display, echo=echo)
             ok = True
         finally:
             analyze.record(all_tasks, combined_digest,
