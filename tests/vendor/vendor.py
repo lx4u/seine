@@ -1378,16 +1378,16 @@ class RealShellBuilder:
         where = (volumes or [(None, None)])[0][0]
         subprocess.run(args, cwd=where, check=True)
 
-def _build_deb(name, version, where):
+def _build_deb(name, version, where, arch="amd64"):
     staging = tempfile.mkdtemp(prefix="seine-tests-deb-")
     try:
         os.makedirs(os.path.join(staging, "DEBIAN"))
         with open(os.path.join(staging, "DEBIAN", "control"), "w") as f:
-            f.write("Package: %s\nVersion: %s\nArchitecture: amd64\n"
-                    "Maintainer: t <t@t>\nDescription: t\n" % (name, version))
+            f.write("Package: %s\nVersion: %s\nArchitecture: %s\n"
+                    "Maintainer: t <t@t>\nDescription: t\n" % (name, version, arch))
         subprocess.run(
             ["dpkg-deb", "--build", "--root-owner-group", staging,
-             os.path.join(where, "%s_%s_amd64.deb" % (name, version))],
+             os.path.join(where, "%s_%s_%s.deb" % (name, version, arch))],
             check=True, capture_output=True)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
@@ -1423,6 +1423,46 @@ class IndexBuildsAFlatListingCoveringBothComponents(avocado.Test):
                 flat = f.read()
             self.assertIn("Package: mainpkg", flat)
             self.assertIn("Package: extrapkg", flat)
+        finally:
+            shutil.rmtree(fetched, ignore_errors=True)
+            shutil.rmtree(deployed, ignore_errors=True)
+
+# index() used to hardcode 'binary-amd64' as the only per-suite index it
+# ever wrote, whatever architectures were actually vendored -- pool/main
+# holds every architecture's .debs mixed together, so that one file
+# silently carried arm64 entries too, and no 'binary-arm64/Packages' was
+# ever written for an arm64 apt client to find.
+class IndexBuildsAPerArchitectureBinaryIndex(avocado.Test):
+    def test(self):
+        from seine.vendor import index, repository, deploy_repository
+
+        suite = "index-arch-test-%d" % os.getpid()
+        fetched = repository(suite)
+        deployed = deploy_repository(suite)
+        try:
+            _build_deb("amdpkg", "1.0", fetched, arch="amd64")
+            _build_deb("armpkg", "1.0", fetched, arch="arm64")
+            sources = {
+                "amdpkg": {"version": "1.0", "files": [], "binaries": {
+                    "amdpkg": {"amd64": "1.0"}}},
+                "armpkg": {"version": "1.0", "files": [], "binaries": {
+                    "armpkg": {"arm64": "1.0"}}},
+            }
+            index(RealShellBuilder(), suite, None, sources,
+                 {"amdpkg", "armpkg"})
+
+            with open(os.path.join(
+                    deployed, "dists", suite, "main",
+                    "binary-amd64", "Packages")) as f:
+                amd64 = f.read()
+            with open(os.path.join(
+                    deployed, "dists", suite, "main",
+                    "binary-arm64", "Packages")) as f:
+                arm64 = f.read()
+            self.assertIn("Package: amdpkg", amd64)
+            self.assertNotIn("Package: armpkg", amd64)
+            self.assertIn("Package: armpkg", arm64)
+            self.assertNotIn("Package: amdpkg", arm64)
         finally:
             shutil.rmtree(fetched, ignore_errors=True)
             shutil.rmtree(deployed, ignore_errors=True)

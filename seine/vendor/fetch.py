@@ -247,11 +247,21 @@ def index(builder, suite, signer, sources, direct):
         shutil.rmtree(where, ignore_errors=True)
         os.makedirs(where, exist_ok=True)
 
+        # Every architecture actually vendored, not just amd64 -- a
+        # binary-only-fetched arch (say, arm64 with '--architecture
+        # arm64', or both by default) needs its own 'binary-<arch>'
+        # index, or apt for that arch finds nothing there at all.
+        archs = sorted({arch for entry in sources.values()
+                        for per_arch in entry.get("binaries", {}).values()
+                        for arch in per_arch})
+
         # Always create pool/main, pool/extra and dists/<suite>/main, dists/<suite>/extra
         # even if one is empty -- main/extra are always present.
         for comp in ["main", "extra"]:
             os.makedirs(os.path.join(where, "pool", comp), exist_ok=True)
-            os.makedirs(os.path.join(where, "dists", suite, comp, "binary-amd64"), exist_ok=True)
+            for arch in archs:
+                os.makedirs(os.path.join(where, "dists", suite, comp,
+                                         "binary-%s" % arch), exist_ok=True)
             os.makedirs(os.path.join(where, "dists", suite, comp, "source"), exist_ok=True)
 
         # Build binpkg -> (owning source, per_arch version dict)
@@ -318,9 +328,18 @@ def index(builder, suite, signer, sources, direct):
 
         script = ""
         for comp in ["main", "extra"]:
-            script += ("apt-ftparchive packages pool/{comp} > dists/{suite}/{comp}/binary-amd64/Packages && "
-                       "gzip -9 -c dists/{suite}/{comp}/binary-amd64/Packages > dists/{suite}/{comp}/binary-amd64/Packages.gz && "
-                       "apt-ftparchive sources pool/{comp} > dists/{suite}/{comp}/source/Sources && "
+            for arch in archs:
+                # '--arch' keeps this one Packages file to *_arch.deb and
+                # *_all.deb -- pool/{comp} holds every architecture mixed
+                # together, so without it every binary-<arch>/Packages
+                # would end up identical and full of debs apt never asked
+                # that arch for.
+                script += ("apt-ftparchive --arch {arch} packages pool/{comp} "
+                           "> dists/{suite}/{comp}/binary-{arch}/Packages && "
+                           "gzip -9 -c dists/{suite}/{comp}/binary-{arch}/Packages "
+                           "> dists/{suite}/{comp}/binary-{arch}/Packages.gz && ").format(
+                               comp=comp, suite=suite, arch=arch)
+            script += ("apt-ftparchive sources pool/{comp} > dists/{suite}/{comp}/source/Sources && "
                        "gzip -9 -c dists/{suite}/{comp}/source/Sources > dists/{suite}/{comp}/source/Sources.gz && ").format(
                            comp=comp, suite=suite)
         # Flat Packages/Sources over 'pool' itself (recurses both
