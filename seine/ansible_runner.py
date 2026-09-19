@@ -309,8 +309,12 @@ class AnsibleContainerRunner:
                     "/var/log/alternatives.log 2>/dev/null; true"])
         # Must be gone, not just empty: systemd only treats the next
         # boot as a real first boot (and generates sshd host keys) if
-        # this file is missing.
-        self._exec(["sh", "-c", "rm -f /etc/machine-id 2>/dev/null; true"])
+        # this file is missing. dbus keeps its own copy, written by its
+        # postinst when /etc/machine-id doesn't exist yet -- a fresh
+        # random ID every build, so it must go too.
+        self._exec(["sh", "-c",
+                    "rm -f /etc/machine-id /var/lib/dbus/machine-id "
+                    "2>/dev/null; true"])
         # _seed_downloads() copied every .deb the shared per-release cache
         # ever held into here, saved back by _save_downloads() already --
         # a build cache, not part of the image, else the shipped rootfs

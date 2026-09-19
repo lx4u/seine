@@ -485,7 +485,7 @@ class TheHypervisorFollowsTheArchitecture(avocado.Test):
     class Source:
         def __init__(self, spec):
             self.spec = spec
-            self.options = {"keep": False, "verbose": False}
+            self.options = {"keep": False, "verbose": False, "reproducible": False}
 
     def setUp(self):
         # Imported here rather than at the top: seine.imager needs

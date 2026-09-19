@@ -94,8 +94,8 @@ class ReproducibleDiskImage:
         second = self.space("second")
         spec = self.specification()
 
-        self.seine(first, ["build", "-v", "--jobs", "2"] + spec, "build-first")
-        self.seine(second, ["build", "-v", "--jobs", "2"] + spec, "build-second")
+        self.seine(first, ["build", "-v", "--reproducible", "--jobs", "2"] + spec, "build-first")
+        self.seine(second, ["build", "-v", "--reproducible", "--jobs", "2"] + spec, "build-second")
 
         one, two = self.image(first), self.image(second)
         with open(one, "rb") as f:

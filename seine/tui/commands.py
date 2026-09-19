@@ -148,8 +148,9 @@ def _packages(app, argv):
     """rebuilt-from-source packages, and what the last SBOM found"""
     _show_over_active_spec(app, argv, "packages")
 
-# Only -j/--jobs= today, not the whole of BuildCmd.LONG_OPTIONS: the
-# rest either means something else here or isn't wired up yet.
+# Only -j/--jobs= and --reproducible today, not the whole of
+# BuildCmd.LONG_OPTIONS: the rest either means something else here or
+# isn't wired up yet.
 def _build(app, argv):
     """build the active specification
 
@@ -159,18 +160,22 @@ def _build(app, argv):
     specifications ('/use a -- b') aren't driven from here yet.
     """
     try:
-        opts, args = getopt.getopt(argv, "j:", ["jobs="])
+        opts, args = getopt.getopt(argv, "j:", ["jobs=", "reproducible"])
     except getopt.GetoptError as e:
         raise CommandError(str(e))
     jobs = None
+    reproducible = None
     for o, a in opts:
-        # Same validation BuildCmd.main() applies to '-j'/'--jobs' on the CLI.
-        try:
-            jobs = int(a)
-        except ValueError:
-            raise CommandError("--jobs expects a number")
-        if jobs < 1:
-            raise CommandError("--jobs shall be at least 1")
+        if o in ("-j", "--jobs"):
+            # Same validation BuildCmd.main() applies to '-j'/'--jobs' on the CLI.
+            try:
+                jobs = int(a)
+            except ValueError:
+                raise CommandError("--jobs expects a number")
+            if jobs < 1:
+                raise CommandError("--jobs shall be at least 1")
+        elif o == "--reproducible":
+            reproducible = True
     if len(args) > 0:
         _use(app, args)
     if not app.context.active:
@@ -191,6 +196,8 @@ def _build(app, argv):
     build = app.context.builds[0]
     if jobs is not None:
         build.options["jobs"] = jobs
+    if reproducible is not None:
+        build.options["reproducible"] = reproducible
     # TUI builds always write an SBOM: ai.py's packages/installed-packages
     # tools need one to read.
     build.options["sbom"] = True
@@ -206,6 +213,8 @@ def _build(app, argv):
 # '/help's OPTIONS section for '/build'; see Command.options.
 _build_options = (
     ("-j N, --jobs=N", "Override the parallel job count for this run only."),
+    ("--reproducible", "Normalize disk image partitions so two builds of "
+     "the same spec give a byte-identical image. Slower."),
 )
 
 def _vendor(app, argv):
@@ -749,10 +758,10 @@ REGISTRY = {
 REGISTRY["q"] = REGISTRY["quit"]
 
 # What Tab/the palette suggest for a command's flags. 'build' only
-# offers --jobs= since that's all _build() actually parses.
+# offers what _build() actually parses.
 OPTIONS = {
     "plan":  BuildCmd.LONG_OPTIONS,
-    "build": ["jobs="],
+    "build": ["jobs=", "reproducible"],
     "issues": ["filter=", "min-urgency=", "min-severity=", "rescan"],
 }
 

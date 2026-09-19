@@ -74,6 +74,7 @@ class BuildCmd(Cmd):
         "packages-only",
         "parallel=",
         "rebuild",
+        "reproducible",
         "require-hashes",
         "resource=",
         "rootfs-only",
@@ -93,7 +94,8 @@ class BuildCmd(Cmd):
                          "debug": False, "dry_run": False,
                          "jobs": settings.load().get("jobs") or 1, "keep": False,
                          "packages_only": False, "parallel": None,
-                         "rebuild": False, "require_hashes": False,
+                         "rebuild": False, "reproducible": False,
+                         "require_hashes": False,
                          "resources": settings.load().get("resources"),
                          "rootfs_only": False,
                          "sbom": False, "sign_key": None, "spec": True,
@@ -1236,6 +1238,8 @@ class BuildCmd(Cmd):
                     sys.exit(1)
             elif o in ("--rebuild"):
                 self.options["rebuild"] = True
+            elif o in ("--reproducible"):
+                self.options["reproducible"] = True
             elif o in ("--sign-key"):
                 self.options["sign_key"] = a
             elif o in ("--sbom"):
@@ -1377,6 +1381,10 @@ Flags:
                         same thing
   --rebuild             rebuild the packages of the 'packages' section even if
                         they were built before
+  --reproducible        normalize disk image partitions so two builds of the
+                        same spec produce byte-identical images. Off by
+                        default: slower, only CI/release builds usually
+                        need it
   --require-hashes      refuse to build when a source is fetched over http with
                         no sha256 to check it against. Reported when the
                         specification is parsed, before anything is downloaded

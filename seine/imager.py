@@ -147,6 +147,7 @@ class Imager:
         self.source = source
         self.keep = source.options["keep"]
         self.verbose = source.options["verbose"]
+        self.reproducible = source.options["reproducible"]
 
     # Keeps only entries for files that made it into the tarball: getfattr
     # walked the live container filesystem, which still had packages later
@@ -292,10 +293,17 @@ class Imager:
             elif ro:
                 what = "PARTLABEL=%s" % m["label"]
             elif m["type"] in ("vfat", "msdos"):
-                # Not g.vfs_uuid(dev): fstab is written before the FAT
-                # rebuild that actually sets this serial on the device.
-                serial = self._fat_serial(m.get("label"), dev)
-                what = "UUID=%s-%s" % (serial[:4], serial[4:])
+                if self.reproducible:
+                    # Not g.vfs_uuid(dev): fstab is written before the
+                    # FAT rebuild that actually sets this serial on
+                    # the device.
+                    serial = self._fat_serial(m.get("label"), dev)
+                    what = "UUID=%s-%s" % (serial[:4], serial[4:])
+                else:
+                    # No FAT rebuild this run (--reproducible is off):
+                    # mkfs.vfat's own serial is what actually lands on
+                    # the device, so fstab has to name that instead.
+                    what = "UUID=%s" % g.vfs_uuid(dev)
             else:
                 what = "UUID=%s" % g.vfs_uuid(dev)
             options = "defaults"
@@ -327,7 +335,7 @@ class Imager:
         # fit in root's own auto-sized slack -- use the scratch disk,
         # mounted only when create() actually added one.
         scratch_mounted = False
-        if ext_mounts or fat_mounts:
+        if self.reproducible and (ext_mounts or fat_mounts):
             # Unmounted again by this source's own g.umount_all(), same as
             # every other mount here -- freshly (re)mounted per source.
             g.mkdir_p(SCRATCH_MOUNT)
@@ -343,12 +351,13 @@ class Imager:
             # part of the disk image.
             g.sh("find %s -xdev -newermt '@%d' -exec touch --no-dereference "
                  "--date=@%d {} +" % (m["_prefix"], started, epoch))
-            if m["type"] in ("vfat", "msdos"):
+            if self.reproducible and m["type"] in ("vfat", "msdos"):
                 self._normalize_fat_tree(g, m, mount_devices[id(m)], staging=staging)
         if scratch_mounted and not ext_mounts:
             g.umount(SCRATCH_MOUNT)
-        for m in sorted(ext_mounts, key=lambda m: m["_depth"], reverse=True):
-            self._normalize_ext_mount(g, m, mounts, mount_devices)
+        if self.reproducible:
+            for m in sorted(ext_mounts, key=lambda m: m["_depth"], reverse=True):
+                self._normalize_ext_mount(g, m, mounts, mount_devices)
 
     def _normalize_ext_mount(self, g, m, mounts, mount_devices):
         dev = mount_devices[id(m)]
@@ -1098,7 +1107,8 @@ class Imager:
                         g, mounts, mount_devices, part_index, hash_part_for)
                     self._print_disk_usage(g, ph, mounts, built_sizes)
                     g.umount_all()
-                    self._pin_ext_mtimes(g, mounts, mount_devices)
+                    if self.reproducible:
+                        self._pin_ext_mtimes(g, mounts, mount_devices)
 
                 g.shutdown()
                 g.close()
