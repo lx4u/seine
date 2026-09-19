@@ -616,7 +616,10 @@ class Imager:
         for m in mount_order:
             if m["type"] in ("vfat", "msdos", "fat", "fat32"):
                 continue
-            g.sh("setfiles -m%s %s %s" % (
+            # -v output can be huge and g.sh() ships it back over the
+            # guestfsd RPC, which has a size limit. Drop stdout, keep
+            # stderr so errors still show up.
+            g.sh("setfiles -m%s %s %s >/dev/null" % (
                 " -v" if self.verbose else "", se_contexts, m["_prefix"]))
 
     # 'None' means no kernel -- not every 'multiconfig:' group needs one.
