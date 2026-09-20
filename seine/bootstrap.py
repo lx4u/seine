@@ -118,8 +118,8 @@ class HostBootstrap(Bootstrap):
     # invalidates the cached image; None outside offline builds.
     # 'force_online': set by vendor.py's own fetch pipeline, which must
     # build this image without going through the offline vendor path it
-    # exists to fill. Gets its own cache tag (see defaultName()) so it
-    # never collides with a plain offline HostBootstrap.
+    # exists to fill. Gets its own "vendor" cache tag (see defaultName())
+    # so it never collides with a plain online or offline HostBootstrap.
     def __init__(self, distro, options, vendor_digest=None, host_architecture=None,
                 force_online=False):
         self.vendor_digest = vendor_digest
@@ -162,16 +162,23 @@ class HostBootstrap(Bootstrap):
             _qemu_fetch(self.host_architecture, emulated),
             APT_CLEANUP), options=build_options)
 
-    # base_feed() alone: a second feed would only cost this image its
-    # sharing with specs that differ there, and nothing here needs
-    # backports or -security anyway.
+    # Nothing installed here ships (see HOST_BOOTSTRAP_SCRIPT), so an
+    # online build keeps the base image's own archive. Offline has no
+    # other source, so it must switch to the vendor mount instead.
     def _sources(self):
-        return apt_sources_dockerfile(self.distro, [base_feed(self.distro)],
-                                      offline=self._offline())
+        if not self._offline():
+            return "true"
+        wipe = ("rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.sources "
+               "/etc/apt/sources.list.d/*.list")
+        switch = apt_sources_dockerfile(self.distro, [base_feed(self.distro)],
+                                        offline=True)
+        return f"{wipe} && {switch}"
 
     def defaultName(self):
-        return os.path.join("bootstrap", self.distro["source"], self.distro["release"],
-                            "vendor" if self.force_online else "all")
+        mode = "vendor" if self.force_online else \
+               "offline" if self._offline() else "online"
+        return os.path.join("bootstrap", self.distro["source"],
+                            self.distro["release"], mode)
 
 class TargetBootstrap(Bootstrap):
     # The root file-system itself, which is what an export leaves behind.
@@ -250,8 +257,9 @@ def _qemu_fetch(architecture, emulated=False):
         "cd / && rm -rf /qemu-extract"
     ) % wanted
 
-# Install ca-certificates from the base image's own sources first:
-# a pinned feed can use https, which apt cannot trust without it.
+# Everything installed here is disposable build tooling, not part of
+# the shipped image, so it never needs the spec's pinned feed: '{3}'
+# only does real work for an offline build, which has no other source.
 HOST_BOOTSTRAP_SCRIPT = """
 FROM {0}:{1} AS base
 {5}
@@ -259,8 +267,6 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,id={2},sharing=locked {4} 
      rm -f /etc/apt/apt.conf.d/docker-clean &&    \
      apt-get update -qqy &&                       \
      apt-get install -qqy --no-install-recommends ca-certificates && \
-     rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.sources \
-           /etc/apt/sources.list.d/*.list &&      \
      {3} &&                                       \
      apt-get update -qqy &&                       \
      apt-get install -qqy --no-install-recommends \

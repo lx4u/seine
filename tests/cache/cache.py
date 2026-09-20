@@ -833,7 +833,7 @@ class AnExportScopedToASpecification(Caches):
         from seine.cache import Wanted
         wanted = Wanted([[self.spec]])
         self.assertIn("builder/debian/bookworm-%s" % HOST_ARCH, wanted.images)
-        self.assertIn("bootstrap/debian/bookworm/all", wanted.images)
+        self.assertIn("bootstrap/debian/bookworm/online", wanted.images)
         self.assertNotIn("builder/debian/trixie-%s" % HOST_ARCH, wanted.images)
 
     def test_the_flag_belongs_to_export_alone(self):
