@@ -19,6 +19,9 @@ path_to_self = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
+from cryptography import x509
+
+from seine import pe_cert
 from seine import vault
 from seine.container import ContainerEngine
 from seine.imager import Imager
@@ -280,6 +283,17 @@ class VaultSbsign(avocado.Test):
                                   capture_output=True, text=True)
         self.assertEqual(verified.returncode, 0, verified.stderr)
         self.assertEqual(dev.sbsign_sign("db", data, epoch), signed)
+
+    def test_pe_cert_reads_the_same_signer_dev_vault_signed_with(self):
+        dev = DevVault()
+        self._devs.append(dev)
+        with open(EFI_FIXTURE, "rb") as f:
+            data = f.read()
+        signed = dev.sbsign_sign("db", data, 1767225600)
+        expected = x509.load_pem_x509_certificate(dev.sbsign_cert("db").encode())
+        found = pe_cert.extract_signer_cert(signed)
+        self.assertIsNotNone(found)
+        self.assertEqual(pe_cert.fingerprint(found), pe_cert.fingerprint(expected))
 
 
 class ImagerWiring(avocado.Test):
