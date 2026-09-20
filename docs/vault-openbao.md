@@ -167,8 +167,8 @@ bao kv put kv/accounts/root hash='<crypt sha512 hash>' password='<plaintext>'
 # kernel module signing (kernel.yaml: signing-key: vault:pc-uki-kernel-modules)
 echo '{"generate": {}}' | bao write seine-kmod/keys/pc-uki-kernel-modules -
 
-# UKI secure-boot signing (main.yaml: secure-boot.private-key: vault:pc-uki-secureboot)
-echo '{"generate": {}}' | bao write seine-sbsign/keys/pc-uki-secureboot -
+# UKI secure-boot signing (main.yaml: secure-boot.private-key: vault:uefi-secureboot)
+echo '{"generate": {}}' | bao write seine-sbsign/keys/uefi-secureboot -
 
 # apt repository signing (SEINE_SIGN_KEY=vault:pc-uki-repo)
 echo '{"generate": {"name": "seine pc-uki-image repo", "email": "seine-demo@example.invalid", "key_type": "rsa3072"}}' \
@@ -179,6 +179,17 @@ echo '{"generate": {"name": "seine pc-uki-image repo", "email": "seine-demo@exam
 (same shape, `{"import": {"key_pem": ..., "cert_pem": ...}}` or
 `{"import": {"private_key": ...}}` for pgp) to bring in a key you already
 hold rather than trusting the vault to mint one.
+
+`examples/minimal-uki` provisions the same way, one key for both its
+`extends: uki:` and `extends: uki-addon:` packages -- the addon
+inherits the UKI's `signing-key` unless it names its own. It shares
+its key's name with `examples/pc-uki-image`'s own image-level key, so
+composing the two ends up with one keypair for the whole boot chain:
+
+```
+# UKI + cmdline addon signing (main.yaml: signing-key: vault:uefi-secureboot)
+echo '{"generate": {}}' | bao write seine-sbsign/keys/uefi-secureboot -
+```
 
 ## 6. Point a build at it
 

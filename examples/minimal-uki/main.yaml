@@ -14,10 +14,15 @@
 # root partition by its Discoverable Partition Specification GPT type
 # GUID (Imager._dps_gpt_type()) instead of needing one baked into the
 # cmdline.
+#
+# UKI and addon share one vault key, 'uefi-secureboot' -- the same
+# key examples/pc-uki-image's own disk signs with, defined once in
+# examples/common/dev-secureboot-key.yaml.
 
 requires:
     - ../common/amd64
     - ../common/trixie
+    - ../common/dev-secureboot-key
 
 packages:
     - name: linux-uki-amd64
@@ -28,10 +33,12 @@ packages:
               linux-image: linux-image-amd64
               initrd: minimal.img
               cmdline: "console=ttyS0 root=gpt-auto ro"
+              signing-key: vault:uefi-secureboot
 
     # A systemd-stub cmdline addon, installed alongside the UKI at
     # boot/EFI/Linux/linux-uki-amd64.efi.extra.d/ -- silences kernel
-    # boot output without rebuilding the UKI itself.
+    # boot output without rebuilding the UKI itself. No 'signing-key'
+    # of its own: it inherits the UKI's, above.
     - name: linux-uki-amd64-quiet
       version: "1"
       extends:

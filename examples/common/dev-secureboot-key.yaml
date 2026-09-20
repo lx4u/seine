@@ -1,13 +1,12 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier Apache-2.0
 
-# Fixed dev-only throwaway key/cert, so two independent local builds
-# sign the UKI with the same key instead of each dev vault minting its
-# own -- the disk would otherwise never be byte-identical. A remote
-# vault ignores this and fails closed on a miss instead.
+# Shared by pc-uki-image and minimal-uki, so their boot chain signs
+# with one keypair together or apart. Fixed dev-only key/cert, so
+# local builds agree; a remote vault ignores this and fails closed.
 defaults:
     vault:
-        pc-uki-secureboot:
+        uefi-secureboot:
             key_pem: |
                 -----BEGIN PRIVATE KEY-----
                 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDJEQi4ydkoVcal

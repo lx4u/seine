@@ -8,7 +8,7 @@
 #   dd if=build/deploy/trixie/pc-uki.img of=/dev/sdX bs=4M status=progress conv=fsync
 
 requires:
-    - secure-boot-keys
+    - ../common/dev-secureboot-key
 
 distribution:
     release: trixie
@@ -36,7 +36,7 @@ image:
     filename: pc-uki.img
     table: gpt
     secure-boot:
-        private-key: vault:pc-uki-secureboot
+        private-key: vault:uefi-secureboot
     partitions:
         - label: esp
           type: vfat

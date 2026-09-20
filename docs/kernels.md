@@ -696,7 +696,7 @@ packages:
               linux-image: linux-image-amd64
               initrd: minimal.img
               cmdline: "console=ttyS0 root=gpt-auto ro"
-              signing-key: vault:pc-uki-secureboot
+              signing-key: vault:uefi-secureboot
 ```
 
 | Setting     | Required | Description                                    |
