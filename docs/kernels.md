@@ -679,3 +679,41 @@ it lands in the local repository like anything else.
 Nothing about a specification changes for it. `cross: false` still
 means what it means elsewhere -- build under emulation, for packaging
 that has to run what it just built.
+
+## Unified Kernel Images
+
+`extends: uki:` wraps a `linux-image-*` package and a prebuilt
+`initrd:` artifact into one Unified Kernel Image. Like a module, it
+carries no source of its own -- `name` and `version` are all it needs:
+
+```
+packages:
+    - name: linux-uki-amd64
+      version: "1"
+      extends:
+          uki:
+              tool: ukify
+              linux-image: linux-image-amd64
+              initrd: minimal.img
+              cmdline: "console=ttyS0 root=gpt-auto ro"
+              signing-key: vault:pc-uki-secureboot
+```
+
+| Setting     | Required | Description                                    |
+| ----------- |:--------:| ----------------------------------------------- |
+| linux-image | yes      | The `linux-image-*` package this UKI wraps      |
+| initrd      | yes      | A deployed `initrd:` artifact, built beforehand |
+| tool        | yes      | `ukify` or `efibootguard`                       |
+| cmdline     | no       | Kernel command line, empty by default           |
+| signing-key | no       | Vault key to sign the built `.efi` with         |
+
+`signing-key` is `vault:<name>`, the same shape as `extends: kernel:
+signing-key`. Signing happens after the build, not inside it: sbuild's
+own chroot has no network to reach a vault from, so seine unpacks the
+finished `.deb`, signs the `.efi` it carries (`seine/uki_sign.py`), and
+repacks it -- the private key never leaves the vault. Leaving
+`signing-key` unset ships an unsigned `.efi`.
+
+`efibootguard` is the other supported `tool`; unlike a systemd-stub
+addon (below), it works on any release this repo supports, including
+bookworm.

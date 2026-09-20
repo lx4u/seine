@@ -20,8 +20,7 @@ from seine.utils import GIT_EMAIL
 from seine.utils import GIT_NAME
 from seine.utils import distribution
 
-SETTINGS = ["cmdline", "initrd", "linux-image", "signing-cert",
-            "signing-key", "tool"]
+SETTINGS = ["cmdline", "initrd", "linux-image", "signing-key", "tool"]
 
 TOOLS = ["ukify", "efibootguard"]
 
@@ -53,6 +52,7 @@ def parse(package, extends):
         package.uki_linux_image = None
         package.uki_initrd = None
         package.uki_cmdline = ""
+        package.uki_signing_key = None
         return
 
     if package.source is not None:
@@ -91,11 +91,16 @@ def parse(package, extends):
                 "command line may not" % forbidden.strip())
     package.uki_cmdline = cmdline
 
-    # Not implemented yet: refuse rather than silently build unsigned.
-    if "signing-key" in settings or "signing-cert" in settings:
-        raise package._error(
-            "'extends: uki: signing-key'/'signing-cert' are not yet "
-            "supported -- drop them and build unsigned for now")
+    # Names the vault key this UKI's '.efi' is signed with, post-build
+    # (seine/uki_sign.py) -- sbuild's unshare chroot has no network to
+    # reach a vault from, so signing can't happen inside 'ukify build'.
+    package.uki_signing_key = settings.get("signing-key")
+    if package.uki_signing_key is not None:
+        if (type(package.uki_signing_key) != type("")
+                or not package.uki_signing_key.startswith("vault:")):
+            raise package._error(
+                "'extends: uki: signing-key' shall be 'vault:<name>'")
+        package.uki_signing_key = package.uki_signing_key[len("vault:"):]
 
 def initrd_path(distro, filename):
     if os.path.isabs(filename):
@@ -147,10 +152,16 @@ def _write(path, content):
         f.write(content)
 
 # Shared between package-build (extend(), rendered into debian/rules as
-# shell) and image-build (imager.py, real paths). Quoting is the caller's
-# job -- pre-quoted for the shell-rendered caller, plain for argv.
+# shell), image-build (imager.py, real paths), and a cmdline-only addon
+# (uki_addon.py, linux=initrd=None -- no kernel/initrd of its own).
+# Quoting is the caller's job -- pre-quoted for the shell-rendered
+# caller, plain for argv.
 def ukify_argv(linux, initrd, cmdline, output, extra=()):
-    argv = ["ukify", "build", "--linux=%s" % linux, "--initrd=%s" % initrd]
+    argv = ["ukify", "build"]
+    if linux is not None:
+        argv.append("--linux=%s" % linux)
+    if initrd is not None:
+        argv.append("--initrd=%s" % initrd)
     if cmdline:
         argv.append("--cmdline=%s" % cmdline)
     argv.extend(extra)

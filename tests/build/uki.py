@@ -133,13 +133,42 @@ class ForbiddenCmdlineCharacter(avocado.Test):
             """)
         self.assertIn("'extends: uki: cmdline'", str(refused.exception))
 
-class SigningNotYetSupported(avocado.Test):
+class SigningKeyParsed(avocado.Test):
+    def test(self):
+        build = parse(UKI % """
+                              signing-key: vault:pc-uki-secureboot
+        """)
+        self.assertEqual(build.image.packages[0].uki_signing_key,
+                         "pc-uki-secureboot")
+
+    def test_defaults_to_none(self):
+        build = parse(UKI % "")
+        self.assertEqual(build.image.packages[0].uki_signing_key, None)
+
+class SigningKeyNotAString(avocado.Test):
+    def test(self):
+        with self.assertRaises(ValueError) as refused:
+            parse(UKI % """
+                              signing-key: [pc-uki-secureboot]
+            """)
+        self.assertIn("'extends: uki: signing-key'", str(refused.exception))
+
+class SigningKeyWithoutVaultPrefixIsRejected(avocado.Test):
     def test(self):
         with self.assertRaises(ValueError) as refused:
             parse(UKI % """
                               signing-key: /a/key.pem
             """)
-        self.assertIn("not yet supported", str(refused.exception))
+        self.assertIn("'extends: uki: signing-key'", str(refused.exception))
+
+class SigningCertSettingIsUnknown(avocado.Test):
+    def test(self):
+        with self.assertRaises(ValueError) as refused:
+            parse(UKI % """
+                              signing-cert: /a/cert.pem
+            """)
+        self.assertIn("'extends: uki' has no 'signing-cert' setting",
+                      str(refused.exception))
 
 class MissingVersion(avocado.Test):
     def test(self):

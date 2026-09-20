@@ -1340,6 +1340,10 @@ unsigned -- correct for a board that has Secure Boot turned off, which
 any board using this today has to (nothing here enrolls a certificate
 into real firmware).
 
+This signs a UKI the imager finds and rebuilds for dm-verity. A UKI
+can also be signed at build time, through its own package instead of
+the disk -- see [`extends: uki: signing-key`](kernels.md#unified-kernel-images).
+
 ### bootlets
 
 Bootlets are binary firmware files placed at specific locations on the boot

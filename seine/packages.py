@@ -23,6 +23,7 @@ from seine.deb    import repack
 from seine.kernel import uki
 from seine        import module
 from seine        import signing
+from seine        import uki_sign
 from seine.cache_index import PACKAGE, Index, say, since
 from seine.sbuild import BuilderImage
 from seine.tasks  import Task
@@ -573,6 +574,22 @@ class Builder:
                 continue
             path = os.path.join(output, name)
             if kmod_sign.has_modules(path) and kmod_sign.resign(path, self._vault(), key):
+                changed.append(name)
+        if len(changed) > 0:
+            for name in os.listdir(output):
+                if name.endswith(".changes"):
+                    repack.patch_changes(os.path.join(output, name), output, changed)
+
+    # Same shape as _sign_modules, for a UKI's '.efi' instead of a
+    # module's '.ko'. Can run on the same output as _sign_modules: a
+    # uki package's .deb may bundle /lib/modules/<abi> too.
+    def _sign_uki(self, output, key, epoch):
+        changed = []
+        for name in sorted(os.listdir(output)):
+            if not name.endswith(".deb"):
+                continue
+            path = os.path.join(output, name)
+            if uki_sign.has_uki(path) and uki_sign.resign(path, self._vault(), key, epoch):
                 changed.append(name)
         if len(changed) > 0:
             for name in os.listdir(output):
@@ -1322,6 +1339,10 @@ class Builder:
             extend_digest(digest, recipe, "uki_tool", package.uki_tool)
             extend_digest(digest, recipe, "uki_linux_image", package.uki_linux_image)
             extend_digest(digest, recipe, "uki_cmdline", package.uki_cmdline)
+            # Same reasoning as 'module_signing_key': a different (or
+            # no) vault key changes the '.efi' bytes, so a cache from
+            # another key is rebuilt, not adopted.
+            extend_digest(digest, recipe, "uki_signing_key", str(package.uki_signing_key))
             initrd = uki.initrd_path(self.distro, package.uki_initrd)
             # Digests are computed for the whole task graph up front, so
             # an 'after:'-ordered initrd may not be built yet. A missing
@@ -2122,6 +2143,9 @@ class Builder:
             key = package.kernel_signing_key or package.module_signing_key
             if key is not None:
                 self._sign_modules(output, key)
+
+            if package.uki_signing_key is not None:
+                self._sign_uki(output, package.uki_signing_key, epoch)
 
             # Handed to the step that publishes it, since a dependent
             # package needs this one's .deb in the repository to build
