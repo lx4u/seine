@@ -745,3 +745,7 @@ Needs systemd >= 254 (trixie and later): bookworm's `systemd-stub`
 does not read `*.efi.extra.d/` at all, so `extends: uki-addon:` is
 refused at parse time there. The parent UKI must be built with `tool:
 ukify` -- `efibootguard` has no equivalent addon layout.
+
+Leaving `signing-key` unset signs the addon with the same key as its
+parent UKI, so both come from one keypair by default; naming a
+different `vault:<name>` overrides just the addon.

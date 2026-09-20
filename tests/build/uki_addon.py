@@ -15,6 +15,13 @@ sys.path.append(path_to_sources)
 
 from seine.build import BuildCmd
 from seine.container import ContainerEngine
+from seine import module
+from seine.kernel import uki_addon
+from seine.packages import Builder
+from seine.sbuild import BuilderImage
+
+DISTRO = {"source": "debian", "release": "trixie",
+         "architecture": "amd64", "uri": "http://example.com/debian"}
 
 os.environ["SEINE_CACHE_DIR"] = tempfile.mkdtemp(prefix="seine-tests-")
 os.environ["SEINE_BUILD_DIR"] = tempfile.mkdtemp(prefix="seine-tests-build-")
@@ -73,6 +80,15 @@ ADDON = """
 
 def parse_addon(extra=""):
     return parse(PARENT + ADDON % extra)
+
+# PARENT with an optional 'signing-key:' line spliced into its 'uki:'
+# block, same indent as 'initrd:' -- for the inheritance tests below.
+def parent_with_key(key=None):
+    extra = ("                              signing-key: vault:%s\n" % key
+             if key else "")
+    return PARENT.replace(
+        "                              initrd: minimal.img\n",
+        "                              initrd: minimal.img\n" + extra)
 
 def addon_package(build):
     for package in build.image.packages:
@@ -272,6 +288,48 @@ class AddonDependsOnItsParent(avocado.Test):
         build = parse_addon()
         addon = addon_package(build)
         self.assertEqual([d.name for d in addon.depends], ["linux-uki-amd64"])
+
+def resolved_key(build):
+    builder = Builder(DISTRO, {}, BuilderImage(DISTRO, {}))
+    # Safe with no 'module:' package in the spec: sets builder.packages
+    # and returns before touching hostBootstrap.
+    module.resolve_kernels(builder, build.image.packages, None)
+    return uki_addon.resolved_signing_key(builder, addon_package(build))
+
+class SigningKeyInheritsFromParent(avocado.Test):
+    def test(self):
+        build = parse(parent_with_key("parent-key") + ADDON % "")
+        self.assertEqual(resolved_key(build), "parent-key")
+
+class SigningKeyOverridesParent(avocado.Test):
+    def test(self):
+        build = parse(parent_with_key("parent-key") + ADDON % (
+            "                              signing-key: vault:addon-key"))
+        self.assertEqual(resolved_key(build), "addon-key")
+
+class SigningKeyDefaultsToNoneWhenParentHasNone(avocado.Test):
+    def test(self):
+        build = parse_addon()
+        self.assertIsNone(resolved_key(build))
+
+def addon_stamp(parent_key, addon_key=None):
+    extra = ("                              signing-key: vault:%s" % addon_key
+             if addon_key else "")
+    build = parse(parent_with_key(parent_key) + ADDON % extra)
+    builder = Builder(DISTRO, {}, BuilderImage(DISTRO, {}))
+    stamps = {p.name: os.path.basename(s).rsplit("_", 1)[1]
+             for p, a, s in builder.stamps(build.image.packages)}
+    return stamps["linux-uki-amd64-quiet"]
+
+class InheritedSigningKeyChangesTheAddonsStamp(avocado.Test):
+    def test(self):
+        self.assertNotEqual(addon_stamp("key-one"), addon_stamp("key-two"))
+
+class ExplicitSigningKeyChangesTheAddonsStamp(avocado.Test):
+    def test(self):
+        self.assertNotEqual(
+            addon_stamp("parent-key", "addon-one"),
+            addon_stamp("parent-key", "addon-two"))
 
 if __name__ == "__main__":
     avocado.main()

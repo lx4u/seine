@@ -1203,6 +1203,7 @@ class Builder:
         self._stamp_module(digest, recipe, package)
         self._stamp_cross_headers(digest, recipe, package)
         self._stamp_uki(digest, recipe, package)
+        self._stamp_uki_addon(digest, recipe, package)
 
         # A package built against another must rebuild when that one
         # changes -- the dependency's digest already carries its own,
@@ -1362,6 +1363,16 @@ class Builder:
                     extend_digest(digest, recipe, "uki_initrd", f.read())
             else:
                 extend_digest(digest, recipe, "uki_initrd", b"<initrd not yet built>")
+
+    def _stamp_uki_addon(self, digest, recipe, package):
+        # An unset key inherits the parent's own -- already covered by
+        # the 'depends:<uki>' entry the recipe digest folds in above,
+        # since a uki's digest already carries its own signing key.
+        if package.uki_addon:
+            extend_digest(digest, recipe, "uki_addon_uki", package.uki_addon_uki)
+            extend_digest(digest, recipe, "uki_addon_cmdline", package.uki_addon_cmdline)
+            extend_digest(digest, recipe, "uki_addon_signing_key",
+                          str(package.uki_addon_signing_key))
 
     # A hashed file's path, written the way the spec wrote it (relative
     # to the file that declared it) rather than the absolute path
@@ -2159,6 +2170,11 @@ class Builder:
 
             if package.uki_signing_key is not None:
                 self._sign_uki(output, package.uki_signing_key, epoch)
+
+            if package.uki_addon:
+                addon_key = uki_addon.resolved_signing_key(self, package)
+                if addon_key is not None:
+                    self._sign_uki(output, addon_key, epoch)
 
             # Handed to the step that publishes it, since a dependent
             # package needs this one's .deb in the repository to build
