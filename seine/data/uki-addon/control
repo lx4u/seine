@@ -1,0 +1,15 @@
+Source: [[ name ]]
+Section: kernel
+Priority: optional
+Maintainer: [[ maintainer ]] <[[ email ]]>
+Build-Depends: debhelper-compat (= 13),
+               systemd-ukify,
+               systemd-boot-efi
+Rules-Requires-Root: no
+
+Package: [[ name ]]
+Architecture: any
+Depends: ${misc:Depends}, [[ uki_name ]]
+Description: systemd-stub cmdline addon for [[ uki_name ]]
+ Built by seine: a cmdline-only Unified Kernel Image addon, picked up
+ by systemd-stub from [[ uki_name ]].efi.extra.d/ next to its parent.

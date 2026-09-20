@@ -28,3 +28,13 @@ packages:
               linux-image: linux-image-amd64
               initrd: minimal.img
               cmdline: "console=ttyS0 root=gpt-auto ro"
+
+    # A systemd-stub cmdline addon, installed alongside the UKI at
+    # boot/EFI/Linux/linux-uki-amd64.efi.extra.d/ -- silences kernel
+    # boot output without rebuilding the UKI itself.
+    - name: linux-uki-amd64-quiet
+      version: "1"
+      extends:
+          uki-addon:
+              uki: linux-uki-amd64
+              cmdline: "quiet loglevel=0"

@@ -717,3 +717,31 @@ repacks it -- the private key never leaves the vault. Leaving
 `efibootguard` is the other supported `tool`; unlike a systemd-stub
 addon (below), it works on any release this repo supports, including
 bookworm.
+
+### Extending a UKI's cmdline
+
+`extends: uki-addon:` builds a systemd-stub cmdline addon: a small PE
+file, discovered by systemd-stub next to its parent UKI
+(`<uki-name>.efi.extra.d/*.addon.efi`), that extends the kernel
+command line without rebuilding the UKI itself:
+
+```
+packages:
+    - name: linux-uki-amd64-quiet
+      version: "1"
+      extends:
+          uki-addon:
+              uki: linux-uki-amd64
+              cmdline: "quiet loglevel=0"
+```
+
+| Setting     | Required | Description                                     |
+| ----------- |:--------:| ------------------------------------------------ |
+| uki         | yes      | The `extends: uki:` package this addon extends   |
+| cmdline     | yes      | Command line to add                              |
+| signing-key | no       | Vault key to sign the addon with, `vault:<name>` |
+
+Needs systemd >= 254 (trixie and later): bookworm's `systemd-stub`
+does not read `*.efi.extra.d/` at all, so `extends: uki-addon:` is
+refused at parse time there. The parent UKI must be built with `tool:
+ukify` -- `efibootguard` has no equivalent addon layout.

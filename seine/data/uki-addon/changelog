@@ -1,0 +1,5 @@
+[[ name ]] ([[ version ]]) unstable; urgency=low
+
+  * Packaged by seine as a systemd-stub cmdline addon for [[ uki_name ]].
+
+ -- [[ maintainer ]] <[[ email ]]>  [[ date ]]

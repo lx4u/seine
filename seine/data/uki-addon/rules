@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+# Written by seine from seine/data/uki-addon/rules.
+
+PACKAGE = [[ name ]]
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+
+override_dh_auto_build:
+
+override_dh_auto_test:
+
+# No kernel/initrd: a cmdline-only addon, verified independently of
+# its parent UKI by systemd-stub.
+override_dh_auto_install:
+	set -e; \
+	mkdir -p debian/$(PACKAGE)/boot/EFI/Linux/[[ uki_name ]].efi.extra.d; \
+	[[ ukify_cmd ]]

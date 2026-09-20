@@ -21,6 +21,7 @@ from seine        import kernel
 from seine        import kmod_sign
 from seine.deb    import repack
 from seine.kernel import uki
+from seine.kernel import uki_addon
 from seine        import module
 from seine        import signing
 from seine        import uki_sign
@@ -64,6 +65,7 @@ EXTENSIONS = {
     "kernel": kernel.SETTINGS,
     "module": module.SETTINGS,
     "uki": uki.SETTINGS,
+    "uki-addon": uki_addon.SETTINGS,
 }
 
 
@@ -274,6 +276,7 @@ class Package:
         kernel.parse(self, extends)
         module.parse(self, extends)
         uki.parse(self, extends)
+        uki_addon.parse(self, extends)
         return extends
 
     # Upstream version of a source, as written in the specification.
@@ -296,6 +299,11 @@ class Package:
             raise self._error(
                 "'version' is not set. seine writes the packaging for a "
                 "UKI wrapper from nothing, so there is no upstream tree "
+                "to read one from -- the specification has to say it.")
+        if self.uki_addon and version is None:
+            raise self._error(
+                "'version' is not set. seine writes the packaging for a "
+                "UKI addon from nothing, so there is no upstream tree "
                 "to read one from -- the specification has to say it.")
         return version
 
@@ -608,8 +616,9 @@ class Builder:
                 volumes=volumes, workdir=WORKDIR)
             return self._source_dir(package.name, workdir)
 
-        # A uki package fetches nothing; uki.extend() writes the tree.
-        if uki.is_uki_package(package):
+        # A uki/uki-addon package fetches nothing; extend() writes the
+        # tree.
+        if uki.is_uki_package(package) or uki_addon.is_uki_addon_package(package):
             sourcedir = os.path.join(workdir, package.name)
             os.makedirs(sourcedir)
             return sourcedir
@@ -859,9 +868,9 @@ class Builder:
         # than of the machine or day.
         if package.module:
             return self._committed(package, sourcedir)
-        # A uki package has no revision either; same fallback as
-        # _committed()'s own.
-        if uki.is_uki_package(package):
+        # A uki/uki-addon package has no revision either; same fallback
+        # as _committed()'s own.
+        if uki.is_uki_package(package) or uki_addon.is_uki_addon_package(package):
             return FALLBACK_EPOCH
         source = os.path.join(WORKDIR, os.path.basename(sourcedir))
         timestamp = self.builderImage.output(
@@ -1844,9 +1853,11 @@ class Builder:
     def _fetch_key(self, package):
         if module.is_cross_package(package):
             return None
-        # Never shared: a uki package fetches nothing.
+        # Never shared: a uki/uki-addon package fetches nothing.
         if uki.is_uki_package(package):
             return ("uki", package.name)
+        if uki_addon.is_uki_addon_package(package):
+            return ("uki-addon", package.name)
         return tuple(self._fetch_args(package))
 
     # As _fetch_key(), for kernel.fetch_upstream()'s own download -- the
@@ -1990,9 +2001,11 @@ class Builder:
         if package.kernel_upstream is not None:
             sourcedir = kernel.graft(self, package, workdir, sourcedir, epoch)
         # Before patches/local changelog: both need a debian/ directory,
-        # which for a module or uki wrapper is what this step creates.
+        # which for a module, uki, or uki-addon wrapper is what this
+        # step creates.
         module.extend(self, package, sourcedir, epoch)
         uki.extend(self, package, sourcedir, epoch)
+        uki_addon.extend(self, package, sourcedir, epoch)
         self.patch(package, sourcedir, epoch)
         # After them, since the series may already cover it.
         if package.kernel_upstream is not None:
@@ -2316,18 +2329,21 @@ def parse(spec, check_uki=True):
 
     parsed = [Package(p, i + 1) for i, p in enumerate(packages)]
     # A package with no 'source' describes nothing to build -- that
-    # belongs under 'defaults' instead. A uki package is the exception:
-    # it generates its own source.
+    # belongs under 'defaults' instead. A uki/uki-addon package is the
+    # exception: it generates its own source.
     for package in parsed:
-        if package.source is None and uki.is_uki_package(package) == False:
+        if (package.source is None and uki.is_uki_package(package) == False
+                and uki_addon.is_uki_addon_package(package) == False):
             raise ValueError(
                 "package '%s' has no 'source' to build from. An entry under "
                 "'packages' asks for a package to be built; one that only "
                 "describes a package goes under 'defaults'." % package.name)
-    # Before ordering, so a bad kernel reference is reported here rather
-    # than by 'after' failing to find it.
+    # Before ordering, so a bad kernel/uki reference is reported here
+    # rather than by 'after' failing to find it.
     module.check_references(parsed)
+    uki_addon.check_uki_addons(parsed, spec)
     module.depend_on_kernels(parsed)
+    uki_addon.depend_on_parents(parsed)
     ordered = propagate(order(parsed))
     module.check_kernels(ordered, spec)
     # Skipped for a 'multiconfig:' group whose predecessor is declared

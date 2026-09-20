@@ -33,6 +33,7 @@ playbook:
                     - udev
                     - kmod
                     - linux-uki-amd64
+                    - linux-uki-amd64-quiet
                 state: present
     - name: a few real-hardware conveniences
       priority: 850

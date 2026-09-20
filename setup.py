@@ -30,6 +30,7 @@ setup(
     package_data={"seine": ["data/*.yml", "data/*.txt", "data/prompt/*.txt",
                             "data/module/*", "data/cross/*",
                             "data/uki-ukify/*", "data/uki-efibootguard/*",
+                            "data/uki-addon/*",
                             "data/docs/*.md", "data/ansible/action_plugins/*.py"]},
     cmdclass={"build_py": build_py},
     entry_points = {
