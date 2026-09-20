@@ -44,6 +44,9 @@ setup(
         # 'seine vendor --refresh' to find an archive URI for a source
         # or binary the live feed has since moved past.
         'requests',
+        # seine/pe_cert.py reads the Authenticode signer cert out of a
+        # signed PE's own bytes, for the imager's boot-chain signer recap.
+        'cryptography',
     ],
     extras_require={
         # rich<14: textual 2.1.2's own 'Style.meta' caches its dict via

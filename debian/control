@@ -24,6 +24,7 @@ Depends: ${misc:Depends},
          crun,
          passt,
          podman,
+         python3-cryptography,
          python3-guestfs,
          qemu-kvm,
          seine-vault-image
