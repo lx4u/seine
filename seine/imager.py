@@ -3,6 +3,7 @@
 
 import datetime
 import hashlib
+import json
 import os
 import re
 import shlex
@@ -744,9 +745,9 @@ class Imager:
             self._boot_signers[path] = pe_cert.extract_signer_cert(f.read())
         shutil.rmtree(workdir, ignore_errors=True)
 
-    # Grouped by signer, so addons that inherit their parent's key don't
-    # repeat its subject line once per file; written next to the image
-    # so "what to enroll" survives after the build finishes.
+    # Grouped by signer, so a shared key isn't named once per file.
+    # Writes a text summary, a JSON manifest, and each unique cert as
+    # its own '.pem', next to the image.
     def _report_boot_signers(self):
         if not self._boot_signers:
             return
@@ -759,18 +760,35 @@ class Imager:
             by_fingerprint.setdefault(
                 pe_cert.fingerprint(cert), (cert, []))[1].append(path)
 
+        cert_dir = "%s.boot-signers" % self.source._output
+        if by_fingerprint:
+            os.makedirs(cert_dir, exist_ok=True)
+
         lines = ["Boot chain signers:"]
+        manifest = {"signers": [], "unsigned": sorted(unsigned)}
         for fingerprint in sorted(by_fingerprint):
             cert, paths = by_fingerprint[fingerprint]
+            paths = sorted(paths)
             lines.append("  %s (%s)" % (pe_cert.subject(cert), fingerprint))
-            lines += ["    %s" % path for path in sorted(paths)]
+            lines += ["    %s" % path for path in paths]
+
+            pem_name = "%s.pem" % fingerprint
+            with open(os.path.join(cert_dir, pem_name), "wb") as f:
+                f.write(pe_cert.to_pem(cert))
+            manifest["signers"].append({
+                "fingerprint": fingerprint, "subject": pe_cert.subject(cert),
+                "cert": "%s/%s" % (os.path.basename(cert_dir), pem_name),
+                "files": paths})
         if unsigned:
             lines.append("  unsigned:")
             lines += ["    %s" % path for path in sorted(unsigned)]
 
         print("\n".join(lines))
-        with open("%s.boot-signers.txt" % self.source._output, "w") as f:
+        with open("%s.txt" % cert_dir, "w") as f:
             f.write("\n".join(lines) + "\n")
+        with open("%s.json" % cert_dir, "w") as f:
+            json.dump(manifest, f, indent=2, sort_keys=True)
+            f.write("\n")
 
     # gpt-auto-generator refuses an unanchored verity pair, so 'usrhash='
     # must be added for '/usr' to mount. Signed only if 'image: secure-boot:'

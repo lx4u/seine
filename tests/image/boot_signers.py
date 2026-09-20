@@ -4,6 +4,7 @@
 
 import avocado
 import datetime
+import json
 import os
 import sys
 
@@ -18,6 +19,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
+from seine import pe_cert
 from seine.imager import Imager
 
 def _self_signed(common_name):
@@ -70,13 +72,16 @@ class BootSignerRecap(avocado.Test):
     def test_report_groups_by_signer_and_writes_next_to_the_image(self):
         imager = self._imager()
         cert = _self_signed("signer-a")
+        fingerprint = pe_cert.fingerprint(cert)
         imager._boot_signers = {
             "/boot/efi/EFI/Linux/parent.efi": cert,
             "/boot/efi/EFI/Linux/parent.efi.extra.d/addon.addon.efi": cert,
             "/boot/efi/EFI/BOOT/BOOTX64.EFI": None,
         }
         imager._report_boot_signers()
-        with open(imager.source._output + ".boot-signers.txt") as f:
+        base = imager.source._output
+
+        with open(base + ".boot-signers.txt") as f:
             text = f.read()
         self.assertIn("parent.efi", text)
         self.assertIn("addon.addon.efi", text)
@@ -85,10 +90,27 @@ class BootSignerRecap(avocado.Test):
         # Grouped: the signer shared by both files is named once, not twice.
         self.assertEqual(text.count("signer-a"), 1)
 
+        with open(base + ".boot-signers.json") as f:
+            manifest = json.load(f)
+        self.assertEqual(manifest["unsigned"], ["/boot/efi/EFI/BOOT/BOOTX64.EFI"])
+        self.assertEqual(len(manifest["signers"]), 1)
+        signer = manifest["signers"][0]
+        self.assertEqual(signer["fingerprint"], fingerprint)
+        self.assertEqual(sorted(signer["files"]), [
+            "/boot/efi/EFI/Linux/parent.efi",
+            "/boot/efi/EFI/Linux/parent.efi.extra.d/addon.addon.efi"])
+
+        pem_path = os.path.join(base + ".boot-signers", "%s.pem" % fingerprint)
+        with open(pem_path, "rb") as f:
+            self.assertEqual(x509.load_pem_x509_certificate(f.read()), cert)
+
     def test_report_writes_nothing_when_the_disk_has_no_efi(self):
         imager = self._imager()
         imager._report_boot_signers()
-        self.assertFalse(os.path.exists(imager.source._output + ".boot-signers.txt"))
+        base = imager.source._output
+        self.assertFalse(os.path.exists(base + ".boot-signers.txt"))
+        self.assertFalse(os.path.exists(base + ".boot-signers.json"))
+        self.assertFalse(os.path.exists(base + ".boot-signers"))
 
 if __name__ == "__main__":
     avocado.main()
