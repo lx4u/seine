@@ -19,6 +19,7 @@ from email.utils import format_datetime
 
 from seine        import kernel
 from seine        import kmod_sign
+from seine.deb    import repack
 from seine.kernel import uki
 from seine        import module
 from seine        import signing
@@ -576,7 +577,7 @@ class Builder:
         if len(changed) > 0:
             for name in os.listdir(output):
                 if name.endswith(".changes"):
-                    kmod_sign.patch_changes(os.path.join(output, name), output, changed)
+                    repack.patch_changes(os.path.join(output, name), output, changed)
 
     def fetch(self, package, workdir):
         volumes = [(workdir, WORKDIR)]

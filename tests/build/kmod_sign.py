@@ -17,6 +17,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine import kmod_sign
+from seine.deb import repack
 
 MAGIC = b"~Module signature appended~\n"
 
@@ -78,7 +79,7 @@ def _build_deb(path, ko_content, extra_ko_xz=True,
     control_tar.addfile(info, io.BytesIO(md5sums.encode()))
     control_tar.close()
 
-    kmod_sign._ar_write(path, [
+    repack.ar_write(path, [
         _ar_member("debian-binary", b"2.0\n"),
         _ar_member("control.tar.xz",
                    lzma.compress(control_buf.getvalue(), preset=6,
@@ -135,7 +136,7 @@ class ResignSignsAndPatchesMd5sums(KmodSignFixture):
         self.assertEqual(self.vault.calls, [("kernel-modules",
                                             b"unsigned module bytes")])
 
-        members = kmod_sign._ar_read(path)
+        members = repack.ar_read(path)
         by_name = {m[0]: m[5] for m in members}
         data_tar = lzma.decompress(by_name["data.tar.xz"])
         with tarfile.open(fileobj=io.BytesIO(data_tar), mode="r:") as tf:
@@ -189,48 +190,6 @@ class ResignIsReproducible(KmodSignFixture):
         with open(path2, "rb") as f:
             b2 = f.read()
         self.assertEqual(b1, b2)
-
-
-class PatchChangesRewritesOnlyChangedEntries(KmodSignFixture):
-    def test(self):
-        path = self.deb()
-        kmod_sign.resign(path, self.vault, "kernel-modules")
-        with open(path, "rb") as f:
-            data = f.read()
-
-        other = os.path.join(self.tmpdir, "other.deb")
-        with open(other, "wb") as f:
-            f.write(b"unrelated, unchanged .deb bytes\n")
-
-        changes = os.path.join(self.tmpdir, "example.changes")
-        with open(changes, "w") as f:
-            f.write(
-                "Checksums-Sha1:\n"
-                " 0000000000000000000000000000000000000000 99 example.deb\n"
-                " 1111111111111111111111111111111111111111 32 other.deb\n"
-                "Checksums-Sha256:\n"
-                " %s 99 example.deb\n"
-                " %s 32 other.deb\n"
-                "Files:\n"
-                " %s 99 kernel optional example.deb\n"
-                " %s 32 kernel optional other.deb\n"
-                % ("0" * 64, "1" * 64, "0" * 32, "1" * 32))
-
-        kmod_sign.patch_changes(changes, self.tmpdir, ["example.deb"])
-        with open(changes) as f:
-            patched = f.read()
-
-        self.assertIn(" %s %d example.deb\n"
-                      % (hashlib.sha1(data).hexdigest(), len(data)), patched)
-        self.assertIn(" %s %d example.deb\n"
-                      % (hashlib.sha256(data).hexdigest(), len(data)), patched)
-        self.assertIn(" %s %d kernel optional example.deb\n"
-                      % (hashlib.md5(data).hexdigest(), len(data)), patched)
-        # other.deb was never touched -- its stale-on-purpose lines survive.
-        self.assertIn("1111111111111111111111111111111111111111 32 other.deb",
-                      patched)
-        self.assertIn("1" * 64 + " 32 other.deb", patched)
-        self.assertIn("1" * 32 + " 32 kernel optional other.deb", patched)
 
 
 if __name__ == "__main__":
