@@ -15,6 +15,7 @@ import uuid
 
 import guestfs
 
+from seine                   import pe_cert
 from seine.bootloader        import detect as detect_bootloader
 from seine.imager_appliance import ImagerAppliance
 from seine.packages          import FALLBACK_EPOCH
@@ -720,6 +721,57 @@ class Imager:
         g.rm(hash_scratch)
         return roothash
 
+    # ESP/XBOOTLDR are both forced 'vfat', so that type finds every
+    # '.efi'. Runs before anchoring, so the parent UKI's entry here is
+    # provisional; _anchor_one_uki() fixes it after rewriting the file.
+    def _scan_boot_signers(self, g, mounts):
+        for m in mounts:
+            if m["type"] not in ("vfat", "msdos"):
+                continue
+            prefix = m["_prefix"].rstrip("/")
+            for relpath in sorted(g.find(m["_prefix"])):
+                if not relpath.lower().endswith(".efi"):
+                    continue
+                path = "%s/%s" % (prefix, relpath)
+                if not g.is_dir(path):
+                    self._record_boot_signer(g, path)
+
+    def _record_boot_signer(self, g, path):
+        workdir = tempfile.mkdtemp(dir=self._output_dir, prefix="boot-signer-")
+        local = os.path.join(workdir, "check.efi")
+        g.download(path, local)
+        with open(local, "rb") as f:
+            self._boot_signers[path] = pe_cert.extract_signer_cert(f.read())
+        shutil.rmtree(workdir, ignore_errors=True)
+
+    # Grouped by signer, so addons that inherit their parent's key don't
+    # repeat its subject line once per file; written next to the image
+    # so "what to enroll" survives after the build finishes.
+    def _report_boot_signers(self):
+        if not self._boot_signers:
+            return
+        by_fingerprint = {}
+        unsigned = []
+        for path, cert in self._boot_signers.items():
+            if cert is None:
+                unsigned.append(path)
+                continue
+            by_fingerprint.setdefault(
+                pe_cert.fingerprint(cert), (cert, []))[1].append(path)
+
+        lines = ["Boot chain signers:"]
+        for fingerprint in sorted(by_fingerprint):
+            cert, paths = by_fingerprint[fingerprint]
+            lines.append("  %s (%s)" % (pe_cert.subject(cert), fingerprint))
+            lines += ["    %s" % path for path in sorted(paths)]
+        if unsigned:
+            lines.append("  unsigned:")
+            lines += ["    %s" % path for path in sorted(unsigned)]
+
+        print("\n".join(lines))
+        with open("%s.boot-signers.txt" % self.source._output, "w") as f:
+            f.write("\n".join(lines) + "\n")
+
     # gpt-auto-generator refuses an unanchored verity pair, so 'usrhash='
     # must be added for '/usr' to mount. Signed only if 'image: secure-boot:'
     # is set. Runs while 'm' and siblings are still mounted.
@@ -822,6 +874,11 @@ class Imager:
         # g.upload() stamps the real time, unlike the mtools rebuild
         # the rest of this FAT tree already went through.
         g.utimens(efi_path, epoch, 0, epoch, 0)
+
+        # The cmdline change invalidates whatever _scan_boot_signers()
+        # recorded before anchoring -- replace it with the truth.
+        with open(os.path.join(workdir, result), "rb") as f:
+            self._boot_signers[efi_path] = pe_cert.extract_signer_cert(f.read())
 
     # Signs a rebuilt UKI, by vault reference or by mounted host key.
     # Returns the signed file's name within workdir.
@@ -1020,6 +1077,9 @@ class Imager:
         ph = self.source.partitionHandler
         disk = self.source._image
         output_dir = self._output_dir
+        # Path -> cert (or None if unsigned), across every multiconfig
+        # group -- one boot-chain recap for the whole disk.
+        self._boot_signers = {}
         try:
             hypervisor = self._hypervisor_path
 
@@ -1103,6 +1163,7 @@ class Imager:
                     self._install_boot_entry(
                         g, part_index, source, mounts, boot_owner, boot_entries)
                     self._normalize_mount_timestamps(g, mounts, mount_devices)
+                    self._scan_boot_signers(g, mounts)
                     built_sizes = self._build_ro_images(
                         g, mounts, mount_devices, part_index, hash_part_for)
                     self._print_disk_usage(g, ph, mounts, built_sizes)
@@ -1112,6 +1173,7 @@ class Imager:
 
                 g.shutdown()
                 g.close()
+                self._report_boot_signers()
                 print("Done.")
             finally:
                 after_launch()
