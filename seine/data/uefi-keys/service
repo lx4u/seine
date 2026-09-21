@@ -1,10 +1,17 @@
 [Unit]
 Description=Provision UEFI Secure Boot Variables (PK, KEK, db)
 Documentation=man:efi-updatevar(1)
+# Ordered before basic.target itself: the implicit default
+# 'After=basic.target' every unit gets would otherwise cycle
+# against that, and systemd breaks the cycle by dropping the
+# start job entirely rather than by picking an order.
+DefaultDependencies=no
 ConditionSecurity=!uefi-secureboot
 RequiresMountsFor=/sys/firmware/efi/efivars
 After=sys-firmware-efi-efivars.mount
 Before=basic.target
+Conflicts=shutdown.target
+Before=shutdown.target
 
 [Service]
 Type=oneshot

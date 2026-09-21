@@ -352,7 +352,7 @@ class RulesConvertsAndConcatenatesEveryRole(ExtendFixture):
             rules = f.read()
         self.assertIn(
             "cert-to-efi-sig-list -g $(OWNER_GUID) debian/certs/pk.pem "
-            "debian/$(PACKAGE)/usr/share/$(PACKAGE)/pk.esl", rules)
+            "debian/$(PACKAGE)/usr/share/$(PACKAGE)/pk.auth", rules)
         self.assertIn(
             "cert-to-efi-sig-list -g $(OWNER_GUID) debian/certs/kek-0.pem "
             "debian/certs/kek-0.esl", rules)

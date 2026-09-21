@@ -24,6 +24,7 @@ from seine.kernel import uki
 from seine.kernel import uki_addon
 from seine        import module
 from seine        import signing
+from seine        import uefi_auth_sign
 from seine        import uefi_keys
 from seine        import uki_sign
 from seine.cache_index import PACKAGE, Index, say, since
@@ -601,6 +602,22 @@ class Builder:
                 continue
             path = os.path.join(output, name)
             if uki_sign.has_uki(path) and uki_sign.resign(path, self._vault(), key, epoch):
+                changed.append(name)
+        if len(changed) > 0:
+            for name in os.listdir(output):
+                if name.endswith(".changes"):
+                    repack.patch_changes(os.path.join(output, name), output, changed)
+
+    # Same shape as _sign_uki, for extends: uefi-keys's 'pk.auth': PK
+    # always needs an authenticated write, unlike KEK/db/dbx.
+    def _sign_pk(self, output, key, epoch):
+        changed = []
+        for name in sorted(os.listdir(output)):
+            if not name.endswith(".deb"):
+                continue
+            path = os.path.join(output, name)
+            if uefi_auth_sign.has_pk_auth(path) and uefi_auth_sign.resign(
+                    path, self._vault(), key, epoch):
                 changed.append(name)
         if len(changed) > 0:
             for name in os.listdir(output):
@@ -2198,6 +2215,9 @@ class Builder:
                 addon_key = uki_addon.resolved_signing_key(self, package)
                 if addon_key is not None:
                     self._sign_uki(output, addon_key, epoch)
+
+            if package.uefi_keys:
+                self._sign_pk(output, package.uefi_keys_pk, epoch)
 
             # Handed to the step that publishes it, since a dependent
             # package needs this one's .deb in the repository to build

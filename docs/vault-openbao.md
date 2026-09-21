@@ -203,6 +203,44 @@ seine build your-spec.yaml
 
 See `docs/environment.md` for the full list of `SEINE_VAULT_*` variables.
 
+## Secure Boot signing
+
+`seine-sbsign` holds one key per name, each playing whatever roles
+`extends: uki:`, `image: secure-boot:` and `extends: uefi-keys:`
+reference it for -- there is no separate "PK key" or "KEK key" plugin,
+just names.
+
+- `sign` signs a PE binary (a UKI, `systemd-boot`, GRUB) with the
+  named key's Authenticode signature -- what `extends: uki:
+  signing-key` and `image: secure-boot:` use.
+- `/cert` hands back the named key's public certificate --
+  `extends: uefi-keys:` fetches one per `pk`/`kek`/`db`/`dbx` reference
+  to build the signature lists it bundles (see
+  [UEFI Secure Boot key provisioning](kernels.md#uefi-secure-boot-key-provisioning)).
+- `sign-var` builds a signed `EFI_VARIABLE_AUTHENTICATION_2` update (an
+  `.auth` file, what `efi-updatevar -f` expects) over an EFI Signature
+  List you already have. `extends: uefi-keys:` calls it on every build,
+  post-build (`seine/uefi_auth_sign.py`), for `pk.auth`: `PK`'s
+  `SetVariable()` needs an authenticated write even in Setup Mode,
+  unlike `KEK`/`db`/`dbx`. The same endpoint is what updating
+  `db`/`dbx` again later, once firmware has left Setup Mode and
+  stopped accepting plain unsigned writes, would need too -- nothing
+  in this checkout calls it for that yet:
+
+```
+curl -s -X POST -H "X-Vault-Token: $BAO_TOKEN" "$BAO_ADDR/v1/seine-sbsign/keys/<name>/sign-var" \
+  -d '{"var": "db", "guid": "d719b2cb-3d3a-4596-a3bc-dad00e67656f",
+       "esl_base64": "'"$(base64 -w0 new-db.esl)"'",
+       "signing_time": "2026-01-01T00:00:00Z"}' \
+  | jq -r .data.auth_base64 | base64 -d > new-db.auth
+```
+
+`var`/`guid` name the variable being updated (`PK`/`KEK` use
+`8be4df61-93ca-11d2-aa0d-00e098032b8c`, `db`/`dbx` use
+`d719b2cb-3d3a-4596-a3bc-dad00e67656f`); `attributes` defaults to
+`0x27` (non-volatile, boot/runtime, time-based authenticated) and
+rarely needs overriding.
+
 ## Where to go from here
 
 None of the above is a finished production setup:

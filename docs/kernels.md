@@ -749,3 +749,64 @@ ukify` -- `efibootguard` has no equivalent addon layout.
 Leaving `signing-key` unset signs the addon with the same key as its
 parent UKI, so both come from one keypair by default; naming a
 different `vault:<name>` overrides just the addon.
+
+## UEFI Secure Boot key provisioning
+
+`extends: uefi-keys:` builds a Debian package that provisions the
+firmware's `PK`, `KEK` and `db` (and optionally `dbx`) UEFI variables
+from vault-held certificates -- it carries no source of its own,
+same as `extends: uki:`:
+
+```
+packages:
+    - name: uefi-provision-keys
+      version: "1"
+      extends:
+          uefi-keys:
+              signing-key: vault:uefi-secureboot
+```
+
+| Setting                | Required | Description                             |
+| ----------------------- |:--------:| ---------------------------------------- |
+| signing-key             | no*      | Fallback `vault:<name>` for pk/kek/db    |
+| pk                      | no*      | Platform Key, a single `vault:<name>`    |
+| kek                     | no*      | Key Exchange Keys, one or a list         |
+| db                      | no*      | Signature Database, one or a list        |
+| dbx                     | no       | Revocation Database, a list              |
+| reboot                  | no       | Reboot once enrollment succeeds          |
+
+\* `pk`, `kek` and `db` each fall back to `signing-key` when left
+unset; naming none of the four is refused at parse time. Every key
+reference is `vault:<name>` -- only public certificates leave the
+vault, the same as `extends: uki: signing-key`.
+
+The generated package installs one EFI Signature List per role under
+`/usr/share/<package>/` (`pk.auth` for the Platform Key, `.esl` for
+the rest) and a `sysinit.target` service that runs its
+`provision-keys` script the moment firmware is still in Setup Mode
+(`ConditionSecurity=!uefi-secureboot`, checked against `SetupMode`
+under `/sys/firmware/efi/efivars/`; `DefaultDependencies=no`, since
+it runs before `basic.target` and the implicit default `After=
+basic.target` every unit otherwise gets would cycle against that).
+Enrollment writes `dbx`, `db` and `KEK` first with a plain,
+unauthenticated `efi-updatevar -e` -- legal for those three while
+Setup Mode lasts -- and `PK` last, since writing it is what ends
+Setup Mode. `PK` is never plain: the UEFI spec requires an
+authenticated write for it regardless of Setup Mode, so seine resigns
+the package's `pk.auth` with the vault right after the build
+(`seine/uefi_auth_sign.py`, the same post-build-signing shape
+`extends: uki:` uses and for the same reason -- sbuild's chroot has
+no network) through the `seine-sbsign` vault plugin's `sign-var`
+endpoint (see [Secure Boot signing](vault-openbao.md#secure-boot-signing)).
+A later boot with firmware already in User Mode skips the service
+entirely. `include-standard-dbx` and `include-microsoft-keys` are
+parsed but currently refused: this checkout bundles no trust anchors
+of its own, so list Microsoft's or the UEFI Forum's certificates
+individually under `kek:`/`db:`/`dbx:` instead.
+
+Certificates are fetched before the build, the same as `extends: uki:`
+signing -- sbuild's own chroot has no network to reach a vault from.
+Enrolling `db`/`dbx` again later, once firmware has left Setup Mode,
+needs a signed `.auth` update the same way `pk.auth` gets one; nothing
+in this checkout builds that update for `db`/`dbx` yet, `sign-var`
+being general enough to when it does.

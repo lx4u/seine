@@ -164,10 +164,13 @@ def _write_certs(vault, certdir, package):
 # One shell recipe line per role: convert each cert to an EFI
 # Signature List, then concatenate a role's lists into the file
 # provision-keys enrolls -- efi-updatevar/KeyTool both read several
-# EFI_SIGNATURE_LIST structures back to back as one update.
+# EFI_SIGNATURE_LIST structures back to back as one update. pk.auth
+# (not pk.esl): PK always needs an authenticated write, so Builder
+# resigns this file with the vault post-build (seine/uefi_auth_sign.py)
+# -- it is an unsigned ESL wearing that name until then.
 def _install_commands(package):
     lines = ["cert-to-efi-sig-list -g $(OWNER_GUID) debian/certs/pk.pem "
-            "debian/$(PACKAGE)/usr/share/$(PACKAGE)/pk.esl"]
+            "debian/$(PACKAGE)/usr/share/$(PACKAGE)/pk.auth"]
     for role in ("kek", "db", "dbx"):
         names = getattr(package, "uefi_keys_%s" % role)
         if len(names) == 0:

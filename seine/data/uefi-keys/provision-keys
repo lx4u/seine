@@ -18,7 +18,14 @@ enroll() {
 enroll dbx dbx
 enroll db db
 enroll KEK kek
-enroll PK pk
+
+# PK, unlike KEK/db/dbx: SetVariable() for PK always needs a signed
+# EFI_VARIABLE_AUTHENTICATION_2, Setup Mode included, so this is
+# already an authenticated update -- no '-e' -- built by resigning
+# 'pk.auth' with the vault after the package builds.
+if [ -f "$CERTDIR/pk.auth" ]; then
+	efi-updatevar -f "$CERTDIR/pk.auth" PK
+fi
 [% if reboot %]
 systemctl --no-block reboot
 [% endif %]
