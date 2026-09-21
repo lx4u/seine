@@ -57,12 +57,12 @@ def _load(files, options, defer_uki_check=False):
     build.parse()
     return build
 
-# A group is a bare file list, or {files:, after:, before:} naming other
+# A group is a bare file list, or {specs:, after:, before:} naming other
 # groups it must build after/before. Returns (files, after, before).
 def _parse_group(name, value):
     if isinstance(value, list):
         return value, [], []
-    if isinstance(value, dict) and isinstance(value.get("files"), list):
+    if isinstance(value, dict) and isinstance(value.get("specs"), list):
         after = value.get("after", [])
         before = value.get("before", [])
         for key, setting in (("after", after), ("before", before)):
@@ -70,10 +70,10 @@ def _parse_group(name, value):
                 raise ValueError(
                     "'multiconfig: %s: %s' shall be a list of group names"
                     % (name, key))
-        return value["files"], after, before
+        return value["specs"], after, before
     raise ValueError(
         "'multiconfig: %s' shall be a list of specification files, or a "
-        "mapping with a 'files:' list" % name)
+        "mapping with a 'specs:' list" % name)
 
 # Fold 'before' into the group it names, so only one direction ('after')
 # needs wiring later. Naming an undeclared group, or itself, is an error.

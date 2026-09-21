@@ -12,9 +12,9 @@ distribution:
 
 multiconfig:
     main:
-        - examples/main-recovery-image/main.yaml
+        - main.yaml
     recovery:
-        - examples/main-recovery-image/recovery.yaml
+        - recovery.yaml
 
 image:
     filename: main-recovery.img

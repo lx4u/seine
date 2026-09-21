@@ -17,16 +17,16 @@ distribution:
 
 multiconfig:
     initrd:
-        - examples/minimal-initrd/main.yaml
-        - examples/pc-uki-image/kernel.yaml
+        - ../minimal-initrd/main.yaml
+        - kernel.yaml
     uki:
-        files:
-            - examples/minimal-uki/main.yaml
+        specs:
+            - ../minimal-uki/main.yaml
         after:
             - initrd
     image:
-        files:
-            - examples/pc-uki-image/image.yaml
+        specs:
+            - image.yaml
         after:
             - uki
 

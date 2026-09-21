@@ -308,6 +308,11 @@ class BuildCmd(Cmd):
                 if libdir not in self.options["ansible_library"]:
                     self.options["ansible_library"].append(libdir)
 
+        # 'multiconfig:' paths are relative to the file listing them, like
+        # 'patches:'. Resolve now, before merge picks a winning group.
+        if yaml_filename != "<string>" and type(spec.get("multiconfig")) == type({}):
+            self._resolve_multiconfig(spec["multiconfig"], os.path.dirname(yaml_filename))
+
         if self.spec is None:
             self.spec = spec
         else:
@@ -406,6 +411,32 @@ class BuildCmd(Cmd):
             path = source[len("file://"):]
             package["source"] = "file://" + os.path.normpath(
                 os.path.join(dirname, path))
+
+    # Like 'requires:': a '.yml'/'.yaml' suffix is optional, and paths
+    # are relative to the file naming them.
+    def _resolve_multiconfig(self, groups, dirname):
+        for name, value in groups.items():
+            if type(value) == type([]):
+                groups[name] = [self._resolve_spec_file(name, entry, dirname)
+                                for entry in value]
+            elif type(value) == type({}) and type(value.get("specs")) == type([]):
+                value["specs"] = [self._resolve_spec_file(name, entry, dirname)
+                                  for entry in value["specs"]]
+
+    def _resolve_spec_file(self, group, entry, dirname):
+        if type(entry) != type(""):
+            return entry
+        path = os.path.normpath(os.path.join(dirname, entry))
+        if os.path.isfile(path):
+            return path
+        for suffix in (".yml", ".yaml"):
+            candidate = os.path.normpath("%s%s" % (path, suffix))
+            if os.path.isfile(candidate):
+                return candidate
+        raise FileNotFoundError(
+            "'multiconfig: %s' names '%s', which could not be found in %s/ "
+            "(with or without a '.yml'/'.yaml' suffix)!"
+            % (group, entry, dirname))
 
     # direction: most-specific file wins (docs/merging.md).
     def _merge_distro(self, spec):

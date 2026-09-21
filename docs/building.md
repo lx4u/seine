@@ -140,9 +140,9 @@ system on the same disk.
 ```yaml
 multiconfig:
   main:
-    - examples/main-recovery-image/main.yaml
+    - main.yaml
   recovery:
-    - examples/main-recovery-image/recovery.yaml
+    - recovery.yaml
 
 image:
   partitions:
@@ -172,16 +172,19 @@ another group:
 ```yaml
 multiconfig:
   initrd:
-    - examples/minimal-initrd/main.yaml
+    - ../minimal-initrd/main.yaml
   uki:
-    files:
-      - examples/minimal-uki/main.yaml
+    specs:
+      - ../minimal-uki/main.yaml
     after:
       - initrd
 ```
 
 `after:` and `before:` take group names. They order whole groups, not
 individual files or package steps.
+
+Like `requires:`, each `specs:` entry (or bare-list entry) is resolved
+relative to the file naming it, with or without a `.yml`/`.yaml` suffix.
 
 ## Review build time
 

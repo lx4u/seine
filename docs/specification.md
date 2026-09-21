@@ -1334,8 +1334,9 @@ they anchor.
 | public-cert  | yes      | Certificate to sign the anchored UKI with |
 
 Both are paths, resolved relative to the current working directory a
-build is run from (like `multiconfig: <group>: files:`, not like
-`patches:`). Omit `secure-boot` entirely to leave an anchored UKI
+build is run from (unlike `patches:` or `multiconfig: <group>: specs:`,
+both resolved relative to the file naming them). Omit `secure-boot`
+entirely to leave an anchored UKI
 unsigned -- correct for a board that has Secure Boot turned off, which
 any board using this today has to (nothing here enrolls a certificate
 into real firmware).

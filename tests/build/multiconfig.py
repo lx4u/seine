@@ -73,25 +73,25 @@ class AMulticonfigGroupsValueIsAFileListOrAMapping(avocado.Test):
     def test_a_mapping_reads_after_and_before(self):
         self.assertEqual(
             multiconfig._parse_group(
-                "uki", {"files": ["a.yaml"], "after": ["initrd"],
+                "uki", {"specs": ["a.yaml"], "after": ["initrd"],
                         "before": ["image"]}),
             (["a.yaml"], ["initrd"], ["image"]))
 
     def test_a_mapping_with_no_after_or_before_defaults_both_empty(self):
         self.assertEqual(
-            multiconfig._parse_group("uki", {"files": ["a.yaml"]}),
+            multiconfig._parse_group("uki", {"specs": ["a.yaml"]}),
             (["a.yaml"], [], []))
 
-    def test_a_mapping_with_no_files_is_rejected(self):
+    def test_a_mapping_with_no_specs_is_rejected(self):
         try:
             multiconfig._parse_group("uki", {"after": ["initrd"]})
-            self.fail("a mapping with no 'files:' was accepted!")
+            self.fail("a mapping with no 'specs:' was accepted!")
         except ValueError:
             pass
 
     def test_after_must_be_a_list(self):
         try:
-            multiconfig._parse_group("uki", {"files": ["a.yaml"], "after": "initrd"})
+            multiconfig._parse_group("uki", {"specs": ["a.yaml"], "after": "initrd"})
             self.fail("a bare string 'after:' was accepted!")
         except ValueError:
             pass
@@ -713,6 +713,60 @@ class MulticonfigKeyMergeIsOverrideByGroupName(avocado.Test):
         build.loads("multiconfig:\n    recovery:\n        - b.yaml\n")
         self.assertEqual(build.spec["multiconfig"],
                          {"main": ["a.yaml"], "recovery": ["b.yaml"]})
+
+# 'multiconfig:' entries are resolved like 'requires:': suffix-less, and
+# relative to the file naming them, not the current directory.
+class MulticonfigEntriesResolveLikeRequires(avocado.Test):
+    def write(self, name, content="distribution:\n    release: trixie\n"):
+        path = os.path.join(self.workdir, name)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+        return path
+
+    def test_a_suffix_less_entry_is_found(self):
+        self.write("sub/main.yaml")
+        outer = self.write("outer.yaml",
+                           "multiconfig:\n    main:\n        - sub/main\n")
+        build = BuildCmd()
+        build.load(outer)
+        [resolved] = build.spec["multiconfig"]["main"]
+        self.assertEqual(resolved, os.path.realpath(
+            os.path.join(self.workdir, "sub", "main.yaml")))
+
+    def test_a_specs_entry_is_resolved_the_same_way(self):
+        self.write("sub/main.yaml")
+        outer = self.write("outer.yaml",
+                           "multiconfig:\n    uki:\n        specs:\n"
+                           "            - sub/main\n        after:\n"
+                           "            - initrd\n")
+        build = BuildCmd()
+        build.load(outer)
+        [resolved] = build.spec["multiconfig"]["uki"]["specs"]
+        self.assertEqual(resolved, os.path.realpath(
+            os.path.join(self.workdir, "sub", "main.yaml")))
+
+    def test_entries_are_relative_to_the_declaring_file_not_the_cwd(self):
+        self.write("sub/main.yaml")
+        outer = self.write("sub/outer.yaml",
+                           "multiconfig:\n    main:\n        - main\n")
+        cwd = os.getcwd()
+        os.chdir(self.workdir)
+        try:
+            build = BuildCmd()
+            build.load(os.path.join("sub", "outer.yaml"))
+        finally:
+            os.chdir(cwd)
+        [resolved] = build.spec["multiconfig"]["main"]
+        self.assertEqual(resolved, os.path.join("sub", "main.yaml"))
+
+    def test_a_missing_entry_is_reported(self):
+        outer = self.write("outer.yaml",
+                           "multiconfig:\n    main:\n        - missing\n")
+        build = BuildCmd()
+        with self.assertRaises(FileNotFoundError) as caught:
+            build.load(outer)
+        self.assertIn("missing", str(caught.exception))
 
 # End to end, through the CLI: 'seine plan --dry-run' on a specification
 # with a 'multiconfig:' key shows both groups' own task graphs, merged
