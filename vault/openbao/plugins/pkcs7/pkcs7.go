@@ -136,6 +136,17 @@ type detachedInfo struct {
 	Content     detachedData `asn1:"explicit,tag:0"`
 }
 
+// sign-efi-sig-list's own shape: raw SignedData (no outer ContentInfo,
+// unlike detachedInfo above), certificates[0] carrying the signer, no
+// authenticatedAttributes. Verified byte-for-byte against efitools.
+type signedDataWithCert struct {
+	Version          int
+	DigestAlgorithms []algorithmIdentifier `asn1:"set"`
+	EncapContentInfo bareContent
+	Certificates     asn1.RawValue      `asn1:"tag:0"`
+	SignerInfos      []signerInfoDirect `asn1:"set"`
+}
+
 type attachedInfo struct {
 	ContentType asn1.ObjectIdentifier
 	Content     attachedData `asn1:"explicit,tag:0"`
@@ -181,6 +192,43 @@ func SignDetached(content []byte, digestOID asn1.ObjectIdentifier, key *rsa.Priv
 				EncryptedDigest: signature,
 			}},
 		},
+	})
+}
+
+// Signs content with no authenticated attributes, embedding the
+// signer's certificate but leaving the content detached (external):
+// the WIN_CERTIFICATE_UEFI_GUID.CertData shape a signed UEFI variable
+// update needs. content is the digest buffer UEFI's own spec defines
+// (variable name, vendor GUID, attributes, timestamp, new value).
+func SignDetachedWithCert(content []byte, digestOID asn1.ObjectIdentifier, key *rsa.PrivateKey, cert *x509.Certificate) ([]byte, error) {
+	hash, err := hashFor(digestOID)
+	if err != nil {
+		return nil, err
+	}
+	sum := hash.New()
+	sum.Write(content)
+	signature, err := rsa.SignPKCS1v15(rand.Reader, key, hash, sum.Sum(nil))
+	if err != nil {
+		return nil, err
+	}
+	return asn1.Marshal(signedDataWithCert{
+		Version:          1,
+		DigestAlgorithms: []algorithmIdentifier{{Algorithm: digestOID, Parameters: asn1.NullRawValue}},
+		EncapContentInfo: bareContent{ContentType: OIDData},
+		Certificates:     asn1.RawValue{Class: 2, Tag: 0, IsCompound: true, Bytes: cert.Raw},
+		SignerInfos: []signerInfoDirect{{
+			Version: 1,
+			SID:     sid(cert),
+			DigestAlgorithm: algorithmIdentifier{
+				Algorithm:  digestOID,
+				Parameters: asn1.NullRawValue,
+			},
+			DigestEncryptionAlgo: algorithmIdentifier{
+				Algorithm:  OIDRSAEncryption,
+				Parameters: asn1.NullRawValue,
+			},
+			EncryptedDigest: signature,
+		}},
 	})
 }
 

@@ -467,6 +467,17 @@ class DevVault(VaultProvider):
             self._ensure_sbsign_key(name)
             return self._inner.sbsign_sign(name, pe, timestamp)
 
+    def sbsign_auth(self, name, var, guid, esl, timestamp):
+        self._ensure_started()
+        if not isinstance(esl, bytes):
+            raise VaultError("UEFI variable signing expects bytes, got %s"
+                             % type(esl).__name__)
+        if not isinstance(timestamp, int) or timestamp < 0:
+            raise VaultError("UEFI variable signing expects a unix epoch timestamp")
+        with self._lock:
+            self._ensure_sbsign_key(name)
+            return self._inner.sbsign_auth(name, var, guid, esl, timestamp)
+
     def _ensure_sbsign_key(self, name):
         if name in self._sbsign_keys:
             return

@@ -127,6 +127,15 @@ class SbsignContract(avocado.Test):
                             body)["data"]
         return base64.b64decode(payload["signed_pe_base64"])
 
+    def _sign_var(self, key, var, guid, esl, stamp=None):
+        body = {"var": var, "guid": guid,
+               "esl_base64": base64.b64encode(esl).decode()}
+        if stamp is not None:
+            body["signing_time"] = stamp
+        payload = self._api("POST", "/v1/seine-sbsign/keys/%s/sign-var" % key,
+                            body)["data"]
+        return base64.b64decode(payload["auth_base64"])
+
     def _sbverify(self, cert_path, blob):
         path = os.path.join(self._workdir(), "check.efi")
         with open(path, "wb") as f:
@@ -168,6 +177,11 @@ class SbsignContract(avocado.Test):
         self.assertEqual(caught.exception.code, 404)
         with self.assertRaises(urllib.error.HTTPError) as caught:
             self._api("GET", "/v1/seine-sbsign/keys/nope/cert")
+        self.assertEqual(caught.exception.code, 404)
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self._sign_var("nope", "db",
+                           "d719b2cb-3d3a-4596-a3bc-dad00e67656f", b"esl",
+                           "2026-01-01T00:00:00Z")
         self.assertEqual(caught.exception.code, 404)
 
     def test_generate_flow_verifies(self):
@@ -233,6 +247,41 @@ class SbsignContract(avocado.Test):
         self._sbverify(os.path.join(where, "db.crt"), twice)
         self.assertEqual(once, twice)
 
+    def test_sign_var_matches_sign_efi_sig_list_byte_for_byte(self):
+        if shutil.which("sign-efi-sig-list") is None:
+            self.cancel("efitools is needed for this check")
+        where = self._workdir()
+        key, cert = self._keypair(where)
+        self._api("POST", "/v1/seine-sbsign/keys/db",
+                  {"import": {"key_pem": key, "cert_pem": cert}})
+        esl = os.path.join(where, "payload.esl")
+        subprocess.run(["cert-to-efi-sig-list",
+                        "-g", "11111111-1111-1111-1111-111111111111",
+                        os.path.join(where, "db.crt"), esl],
+                       capture_output=True, check=True)
+        with open(esl, "rb") as f:
+            esl_data = f.read()
+        guid = "d719b2cb-3d3a-4596-a3bc-dad00e67656f"
+        via_api = self._sign_var("db", "db", guid, esl_data,
+                                 "2026-01-01T00:00:00Z")
+        direct = os.path.join(where, "direct.auth")
+        subprocess.run(["sign-efi-sig-list", "-t", "2026-01-01",
+                        "-c", os.path.join(where, "db.crt"),
+                        "-k", os.path.join(where, "db.key"),
+                        "db", esl, direct], capture_output=True, check=True)
+        with open(direct, "rb") as f:
+            self.assertEqual(via_api, f.read())
+
+    def test_sign_var_is_deterministic(self):
+        where = self._workdir()
+        key, cert = self._keypair(where)
+        self._api("POST", "/v1/seine-sbsign/keys/db",
+                  {"import": {"key_pem": key, "cert_pem": cert}})
+        stamp = "2026-01-01T00:00:00Z"
+        guid = "d719b2cb-3d3a-4596-a3bc-dad00e67656f"
+        self.assertEqual(self._sign_var("db", "db", guid, b"esl-payload", stamp),
+                         self._sign_var("db", "db", guid, b"esl-payload", stamp))
+
 
 class VaultSbsign(avocado.Test):
     """
@@ -283,6 +332,15 @@ class VaultSbsign(avocado.Test):
                                   capture_output=True, text=True)
         self.assertEqual(verified.returncode, 0, verified.stderr)
         self.assertEqual(dev.sbsign_sign("db", data, epoch), signed)
+
+    def test_sign_var_end_to_end(self):
+        dev = DevVault()
+        self._devs.append(dev)
+        epoch = 1767225600
+        guid = "d719b2cb-3d3a-4596-a3bc-dad00e67656f"
+        auth = dev.sbsign_auth("db", "db", guid, b"esl-payload", epoch)
+        self.assertTrue(auth.endswith(b"esl-payload"))
+        self.assertEqual(dev.sbsign_auth("db", "db", guid, b"esl-payload", epoch), auth)
 
     def test_pe_cert_reads_the_same_signer_dev_vault_signed_with(self):
         dev = DevVault()

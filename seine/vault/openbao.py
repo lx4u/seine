@@ -183,6 +183,20 @@ class OpenBaoProvider(VaultProvider):
             token=self._token)
         return _b64decode(_field(reply, "data", "signed_pe_base64"))
 
+    def sbsign_auth(self, name, var, guid, esl, timestamp):
+        if not isinstance(esl, bytes):
+            raise VaultError("UEFI variable signing expects bytes, got %s"
+                             % type(esl).__name__)
+        if not isinstance(timestamp, int) or timestamp < 0:
+            raise VaultError("UEFI variable signing expects a unix epoch timestamp")
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(timestamp))
+        reply = self._request(
+            "POST", "/v1/seine-sbsign/keys/%s/sign-var" % urllib.parse.quote(name, safe=""),
+            {"var": var, "guid": guid, "esl_base64": base64.b64encode(esl).decode(),
+             "signing_time": stamp},
+            token=self._token)
+        return _b64decode(_field(reply, "data", "auth_base64"))
+
     # Kernel module signing through the seine-kmod plugin. Unknown
     # keys fail closed; only explicit generate/import calls create.
     def kmod_cert(self, name):

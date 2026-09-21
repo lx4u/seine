@@ -145,6 +145,58 @@ func TestAuthenticodeDeterministic(t *testing.T) {
 	}
 }
 
+// The signed-UEFI-variable shape: no outer ContentInfo (unlike
+// SignDetached), the certificate embedded, no authenticated attributes.
+func TestDetachedWithCertShape(t *testing.T) {
+	key, cert := testPair(t)
+	der, err := SignDetachedWithCert([]byte("digest-buffer"), OIDSHA256, key, cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sd detachedWithCertShape
+	if _, err := asn1.Unmarshal(der, &sd); err != nil {
+		t.Fatalf("unparsable SignedData: %s", err)
+	}
+	if len(sd.Certificates.Bytes) == 0 {
+		t.Fatal("no embedded certificate")
+	}
+	if len(sd.SignerInfos) != 1 || len(sd.SignerInfos[0].AuthenticatedAttrs) != 0 {
+		t.Fatal("unexpected signer count or authenticated attributes")
+	}
+}
+
+func TestDetachedWithCertDeterministic(t *testing.T) {
+	key, cert := testPair(t)
+	first, err := SignDetachedWithCert([]byte("digest-buffer"), OIDSHA256, key, cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := SignDetachedWithCert([]byte("digest-buffer"), OIDSHA256, key, cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(first) != string(second) {
+		t.Fatal("same input signed differently")
+	}
+}
+
+// Same field layout as attachedShape -- the shape differs only in
+// EncapContentInfo (bareContent, no attached content) and its version.
+type detachedWithCertShape struct {
+	Version          int
+	DigestAlgorithms []algorithmIdentifier `asn1:"set"`
+	EncapContentInfo bareContent
+	Certificates     asn1.RawValue `asn1:"tag:0,optional"`
+	SignerInfos      []struct {
+		Version              int
+		SID                  issuerAndSerial
+		DigestAlgorithm      algorithmIdentifier
+		AuthenticatedAttrs   []asn1.RawValue `asn1:"tag:0,optional"`
+		DigestEncryptionAlgo algorithmIdentifier
+		EncryptedDigest      []byte
+	} `asn1:"set"`
+}
+
 type attachedShape struct {
 	Version          int
 	DigestAlgorithms []algorithmIdentifier `asn1:"set"`

@@ -55,6 +55,13 @@ class VaultProvider:
     def sbsign_sign(self, name, pe, timestamp):
         raise NotImplementedError
 
+    # Authenticated UEFI variable updates ('.auth' files, what
+    # 'efi-updatevar -f' expects): a signed EFI_VARIABLE_AUTHENTICATION_2
+    # wrapping an EFI Signature List -- for updating db/dbx once a
+    # system has left Setup Mode.
+    def sbsign_auth(self, name, var, guid, esl, timestamp):
+        raise NotImplementedError
+
     # Kernel module signing through the seine-kmod plugin: a .ko goes
     # up, signed with the named key, and comes back; strip-then-sign
     # like sign-file, so signed and unsigned modules share the path.
