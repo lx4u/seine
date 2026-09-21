@@ -1,0 +1,24 @@
+#!/bin/sh
+# Written by seine from seine/data/uefi-keys/provision-keys.
+# Enrolls whichever signature lists were bundled, in ascending
+# authority order -- PK last, since that locks firmware into User
+# Mode and ends Setup Mode enrollment.
+
+set -e
+
+CERTDIR=/usr/share/[[ name ]]
+
+enroll() {
+	var="$1"
+	file="$CERTDIR/$2.esl"
+	[ -f "$file" ] || return 0
+	efi-updatevar -e -f "$file" "$var"
+}
+
+enroll dbx dbx
+enroll db db
+enroll KEK kek
+enroll PK pk
+[% if reboot %]
+systemctl --no-block reboot
+[% endif %]

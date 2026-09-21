@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+# Written by seine from seine/data/uefi-keys/rules.
+
+PACKAGE = [[ name ]]
+OWNER_GUID = [[ owner_guid ]]
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+
+override_dh_auto_build:
+
+override_dh_auto_test:
+
+# No upstream build: certs are already in debian/certs/, fetched from
+# the vault when seine generated this source tree.
+override_dh_auto_install:
+	set -e; \
+	mkdir -p debian/$(PACKAGE)/usr/share/$(PACKAGE); \
+	mkdir -p debian/$(PACKAGE)/usr/libexec/$(PACKAGE); \
+	[[ install_commands ]]; \
+	install -m 0755 debian/check-setup-mode debian/$(PACKAGE)/usr/libexec/$(PACKAGE)/check-setup-mode; \
+	install -m 0755 debian/provision-keys debian/$(PACKAGE)/usr/libexec/$(PACKAGE)/provision-keys

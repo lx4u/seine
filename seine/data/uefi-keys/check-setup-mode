@@ -1,0 +1,12 @@
+#!/bin/sh
+# Written by seine from seine/data/uefi-keys/check-setup-mode.
+# Exits 0 only when firmware is in Setup Mode: SetupMode efivar is a
+# 4-byte attributes header (efivarfs) followed by one value byte, 1
+# meaning Setup Mode.
+
+set -e
+
+efivar=/sys/firmware/efi/efivars/SetupMode-8be4df61-93ca-11d2-aa0d-00e098032b8c
+[ -r "$efivar" ] || exit 1
+byte=$(od -An -tu1 -j4 -N1 "$efivar" | tr -d ' ')
+[ "$byte" = "1" ]

@@ -1,0 +1,16 @@
+[Unit]
+Description=Provision UEFI Secure Boot Variables (PK, KEK, db)
+Documentation=man:efi-updatevar(1)
+ConditionSecurity=!uefi-secureboot
+RequiresMountsFor=/sys/firmware/efi/efivars
+After=sys-firmware-efi-efivars.mount
+Before=basic.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecCondition=/usr/libexec/[[ name ]]/check-setup-mode
+ExecStart=/usr/libexec/[[ name ]]/provision-keys
+
+[Install]
+WantedBy=sysinit.target

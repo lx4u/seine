@@ -24,6 +24,7 @@ from seine.kernel import uki
 from seine.kernel import uki_addon
 from seine        import module
 from seine        import signing
+from seine        import uefi_keys
 from seine        import uki_sign
 from seine.cache_index import PACKAGE, Index, say, since
 from seine.sbuild import BuilderImage
@@ -64,6 +65,7 @@ ANY_RELEASE = None
 EXTENSIONS = {
     "kernel": kernel.SETTINGS,
     "module": module.SETTINGS,
+    "uefi-keys": uefi_keys.SETTINGS,
     "uki": uki.SETTINGS,
     "uki-addon": uki_addon.SETTINGS,
 }
@@ -275,6 +277,7 @@ class Package:
 
         kernel.parse(self, extends)
         module.parse(self, extends)
+        uefi_keys.parse(self, extends)
         uki.parse(self, extends)
         uki_addon.parse(self, extends)
         return extends
@@ -616,9 +619,10 @@ class Builder:
                 volumes=volumes, workdir=WORKDIR)
             return self._source_dir(package.name, workdir)
 
-        # A uki/uki-addon package fetches nothing; extend() writes the
-        # tree.
-        if uki.is_uki_package(package) or uki_addon.is_uki_addon_package(package):
+        # A uki/uki-addon/uefi-keys package fetches nothing; extend()
+        # writes the tree.
+        if (uki.is_uki_package(package) or uki_addon.is_uki_addon_package(package)
+                or uefi_keys.is_uefi_keys_package(package)):
             sourcedir = os.path.join(workdir, package.name)
             os.makedirs(sourcedir)
             return sourcedir
@@ -868,9 +872,10 @@ class Builder:
         # than of the machine or day.
         if package.module:
             return self._committed(package, sourcedir)
-        # A uki/uki-addon package has no revision either; same fallback
-        # as _committed()'s own.
-        if uki.is_uki_package(package) or uki_addon.is_uki_addon_package(package):
+        # A uki/uki-addon/uefi-keys package has no revision either;
+        # same fallback as _committed()'s own.
+        if (uki.is_uki_package(package) or uki_addon.is_uki_addon_package(package)
+                or uefi_keys.is_uefi_keys_package(package)):
             return FALLBACK_EPOCH
         source = os.path.join(WORKDIR, os.path.basename(sourcedir))
         timestamp = self.builderImage.output(
@@ -1864,11 +1869,13 @@ class Builder:
     def _fetch_key(self, package):
         if module.is_cross_package(package):
             return None
-        # Never shared: a uki/uki-addon package fetches nothing.
+        # Never shared: a uki/uki-addon/uefi-keys package fetches nothing.
         if uki.is_uki_package(package):
             return ("uki", package.name)
         if uki_addon.is_uki_addon_package(package):
             return ("uki-addon", package.name)
+        if uefi_keys.is_uefi_keys_package(package):
+            return ("uefi-keys", package.name)
         return tuple(self._fetch_args(package))
 
     # As _fetch_key(), for kernel.fetch_upstream()'s own download -- the
@@ -2015,6 +2022,7 @@ class Builder:
         # which for a module, uki, or uki-addon wrapper is what this
         # step creates.
         module.extend(self, package, sourcedir, epoch)
+        uefi_keys.extend(self, package, sourcedir, epoch)
         uki.extend(self, package, sourcedir, epoch)
         uki_addon.extend(self, package, sourcedir, epoch)
         self.patch(package, sourcedir, epoch)
@@ -2345,11 +2353,12 @@ def parse(spec, check_uki=True):
 
     parsed = [Package(p, i + 1) for i, p in enumerate(packages)]
     # A package with no 'source' describes nothing to build -- that
-    # belongs under 'defaults' instead. A uki/uki-addon package is the
-    # exception: it generates its own source.
+    # belongs under 'defaults' instead. A uki/uki-addon/uefi-keys
+    # package is the exception: it generates its own source.
     for package in parsed:
         if (package.source is None and uki.is_uki_package(package) == False
-                and uki_addon.is_uki_addon_package(package) == False):
+                and uki_addon.is_uki_addon_package(package) == False
+                and uefi_keys.is_uefi_keys_package(package) == False):
             raise ValueError(
                 "package '%s' has no 'source' to build from. An entry under "
                 "'packages' asks for a package to be built; one that only "

@@ -1,0 +1,14 @@
+Source: [[ name ]]
+Section: admin
+Priority: optional
+Maintainer: [[ maintainer ]] <[[ email ]]>
+Build-Depends: debhelper-compat (= 13), efitools
+Rules-Requires-Root: no
+
+Package: [[ name ]]
+Architecture: any
+Depends: ${misc:Depends}, efitools
+Description: provision UEFI Secure Boot variables
+ Built by seine: installs PK, KEK and db (and optionally dbx)
+ signature lists and enrolls them into NVRAM via a systemd
+ service, while firmware is still in Setup Mode.

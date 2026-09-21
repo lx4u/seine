@@ -1,0 +1,5 @@
+[[ name ]] ([[ version ]]) unstable; urgency=low
+
+  * Packaged by seine to provision UEFI Secure Boot variables.
+
+ -- [[ maintainer ]] <[[ email ]]>  [[ date ]]
