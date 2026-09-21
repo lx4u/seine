@@ -1209,6 +1209,7 @@ class Builder:
         self._stamp_cross_headers(digest, recipe, package)
         self._stamp_uki(digest, recipe, package)
         self._stamp_uki_addon(digest, recipe, package)
+        self._stamp_uefi_keys(digest, recipe, package)
 
         # A package built against another must rebuild when that one
         # changes -- the dependency's digest already carries its own,
@@ -1378,6 +1379,20 @@ class Builder:
             extend_digest(digest, recipe, "uki_addon_cmdline", package.uki_addon_cmdline)
             extend_digest(digest, recipe, "uki_addon_signing_key",
                           str(package.uki_addon_signing_key))
+
+    def _stamp_uefi_keys(self, digest, recipe, package):
+        # A generated package: the packaging seine writes for it
+        # decides the output as much as these settings do (same
+        # reasoning as _stamp_module) -- order matters for kek/db/dbx,
+        # each concatenated into one file in the order given.
+        if package.uefi_keys:
+            extend_digest(digest, recipe, "uefi_keys_packaging",
+                          "".join(uefi_keys.uefi_keys_packaging().values()))
+            extend_digest(digest, recipe, "uefi_keys_pk", str(package.uefi_keys_pk))
+            extend_digest(digest, recipe, "uefi_keys_kek", ",".join(package.uefi_keys_kek))
+            extend_digest(digest, recipe, "uefi_keys_db", ",".join(package.uefi_keys_db))
+            extend_digest(digest, recipe, "uefi_keys_dbx", ",".join(package.uefi_keys_dbx))
+            extend_digest(digest, recipe, "uefi_keys_reboot", str(package.uefi_keys_reboot))
 
     # A hashed file's path, written the way the spec wrote it (relative
     # to the file that declared it) rather than the absolute path
