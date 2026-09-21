@@ -11,6 +11,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.utils import HOST_ARCH
+from tests.testutils import prune_on_pass
 
 EXAMPLES = os.path.join(path_to_sources, "examples", "minimal-initrd")
 
@@ -34,6 +35,9 @@ class MinimalInitrdBuilds(avocado.Test):
             self.cancel("podman is needed to build a root file-system")
         if shutil.which("file") is None:
             self.cancel("'file' is needed to check the deployed initrd")
+
+    def tearDown(self):
+        prune_on_pass(self)
 
     def test_builds_and_deploys_exactly_one_initrd(self):
         deployed = os.path.join(self.workdir, "minimal.img")

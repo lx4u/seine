@@ -11,6 +11,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.utils import HOST_ARCH
+from tests.testutils import prune_on_pass
 
 INITRD = os.path.join(path_to_sources, "examples", "minimal-initrd")
 UKI = os.path.join(path_to_sources, "examples", "minimal-uki")
@@ -40,6 +41,9 @@ class MinimalUkiImageBuilds(avocado.Test):
             import guestfs
         except ImportError as e:
             self.cancel("python3-guestfs is missing: %s" % e)
+
+    def tearDown(self):
+        prune_on_pass(self)
 
     def _build(self, args, log):
         with open(log, "w") as f:

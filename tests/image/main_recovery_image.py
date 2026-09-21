@@ -12,6 +12,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.utils import HOST_ARCH
+from tests.testutils import prune_on_pass
 
 EXAMPLES = os.path.join(path_to_sources, "examples", "main-recovery-image")
 
@@ -42,6 +43,9 @@ class MainRecoveryImageBuilds(avocado.Test):
             import guestfs
         except ImportError as e:
             self.cancel("python3-guestfs is missing: %s" % e)
+
+    def tearDown(self):
+        prune_on_pass(self)
 
     # Read out of dpkg's own status database rather than guessed by
     # path -- same as tests/image/multiconfig.py's own.

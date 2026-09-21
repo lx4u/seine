@@ -23,6 +23,7 @@ from seine import multiconfig
 from seine.build import BuildCmd
 from seine.tasks import Task
 from seine.utils import HOST_ARCH
+from tests.testutils import prune_on_pass
 
 EXAMPLES = os.path.join(path_to_sources, "examples")
 
@@ -445,6 +446,7 @@ class MultiGroupSharesPackagesWithinAnArchCohort(avocado.Test):
     def tearDown(self):
         for space in self.spaces:
             subprocess.run(["podman", "unshare", "rm", "-rf", space], check=False)
+        prune_on_pass(self)
 
     def space(self, name):
         path = os.path.join(self.workdir, name)

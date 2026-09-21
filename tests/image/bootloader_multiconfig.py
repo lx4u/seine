@@ -12,6 +12,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.utils import HOST_ARCH
+from tests.testutils import prune_on_pass
 
 # As tests/image/multiconfig.py's own: a real build, so this does not run
 # unless asked for. GrubBootloader's EFI support is x86_64-only, so this
@@ -40,6 +41,9 @@ class OneBootEntryPerGroup(avocado.Test):
             import guestfs
         except ImportError as e:
             self.cancel("python3-guestfs is missing: %s" % e)
+
+    def tearDown(self):
+        prune_on_pass(self)
 
     # 'boot_owner' also gets a 'GRUB_CMDLINE_LINUX' edit, the same shape
     # as examples/pc-image/grub-serial-console.yaml -- what is under

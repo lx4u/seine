@@ -12,6 +12,8 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
+from tests.testutils import prune_on_pass
+
 PLAN = os.environ.get("SEINE_TEST_PLAN", "")
 
 # Shared scaffolding for the reproducible_disk*.py tests: build the same
@@ -42,6 +44,7 @@ class ReproducibleDiskImage:
     def tearDown(self):
         for space in self.spaces:
             subprocess.run(["podman", "unshare", "rm", "-rf", space], check=False)
+        prune_on_pass(self)
 
     def space(self, name):
         path = os.path.join(self.workdir, name)

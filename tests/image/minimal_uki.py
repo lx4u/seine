@@ -14,6 +14,7 @@ sys.path.append(path_to_sources)
 
 from seine.container import ContainerEngine
 from seine.utils import HOST_ARCH
+from tests.testutils import prune_on_pass
 
 INITRD = os.path.join(path_to_sources, "examples", "minimal-initrd")
 UKI = os.path.join(path_to_sources, "examples", "minimal-uki")
@@ -38,6 +39,9 @@ class MinimalUkiBuilds(avocado.Test):
             self.cancel("podman is needed to build packages")
         if shutil.which("dpkg-deb") is None:
             self.cancel("dpkg-deb is needed to inspect the built package")
+
+    def tearDown(self):
+        prune_on_pass(self)
 
     def _build(self, args, log):
         with open(log, "w") as f:

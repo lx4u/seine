@@ -12,6 +12,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.utils import HOST_ARCH
+from tests.testutils import prune_on_pass
 
 # As tests/image/images.py's own: a real build, so this does not run
 # unless asked for.
@@ -37,6 +38,9 @@ class TwoSourcesOnOneDisk(avocado.Test):
             import guestfs
         except ImportError as e:
             self.cancel("python3-guestfs is missing: %s" % e)
+
+    def tearDown(self):
+        prune_on_pass(self)
 
     # A plain apt install of a small, already-built package -- nothing
     # here is rebuilt from source, only whether the right one landed on

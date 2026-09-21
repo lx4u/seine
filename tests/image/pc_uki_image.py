@@ -11,6 +11,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.utils import HOST_ARCH
+from tests.testutils import prune_on_pass
 
 SPEC = os.path.join("examples", "pc-uki-image", "main.yaml")
 
@@ -37,6 +38,9 @@ class PcUkiImageBuilds(avocado.Test):
             import guestfs
         except ImportError as e:
             self.cancel("python3-guestfs is missing: %s" % e)
+
+    def tearDown(self):
+        prune_on_pass(self)
 
     # No 'SEINE_BUILD_DIR' override: that puts podman's own rootless
     # container storage under 'self.workdir' too, which avocado cannot

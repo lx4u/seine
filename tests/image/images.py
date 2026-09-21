@@ -17,6 +17,7 @@ sys.path.append(path_to_sources)
 
 from seine.container import ContainerEngine
 from seine.utils import HOST_ARCH
+from tests.testutils import prune_on_pass
 
 EXAMPLES = os.path.join(path_to_sources, "examples")
 
@@ -124,6 +125,9 @@ class Image(avocado.Test):
             self.cancel("SEINE_TEST_PLAN=full builds images; this takes hours")
         if shutil.which("podman") is None:
             self.cancel("podman is needed to build an image")
+
+    def tearDown(self):
+        prune_on_pass(self)
 
     @property
     def filename(self):
@@ -616,6 +620,7 @@ class CarriedCache(avocado.Test):
             subprocess.run(["podman", "unshare", "rm", "-rf", space],
                            check=False)
         remove_artifacts(self.workdir)
+        prune_on_pass(self)
 
     def space(self, name):
         path = os.path.join(self.workdir, name)
@@ -849,6 +854,7 @@ class ScopedRebuild(avocado.Test):
             subprocess.run(["podman", "unshare", "rm", "-rf", space],
                            check=False)
         remove_artifacts(self.workdir)
+        prune_on_pass(self)
 
     def space(self, name):
         path = os.path.join(self.workdir, name)
@@ -980,6 +986,7 @@ class AllDerivedFlavoursAreBuilt(avocado.Test):
             subprocess.run(["podman", "unshare", "rm", "-rf", space],
                            check=False)
         remove_artifacts(self.workdir)
+        prune_on_pass(self)
 
     def space(self, name):
         path = os.path.join(self.workdir, name)
@@ -1145,6 +1152,7 @@ class SignedRebuild(avocado.Test):
             subprocess.run(["gpgconf", "--homedir", self.gnupg, "--kill", "all"],
                            capture_output=True)
         remove_artifacts(self.workdir)
+        prune_on_pass(self)
 
     def space(self, name):
         path = os.path.join(self.workdir, name)
