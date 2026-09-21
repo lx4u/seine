@@ -20,6 +20,20 @@ distribution:
     architectures:
         - amd64
 
+# 'signing-key' covers PK/KEK/db with the one key already signing the
+# bootloader; 'db' then adds the second key ../common/dev-uki-addon-
+# key.yaml signs the 'quiet' UKI addon with, so Secure Boot trusts
+# both signers this image actually boots -- not just one.
+packages:
+    - name: uefi-provision-keys
+      version: "1"
+      extends:
+          uefi-keys:
+              signing-key: vault:uefi-secureboot
+              db:
+                  - vault:uefi-secureboot
+                  - vault:pc-uki-addon-quiet
+
 playbook:
     - name: uki boot packages
       priority: 800
@@ -34,6 +48,7 @@ playbook:
                     - kmod
                     - linux-uki-amd64
                     - linux-uki-amd64-quiet
+                    - uefi-provision-keys
                 state: present
     - name: a few real-hardware conveniences
       priority: 850

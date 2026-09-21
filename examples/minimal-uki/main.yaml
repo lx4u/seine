@@ -15,14 +15,19 @@
 # GUID (Imager._dps_gpt_type()) instead of needing one baked into the
 # cmdline.
 #
-# UKI and addon share one vault key, 'uefi-secureboot' -- the same
-# key examples/pc-uki-image's own disk signs with, defined once in
-# examples/common/dev-secureboot-key.yaml.
+# UKI and addon sign with two different keys, on purpose: 'uefi-
+# secureboot' (the same key examples/pc-uki-image's own disk signs
+# with, defined in examples/common/dev-secureboot-key.yaml) for the
+# UKI, 'pc-uki-addon-quiet' (examples/common/dev-uki-addon-key.yaml)
+# for its cmdline addon. Both certs land in uefi-provision-keys' own
+# 'db' (examples/pc-uki-image/image.yaml), so Secure Boot trusts
+# either signer.
 
 requires:
     - ../common/amd64
     - ../common/trixie
     - ../common/dev-secureboot-key
+    - ../common/dev-uki-addon-key
 
 packages:
     - name: linux-uki-amd64
@@ -37,11 +42,13 @@ packages:
 
     # A systemd-stub cmdline addon, installed alongside the UKI at
     # boot/EFI/Linux/linux-uki-amd64.efi.extra.d/ -- silences kernel
-    # boot output without rebuilding the UKI itself. No 'signing-key'
-    # of its own: it inherits the UKI's, above.
+    # boot output without rebuilding the UKI itself. Its own
+    # 'signing-key', distinct from the UKI's: proves Secure Boot
+    # trusts more than one signer at once, both enrolled in 'db'.
     - name: linux-uki-amd64-quiet
       version: "1"
       extends:
           uki-addon:
               uki: linux-uki-amd64
               cmdline: "quiet loglevel=0"
+              signing-key: vault:pc-uki-addon-quiet

@@ -9,6 +9,7 @@
 
 requires:
     - ../common/dev-secureboot-key
+    - ../common/dev-uki-addon-key
 
 distribution:
     release: trixie

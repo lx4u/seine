@@ -1,0 +1,81 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier Apache-2.0
+
+# A second key, deliberately not shared with dev-secureboot-key.yaml:
+# proves examples/pc-uki-image trusts more than one signer at once --
+# the main UKI signs with 'uefi-secureboot', its 'quiet' cmdline addon
+# with this one, and both certs land in 'db' (uefi-provision-keys'
+# extends: uefi-keys: db) so Secure Boot verifies either. Fixed
+# dev-only throwaway key/cert, so local builds agree; a remote vault
+# ignores this and fails closed instead.
+defaults:
+    vault:
+        pc-uki-addon-quiet:
+            key_pem: |
+                -----BEGIN PRIVATE KEY-----
+                MIIG/gIBADANBgkqhkiG9w0BAQEFAASCBugwggbkAgEAAoIBgQC3LjqVtSNpXDJi
+                83MDHPqLqpusuyVXgcxzE0YyYbYoqKH/NFAo2rXgNSBEAJkWzDIoHEXdROOphhcB
+                b9p5ok/K7AtvRwrdBQ/iPSjD/fbJVdHP2OlIMQaU7/GaE/8E4OP6etd4xRI4qfjr
+                sS/w2cihGKjjdPhQHcMPlkK75ZX6EH3lqKLPa2K/8sc8zOIKH1WlKUFHWNBSkjth
+                oEc142CEU81ONMu+I7mQOIEwBQNXMQ/acWoTRsnkzgumHSKNNjJiOI6usgwrMy6K
+                ncJYCvNFpb+YnbeqxkH4vWZNvmZJsuw/ipruMU/APd/hMhuY8QN9ckLuuVdTudg9
+                94JD4vZvvXcDm0hhPN+voLb8XRhkh7pCNdydF4drD72KaiYyJlv4Kg1JXBv50/Fm
+                wt/d85wlE6uoXgSUjuenLxX8gpvSPo6RAlJr8xSi/LUYYcX3loxaF/ixXnlpGSIH
+                9+vu5Z6DF4EHnK+HA7ZUaaasT1enfF/00hwBmvWyJLvNraAa2G0CAwEAAQKCAYAd
+                VWUSy7S9vsKf12HjzfxuKLYwsTBf5Lx3cg7z6vNHbAezDS7H+AwXeRJvaVQakzz1
+                8N8cOZemcj9VXtLS1xPliCqlmXALKDAct9QDHLRsFdbZLKBgy98Esy7SkGCuaJAB
+                cLH4GEDce5WNsqxdapam+4KyF+1asQVnRdXubmu3pXPvtrNJuWXRHKDcoueQnOdz
+                YRmfwgBsNJgXQFoe7kgqsJvIKgq1alWhG3dOmALqr8Pc5HwK1bNndTpm0bQSfmrK
+                NhKppoh/7r/jPs2geAUFn0izsB6d6hsw4vw7nL4UzdqyxX4ZPhQ9qPKN1xKOZknn
+                56nyGKEEt69G7AIHiaqrmDziKwIfTXEo2X1+sPeo6h7k6ix9TVjTlap6g5bMApgl
+                R6nnYUYND6JxyzVPV7uz7Xuyt0AsrLyV+5OOkiZXj+HHInSdJ4XVJ8Kv3b4s8x4L
+                +41eXIWiuGLilloAr04aeIOFMOaEUPQvVykQUoI/vhlkWEi8cdOPSTZMNVeZnLEC
+                gcEA2X8b4vmavBndoH8oT3ymEX7G/jkKANYCsjlngy1RPal/xlZ66BbU0aFHkmhL
+                SKL6JQtTUhIM9jIUrGXIGYKht4jZ+g/AMUZo98+4vA3OGSHz6C1lD7fhL0h/2t9z
+                0Apf9mK3gI0ml0ZNLqW0CfqbrBoW4Cy2kSFWOezEg5jykhIWMswVhzl9Vzvfi5K1
+                IOnmCttvoe1qCZ4RLo0fk/vadpWvmjlGxESnEA341b19jwBWI22p+Sym3cl7BH+s
+                jKfxAoHBANeb7gAIbLC6inbVNkCxcKyLEptcdOAwgiMimLvrU3fLjOnMODQzwH1J
+                6k3udfr+WtzM4OvApoUzaZ3FZKE9RE183EEiMf4gQAifAmGk1aMdVPJztry397uR
+                bZoGfyScWXwMQOJvaYl30MmHrN3VIW+cCVb9yHHFx4/hlIT2yWn6ZRv14fcewwv5
+                oBIxOphOYeWAf5LQSO3FgtnvlIZAlIGHxrz0YPSq6S6gqkukk/o9oAz0xYmMZAMh
+                Oc+1FPgUPQKBwQCWJazfvYb30jdxBDeU4C1ZKJdBi6j/OL71wLFYGqHaGriN+Mey
+                j4huC5P4W62VQIXFqxLjNnjiQWKKPV2tVsRDiuNIQTViDwSKB0m18SXVrd3O6/+3
+                oS6A0OEK/XXbKj5jPnUF9uusRSklSdmHhg2P+xbNvbBvcn8vT+e+HYlgE8JlYQR/
+                rM19umSx2x7V0QMxfZmMRPUOHKQp6dzh8V04vk9S/bV/6xEWAT9GdyFF5mqQ3LUZ
+                wpyTwfL+ARHirFECgcEAveRfYTgKQjyI5tAx0Bh3HAAAi0SKy0jt1PQLgLZp9QAZ
+                Q3DRr2hFCBOpgKmcz0plzEHFdt1dy8LUKlhHoJrNJVHqypLLZP4SZ4VkG4uJfPfA
+                cSjosJ12WoRi+1ztbdkmFtLT8podYS1dfaE45sdng1zx/OPXPhzq/hW3MMQJ8ITP
+                uCh+s58sOcfI6zzgVnPyVKcvtKYtFPz3meof7X3DTbG/n3u8SMCeTqrCUYzJp4PP
+                CpopwFMdYoRI3l6l8TghAoHAMFKVMLgKWbBtldQJ6chyw2GksPGRyctsCKqOlRSX
+                HN3jpKNMrtNTiXbnCoey0DZCNxMcVPQUmpshOfjvmTLUdIbyYAf5DvNnmj9o6C4U
+                9Wn3XS2OG/SDa107VoKnNkT+wBkgP+A3oVjAyN3b5ej30nGUziLhOAkOOXMcP/rX
+                LLMSSThb+wj3XWOst5oc02pym89ODmahxI0PfOMmLI/bAnGapxvF5df7rBhXQkPD
+                G65fF27eB2AQeIVMRx6TFhFF
+                -----END PRIVATE KEY-----
+            cert_pem: |
+                -----BEGIN CERTIFICATE-----
+                MIIEXTCCAsWgAwIBAgIUXbWwEakgZm1v7KKE5Xu+2w9PcOcwDQYJKoZIhvcNAQEL
+                BQAwPTE7MDkGA1UEAwwyc2VpbmUgcGMtdWtpLWltYWdlIHF1aWV0LWFkZG9uIGRl
+                diBrZXkgKHRocm93YXdheSkwIBcNMjYwOTIxMDkwNzM2WhgPMjEyNjA4MjgwOTA3
+                MzZaMD0xOzA5BgNVBAMMMnNlaW5lIHBjLXVraS1pbWFnZSBxdWlldC1hZGRvbiBk
+                ZXYga2V5ICh0aHJvd2F3YXkpMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKC
+                AYEAty46lbUjaVwyYvNzAxz6i6qbrLslV4HMcxNGMmG2KKih/zRQKNq14DUgRACZ
+                FswyKBxF3UTjqYYXAW/aeaJPyuwLb0cK3QUP4j0ow/32yVXRz9jpSDEGlO/xmhP/
+                BODj+nrXeMUSOKn467Ev8NnIoRio43T4UB3DD5ZCu+WV+hB95aiiz2tiv/LHPMzi
+                Ch9VpSlBR1jQUpI7YaBHNeNghFPNTjTLviO5kDiBMAUDVzEP2nFqE0bJ5M4Lph0i
+                jTYyYjiOrrIMKzMuip3CWArzRaW/mJ23qsZB+L1mTb5mSbLsP4qa7jFPwD3f4TIb
+                mPEDfXJC7rlXU7nYPfeCQ+L2b713A5tIYTzfr6C2/F0YZIe6QjXcnReHaw+9imom
+                MiZb+CoNSVwb+dPxZsLf3fOcJROrqF4ElI7npy8V/IKb0j6OkQJSa/MUovy1GGHF
+                95aMWhf4sV55aRkiB/fr7uWegxeBB5yvhwO2VGmmrE9Xp3xf9NIcAZr1siS7za2g
+                GthtAgMBAAGjUzBRMB0GA1UdDgQWBBRwZZKufKiGOZKjJii442rxvVAyezAfBgNV
+                HSMEGDAWgBRwZZKufKiGOZKjJii442rxvVAyezAPBgNVHRMBAf8EBTADAQH/MA0G
+                CSqGSIb3DQEBCwUAA4IBgQCZJBRhAsWDFoMmn2lATEi/xhxXYqF1rJaia5RHIc0H
+                d5LcUPqSJPlR5cMn05JasA85sQXGCOvrn6gbqVu5uA0LC+TixMP2bMIusPmFrvYJ
+                iwsNh5KerMblVwqbgxg2FnsZPCs4PS0MxJp9NKa4Yd6C8VcB3z8nuXqkFn+NK5EG
+                B4dA5wEcRvj6TlVYMxeStRWkgCZLdqMGL9enhHFcQKXJazxs9abEFzVonLrPTb09
+                V9GCPJXr5D6DGJ4WQpObbR3QbMSn0AhYBqFeGxnLzVBrSiBpbq1zkv9ltRm4AFwo
+                chZIVzSqBXeTDtCX96leQNFA0LlYceyG2FyGw7qESrbWGIelCzlyezRsA7fU/KLY
+                5vRroRwBV7BPXPjB2BojXV/x0Xvw7zB7zqq4PaMb6IvsdbD6e9SrAMdnx5dlqtay
+                M1Z725fXk0TehrUPknwvDzzn81d6i/nwzUkIcD7sSY6bEHKwJK8iLGkPvD7bUA69
+                JalNoFDsa6BBDttK4YGekJU=
+                -----END CERTIFICATE-----
