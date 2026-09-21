@@ -151,6 +151,44 @@ class RedrawsNeverDriftOffColumnZero(avocado.Test):
         for line in screen.display:
             self.assertNotIn("uki:package:linux-uki-amd64  1s", line)
 
+class AReentrantSayDuringRedrawLeavesNoStrayRows(avocado.Test):
+    def test(self):
+        # SIGINT can call say() on the same thread, mid-_redraw(). The
+        # interrupted _redraw() must stop, not append past say()'s redraw.
+        with _pyte_required(self):
+            import pyte
+        screen = pyte.Screen(60, 10)
+        vt = pyte.Stream(screen)
+
+        class Recorder(Terminal):
+            def write(self, s):
+                vt.feed(s)
+                return super().write(s)
+
+        stream = Recorder()
+        shown, clock = display(stream, total=5, environment={"TERM": "xterm"})
+        shown.started("alpha")
+        shown.started("beta")
+        shown.started("gamma")
+        shown._redraw()
+
+        orig_line = type(shown)._line
+        calls = {"n": 0}
+        def interrupted_line(self, text):
+            orig_line(self, text)
+            calls["n"] += 1
+            if calls["n"] == 2:
+                type(shown)._line = orig_line
+                self.say("build interrupted, finishing running steps")
+        type(shown)._line = interrupted_line
+
+        shown._redraw()
+
+        lines = [line.rstrip() for line in screen.display if line.strip()]
+        self.assertEqual(len(lines), 5)
+        self.assertEqual(sum("gamma" in line for line in lines), 1)
+        self.assertEqual(sum("3 running" in line for line in lines), 1)
+
 class StepsRunningAtOnceAreAllShown(avocado.Test):
     def test(self):
         stream = Terminal()

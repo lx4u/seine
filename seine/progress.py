@@ -54,6 +54,8 @@ class Display:
         self.failed = 0
         self.lines = 0
         self.frame = 0
+        # Bumped on every _erase(), so a write can notice a reentrant one ran.
+        self.generation = 0
         # Reentrant: say() can run from the SIGINT handler while the
         # main thread already holds this lock (e.g. inside started()).
         self.lock = threading.RLock()
@@ -74,10 +76,15 @@ class Display:
             # Leave this step's line in the scrollback; only redraw
             # what's still running.
             self._erase()
-            self._line("%s %-28s %s" % (
+            generation = self.generation
+            text = "%s %-28s %s" % (
                 (FAILED if failed else DONE)[self.fancy], name,
                 "" if started is None
-                else elapsed(self.clock() - started)))
+                else elapsed(self.clock() - started))
+            # A reentrant say() may have redrawn since our erase; erase again.
+            if generation != self.generation:
+                self._erase()
+            self._line(text)
             self.lines = 0
             self._redraw()
 
@@ -85,6 +92,10 @@ class Display:
     def say(self, text):
         with self.lock:
             self._erase()
+            generation = self.generation
+            # A reentrant say() may have redrawn since our erase; erase again.
+            if generation != self.generation:
+                self._erase()
             self._line(text)
             self.lines = 0
             self._redraw()
@@ -113,12 +124,19 @@ class Display:
         if not self.interactive:
             return
         self._erase()
+        generation = self.generation
         spinner = SPINNER[self.fancy]
         for name, started in sorted(self.running.items(),
                                     key=lambda item: item[1]):
+            # A reentrant say() may have redrawn already; stop instead of
+            # appending past its block.
+            if generation != self.generation:
+                return
             self._line("  %s %-28s %s" % (
                 spinner[self.frame % len(spinner)], name,
                 elapsed(self.clock() - started)))
+        if generation != self.generation:
+            return
         self._line(self._summary())
         self.stream.flush()
 
@@ -135,6 +153,7 @@ class Display:
         if self.interactive and self.lines > 0:
             self.stream.write("\x1b[%dA\x1b[J" % self.lines)
             self.lines = 0
+        self.generation += 1
 
     def _line(self, text):
         # A long line wraps to a row '_erase' does not count, which
