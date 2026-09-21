@@ -1302,6 +1302,7 @@ class Imager:
                 bootloader.install(g, "/efi")
                 bootloader.add_entry(g)
                 self._normalize_grub_lvmid(g)
+                self._sign_bootloader_files(g, bootloader, "/efi")
         elif root_m is not None:
             boot_files = self._boot_files(g)
             if boot_files is not None:
@@ -1333,6 +1334,28 @@ class Imager:
                             root_partuuid=entry["root_partuuid"],
                             root_label=entry["root_label"],
                             cmdline=entry["cmdline"])
+                    self._sign_bootloader_files(g, bootloader, "/efi")
+
+    # Only what 'image: secure-boot:' covers -- unset means every EFI
+    # binary the bootloader installs stays exactly as it shipped, same
+    # as an unsigned UKI.
+    def _sign_bootloader_files(self, g, bootloader, esp_mount):
+        if self.source.partitionHandler.secure_boot is None:
+            return
+        for path in bootloader.paths_to_sign(esp_mount):
+            if g.is_file(path):
+                self._sign_pe_in_place(g, path)
+
+    # Reuses _sign_uki() by staging the download under the name it
+    # already expects; unlike a UKI, nothing here needs ukify rebuilt.
+    def _sign_pe_in_place(self, g, path):
+        workdir = tempfile.mkdtemp(dir=self._output_dir, prefix="boot-sign-")
+        g.download(path, os.path.join(workdir, "rebuilt.efi"))
+        epoch = self.source._epoch()
+        result = self._sign_uki(workdir, epoch)
+        g.upload(os.path.join(workdir, result), path)
+        g.utimens(path, epoch, 0, epoch, 0)
+        shutil.rmtree(workdir, ignore_errors=True)
 
     def _print_disk_usage(self, g, ph, mounts, built_sizes):
         print("Disk usage:")

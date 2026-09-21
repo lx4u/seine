@@ -8,7 +8,7 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-from seine.bootloader import GrubBootloader, detect
+from seine.bootloader import GrubBootloader, SystemdBootBootloader, detect
 
 # Plain Python, no guestfs appliance involved -- a fake stands in for 'g'
 # and records what was called against it.
@@ -49,6 +49,16 @@ class Detection(avocado.Test):
     def test_nothing_is_picked_when_absent(self):
         g = FakeGuestfs()
         self.assertIsNone(detect(g, "/dev/sda"))
+
+class PathsToSign(avocado.Test):
+    def test_grub_names_the_efi_binary_it_moves_onto_the_esp(self):
+        paths = GrubBootloader("/dev/sda").paths_to_sign("/efi")
+        self.assertEqual(paths, ["/efi/EFI/boot/bootx64.efi"])
+
+    def test_systemd_boot_names_both_binaries_it_installs(self):
+        paths = SystemdBootBootloader("/dev/sda").paths_to_sign("/efi")
+        self.assertEqual(paths, ["/efi/EFI/BOOT/BOOTX64.EFI",
+                                 "/efi/EFI/systemd/systemd-bootx64.efi"])
 
 class GrubInstall(avocado.Test):
     def test_efi_reproduces_todays_inline_block(self):

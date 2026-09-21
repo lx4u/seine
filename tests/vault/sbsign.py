@@ -303,6 +303,7 @@ class ImagerWiring(avocado.Test):
         imager.source.partitionHandler.secure_boot = secure_boot
         imager._extra_tools = mock.Mock()
         imager._extra_tools.name = "tools"
+        imager._output_dir = self.workdir
         return imager
 
     def test_vault_key_calls_the_provider(self):
@@ -329,6 +330,46 @@ class ImagerWiring(avocado.Test):
         args = run.call_args[0][0]
         self.assertIn("%s:/work-key:ro" % key, args)
         self.assertIn("%s:/work-cert:ro" % cert, args)
+
+    def test_sign_bootloader_files_skips_without_a_secure_boot_key(self):
+        imager = self.imager(None)
+        bootloader = mock.Mock()
+        bootloader.paths_to_sign.return_value = ["/efi/EFI/BOOT/BOOTX64.EFI"]
+        with mock.patch.object(Imager, "_sign_pe_in_place") as sign:
+            imager._sign_bootloader_files(mock.Mock(), bootloader, "/efi")
+        sign.assert_not_called()
+
+    def test_sign_bootloader_files_signs_only_paths_that_exist(self):
+        imager = self.imager({"private-key": "vault:db"})
+        bootloader = mock.Mock()
+        bootloader.paths_to_sign.return_value = [
+            "/efi/EFI/BOOT/BOOTX64.EFI", "/efi/EFI/missing.efi"]
+        g = mock.Mock()
+        g.is_file.side_effect = lambda path: path.endswith("BOOTX64.EFI")
+        with mock.patch.object(Imager, "_sign_pe_in_place") as sign:
+            imager._sign_bootloader_files(g, bootloader, "/efi")
+        sign.assert_called_once_with(g, "/efi/EFI/BOOT/BOOTX64.EFI")
+
+    def test_sign_pe_in_place_round_trips_through_sign_uki(self):
+        imager = self.imager({"private-key": "vault:db"})
+        imager.source._epoch.return_value = 1234
+        uploaded = {}
+        g = mock.Mock()
+        def fake_download(path, local):
+            with open(local, "wb") as f:
+                f.write(b"pe-bytes")
+        g.download.side_effect = fake_download
+        def fake_upload(local, path):
+            with open(local, "rb") as f:
+                uploaded[path] = f.read()
+        g.upload.side_effect = fake_upload
+        provider = mock.Mock()
+        provider.sbsign_sign.return_value = b"signed-pe"
+        with mock.patch.object(vault, "for_build", return_value=provider):
+            imager._sign_pe_in_place(g, "/efi/EFI/BOOT/BOOTX64.EFI")
+        self.assertEqual(uploaded["/efi/EFI/BOOT/BOOTX64.EFI"], b"signed-pe")
+        g.utimens.assert_called_once_with(
+            "/efi/EFI/BOOT/BOOTX64.EFI", 1234, 0, 1234, 0)
 
 
 if __name__ == "__main__":

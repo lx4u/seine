@@ -26,6 +26,11 @@ class Bootloader:
                   root_partuuid=None, **opts):
         raise NotImplementedError
 
+    # Paths under 'esp_mount' to sign with the disk's secure-boot key.
+    # Empty unless a subclass installs its own binaries.
+    def paths_to_sign(self, esp_mount):
+        return []
+
 
 class GrubBootloader(Bootloader):
     def detect(self, g):
@@ -67,6 +72,11 @@ class GrubBootloader(Bootloader):
              " %s" % cmdline if cmdline else "", initrd)
         g.write_append(self._cfg_path, entry.encode())
 
+    # Only the EFI target moves a binary onto the ESP; the caller
+    # checks it exists, so a BIOS-only install is a no-op here.
+    def paths_to_sign(self, esp_mount):
+        return ["%s/EFI/boot/bootx64.efi" % esp_mount]
+
 
 # A Unified Kernel Image needs no boot entry: the Boot Loader
 # Specification finds '/boot/EFI/Linux/*.efi' on its own.
@@ -85,6 +95,12 @@ class SystemdBootBootloader(Bootloader):
 
     def add_entry(self, g, **opts):
         pass
+
+    # 'bootctl install' writes both the removable fallback path and its
+    # own, neither signed on its own.
+    def paths_to_sign(self, esp_mount):
+        return ["%s/EFI/BOOT/BOOTX64.EFI" % esp_mount,
+                "%s/EFI/systemd/systemd-bootx64.efi" % esp_mount]
 
 
 REGISTRY = [GrubBootloader, SystemdBootBootloader]
