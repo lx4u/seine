@@ -63,6 +63,11 @@ class ToolTable(avocado.Test):
         os.environ["SEINE_GISTS_DIR"] = os.path.join(self.workdir, "gists")
         os.environ["SEINE_WORKBENCH_DIR"] = os.path.join(self.workdir, "workbench")
         _clear_llm_env()
+        self._patches = []
+
+    def tearDown(self):
+        for restore in reversed(self._patches):
+            restore()
 
     def _minimal_spec(self):
         path = os.path.join(self.workdir, "minimal.yaml")
@@ -183,7 +188,7 @@ class ToolTable(avocado.Test):
                 return 0, ""
         saved = sources.SourceBootstrap
         sources.SourceBootstrap = Fake
-        self.addCleanup(setattr, sources, "SourceBootstrap", saved)
+        self._patches.append(lambda: setattr(sources, "SourceBootstrap", saved))
 
     def test_source_list_with_nothing_yet(self):
         app = self.SeineApp()
@@ -246,7 +251,7 @@ class ToolTable(avocado.Test):
         def restore():
             sources.HostBootstrap.create = saved_create
             ContainerEngine.run_captured = saved_run
-        self.addCleanup(restore)
+        self._patches.append(restore)
 
     def test_bash_needs_an_active_spec(self):
         app = self.SeineApp()

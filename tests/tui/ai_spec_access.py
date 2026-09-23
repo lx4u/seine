@@ -379,12 +379,13 @@ class ToolTable(avocado.Test):
             f.write("installed copy\n")
         real_system_prompt_file = self.ai.SYSTEM_PROMPT_FILE
         self.ai.SYSTEM_PROMPT_FILE = fake_system_prompt
-        self.addCleanup(setattr, self.ai, "SYSTEM_PROMPT_FILE", real_system_prompt_file)
-
-        app = self.SeineApp()
-        text = self.ai.TOOLS["docs"].run(app, {})
-        self.assertIn("only-here.md", text)
-        self.assertNotIn("specification.md", text)
+        try:
+            app = self.SeineApp()
+            text = self.ai.TOOLS["docs"].run(app, {})
+            self.assertIn("only-here.md", text)
+            self.assertNotIn("specification.md", text)
+        finally:
+            self.ai.SYSTEM_PROMPT_FILE = real_system_prompt_file
 
     # No installed docs/ next to SYSTEM_PROMPT_FILE (the ordinary case)
     # falls back to the repository root's own docs/ -- every test
@@ -396,11 +397,12 @@ class ToolTable(avocado.Test):
         fake_system_prompt = os.path.join(self.workdir, "data", "system_prompt.txt")
         real_system_prompt_file = self.ai.SYSTEM_PROMPT_FILE
         self.ai.SYSTEM_PROMPT_FILE = fake_system_prompt
-        self.addCleanup(setattr, self.ai, "SYSTEM_PROMPT_FILE", real_system_prompt_file)
-
-        app = self.SeineApp()
-        text = self.ai.TOOLS["docs"].run(app, {})
-        self.assertIn("specification.md", text)
+        try:
+            app = self.SeineApp()
+            text = self.ai.TOOLS["docs"].run(app, {})
+            self.assertIn("specification.md", text)
+        finally:
+            self.ai.SYSTEM_PROMPT_FILE = real_system_prompt_file
 
     # 'docs' also serves the prompt's own cluster files (always
     # present, unlike docs/*.md) -- with docs/ unavailable, the tool
@@ -408,12 +410,13 @@ class ToolTable(avocado.Test):
     def test_docs_falls_back_to_prompt_clusters_when_docs_dir_is_absent(self):
         real_docs_dir = self.ai._docs_dir
         self.ai._docs_dir = lambda: None
-        self.addCleanup(setattr, self.ai, "_docs_dir", real_docs_dir)
-
-        app = self.SeineApp()
-        text = self.ai.TOOLS["docs"].run(app, {})
-        self.assertIn("gists.txt", text)
-        self.assertNotIn("specification.md", text)
+        try:
+            app = self.SeineApp()
+            text = self.ai.TOOLS["docs"].run(app, {})
+            self.assertIn("gists.txt", text)
+            self.assertNotIn("specification.md", text)
+        finally:
+            self.ai._docs_dir = real_docs_dir
 
     def test_docs_reads_a_prompt_cluster_file_by_name(self):
         app = self.SeineApp()
@@ -436,10 +439,11 @@ class ToolTable(avocado.Test):
         real_prompt_dir = self.ai.PROMPT_DOCS_DIR
         self.ai._docs_dir = lambda: None
         self.ai.PROMPT_DOCS_DIR = os.path.join(self.workdir, "no-such-prompt-dir")
-        self.addCleanup(setattr, self.ai, "_docs_dir", real_docs_dir)
-        self.addCleanup(setattr, self.ai, "PROMPT_DOCS_DIR", real_prompt_dir)
-
-        app = self.SeineApp()
-        text = self.ai.TOOLS["docs"].run(app, {})
-        self.assertIn("no documentation available", text)
+        try:
+            app = self.SeineApp()
+            text = self.ai.TOOLS["docs"].run(app, {})
+            self.assertIn("no documentation available", text)
+        finally:
+            self.ai._docs_dir = real_docs_dir
+            self.ai.PROMPT_DOCS_DIR = real_prompt_dir
 

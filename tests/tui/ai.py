@@ -532,7 +532,9 @@ class TheLoop(avocado.Test):
         os.environ["XDG_CONFIG_HOME"] = self.workdir
         os.environ["SEINE_LLM_MODEL"] = "openai/fake"
         self._real_litellm = sys.modules.get("litellm")
-        self.addCleanup(self._restore_litellm)
+
+    def tearDown(self):
+        self._restore_litellm()
 
     def _restore_litellm(self):
         if self._real_litellm is not None:
@@ -1323,14 +1325,10 @@ class StartVendorTool(avocado.Test):
         self.SeineApp = SeineApp
         self.VendorScreen = VendorScreen
         self.real_run = VendorCmd._run
-        self.addCleanup(setattr, VendorCmd, "_run", self.real_run)
-        from seine import tasks
-        self.addCleanup(tasks._interrupted.clear)
         os.environ["SEINE_CACHE_DIR"] = self.workdir
         os.environ["XDG_CONFIG_HOME"] = self.workdir
         os.environ["SEINE_LLM_MODEL"] = "openai/fake"
         self._real_litellm = sys.modules.get("litellm")
-        self.addCleanup(self._restore_litellm)
         self.fragment = os.path.join(self.workdir, "vendor-only.yaml")
         with open(self.fragment, "w") as f:
             f.write(
@@ -1340,6 +1338,12 @@ class StartVendorTool(avocado.Test):
                 "    uri: http://example.com/debian\n"
                 "vendor:\n"
                 "    - name: openssl\n")
+
+    def tearDown(self):
+        from seine import tasks
+        self.VendorCmd._run = self.real_run
+        tasks._interrupted.clear()
+        self._restore_litellm()
 
     def _restore_litellm(self):
         if self._real_litellm is not None:
@@ -1467,14 +1471,16 @@ class StartBuildNotifiesTheAI(avocado.Test):
         self.ChatScreen = ChatScreen
         self.OverviewScreen = OverviewScreen
         self.real_build = Image.build
-        self.addCleanup(setattr, Image, "build", self.real_build)
-        from seine import tasks
-        self.addCleanup(tasks._interrupted.clear)
         os.environ["SEINE_CACHE_DIR"] = self.workdir
         os.environ["XDG_CONFIG_HOME"] = self.workdir
         os.environ["SEINE_LLM_MODEL"] = "openai/fake"
         self._real_litellm = sys.modules.get("litellm")
-        self.addCleanup(self._restore_litellm)
+
+    def tearDown(self):
+        from seine import tasks
+        self.Image.build = self.real_build
+        tasks._interrupted.clear()
+        self._restore_litellm()
 
     def _restore_litellm(self):
         if self._real_litellm is not None:
@@ -1796,7 +1802,9 @@ class ChatTranscriptsArePersisted(avocado.Test):
         os.environ["SEINE_LLM_MODEL"] = "openai/fake"
         os.environ["SEINE_CHAT_DIR"] = os.path.join(self.workdir, "chats")
         self._real_litellm = sys.modules.get("litellm")
-        self.addCleanup(self._restore_litellm)
+
+    def tearDown(self):
+        self._restore_litellm()
 
     def _restore_litellm(self):
         if self._real_litellm is not None:
@@ -1919,18 +1927,20 @@ class Routing(avocado.Test):
 
     def test_configured_bare_text_goes_to_chat(self):
         sys.modules["litellm"] = fake_litellm()
-        self.addCleanup(sys.modules.pop, "litellm", None)
         os.environ["SEINE_LLM_MODEL"] = "openai/fake"
-        async def scenario():
-            from seine.tui.chat import ChatScreen
-            app = self.SeineApp()
-            async with app.run_test() as pilot:
-                prompt = app.screen.query_one("#prompt")
-                prompt.value = "hello"
-                await pilot.press("enter")
-                await pilot.pause()
-                self.assertIsInstance(app.screen, ChatScreen)
-        _run(scenario)
+        try:
+            async def scenario():
+                from seine.tui.chat import ChatScreen
+                app = self.SeineApp()
+                async with app.run_test() as pilot:
+                    prompt = app.screen.query_one("#prompt")
+                    prompt.value = "hello"
+                    await pilot.press("enter")
+                    await pilot.pause()
+                    self.assertIsInstance(app.screen, ChatScreen)
+            _run(scenario)
+        finally:
+            sys.modules.pop("litellm", None)
 
 # Opt-in, real endpoint: skipped unless 'SEINE_LLM_MODEL'/
 # 'SEINE_LLM_API_BASE' are both actually set, the same "cancel, don't
