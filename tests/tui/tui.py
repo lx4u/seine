@@ -100,12 +100,15 @@ def _tui_required(test):
     except ImportError as e:
         test.cancel("the 'tui' extra (textual) is not installed: %s" % e)
 
-# History is cwd-relative by default (shared by the whole run), so
-# one test's submitted lines would otherwise leak into the next
-# test's recall.
+# History is cwd-relative by default. Wrap tearDown so every test
+# cleans up SEINE_HISTORY_FILE when it finishes.
 def _isolate_history(test):
     os.environ["SEINE_HISTORY_FILE"] = os.path.join(test.workdir, "history.json")
-    test.addCleanup(os.environ.pop, "SEINE_HISTORY_FILE", None)
+    original_teardown = test.tearDown
+    def teardown():
+        os.environ.pop("SEINE_HISTORY_FILE", None)
+        original_teardown()
+    test.tearDown = teardown
 
 # Commands: the registry the prompt, Tab completion and the command
 # palette all read.
@@ -147,13 +150,14 @@ class CommandRegistry(avocado.Test):
     # (seine/tui/paths.py) -- a command handler never sees it.
     def test_at_is_stripped_from_arguments_before_a_command_runs(self):
         original = self.commands.REGISTRY["use"]
-        self.addCleanup(self.commands.REGISTRY.__setitem__, "use", original)
         seen = {}
         self.commands.REGISTRY["use"] = original._replace(
             run=lambda app, argv: seen.setdefault("argv", argv))
-
-        self.commands.dispatch(object(), "/use @examples/pc-image/main.yaml plain")
-        self.assertEqual(seen["argv"], ["examples/pc-image/main.yaml", "plain"])
+        try:
+            self.commands.dispatch(object(), "/use @examples/pc-image/main.yaml plain")
+            self.assertEqual(seen["argv"], ["examples/pc-image/main.yaml", "plain"])
+        finally:
+            self.commands.REGISTRY["use"] = original
 
 # Context: what 'use' sets, and what Overview/Plan act on.
 class ActiveSpecification(avocado.Test):
@@ -1034,10 +1038,14 @@ class IssuesRendering(avocado.Test):
             gate.wait(10)
             report("fetching defects from UDD…")
 
-        saved = issues_module._rescan_once
+        self._issues_module = issues_module
+        self._saved_rescan_once = issues_module._rescan_once
         issues_module._rescan_once = stub
-        self.addCleanup(setattr, issues_module, "_rescan_once", saved)
         return gate, calls
+
+    def tearDown(self):
+        if getattr(self, "_issues_module", None) is not None:
+            self._issues_module._rescan_once = self._saved_rescan_once
 
     def _rescan_app(self):
         app = self.SeineApp(files=[BUSYBOX_REBUILD])
@@ -1429,7 +1437,6 @@ class PathCompletionUI(avocado.Test):
 
         self._cwd = os.getcwd()
         os.chdir(self.workdir)
-        self.addCleanup(os.chdir, self._cwd)
         os.makedirs("stuff/deep")
         # A real, minimal, loadable spec -- 'one.yaml' is used as a
         # '/use' target below, and '/use' really loads what it is given.
@@ -1443,6 +1450,9 @@ image:
 """)
         with open("stuff/two.yaml", "w"):
             pass
+
+    def tearDown(self):
+        os.chdir(self._cwd)
 
     async def _type(self, pilot, text):
         for ch in text:
@@ -3209,14 +3219,16 @@ class BuildScreenIntegration(avocado.Test):
         self.SeineApp = SeineApp
         self.BuildScreen = BuildScreen
         self.real_build = Image.build
-        self.addCleanup(setattr, Image, "build", self.real_build)
-        from seine import tasks
-        self.addCleanup(tasks._interrupted.clear)
         # BuildCmd.__init__ reads settings.py for its jobs default --
         # isolated the same way every other class here already is.
         os.environ["SEINE_CACHE_DIR"] = self.workdir
         os.environ["XDG_CONFIG_HOME"] = self.workdir
         _isolate_history(self)
+
+    def tearDown(self):
+        from seine import tasks
+        self.Image.build = self.real_build
+        tasks._interrupted.clear()
 
     def test_build_command_runs_to_completion(self):
         import time as clock
@@ -3592,14 +3604,16 @@ class VendorScreenIntegration(avocado.Test):
         self.SeineApp = SeineApp
         self.VendorScreen = VendorScreen
         self.real_run = VendorCmd._run
-        self.addCleanup(setattr, VendorCmd, "_run", self.real_run)
-        from seine import tasks
-        self.addCleanup(tasks._interrupted.clear)
         os.environ["SEINE_CACHE_DIR"] = self.workdir
         os.environ["XDG_CONFIG_HOME"] = self.workdir
         self.fragment = os.path.join(self.workdir, "vendor-only.yaml")
         _write_vendor_only_spec(self.fragment)
         _isolate_history(self)
+
+    def tearDown(self):
+        from seine import tasks
+        self.VendorCmd._run = self.real_run
+        tasks._interrupted.clear()
 
     def test_vendor_command_runs_to_completion(self):
         def fast_run(cmd_self, distro, entries, exclude, wanted, refresh,
@@ -3820,10 +3834,12 @@ class TestScreenIntegration(avocado.Test):
         self.SeineApp = SeineApp
         self.TestScreen = TestScreen
         self.real_run_spec = runner.run_spec
-        self.addCleanup(setattr, runner, "run_spec", self.real_run_spec)
         os.environ["SEINE_CACHE_DIR"] = self.workdir
         os.environ["XDG_CONFIG_HOME"] = self.workdir
         _isolate_history(self)
+
+    def tearDown(self):
+        self.runner.run_spec = self.real_run_spec
 
     def test_test_command_runs_to_completion(self):
         def fast_run_spec(files, spec=None, tags=None, outdir=None,
@@ -4307,7 +4323,9 @@ class TestNodeLiveMarks(avocado.Test):
         # called unconditionally by render_test_node()) must see an empty,
         # real SEINE_LOG_DIR rather than whatever the environment has.
         os.environ["SEINE_LOG_DIR"] = self.workdir
-        self.addCleanup(os.environ.pop, "SEINE_LOG_DIR", None)
+
+    def tearDown(self):
+        os.environ.pop("SEINE_LOG_DIR", None)
 
     def _node(self, data, children=()):
         return types.SimpleNamespace(data=data, children=list(children))
@@ -4398,8 +4416,10 @@ class TestHistory(avocado.Test):
         self.render = render
         self.testindex = testindex
         os.environ["SEINE_LOG_DIR"] = self.workdir
-        self.addCleanup(os.environ.pop, "SEINE_LOG_DIR", None)
         _isolate_history(self)
+
+    def tearDown(self):
+        os.environ.pop("SEINE_LOG_DIR", None)
 
     def _state(self):
         return types.SimpleNamespace(

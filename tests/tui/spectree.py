@@ -225,14 +225,14 @@ class HighlightsNamespacedGroupTasks(avocado.Test):
         self.SeineApp = SeineApp
         self.SpecTree = SpecTree
         self.real_build = Image.build
-        self.addCleanup(setattr, Image, "build", self.real_build)
-        from seine import tasks
-        self.addCleanup(tasks._interrupted.clear)
         os.environ["SEINE_CACHE_DIR"] = self.workdir
         os.environ["XDG_CONFIG_HOME"] = self.workdir
         os.environ["SEINE_HISTORY_FILE"] = os.path.join(self.workdir, "history.json")
 
     def tearDown(self):
+        from seine import tasks
+        self.Image.build = self.real_build
+        tasks._interrupted.clear()
         os.environ.pop("SEINE_HISTORY_FILE", None)
 
     def test_a_groups_own_task_highlights_under_its_own_branch_only(self):
