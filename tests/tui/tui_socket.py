@@ -9,6 +9,7 @@
 # ones there.
 
 import asyncio
+import atexit
 import avocado
 import contextlib
 import json
@@ -23,8 +24,12 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
+from tests.testutils import remove_tree
+
 os.environ.setdefault("SEINE_CACHE_DIR", tempfile.mkdtemp(prefix="seine-tui-socket-tests-"))
+atexit.register(remove_tree, os.environ["SEINE_CACHE_DIR"])
 os.environ["XDG_CONFIG_HOME"] = tempfile.mkdtemp(prefix="seine-tui-socket-tests-config-")
+atexit.register(remove_tree, os.environ["XDG_CONFIG_HOME"])
 # Same reasoning as tui.py's own: nothing here is about the AI chat
 # actually talking to a server, so a real endpoint exported in the
 # shell running the suite must not leak in.
@@ -33,7 +38,9 @@ for _var in ("SEINE_LLM_MODEL", "SEINE_LLM_API_BASE", "SEINE_LLM_API_KEY"):
 
 # Same reasoning as tui.py's own: History is cwd-relative, and every
 # test here builds a real SeineApp.
-os.chdir(tempfile.mkdtemp(prefix="seine-tui-socket-tests-cwd-"))
+_cwd = tempfile.mkdtemp(prefix="seine-tui-socket-tests-cwd-")
+atexit.register(remove_tree, _cwd)
+os.chdir(_cwd)
 
 from tests.native_image import native_image
 

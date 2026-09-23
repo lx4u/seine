@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import atexit
 import avocado
 import contextlib
 import os
@@ -12,8 +13,14 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-os.environ.setdefault("SEINE_CACHE_DIR", tempfile.mkdtemp(prefix="seine-ai-tests-"))
-os.chdir(tempfile.mkdtemp(prefix="seine-ai-tests-cwd-"))
+from tests.testutils import remove_tree
+
+if "SEINE_CACHE_DIR" not in os.environ:
+    os.environ["SEINE_CACHE_DIR"] = tempfile.mkdtemp(prefix="seine-ai-tests-")
+    atexit.register(remove_tree, os.environ["SEINE_CACHE_DIR"])
+_cwd = tempfile.mkdtemp(prefix="seine-ai-tests-cwd-")
+atexit.register(remove_tree, _cwd)
+os.chdir(_cwd)
 
 # The three env vars ('SEINE_LLM_MODEL' etc.) are process-global state,
 # same as any other 'SEINE_*' override elsewhere in this suite -- popped

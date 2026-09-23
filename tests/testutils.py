@@ -4,6 +4,24 @@
 
 import glob
 import os
+import shutil
+import subprocess
+
+# Plain rmtree can't touch rootless podman's storage: its files belong
+# to a uid-mapped "root", and an overlay mount can still be busy.
+# podman unshare owns that uid and can unmount and remove both.
+def remove_tree(path):
+    shutil.rmtree(path, ignore_errors=True)
+    if not os.path.exists(path):
+        return
+    overlay = os.path.join(path, "build", "containers", "overlay")
+    for cmd in (["podman", "unshare", "umount", "-R", overlay],
+                ["podman", "unshare", "rm", "-rf", path]):
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
 
 # What a passing test leaves behind should be what avocado itself always
 # writes (debug.log, whiteboard, the results files) -- not a build's own

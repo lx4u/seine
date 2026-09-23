@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import asyncio
+import atexit
 import avocado
 import contextlib
 import json
@@ -14,10 +15,14 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
+from tests.testutils import remove_tree
+
 os.environ.setdefault("SEINE_CACHE_DIR", tempfile.mkdtemp(prefix="seine-tui-tests-"))
+atexit.register(remove_tree, os.environ["SEINE_CACHE_DIR"])
 # Every SeineApp()/BuildCmd() below reads settings.py -- pointed at an
 # empty, per-run directory so a real settings.json can never leak in.
 os.environ["XDG_CONFIG_HOME"] = tempfile.mkdtemp(prefix="seine-tui-tests-config-")
+atexit.register(remove_tree, os.environ["XDG_CONFIG_HOME"])
 # None of this file is about the AI chat (that's tests/tui/ai.py's
 # job) -- popped, not just left unset, so a real endpoint exported in
 # the shell running the whole suite can't silently route a bare-text
@@ -31,7 +36,9 @@ for _var in ("SEINE_LLM_MODEL", "SEINE_LLM_API_BASE", "SEINE_LLM_API_KEY"):
 # 'SeineApp', so without this the whole suite would write a '.seine/'
 # into the checkout avocado was run from. Everything above is already an
 # absolute path, so moving the process elsewhere changes nothing else.
-os.chdir(tempfile.mkdtemp(prefix="seine-tui-tests-cwd-"))
+_cwd = tempfile.mkdtemp(prefix="seine-tui-tests-cwd-")
+atexit.register(remove_tree, _cwd)
+os.chdir(_cwd)
 
 # Static keeps update()'s text in a private attribute: '_content' in
 # Debian trixie's python3-textual (2.1.2), name-mangled '__content' in

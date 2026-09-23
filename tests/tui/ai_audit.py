@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import atexit
 import avocado
 import contextlib
 import os
@@ -11,8 +12,14 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-os.environ.setdefault("SEINE_CACHE_DIR", tempfile.mkdtemp(prefix="seine-ai-audit-tests-"))
-os.chdir(tempfile.mkdtemp(prefix="seine-ai-audit-tests-cwd-"))
+from tests.testutils import remove_tree
+
+if "SEINE_CACHE_DIR" not in os.environ:
+    os.environ["SEINE_CACHE_DIR"] = tempfile.mkdtemp(prefix="seine-ai-audit-tests-")
+    atexit.register(remove_tree, os.environ["SEINE_CACHE_DIR"])
+_cwd = tempfile.mkdtemp(prefix="seine-ai-audit-tests-cwd-")
+atexit.register(remove_tree, _cwd)
+os.chdir(_cwd)
 
 @contextlib.contextmanager
 def _tui_required(test):
