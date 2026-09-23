@@ -121,25 +121,29 @@ class GetRaisesSnapshotErrorOnHttpFailure(avocado.Test):
     def test(self):
         real_backoff = snapshot.GET_BACKOFF
         snapshot.GET_BACKOFF = 0
-        self.addCleanup(setattr, snapshot, "GET_BACKOFF", real_backoff)
-        sess = FakeSession({SRCFILES_URL: FakeResponse(status_code=500)})
-        with self.assertRaises(snapshot.SnapshotError):
-            snapshot.source_files(sess, "bash", "5.1-2")
-        # Every attempt, not just the first, since a 5xx is treated as
-        # transient (see _get()'s own comment).
-        self.assertEqual(len(sess.requested), snapshot.GET_ATTEMPTS)
+        try:
+            sess = FakeSession({SRCFILES_URL: FakeResponse(status_code=500)})
+            with self.assertRaises(snapshot.SnapshotError):
+                snapshot.source_files(sess, "bash", "5.1-2")
+            # Every attempt, not just the first, since a 5xx is treated as
+            # transient (see _get()'s own comment).
+            self.assertEqual(len(sess.requested), snapshot.GET_ATTEMPTS)
+        finally:
+            snapshot.GET_BACKOFF = real_backoff
 
 class GetRetriesATransientFailureThenSucceeds(avocado.Test):
     def test(self):
         real_backoff = snapshot.GET_BACKOFF
         snapshot.GET_BACKOFF = 0
-        self.addCleanup(setattr, snapshot, "GET_BACKOFF", real_backoff)
-        sess = FakeSession({SRCFILES_URL: [
-            FakeResponse(status_code=503),
-            FakeResponse(json_body={"result": [], "fileinfo": {}}),
-        ]})
-        self.assertEqual(snapshot.source_files(sess, "bash", "5.1-2"), {})
-        self.assertEqual(len(sess.requested), 2)
+        try:
+            sess = FakeSession({SRCFILES_URL: [
+                FakeResponse(status_code=503),
+                FakeResponse(json_body={"result": [], "fileinfo": {}}),
+            ]})
+            self.assertEqual(snapshot.source_files(sess, "bash", "5.1-2"), {})
+            self.assertEqual(len(sess.requested), 2)
+        finally:
+            snapshot.GET_BACKOFF = real_backoff
 
 class DownloadWritesAtomicallyAndReturnsItsOwnSha256(avocado.Test):
     def test(self):
