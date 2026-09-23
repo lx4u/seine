@@ -193,23 +193,25 @@ class SocketProtocol(avocado.Test):
             app = self.SeineApp(interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                conn.send({"type": "input", "text": "/nope"})
-                # Waiting on history (populated by dispatch, after Enter)
-                # rather than prompt.value (already "/nope" the moment
-                # typing finishes, before Enter is even sent) -- the
-                # latter would pass before the submit round trip in
-                # _handle_socket_message() has actually run.
-                lines = lambda: [e["line"] for e in app.history.entries(("commands",))]
-                await _wait_until(pilot, lambda: "/nope" in lines())
-                # Enter was processed by the real Prompt (on_input_
-                # submitted() clears it on any submit, same as a keyboard
-                # Enter -- tests/tui/tui.py's own
-                # test_history_recalls_previous_commands_on_up relies on
-                # the same clear-then-recall-with-Up shape), not just
-                # injected straight into history.
-                prompt = app.screen.query_one("#prompt", self.Prompt)
-                self.assertEqual(prompt.value, "")
+                try:
+                    conn.send({"type": "input", "text": "/nope"})
+                    # Waiting on history (populated by dispatch, after Enter)
+                    # rather than prompt.value (already "/nope" the moment
+                    # typing finishes, before Enter is even sent) -- the
+                    # latter would pass before the submit round trip in
+                    # _handle_socket_message() has actually run.
+                    lines = lambda: [e["line"] for e in app.history.entries(("commands",))]
+                    await _wait_until(pilot, lambda: "/nope" in lines())
+                    # Enter was processed by the real Prompt (on_input_
+                    # submitted() clears it on any submit, same as a keyboard
+                    # Enter -- tests/tui/tui.py's own
+                    # test_history_recalls_previous_commands_on_up relies on
+                    # the same clear-then-recall-with-Up shape), not just
+                    # injected straight into history.
+                    prompt = app.screen.query_one("#prompt", self.Prompt)
+                    self.assertEqual(prompt.value, "")
+                finally:
+                    conn.close()
         _run(scenario)
 
     def test_ai_input_forwards_to_ai_ask(self):
@@ -219,14 +221,18 @@ class SocketProtocol(avocado.Test):
             calls = []
             real_ask = self.ai.ask
             self.ai.ask = lambda a, prompt: calls.append((a, prompt))
-            self.addCleanup(setattr, self.ai, "ask", real_ask)
-            async with app.run_test() as pilot:
-                conn = _connect(path)
-                self.addCleanup(conn.close)
-                conn.send({"type": "ai_input", "prompt": "hello there"})
-                await _wait_until(pilot, lambda: len(calls) == 1)
-                self.assertIs(calls[0][0], app)
-                self.assertEqual(calls[0][1], "hello there")
+            try:
+                async with app.run_test() as pilot:
+                    conn = _connect(path)
+                    try:
+                        conn.send({"type": "ai_input", "prompt": "hello there"})
+                        await _wait_until(pilot, lambda: len(calls) == 1)
+                        self.assertIs(calls[0][0], app)
+                        self.assertEqual(calls[0][1], "hello there")
+                    finally:
+                        conn.close()
+            finally:
+                self.ai.ask = real_ask
         _run(scenario)
 
     # A garbage line must not kill the connection for the well-formed
@@ -237,11 +243,13 @@ class SocketProtocol(avocado.Test):
             app = self.SeineApp(interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                conn.send_raw(b"not json\n")
-                conn.send({"type": "input", "text": "/nope"})
-                lines = lambda: [e["line"] for e in app.history.entries(("commands",))]
-                await _wait_until(pilot, lambda: "/nope" in lines())
+                try:
+                    conn.send_raw(b"not json\n")
+                    conn.send({"type": "input", "text": "/nope"})
+                    lines = lambda: [e["line"] for e in app.history.entries(("commands",))]
+                    await _wait_until(pilot, lambda: "/nope" in lines())
+                finally:
+                    conn.close()
         _run(scenario)
 
     # An unrecognized "type" is ignored -- and does not wedge the
@@ -252,11 +260,13 @@ class SocketProtocol(avocado.Test):
             app = self.SeineApp(interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                conn.send({"type": "future-feature"})
-                conn.send({"type": "input", "text": "/nope"})
-                lines = lambda: [e["line"] for e in app.history.entries(("commands",))]
-                await _wait_until(pilot, lambda: "/nope" in lines())
+                try:
+                    conn.send({"type": "future-feature"})
+                    conn.send({"type": "input", "text": "/nope"})
+                    lines = lambda: [e["line"] for e in app.history.entries(("commands",))]
+                    await _wait_until(pilot, lambda: "/nope" in lines())
+                finally:
+                    conn.close()
         _run(scenario)
 
 # AIState's half of the bridge: which messages _socket_send_ai_messages()
@@ -296,13 +306,15 @@ class SocketAIBridge(avocado.Test):
             app = self.SeineApp(interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                app.ai_state.messages.append({"role": "user", "content": "hi"})
-                app.ai_state.messages.append({"role": "assistant", "content": "hello there"})
-                app.ai_state.changed()
-                msg = conn.recv()
-                self.assertEqual(msg, {"type": "ai_message", "content": "hello there"})
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    app.ai_state.messages.append({"role": "user", "content": "hi"})
+                    app.ai_state.messages.append({"role": "assistant", "content": "hello there"})
+                    app.ai_state.changed()
+                    msg = conn.recv()
+                    self.assertEqual(msg, {"type": "ai_message", "content": "hello there"})
+                finally:
+                    conn.close()
         _run(scenario)
 
     # Regression check for the original commit: AIState.changed() used
@@ -337,11 +349,13 @@ class SocketAppEvents(avocado.Test):
         self.PlanScreen = PlanScreen
         self.SeineApp = SeineApp
         self.real_build = Image.build
-        self.addCleanup(setattr, Image, "build", self.real_build)
-        from seine import tasks
-        self.addCleanup(tasks._interrupted.clear)
         os.environ["SEINE_CACHE_DIR"] = self.workdir
         os.environ["XDG_CONFIG_HOME"] = self.workdir
+
+    def tearDown(self):
+        from seine import tasks
+        self.Image.build = self.real_build
+        tasks._interrupted.clear()
 
     def test_build_finished_emits_an_event(self):
         from seine import tasks
@@ -357,19 +371,21 @@ class SocketAppEvents(avocado.Test):
             app = self.SeineApp(files=[NATIVE_IMAGE], interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                prompt = app.screen.query_one("#prompt")
-                prompt.value = "/build"
-                await pilot.press("enter")
-                for _ in range(50):
-                    if not app.build_state.running:
-                        break
-                    await asyncio.sleep(0.02)
-                    await pilot.pause()
-                msg = conn.recv_until("build_finished")
-                self.assertEqual(msg, {"type": "build_finished", "error": False,
-                                       "message": "build finished"})
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    prompt = app.screen.query_one("#prompt")
+                    prompt.value = "/build"
+                    await pilot.press("enter")
+                    for _ in range(50):
+                        if not app.build_state.running:
+                            break
+                        await asyncio.sleep(0.02)
+                        await pilot.pause()
+                    msg = conn.recv_until("build_finished")
+                    self.assertEqual(msg, {"type": "build_finished", "error": False,
+                                           "message": "build finished"})
+                finally:
+                    conn.close()
         _run(scenario)
 
     def test_screen_changed_emits_an_event(self):
@@ -378,13 +394,15 @@ class SocketAppEvents(avocado.Test):
             app = self.SeineApp(files=[NATIVE_IMAGE], interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                app.show("plan")
-                await pilot.pause()
-                self.assertIsInstance(app.screen, self.PlanScreen)
-                msg = conn.recv()
-                self.assertEqual(msg, {"type": "screen_changed", "screen": "plan"})
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    app.show("plan")
+                    await pilot.pause()
+                    self.assertIsInstance(app.screen, self.PlanScreen)
+                    msg = conn.recv()
+                    self.assertEqual(msg, {"type": "screen_changed", "screen": "plan"})
+                finally:
+                    conn.close()
         _run(scenario)
 
     # show() only switches (and only the switch is worth an event) when
@@ -396,11 +414,13 @@ class SocketAppEvents(avocado.Test):
             app = self.SeineApp(files=[NATIVE_IMAGE], interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                app.show("overview")
-                await pilot.pause()
-                self.assertIsNone(conn.recv())
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    app.show("overview")
+                    await pilot.pause()
+                    self.assertIsNone(conn.recv())
+                finally:
+                    conn.close()
         _run(scenario)
 
 # A minimal stand-in for mtda.client.Client -- same shape/role as
@@ -449,7 +469,9 @@ class SocketTargetEvents(avocado.Test):
         mtda_pkg.client = types.SimpleNamespace(Client=lambda host=None: self.client)
         sys.modules["mtda"] = mtda_pkg
         sys.modules["mtda.client"] = mtda_pkg.client
-        self.addCleanup(self._restore_mtda)
+
+    def tearDown(self):
+        self._restore_mtda()
 
     def _restore_mtda(self):
         self.target._available = None
@@ -466,11 +488,13 @@ class SocketTargetEvents(avocado.Test):
             app = self.SeineApp(files=[NATIVE_IMAGE], interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                self.target.connect(app)
-                msg = conn.recv()
-                self.assertEqual(msg, {"type": "target_connected", "agent": "Local"})
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    self.target.connect(app)
+                    msg = conn.recv()
+                    self.assertEqual(msg, {"type": "target_connected", "agent": "Local"})
+                finally:
+                    conn.close()
         _run(scenario)
 
     def test_storage_to_host_emits_an_event(self):
@@ -480,11 +504,13 @@ class SocketTargetEvents(avocado.Test):
             async with app.run_test() as pilot:
                 self.target.connect(app)
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                self.target.storage_to_host(app)
-                msg = conn.recv()
-                self.assertEqual(msg, {"type": "target_storage_on_host"})
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    self.target.storage_to_host(app)
+                    msg = conn.recv()
+                    self.assertEqual(msg, {"type": "target_storage_on_host"})
+                finally:
+                    conn.close()
         _run(scenario)
 
     def test_write_image_emits_target_storage_write_completed(self):
@@ -494,12 +520,14 @@ class SocketTargetEvents(avocado.Test):
             async with app.run_test() as pilot:
                 self.target.connect(app)
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                self.target.write_image(app, "/tmp/rootfs.img")
-                msg = conn.recv()
-                self.assertEqual(msg, {"type": "target_storage_write_completed",
-                                       "path": "/tmp/rootfs.img"})
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    self.target.write_image(app, "/tmp/rootfs.img")
+                    msg = conn.recv()
+                    self.assertEqual(msg, {"type": "target_storage_write_completed",
+                                           "path": "/tmp/rootfs.img"})
+                finally:
+                    conn.close()
                 self.assertIn(("storage_write_image", "/tmp/rootfs.img"), self.client.calls)
                 self.assertIn(("storage_to_target",), self.client.calls)
         _run(scenario)
@@ -622,7 +650,9 @@ class SocketAIEvents(avocado.Test):
         os.environ["XDG_CONFIG_HOME"] = self.workdir
         os.environ["SEINE_LLM_MODEL"] = "openai/fake"
         self._real_litellm = sys.modules.get("litellm")
-        self.addCleanup(self._restore_litellm)
+
+    def tearDown(self):
+        self._restore_litellm()
 
     def _restore_litellm(self):
         if self._real_litellm is not None:
@@ -685,22 +715,24 @@ class SocketAIEvents(avocado.Test):
             app = self.SeineApp(files=[spec], interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                prompt = app.screen.query_one("#prompt")
-                prompt.value = "add a new fragment file with 'extra: true'"
-                await pilot.press("enter")
-                await self._wait_for_confirm(app, pilot)
-                shown = conn.recv_until("confirm_shown")
-                self.assertEqual(shown["type"], "confirm_shown")
-                self.assertEqual(shown["tool"], "spec-create")
-                self.assertEqual(shown["arguments"], arguments)
-                self.assertIsInstance(shown["preview"], str)  # a real diff, not None
-                await pilot.press("enter")  # 'Yes' is highlighted first
-                resolved = conn.recv_until("confirm_resolved")
-                self.assertEqual(resolved, {"type": "confirm_resolved",
-                                            "tool": "spec-create", "approved": True})
-                await self._settle(app, pilot)
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    prompt = app.screen.query_one("#prompt")
+                    prompt.value = "add a new fragment file with 'extra: true'"
+                    await pilot.press("enter")
+                    await self._wait_for_confirm(app, pilot)
+                    shown = conn.recv_until("confirm_shown")
+                    self.assertEqual(shown["type"], "confirm_shown")
+                    self.assertEqual(shown["tool"], "spec-create")
+                    self.assertEqual(shown["arguments"], arguments)
+                    self.assertIsInstance(shown["preview"], str)  # a real diff, not None
+                    await pilot.press("enter")  # 'Yes' is highlighted first
+                    resolved = conn.recv_until("confirm_resolved")
+                    self.assertEqual(resolved, {"type": "confirm_resolved",
+                                                "tool": "spec-create", "approved": True})
+                    await self._settle(app, pilot)
+                finally:
+                    conn.close()
         _run(scenario)
 
     def test_confirm_resolved_reports_a_denial(self):
@@ -714,19 +746,21 @@ class SocketAIEvents(avocado.Test):
             app = self.SeineApp(files=[spec], interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                prompt = app.screen.query_one("#prompt")
-                prompt.value = "add a new fragment file with 'extra: true'"
-                await pilot.press("enter")
-                await self._wait_for_confirm(app, pilot)
-                conn.recv_until("confirm_shown")
-                await pilot.press("escape")
-                resolved = conn.recv_until("confirm_resolved")
-                self.assertEqual(resolved, {"type": "confirm_resolved",
-                                            "tool": "spec-create", "approved": False})
-                self.assertFalse(os.path.exists(new_path))
-                await self._settle(app, pilot)
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    prompt = app.screen.query_one("#prompt")
+                    prompt.value = "add a new fragment file with 'extra: true'"
+                    await pilot.press("enter")
+                    await self._wait_for_confirm(app, pilot)
+                    conn.recv_until("confirm_shown")
+                    await pilot.press("escape")
+                    resolved = conn.recv_until("confirm_resolved")
+                    self.assertEqual(resolved, {"type": "confirm_resolved",
+                                                "tool": "spec-create", "approved": False})
+                    self.assertFalse(os.path.exists(new_path))
+                    await self._settle(app, pilot)
+                finally:
+                    conn.close()
         _run(scenario)
 
     def test_ai_turn_finished_emits_an_event(self):
@@ -736,14 +770,16 @@ class SocketAIEvents(avocado.Test):
             app = self.SeineApp(interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                prompt = app.screen.query_one("#prompt")
-                prompt.value = "is sudo installed?"
-                await pilot.press("enter")
-                await self._settle(app, pilot)
-                msg = conn.recv_until("ai_turn_finished")
-                self.assertEqual(msg, {"type": "ai_turn_finished"})
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    prompt = app.screen.query_one("#prompt")
+                    prompt.value = "is sudo installed?"
+                    await pilot.press("enter")
+                    await self._settle(app, pilot)
+                    msg = conn.recv_until("ai_turn_finished")
+                    self.assertEqual(msg, {"type": "ai_turn_finished"})
+                finally:
+                    conn.close()
         _run(scenario)
 
     def test_spec_create_emits_spec_written_with_the_real_path(self):
@@ -756,18 +792,20 @@ class SocketAIEvents(avocado.Test):
             app = self.SeineApp(files=[spec], interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                prompt = app.screen.query_one("#prompt")
-                prompt.value = "add a new fragment file with 'extra: true'"
-                await pilot.press("enter")
-                await self._wait_for_confirm(app, pilot)
-                await pilot.press("enter")  # 'Yes' is highlighted first
-                msg = conn.recv_until("spec_written")
-                self.assertEqual(msg, {"type": "spec_written",
-                                       "path": os.path.realpath(new_path)})
-                self.assertTrue(os.path.exists(new_path))
-                await self._settle(app, pilot)
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    prompt = app.screen.query_one("#prompt")
+                    prompt.value = "add a new fragment file with 'extra: true'"
+                    await pilot.press("enter")
+                    await self._wait_for_confirm(app, pilot)
+                    await pilot.press("enter")  # 'Yes' is highlighted first
+                    msg = conn.recv_until("spec_written")
+                    self.assertEqual(msg, {"type": "spec_written",
+                                           "path": os.path.realpath(new_path)})
+                    self.assertTrue(os.path.exists(new_path))
+                    await self._settle(app, pilot)
+                finally:
+                    conn.close()
         _run(scenario)
 
 # TestState (seine/tui/testing.py) gained an 'on_finished' hook, same
@@ -790,13 +828,15 @@ class SocketTestEvents(avocado.Test):
             app = self.SeineApp(interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                result = types.SimpleNamespace(ok=True, summary=lambda: "4 tests, 4 passed")
-                app.test_state.finished_ok(result)
-                msg = conn.recv()
-                self.assertEqual(msg, {"type": "test_finished", "error": False,
-                                       "message": "4 tests, 4 passed"})
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    result = types.SimpleNamespace(ok=True, summary=lambda: "4 tests, 4 passed")
+                    app.test_state.finished_ok(result)
+                    msg = conn.recv()
+                    self.assertEqual(msg, {"type": "test_finished", "error": False,
+                                           "message": "4 tests, 4 passed"})
+                finally:
+                    conn.close()
         _run(scenario)
 
     def test_finished_failed_emits_an_event(self):
@@ -805,10 +845,12 @@ class SocketTestEvents(avocado.Test):
             app = self.SeineApp(interaction_socket=path)
             async with app.run_test() as pilot:
                 conn = _connect(path)
-                self.addCleanup(conn.close)
-                await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
-                app.test_state.finished_failed("robotframework is not installed")
-                msg = conn.recv()
-                self.assertEqual(msg, {"type": "test_finished", "error": True,
-                                       "message": "robotframework is not installed"})
+                try:
+                    await _wait_until(pilot, lambda: len(app._socket_clients) == 1)
+                    app.test_state.finished_failed("robotframework is not installed")
+                    msg = conn.recv()
+                    self.assertEqual(msg, {"type": "test_finished", "error": True,
+                                           "message": "robotframework is not installed"})
+                finally:
+                    conn.close()
         _run(scenario)
