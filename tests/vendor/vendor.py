@@ -52,6 +52,20 @@ def load(text):
     distro = utils.distribution(build.spec)
     return build.spec, distro
 
+class _CleansUpPaths:
+    _cleanup_paths = ()
+
+    def track(self, path):
+        self._cleanup_paths = self._cleanup_paths + (path,)
+        return path
+
+    def tearDown(self):
+        for path in self._cleanup_paths:
+            if os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+            elif os.path.exists(path):
+                os.unlink(path)
+
 # VendorCmd's own jobs default -- BuildCmd's twin (tests/build/build.py's
 # own DefaultJobCount): 1 unless a persisted setting overrides it, an
 # explicit -j/--jobs still winning either way.
@@ -276,12 +290,12 @@ class SuitesComeFromEveryConfiguredFeedAsked(avocado.Test):
             sorted(e.name for e in vendor.entries_for(entries, "bookworm-security")),
             ["busybox", "openssl"])
 
-class SuiteFlagOnlyValidatesFeedsItNeeds(avocado.Test):
+class SuiteFlagOnlyValidatesFeedsItNeeds(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import VendorCmd
         spec_file = tempfile.NamedTemporaryFile(
             mode="w", suffix=".yaml", delete=False)
-        self.addCleanup(os.unlink, spec_file.name)
+        self.track(spec_file.name)
         spec_file.write("""
                 distribution:
                     release: bookworm
@@ -312,12 +326,12 @@ class SuiteFlagOnlyValidatesFeedsItNeeds(avocado.Test):
             cmd.main(["--suite", "trixie", spec_file.name])
         self.assertEqual(ctx.exception.code, 3)
 
-class ArchitectureFlagNarrowsFetchingAlone(avocado.Test):
+class ArchitectureFlagNarrowsFetchingAlone(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import VendorCmd
         spec_file = tempfile.NamedTemporaryFile(
             mode="w", suffix=".yaml", delete=False)
-        self.addCleanup(os.unlink, spec_file.name)
+        self.track(spec_file.name)
         spec_file.write("""
                 distribution:
                     release: bookworm
@@ -361,12 +375,12 @@ class ArchitectureFlagNarrowsFetchingAlone(avocado.Test):
 # 'distribution: architectures:' reaches the CLI the same way 'vendor:'
 # entries' own 'arch:' does -- both fold into main()'s own
 # available_archs, and both reach '_run()' as 'extra_archs'.
-class DistributionArchitecturesWidensWhatArchitectureAccepts(avocado.Test):
+class DistributionArchitecturesWidensWhatArchitectureAccepts(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import VendorCmd
         spec_file = tempfile.NamedTemporaryFile(
             mode="w", suffix=".yaml", delete=False)
-        self.addCleanup(os.unlink, spec_file.name)
+        self.track(spec_file.name)
         spec_file.write("""
                 distribution:
                     release: bookworm
@@ -1776,10 +1790,10 @@ class MergeVendorDictGoesToVendorLock(avocado.Test):
             build.spec["_vendor_lock"]["bookworm"]["sources"]["openssl"]["version"],
             "3.0.11-1")
 
-class LoadAllSplicesSiblingLockFile(avocado.Test):
+class LoadAllSplicesSiblingLockFile(_CleansUpPaths, avocado.Test):
     def test(self):
         spec_dir = tempfile.mkdtemp(prefix="seine-tests-lock-")
-        self.addCleanup(shutil.rmtree, spec_dir, ignore_errors=True)
+        self.track(spec_dir)
         spec_path = os.path.join(spec_dir, "foo.yaml")
         lock_path = os.path.join(spec_dir, "foo.lock.yaml")
         with open(spec_path, "w") as f:
@@ -1854,7 +1868,7 @@ class VendorLockSuiteIsTrustedWithoutResolving(avocado.Test):
 # (which does take the manifest as an argument) having fetched the
 # right files. No save_manifest() call anywhere in this test -- that is
 # the point.
-class VendorLockIndexesWithoutAnyCacheManifest(avocado.Test):
+class VendorLockIndexesWithoutAnyCacheManifest(_CleansUpPaths, avocado.Test):
     def distro(self):
         return {"source": "debian", "release": "bookworm", "architecture": "amd64",
                "uri": "http://example.com/debian",
@@ -1868,8 +1882,8 @@ class VendorLockIndexesWithoutAnyCacheManifest(avocado.Test):
         suite = "lock-index-test-%d" % os.getpid()
         fetched = repository(suite)
         deployed = deploy_repository(suite)
-        self.addCleanup(shutil.rmtree, fetched, ignore_errors=True)
-        self.addCleanup(shutil.rmtree, deployed, ignore_errors=True)
+        self.track(fetched)
+        self.track(deployed)
         open(os.path.join(fetched, "openssl_3.0.11-1.dsc"), "w").close()
 
         entries = vendor.parse({"vendor": [{"name": "openssl"}]})
@@ -1926,7 +1940,7 @@ class VendorLockDigestMismatchRefusesOutright(avocado.Test):
                          vendor_lock=vendor_lock)
         self.assertIn("out of date", str(ctx.exception))
 
-class RefreshAlwaysWritesTheLockFile(avocado.Test):
+class RefreshAlwaysWritesTheLockFile(_CleansUpPaths, avocado.Test):
     def distro(self):
         return {"source": "debian", "release": "bookworm", "architecture": "amd64",
                "uri": "http://example.com/debian",
@@ -1955,8 +1969,7 @@ class RefreshAlwaysWritesTheLockFile(avocado.Test):
 
         lock_path = os.path.join(tempfile.mkdtemp(prefix="seine-tests-lock-"),
                                  "spec.lock.yaml")
-        self.addCleanup(shutil.rmtree, os.path.dirname(lock_path),
-                        ignore_errors=True)
+        self.track(os.path.dirname(lock_path))
 
         cmd = VendorCmd()
         cmd.options["jobs"] = 1
@@ -2038,17 +2051,17 @@ class CheckReportsDriftWithoutWritingAnything(avocado.Test):
                 check=True)
         self.assertEqual(code, 0)
 
-class RefreshAndCheckNeedExactlyOneSpecFile(avocado.Test):
+class RefreshAndCheckNeedExactlyOneSpecFile(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import VendorCmd
         spec_a = tempfile.NamedTemporaryFile(
             mode="w", suffix=".yaml", delete=False)
-        self.addCleanup(os.unlink, spec_a.name)
+        self.track(spec_a.name)
         spec_a.write("vendor:\n    - name: openssl\n")
         spec_a.close()
         spec_b = tempfile.NamedTemporaryFile(
             mode="w", suffix=".yaml", delete=False)
-        self.addCleanup(os.unlink, spec_b.name)
+        self.track(spec_b.name)
         spec_b.write("vendor:\n    - name: git\n")
         spec_b.close()
 
@@ -2116,7 +2129,7 @@ def _vendor_cmd(jobs=1, verbose=True):
 # and counts how many calls were ever in flight at once, is the
 # straightforward way to prove real concurrency rather than trust that
 # building Task objects implies it.
-class EnrichForLockRunsLookupsConcurrentlyUpToJobs(avocado.Test):
+class EnrichForLockRunsLookupsConcurrentlyUpToJobs(_CleansUpPaths, avocado.Test):
     def test(self):
         import threading
         import time
@@ -2125,7 +2138,7 @@ class EnrichForLockRunsLookupsConcurrentlyUpToJobs(avocado.Test):
 
         suite = "enrich-concurrency-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
 
         lock = threading.Lock()
         state = {"inflight": 0, "max_inflight": 0}
@@ -2158,7 +2171,7 @@ class EnrichForLockRunsLookupsConcurrentlyUpToJobs(avocado.Test):
         # in flight; run concurrently up to 'jobs', more than one
         # really was in flight at once.
         self.assertGreater(state["max_inflight"], 1)
-class EnrichForLockSaysMadeOnAQueryAndReusedOnACacheHit(avocado.Test):
+class EnrichForLockSaysMadeOnAQueryAndReusedOnACacheHit(_CleansUpPaths, avocado.Test):
     def test(self):
         import hashlib
         from seine.vendor import repository
@@ -2166,7 +2179,7 @@ class EnrichForLockSaysMadeOnAQueryAndReusedOnACacheHit(avocado.Test):
 
         suite = "enrich-verbose-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
         content = b"dsc content"
         fname = "openssl_3.0.11-1.dsc"
         with open(os.path.join(where, fname), "wb") as f:
@@ -2237,7 +2250,7 @@ class EnrichForLockSaysMadeOnAQueryAndReusedOnACacheHit(avocado.Test):
 
         suite = "enrich-verbose-binary-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
         content = b"deb bytes"
         deb_name = "libssl3_3.0.11-1_amd64.deb"
         with open(os.path.join(where, deb_name), "wb") as f:
@@ -2267,7 +2280,7 @@ class EnrichForLockSaysMadeOnAQueryAndReusedOnACacheHit(avocado.Test):
         self.assertEqual(quiet_sess.requested, [])
         self.assertIn("vendor snapshot libssl3:amd64=3.0.11-1 reused", out.getvalue())
 
-class EnrichForLockRecordsASnapshotUrlOnHashMatch(avocado.Test):
+class EnrichForLockRecordsASnapshotUrlOnHashMatch(_CleansUpPaths, avocado.Test):
     def test(self):
         import hashlib
         from seine.vendor import repository
@@ -2275,7 +2288,7 @@ class EnrichForLockRecordsASnapshotUrlOnHashMatch(avocado.Test):
 
         suite = "enrich-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
         content = b"dsc content"
         fname = "openssl_3.0.11-1.dsc"
         with open(os.path.join(where, fname), "wb") as f:
@@ -2305,7 +2318,7 @@ class EnrichForLockRecordsASnapshotUrlOnHashMatch(avocado.Test):
 # one of them again. Proven here by handing the second run a session
 # that 404s everything -- if it were actually queried, the recorded
 # 'snapshot' entry would vanish, not survive.
-class EnrichForLockCachesAMatchAndNeverAsksSnapshotAgain(avocado.Test):
+class EnrichForLockCachesAMatchAndNeverAsksSnapshotAgain(_CleansUpPaths, avocado.Test):
     def test(self):
         import hashlib
         from seine.vendor import repository
@@ -2313,7 +2326,7 @@ class EnrichForLockCachesAMatchAndNeverAsksSnapshotAgain(avocado.Test):
 
         suite = "enrich-cache-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
         content = b"dsc content"
         fname = "openssl_3.0.11-1.dsc"
         with open(os.path.join(where, fname), "wb") as f:
@@ -2345,13 +2358,13 @@ class EnrichForLockCachesAMatchAndNeverAsksSnapshotAgain(avocado.Test):
 # never cached -- a freshly uploaded version lags behind snapshot's own
 # indexing, and caching "not found" forever would mean a later refresh,
 # run once the mirror has caught up, never noticing.
-class EnrichForLockNeverCachesAMiss(avocado.Test):
+class EnrichForLockNeverCachesAMiss(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import repository
 
         suite = "enrich-nocache-miss-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
         fname = "openssl_3.0.11-1.dsc"
         with open(os.path.join(where, fname), "wb") as f:
             f.write(b"content")
@@ -2374,7 +2387,7 @@ class EnrichForLockNeverCachesAMiss(avocado.Test):
 # own declared checksum has to actually match what apt just fetched, or
 # recording the URL would let a later plain 'seine vendor' silently pull
 # different bytes than the ones '--refresh' verified.
-class EnrichForLockSkipsOnHashMismatch(avocado.Test):
+class EnrichForLockSkipsOnHashMismatch(_CleansUpPaths, avocado.Test):
     def test(self):
         import hashlib
         from seine.vendor import repository
@@ -2382,7 +2395,7 @@ class EnrichForLockSkipsOnHashMismatch(avocado.Test):
 
         suite = "enrich-mismatch-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
         fname = "openssl_3.0.11-1.dsc"
         with open(os.path.join(where, fname), "wb") as f:
             f.write(b"local content")
@@ -2413,7 +2426,7 @@ class EnrichForLockSkipsOnHashMismatch(avocado.Test):
 # was actually fetched only matched by chance -- this checks every
 # candidate snapshot.debian.org names for the filename, not just the
 # first.
-class EnrichForLockChecksEveryCandidateNotJustTheFirst(avocado.Test):
+class EnrichForLockChecksEveryCandidateNotJustTheFirst(_CleansUpPaths, avocado.Test):
     def test(self):
         import hashlib
         from seine.vendor import repository
@@ -2421,7 +2434,7 @@ class EnrichForLockChecksEveryCandidateNotJustTheFirst(avocado.Test):
 
         suite = "enrich-multi-upload-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
         fname = "golang-foo_1.0-1.dsc"
         actual_content = b"the upload apt actually fetched this time"
         with open(os.path.join(where, fname), "wb") as f:
@@ -2452,13 +2465,13 @@ class EnrichForLockChecksEveryCandidateNotJustTheFirst(avocado.Test):
 
 # Not an error, matching seine/snapshot.py's own docstring: '--refresh'
 # still succeeds, this source just has nothing to fall back to later.
-class EnrichForLockSkipsWhenSnapshotHasNothing(avocado.Test):
+class EnrichForLockSkipsWhenSnapshotHasNothing(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import repository
 
         suite = "enrich-404-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
         fname = "openssl_3.0.11-1.dsc"
         with open(os.path.join(where, fname), "wb") as f:
             f.write(b"content")
@@ -2479,13 +2492,13 @@ class EnrichForLockSkipsWhenSnapshotHasNothing(avocado.Test):
 # task_runner.run()'s own tasks.ordered() rejects outright
 # ("duplicate task"). This must not raise, and must only query
 # snapshot.debian.org once for the pair.
-class EnrichForLockDedupsABinaryReachableFromTwoSources(avocado.Test):
+class EnrichForLockDedupsABinaryReachableFromTwoSources(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import repository
 
         suite = "enrich-dedup-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
         deb_name = "ecj_1.0-1_amd64.deb"
         with open(os.path.join(where, deb_name), "wb") as f:
             f.write(b"deb bytes")
@@ -2525,14 +2538,14 @@ class FetchTasksDedupsABinaryReachableFromTwoSources(avocado.Test):
         self.assertEqual(len(names), len(set(names)))
         self.assertEqual(len([n for n in names if n.startswith("fetch-bin:")]), 1)
 
-class FetchSourceUsesSnapshotDirectlyWhenRecorded(avocado.Test):
+class FetchSourceUsesSnapshotDirectlyWhenRecorded(_CleansUpPaths, avocado.Test):
     def test(self):
         import hashlib
         from seine.vendor import fetch_source, repository
 
         suite = "fetch-snapshot-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
         content = b"dsc bytes"
         expected = hashlib.sha256(content).hexdigest()
 
@@ -2552,13 +2565,13 @@ class FetchSourceUsesSnapshotDirectlyWhenRecorded(avocado.Test):
 # The hard-error/no-fallback guarantee: a snapshot download that does
 # not match the lock's own recorded hash is refused outright, and the
 # bad file is not left behind for a later run to trust by accident.
-class FetchSourceRefusesAMismatchedSnapshotFile(avocado.Test):
+class FetchSourceRefusesAMismatchedSnapshotFile(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import fetch_source, repository
 
         suite = "fetch-snapshot-mismatch-test-%d" % os.getpid()
         where = repository(suite)
-        self.addCleanup(shutil.rmtree, where, ignore_errors=True)
+        self.track(where)
 
         def fake_download(sess, url, dest):
             with open(dest, "wb") as f:
@@ -2613,7 +2626,7 @@ class FetchTasksNeverBuildsAContainerForASnapshotPinnedSource(avocado.Test):
 # worth a test of its own, since it is easy to lose silently (a
 # reformat that drops the kwarg, a future field built from a raw
 # set() and never sorted).
-class SaveLockOutputIsDeterministicRegardlessOfDictOrder(avocado.Test):
+class SaveLockOutputIsDeterministicRegardlessOfDictOrder(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import save_lock, load_lock
 
@@ -2632,7 +2645,7 @@ class SaveLockOutputIsDeterministicRegardlessOfDictOrder(avocado.Test):
                        "version": "3.0.11-1"}}, "digest": "d"}}
 
         workdir = tempfile.mkdtemp(prefix="seine-tests-lock-order-")
-        self.addCleanup(shutil.rmtree, workdir, ignore_errors=True)
+        self.track(workdir)
         path_a = os.path.join(workdir, "a.lock.yaml")
         path_b = os.path.join(workdir, "b.lock.yaml")
         save_lock(path_a, a)
@@ -2715,7 +2728,7 @@ class CompressFilesFoldsHashAndSnapshotIntoOneScalar(avocado.Test):
                           "openssl_3.0.11.orig.tar.gz": sha256_b})
         self.assertEqual(_expand_files(compressed), sources)
 
-class SaveLockMergesAMatchingBinaryIntoItsOwnHash(avocado.Test):
+class SaveLockMergesAMatchingBinaryIntoItsOwnHash(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import save_lock, load_lock
 
@@ -2726,7 +2739,7 @@ class SaveLockMergesAMatchingBinaryIntoItsOwnHash(avocado.Test):
             "binary_hashes": {"libssl3": {"amd64": "a" * 64},
                               "libssl3-udeb": {"amd64": "b" * 64}}}}}}
         workdir = tempfile.mkdtemp(prefix="seine-tests-lock-compress-")
-        self.addCleanup(shutil.rmtree, workdir, ignore_errors=True)
+        self.track(workdir)
         path = os.path.join(workdir, "spec.lock.yaml")
         save_lock(path, suites)
         with open(path) as f:
@@ -2750,12 +2763,12 @@ class SaveLockMergesAMatchingBinaryIntoItsOwnHash(avocado.Test):
 # VendorCmd.main() expands it there too, by handing a compressed lock
 # straight to a stubbed _run() and inspecting what it actually
 # received.
-class MainExpandsACompressedLockLoadedThroughBuildCmd(avocado.Test):
+class MainExpandsACompressedLockLoadedThroughBuildCmd(_CleansUpPaths, avocado.Test):
     def test(self):
         from seine.vendor import VendorCmd
 
         spec_dir = tempfile.mkdtemp(prefix="seine-tests-lock-expand-")
-        self.addCleanup(shutil.rmtree, spec_dir, ignore_errors=True)
+        self.track(spec_dir)
         spec_path = os.path.join(spec_dir, "foo.yaml")
         lock_path = os.path.join(spec_dir, "foo.lock.yaml")
         with open(spec_path, "w") as f:

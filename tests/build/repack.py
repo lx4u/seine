@@ -19,7 +19,9 @@ from seine.deb import repack
 class RepackFixture(avocado.Test):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix="repack-test-")
-        self.addCleanup(shutil.rmtree, self.tmpdir, ignore_errors=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
 
 class ArReadWriteRoundTrips(RepackFixture):

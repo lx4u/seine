@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
+import atexit
 import avocado
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -14,6 +16,7 @@ sys.path.append(path_to_sources)
 # empty, per-run directory so a developer's real settings.json can never
 # change how many of these run in parallel.
 os.environ["XDG_CONFIG_HOME"] = tempfile.mkdtemp(prefix="seine-build-tests-config-")
+atexit.register(shutil.rmtree, os.environ["XDG_CONFIG_HOME"], ignore_errors=True)
 
 from seine import analyze
 from seine import settings

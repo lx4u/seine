@@ -93,8 +93,10 @@ def _build_deb(path, ko_content, extra_ko_xz=True,
 class KmodSignFixture(avocado.Test):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix="kmod-sign-test-")
-        self.addCleanup(shutil.rmtree, self.tmpdir, ignore_errors=True)
         self.vault = FakeVault()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def deb(self, name="example.deb", ko_content=b"unsigned module bytes",
            extra_ko_xz=True,

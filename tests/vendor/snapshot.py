@@ -146,14 +146,16 @@ class DownloadWritesAtomicallyAndReturnsItsOwnSha256(avocado.Test):
         content = b"hello snapshot"
         sess = FakeSession({"http://x/file": FakeResponse(content=content)})
         workdir = tempfile.mkdtemp(prefix="seine-tests-snapshot-")
-        self.addCleanup(shutil.rmtree, workdir, ignore_errors=True)
-        dest = os.path.join(workdir, "out.bin")
-        digest = snapshot.download(sess, "http://x/file", dest)
-        self.assertEqual(digest, hashlib.sha256(content).hexdigest())
-        with open(dest, "rb") as f:
-            self.assertEqual(f.read(), content)
-        # No leftover temporary file.
-        self.assertEqual(os.listdir(workdir), ["out.bin"])
+        try:
+            dest = os.path.join(workdir, "out.bin")
+            digest = snapshot.download(sess, "http://x/file", dest)
+            self.assertEqual(digest, hashlib.sha256(content).hexdigest())
+            with open(dest, "rb") as f:
+                self.assertEqual(f.read(), content)
+            # No leftover temporary file.
+            self.assertEqual(os.listdir(workdir), ["out.bin"])
+        finally:
+            shutil.rmtree(workdir, ignore_errors=True)
 
 class DownloadRaisesSnapshotErrorOnHttpFailure(avocado.Test):
     def test(self):

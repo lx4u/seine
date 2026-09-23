@@ -86,8 +86,10 @@ def _build_deb(path, pk_content, extra_pk=True,
 class UefiAuthSignFixture(avocado.Test):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix="uefi-auth-sign-test-")
-        self.addCleanup(shutil.rmtree, self.tmpdir, ignore_errors=True)
         self.vault = FakeVault()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def deb(self, name="example.deb", pk_content=b"unsigned ESL bytes",
            extra_pk=True,

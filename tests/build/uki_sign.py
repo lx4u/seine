@@ -86,8 +86,10 @@ def _build_deb(path, efi_content, extra_efi=True,
 class UkiSignFixture(avocado.Test):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp(prefix="uki-sign-test-")
-        self.addCleanup(shutil.rmtree, self.tmpdir, ignore_errors=True)
         self.vault = FakeVault()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def deb(self, name="example.deb", efi_content=b"unsigned PE bytes",
            extra_efi=True,
