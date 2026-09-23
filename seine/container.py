@@ -5,6 +5,7 @@
 # Split out of seine/utils.py, which got too big.
 
 import atexit
+import glob
 import hashlib
 import os
 import shutil
@@ -269,6 +270,14 @@ class ContainerEngine:
         short = os.path.join(base, "seine-tmp-%s" %
                              hashlib.sha1(cache.encode()).hexdigest()[:12])
         if not os.path.islink(short):
+            # A symlink for a build dir that's since been removed (e.g. a
+            # test's) stays here forever. Sweep those first.
+            for stale in glob.glob(os.path.join(base, "seine-tmp-*")):
+                if os.path.islink(stale) and not os.path.exists(stale):
+                    try:
+                        os.unlink(stale)
+                    except OSError:
+                        pass
             try:
                 os.symlink(cache, short)
             except FileExistsError:
