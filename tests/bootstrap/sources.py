@@ -28,7 +28,9 @@ class Workbench(avocado.Test):
         self.environment = dict(os.environ)
         os.environ.pop("SEINE_WORKBENCH_DIR", None)
         os.environ.pop("SEINE_BUILD_DIR", None)
-        self.addCleanup(self._restore)
+
+    def tearDown(self):
+        self._restore()
 
     def _restore(self):
         os.environ.clear()
@@ -194,7 +196,9 @@ class Pull(avocado.Test):
         FakeSourceBootstrap.instances = []
         FakeSourceBootstrap.effect = None
         FakeSourceBootstrap.result = (0, "")
-        self.addCleanup(self._restore)
+
+    def tearDown(self):
+        self._restore()
 
     def _restore(self):
         sources.SourceBootstrap = self.saved
@@ -270,7 +274,9 @@ class Cli(avocado.Test):
     def setUp(self):
         self.environment = dict(os.environ)
         os.environ["SEINE_WORKBENCH_DIR"] = self.workdir
-        self.addCleanup(self._restore)
+
+    def tearDown(self):
+        self._restore()
 
     def _restore(self):
         os.environ.clear()
@@ -349,7 +355,9 @@ class Bash(avocado.Test):
         self.saved_create = sources.HostBootstrap.create
         self.saved_run = ContainerEngine.run_captured
         sources.HostBootstrap.create = lambda self: self
-        self.addCleanup(self._restore)
+
+    def tearDown(self):
+        self._restore()
 
     def _restore(self):
         sources.HostBootstrap.create = self.saved_create

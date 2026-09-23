@@ -14,7 +14,6 @@ class Completing(avocado.Test):
     def setUp(self):
         self._cwd = os.getcwd()
         os.chdir(self.workdir)
-        self.addCleanup(os.chdir, self._cwd)
 
         os.mkdir("etc")
         os.mkdir("etc/nested")
@@ -24,6 +23,9 @@ class Completing(avocado.Test):
             pass
         with open(".hidden", "w"):
             pass
+
+    def tearDown(self):
+        os.chdir(self._cwd)
 
     def test_a_bare_prefix_matches_relative_to_cwd(self):
         self.assertEqual(complete("et"), ["etc/"])

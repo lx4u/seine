@@ -18,7 +18,9 @@ class DefaultDir(avocado.Test):
         self.environment = dict(os.environ)
         os.environ.pop("SEINE_GISTS_DIR", None)
         os.environ.pop("XDG_DATA_HOME", None)
-        self.addCleanup(self._restore)
+
+    def tearDown(self):
+        self._restore()
 
     def _restore(self):
         os.environ.clear()
@@ -110,7 +112,9 @@ class Cli(avocado.Test):
     def setUp(self):
         self.environment = dict(os.environ)
         os.environ["SEINE_GISTS_DIR"] = self.workdir
-        self.addCleanup(self._restore)
+
+    def tearDown(self):
+        self._restore()
 
     def _restore(self):
         os.environ.clear()
