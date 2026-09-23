@@ -91,18 +91,22 @@ class QueryShape(avocado.Test):
 
     def test_many_sources_go_out_in_chunks(self):
         saved, bugs_module.CHUNK_SIZE = bugs_module.CHUNK_SIZE, 2
-        self.addCleanup(setattr, bugs_module, "CHUNK_SIZE", saved)
-        with Network(self) as net:
-            fetch(["a", "b", "c", "d", "e"], distro="trixie")
-        self.assertEqual(len(net.urls), 3)
+        try:
+            with Network(self) as net:
+                fetch(["a", "b", "c", "d", "e"], distro="trixie")
+            self.assertEqual(len(net.urls), 3)
+        finally:
+            bugs_module.CHUNK_SIZE = saved
 
     def test_a_broken_chunk_is_skipped_not_raised(self):
         saved, bugs_module.CHUNK_SIZE = bugs_module.CHUNK_SIZE, 1
-        self.addCleanup(setattr, bugs_module, "CHUNK_SIZE", saved)
-        with Network(self, payloads=[b"{not json", answer(ENTRY)]) as net:
-            found = fetch(["a", "b"], distro="trixie")
-        self.assertEqual(len(net.urls), 2)
-        self.assertEqual([b.id for b in found], [1234567])
+        try:
+            with Network(self, payloads=[b"{not json", answer(ENTRY)]) as net:
+                found = fetch(["a", "b"], distro="trixie")
+            self.assertEqual(len(net.urls), 2)
+            self.assertEqual([b.id for b in found], [1234567])
+        finally:
+            bugs_module.CHUNK_SIZE = saved
 
     def test_the_same_bug_twice_is_one_bug(self):
         with Network(self, payloads=[answer(ENTRY, ENTRY)]):
@@ -239,12 +243,14 @@ class Cli(avocado.Test):
             raise OSError("network is unreachable")
         saved = bugs_module._fetch_url
         bugs_module._fetch_url = dead
-        self.addCleanup(setattr, bugs_module, "_fetch_url", saved)
-        with Engine(self, output=b""), \
-                contextlib.redirect_stderr(io.StringIO()):
-            with self.assertRaises(SystemExit) as caught:
-                IssuesCmd().main(["--sbom", path, "--defects"])
-        self.assertEqual(caught.exception.code, 5)
+        try:
+            with Engine(self, output=b""), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as caught:
+                    IssuesCmd().main(["--sbom", path, "--defects"])
+            self.assertEqual(caught.exception.code, 5)
+        finally:
+            bugs_module._fetch_url = saved
 
     def test_a_bad_min_severity_is_an_error(self):
         secscan_module, Engine = self._engine()

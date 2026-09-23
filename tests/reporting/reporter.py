@@ -61,7 +61,6 @@ class ImageBuildTakesAReporter(avocado.Test):
         # "single job" into "several" underneath these tests.
         os.environ["XDG_CONFIG_HOME"] = self.workdir
         self.real_run = tasks.run
-        self.addCleanup(setattr, tasks, "run", self.real_run)
         self.calls = []
 
         def fake_run(steps, jobs=1, resources=None, verbose=False,
@@ -81,6 +80,9 @@ class ImageBuildTakesAReporter(avocado.Test):
         build.loads(MINIMAL)
         build.parse()
         self.build = build
+
+    def tearDown(self):
+        tasks.run = self.real_run
 
     # Unchanged from before 'reporter' existed: no argument, a
     # progress.Display, log directory forced by --verbose/--jobs as always.
@@ -131,12 +133,13 @@ class ImageBuildTakesAReporter(avocado.Test):
         def fake_watching(*a, **kw):
             captured["callback"] = kw.get("callback")
             return real_watching(*a, **kw)
-        self.addCleanup(setattr, analyze, "watching", real_watching)
         analyze.watching = fake_watching
-
-        reporter = Sampling()
-        self.build.image.build(reporter=reporter)
-        self.assertEqual(captured["callback"], reporter.sampled)
+        try:
+            reporter = Sampling()
+            self.build.image.build(reporter=reporter)
+            self.assertEqual(captured["callback"], reporter.sampled)
+        finally:
+            analyze.watching = real_watching
 
     # And nothing breaks for one that does not -- the common case, since
     # neither 'Display' nor a minimal Reporter has to implement it.

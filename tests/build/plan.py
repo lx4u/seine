@@ -211,16 +211,18 @@ class WhatTheseFilesLastBuilt(avocado.Test):
 class ABuildRecordsWhatTheNextPlanReadsAgainst(avocado.Test):
     def setUp(self):
         os.environ["SEINE_CACHE_DIR"] = self.workdir
-        built, pruned = Image.build, BuildCmd._prune
+        self._built, self._pruned = Image.build, BuildCmd._prune
         # A build that finished returns nothing -- a stub returning 0 would
         # agree with a check that is wrong -- and writes into every playbook
         # as it goes, as the ansible runner does.
         Image.build = lambda image, reporter=None: self.building(image)
         BuildCmd._prune = lambda command: None
-        self.addCleanup(setattr, Image, "build", built)
-        self.addCleanup(setattr, BuildCmd, "_prune", pruned)
         self.spec = os.path.join(self.workdir, "demo.yml")
         self.written(SPEC)
+
+    def tearDown(self):
+        Image.build = self._built
+        BuildCmd._prune = self._pruned
 
     # A build, as far as the specification is concerned.
     def building(self, image, failing=None):

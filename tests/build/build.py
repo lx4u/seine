@@ -106,7 +106,6 @@ class RecordedDigestSurvivesTaskMutation(avocado.Test):
     def setUp(self):
         os.environ["SEINE_CACHE_DIR"] = self.workdir
         self.real_run = tasks.run
-        self.addCleanup(setattr, tasks, "run", self.real_run)
 
         build = BuildCmd()
         build.loads(MINIMAL)
@@ -122,6 +121,9 @@ class RecordedDigestSurvivesTaskMutation(avocado.Test):
                 step.started = step.ended = time.time()
                 step.failed = False
         tasks.run = mutating_run
+
+    def tearDown(self):
+        tasks.run = self.real_run
 
     def test_the_recorded_digest_matches_a_fresh_reload(self):
         fresh = BuildCmd()
