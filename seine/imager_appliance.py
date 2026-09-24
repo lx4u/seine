@@ -53,6 +53,26 @@ BINARIES = [
 # UKI needs systemd 257; not available for bookworm.
 UKI_APT_PACKAGES = ["systemd-ukify", "systemd-boot-efi"]
 
+CONTAINER_KMOD_HOSTFILES = [
+    "/usr/lib/modules/*/kernel/net/9p/*",
+    "/usr/lib/modules/*/kernel/fs/9p/*",
+    "/lib/modules/*/kernel/net/9p/*",
+    "/lib/modules/*/kernel/fs/9p/*",
+]
+
+CONTAINER_APT_PACKAGES = [
+    "docker.io", "containerd", "runc", "iptables"
+]
+CONTAINER_SUPERMIN_PACKAGES = ["docker.io", "containerd", "runc"]
+CONTAINER_HOSTFILES = [
+    "/usr/bin/docker",
+    "/usr/sbin/dockerd",
+    "/usr/bin/containerd",
+    "/usr/bin/containerd-shim-runc-v2",
+    "/usr/bin/runc",
+] + CONTAINER_KMOD_HOSTFILES
+CONTAINER_MEMSIZE = 2048
+
 # One custom appliance per (source, release, architecture), built the
 # same way for every architecture. Bundles the fixed appliance and the
 # extra tool binaries in one container, so we build it only once.
@@ -71,8 +91,20 @@ class ImagerAppliance(Bootstrap):
                 "default is known for architecture '%s'" % distro["architecture"])
         super().__init__(distro, source.options)
 
+    def has_containers(self):
+        if getattr(self.source, "containers", None) or (getattr(self.source, "spec", {}) or {}).get("containers"):
+            return True
+        for build in (getattr(self.source, "subbuilds", {}) or {}).values():
+            if getattr(getattr(build, "image", None), "containers", None) or (getattr(build, "spec", {}) or {}).get("containers"):
+                return True
+        return False
+
+    def memsize(self):
+        return CONTAINER_MEMSIZE if self.has_containers() else None
+
     def defaultName(self):
-        return os.path.join("imager-appliance", self.distro["source"],
+        prefix = "imager-appliance-containers" if self.has_containers() else "imager-appliance"
+        return os.path.join(prefix, self.distro["source"],
                             self.distro["release"], self.distro["architecture"])
 
     def create(self):
@@ -82,15 +114,24 @@ class ImagerAppliance(Bootstrap):
             raise NotImplementedError(
                 "building the imager appliance for architecture "
                 "'%s' is not yet supported (unknown multiarch triplet)" % arch)
+        has_containers = self.has_containers()
+        container_apt_packages = (
+            CONTAINER_APT_PACKAGES + (["docker-cli"] if self.distro["release"] != "bookworm" else [])
+            if has_containers else []
+        )
         apt_packages = (APT_PACKAGES + EXTRA_APPLIANCE_PACKAGES
+                        + container_apt_packages
                         + (UKI_APT_PACKAGES if self.distro["release"] != "bookworm" else []))
+        extra_packages = EXTRA_APPLIANCE_PACKAGES + (CONTAINER_SUPERMIN_PACKAGES if has_containers else [])
+        hostfiles = ["/usr/sbin/.lvm-real/lvm"] + (CONTAINER_HOSTFILES if has_containers else [])
         return self.build(
             IMAGER_APPLIANCE_SCRIPT.format(
                 base=self.source.targetBootstrap.name,
                 apt_setup=packages.apt_setup_layer(self.distro),
                 kernel=self.package,
                 apt_packages=" ".join(apt_packages),
-                extra_packages=" ".join(EXTRA_APPLIANCE_PACKAGES),
+                extra_packages=" ".join(extra_packages),
+                hostfiles=" ".join(hostfiles),
                 host_cpu=info["host_cpu"],
                 triplet=info["triplet"],
                 binaries=" ".join(BINARIES),
@@ -239,7 +280,7 @@ FROM {base}
         {kernel} supermin libguestfs0 {apt_packages} && \\
     mkdir -p /appliance /extra-tools /seine-hints /usr/sbin/.lvm-real && \\
     mv /usr/sbin/lvm /usr/sbin/.lvm-real/lvm && \\
-    echo /usr/sbin/.lvm-real/lvm >/seine-hints/hostfiles && \\
+    printf '%s\\n' {hostfiles} >/seine-hints/hostfiles && \\
     printf '%s\\n' {extra_packages} >/seine-hints/packages
 
 RUN <<'SEINE_LVM_WRAPPER' cat >/usr/sbin/lvm
