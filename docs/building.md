@@ -23,6 +23,7 @@ Use these options for common variations:
 | Command | Use it when you want to |
 | --- | --- |
 | `seine build --dry-run spec.yaml` | Check what would run without changing anything. |
+| `seine build --offline spec.yaml` | Build completely offline; requires all packages and containers to be vendored. |
 | `seine build --packages-only spec.yaml` | Build packages only; do not create a root file system or image. |
 | `seine build --rootfs-only spec.yaml` | Create a root file-system tarball, but not a disk image. |
 | `seine build --rebuild spec.yaml` | Rebuild packages even when cached results exist. |
@@ -32,6 +33,28 @@ Use these options for common variations:
 
 `--target TASK` is useful while working on one part of a build. It builds that
 task and what it needs. Find task names with `seine plan --tasks-only spec.yaml`.
+
+## Preloading container images
+
+When a specification declares container images under `containers:`, you can vendor
+them into local archives so subsequent builds run completely offline:
+
+```
+seine vendor spec.yaml
+```
+
+This uses `skopeo` to download target architecture container archives into
+`vendor/containers/` and records resolved manifest digests and checksums in
+`spec.lock.yaml`.
+
+To build completely offline without network access to container registries:
+
+```
+seine build --offline spec.yaml
+```
+
+When `--offline` is set, `seine build` sources container archives exclusively from
+`vendor/containers/` and fails if any required archive is missing.
 
 ## Check the plan
 

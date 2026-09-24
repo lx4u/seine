@@ -6,6 +6,7 @@
 # runs, and what the command line drives directly.
 
 import getopt
+import hashlib
 import os
 import subprocess
 import sys
@@ -23,16 +24,20 @@ from seine import signing
 from seine import snapshot
 from seine import tasks as task_runner
 
+from seine.containers import (container_archive_filename, fetch_container,
+                              resolve_container)
 from .fetch import (_artifact_key, _binary_already_fetched, _binary_has_gocode,
                     _dedup_binaries, _index_has_gocode, fetch_binary,
                     fetch_source, index)
 from .manifest import (GRAPH_VERSION, _binary_file_path, _binary_hashes,
                        _cached_local_matches, _expand_binaries, _expand_files,
                        _file_hashes, _local_sha1, _lock_sources, _reverse_of,
-                       _save_source_snapshot_cache, architectures, entries_for,
-                       exclusions, extra_architectures, load_manifest,
-                       manifest_digest, named_suites, parse, repository,
-                       save_lock, save_manifest, unconfigured_suites)
+                       _save_source_snapshot_cache, architectures,
+                       entries_for, exclusions, extra_architectures,
+                       load_lock_containers, load_manifest, manifest_digest,
+                       named_suites, parse, repository, save_lock,
+                       save_manifest, unconfigured_suites)
+
 from .resolve import VendorResolver
 
 
@@ -302,7 +307,7 @@ class VendorCmd(Cmd):
                 "which '<file>.lock.yaml' to write\n"
                 % ("--refresh" if refresh is not False else "--check"))
             sys.exit(1)
-        lock_path = lock_sibling(args[0]) if (refresh is not False or check) else None
+        lock_path = lock_sibling(args[0]) if len(args) == 1 else None
 
         from seine.build import BuildCmd
         from seine import utils
@@ -315,6 +320,9 @@ class VendorCmd(Cmd):
             exclude = exclusions(build.spec)
             extra_archs = extra_architectures(build.spec)
             available = named_suites(entries, distro)
+            spec_dir = os.path.dirname(os.path.abspath(args[0]))
+            from seine import containers
+            containers_declared = containers.parse(build.spec, spec_dir=spec_dir)
             # 'load_lock()' isn't used here: this data came through
             # BuildCmd's generic YAML/jinja loader (_merge_vendor()'s
             # dict branch) instead, so the same expansion is applied
@@ -330,8 +338,8 @@ class VendorCmd(Cmd):
             sys.stderr.write("error: %s\n" % e)
             sys.exit(3)
 
-        if len(entries) == 0:
-            print("nothing to vendor: this specification has no 'vendor:' section")
+        if len(entries) == 0 and len(containers_declared) == 0:
+            print("nothing to vendor: this specification has no 'vendor:' or 'containers:' section")
             return 0
 
         for suite in suites_asked:
@@ -372,7 +380,9 @@ class VendorCmd(Cmd):
             sys.exit(self._run(distro, entries, exclude, wanted, refresh, archs,
                                extra_archs, vendor_lock=vendor_lock,
                                lock_path=lock_path, check=check,
-                               vault_defaults=vault_defaults))
+                               vault_defaults=vault_defaults,
+                               containers_declared=containers_declared,
+                               spec_dir=spec_dir))
         except OSError as e:
             sys.stderr.write("error: %s\n" % e)
             sys.exit(2)
@@ -392,7 +402,8 @@ class VendorCmd(Cmd):
     # also feeds manifest_digest(), so naming a new one re-resolves.
     def _run(self, distro, entries, exclude, wanted, refresh, archs=None,
              extra_archs=(), display=None, vendor_lock=None, lock_path=None,
-             check=False, vault_defaults=None):
+             check=False, vault_defaults=None, containers_declared=None,
+             spec_dir="."):
         # Qualified: tests patch 'seine.vendor.HostBootstrap'.
         from seine import vendor
         hostBootstrap = vendor.HostBootstrap(distro, self.options, force_online=True)
@@ -459,7 +470,7 @@ class VendorCmd(Cmd):
                 if not check:
                     save_manifest(suite, {"sources": fresh, "digest": digests[suite],
                                           "graph": graph, "graph_version": GRAPH_VERSION})
-        else:
+        elif len(wanted) > 0:
             # Needed even when every suite is already frozen: the resolve
             # wave above is what builds the image fetch/index stand on,
             # and skipping it here would leave that unbuilt. Run as a
@@ -470,36 +481,50 @@ class VendorCmd(Cmd):
         # '--check' stops here: comparing against the lock needs no
         # fetch or index, and the point is to touch nothing on disk.
         if check:
-            return self._report_check(vendor_lock, manifests, wanted)
+            code = self._report_check(vendor_lock, manifests, wanted)
+            if containers_declared:
+                c_code = self._report_containers_check(
+                    containers_declared, lock_path, distro, archs, extra_archs)
+                if c_code != 0:
+                    return c_code
+            return code
 
-        fetch = []
-        for suite in wanted:
-            fetch += vendor.fetch_tasks(distro, suite, manifests[suite], self.options,
-                                        hostBootstrap, archs)
-        self._run_wave(fetch, retryable=True, display=display)
+        if len(wanted) > 0:
+            fetch = []
+            for suite in wanted:
+                fetch += vendor.fetch_tasks(distro, suite, manifests[suite], self.options,
+                                            hostBootstrap, archs)
+            self._run_wave(fetch, retryable=True, display=display)
 
-        signer = signing.vendor_signer(self.options, vault_defaults)
-        self._run_wave(
-            vendor.index_tasks(distro, wanted, self.options, hostBootstrap, signer,
-                               manifests, entries),
-            retryable=False, display=display)
+            signer = signing.vendor_signer(self.options, vault_defaults)
+            self._run_wave(
+                vendor.index_tasks(distro, wanted, self.options, hostBootstrap, signer,
+                                   manifests, entries),
+                retryable=False, display=display)
 
-        for suite in wanted:
-            print("vendored %d source package(s) for %s"
-                 % (len(manifests[suite]), suite))
-        # A caller with its own display can't see the prints above (they
-        # go to the real terminal) -- same summary, one line, via say().
-        if display is not None:
-            display.say("vendored " + ", ".join(
-                "%d source package(s) for %s" % (len(manifests[suite]), suite)
-                for suite in wanted))
+            for suite in wanted:
+                print("vendored %d source package(s) for %s"
+                     % (len(manifests[suite]), suite))
+            # A caller with its own display can't see the prints above (they
+            # go to the real terminal) -- same summary, one line, via say().
+            if display is not None:
+                display.say("vendored " + ", ".join(
+                    "%d source package(s) for %s" % (len(manifests[suite]), suite)
+                    for suite in wanted))
+
+        containers_result = None
+        if containers_declared:
+            containers_result = self._vendor_containers(
+                containers_declared, distro, archs, extra_archs,
+                hostBootstrap, refresh, spec_dir, lock_path, display=display)
 
         # '--refresh' always writes (or creates) the lock beside the
         # spec file. Every suite the existing lock already named is kept
         # as-is except the ones this run touched ('wanted'), so a
         # '--suite'-scoped run never drops what an earlier run froze.
-        if refresh is not False and lock_path is not None:
-            updated = dict(vendor_lock)
+        updated = dict(vendor_lock)
+        wrote_lock = False
+        if refresh is not False and lock_path is not None and len(wanted) > 0:
             for suite in wanted:
                 enriched = self._enrich_for_lock(suite, manifests[suite], display=display)
                 # Read-modify-write: keeps 'digest'/'graph'/'graph_version'
@@ -509,8 +534,132 @@ class VendorCmd(Cmd):
                 save_manifest(suite, document)
                 updated[suite] = {"digest": digests[suite],
                                   "sources": _lock_sources(enriched)}
-            save_lock(lock_path, updated)
+            wrote_lock = True
+        if containers_result is not None:
+            wrote_lock = True
+        if wrote_lock and lock_path is not None:
+            save_lock(lock_path, updated, containers=containers_result)
             print("wrote %s" % lock_path)
+        return 0
+
+    def _vendor_containers(self, containers_declared, distro, archs, extra_archs,
+                           hostBootstrap, refresh, spec_dir, lock_path, display=None):
+        target_archs = list(archs) if archs else architectures([], distro, extra_archs)
+        existing_containers = load_lock_containers(lock_path) if lock_path else []
+        existing_by_image = {c.get("image"): c for c in existing_containers
+                             if isinstance(c, dict) and c.get("image")}
+
+        containers_result = []
+        for c in containers_declared:
+            if not c.image:
+                continue
+
+            locked = existing_by_image.get(c.image)
+            can_reuse = (refresh is False and locked is not None and "architectures" in locked)
+            if can_reuse:
+                for arch in target_archs:
+                    arch_info = locked.get("architectures", {}).get(arch)
+                    if not arch_info or "file" not in arch_info:
+                        can_reuse = False
+                        break
+                    full_file = os.path.join(spec_dir, arch_info["file"])
+                    if not os.path.isfile(full_file):
+                        can_reuse = False
+                        break
+
+            if can_reuse:
+                if display is not None:
+                    display.say("vendor container %s reused" % c.image)
+                say(self.options, "vendor container %s reused" % c.image)
+                containers_result.append(locked)
+                continue
+
+            top_digest, arch_digests = resolve_container(
+                c.image, target_archs, hostBootstrap=hostBootstrap, auth=c.auth)
+
+            arch_map = {}
+            for arch in target_archs:
+                arch_digest = arch_digests.get(arch) or top_digest
+                pinned = c.digest_for(arch)
+                if pinned and pinned != top_digest and pinned != arch_digest:
+                    raise ValueError(
+                        "container '%s' (%s): resolved digest %s does not match specified digest %s"
+                        % (c.image, arch, arch_digest, pinned))
+
+                fname = container_archive_filename(c.image, arch, arch_digest)
+                rel_file = os.path.join("vendor", "containers", fname)
+                dest_path = os.path.join(spec_dir, rel_file)
+                if refresh is False and os.path.isfile(dest_path) and os.path.getsize(dest_path) > 0:
+                    size = os.path.getsize(dest_path)
+                    h = hashlib.sha256()
+                    with open(dest_path, "rb") as f:
+                        while chunk := f.read(65536):
+                            h.update(chunk)
+                    file_sha = h.hexdigest()
+                    arch_map[arch] = {
+                        "manifest_digest": arch_digest,
+                        "file": rel_file,
+                        "size": size,
+                        "sha256": file_sha,
+                    }
+                    say(self.options, "vendor container archive %s reused" % rel_file)
+                else:
+                    if display is not None:
+                        display.say("fetching container %s (%s)..." % (c.image, arch))
+                    say(self.options, "fetching container %s (%s)..." % (c.image, arch))
+                    fetch_info = fetch_container(
+                        c.image, arch, dest_path, manifest_digest=arch_digest,
+                        hostBootstrap=hostBootstrap, auth=c.auth)
+                    arch_map[arch] = {
+                        "manifest_digest": fetch_info["manifest_digest"],
+                        "file": rel_file,
+                        "size": fetch_info["size"],
+                        "sha256": fetch_info["sha256"],
+                    }
+
+            containers_result.append({
+                "image": c.image,
+                "digest": c.digest or top_digest,
+                "architectures": arch_map,
+            })
+
+
+        print("vendored %d container image(s)" % len(containers_result))
+        if display is not None:
+            display.say("vendored %d container image(s)" % len(containers_result))
+        return containers_result
+
+    def _report_containers_check(self, containers_declared, lock_path, distro, archs, extra_archs):
+        if not lock_path or not os.path.isfile(lock_path):
+            sys.stderr.write("error: vendor lock file '%s' does not exist\n" % (lock_path or ""))
+            return 1
+
+        target_archs = list(archs) if archs else architectures([], distro, extra_archs)
+        locked_containers = load_lock_containers(lock_path)
+        locked_by_image = {c.get("image"): c for c in locked_containers if isinstance(c, dict) and c.get("image")}
+
+        drifted = False
+        for c in containers_declared:
+            if not c.image:
+                continue
+            if c.image not in locked_by_image:
+                print("container lock: image '%s' is not in the lock" % c.image)
+                drifted = True
+                continue
+            locked = locked_by_image[c.image]
+            for arch in target_archs:
+                if arch not in locked.get("architectures", {}):
+                    print("container lock for '%s': missing architecture '%s'" % (c.image, arch))
+                    drifted = True
+            top_digest, _ = resolve_container(c.image, target_archs)
+            if locked.get("digest") != top_digest and (not c.digest or c.digest != locked.get("digest")):
+                print("container lock for '%s': locked %s, resolved %s" % (c.image, locked.get("digest"), top_digest))
+                drifted = True
+
+        if drifted:
+            sys.stderr.write("error: container lock has drifted from a fresh resolve\n")
+            return 1
+        print("container lock matches a fresh resolve")
         return 0
 
     # '--check': whether a fresh resolve still matches the committed
