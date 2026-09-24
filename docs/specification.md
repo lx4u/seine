@@ -1154,6 +1154,14 @@ Seine downloads the containers, boots the imager appliance with Docker tooling, 
 
 When container images are declared, Seine automatically inspects the uncompressed layer archives before partitioning. Required storage is calculated using 4KB block alignment, inode allocation overhead (256 bytes per entry), and 15% ext4 metadata slack. The resulting size is credited directly to the partition covering `/var/lib/docker` (or `/` if no dedicated container partition is defined), ensuring target partitions are sized accurately without manual padding.
 
+### Unified Software Bill of Materials (SBOM)
+
+When building with `--sbom`, Seine generates `<image>-sbom.spdx.json` as a single unified SPDX 2.3 JSON document covering both the host operating system and all preloaded containers:
+
+* **Host Operating System**: `debsbom` analyzes `/var/lib/dpkg/status` from the rootfs tarball, recording Debian binary packages and their source packages for Debian CVE and defect tracking.
+* **Preloaded Containers**: Container archives are scanned using `syft`, extracting OS packages (Alpine `apk`, Debian/Ubuntu `dpkg`, RedHat `rpm`, Arch `pacman`) and language-level packages/runtimes (Python, Go, Node, Rust, Java).
+* **SPDX Splicing**: Seine names each container as an SPDX package (`SPDXRef-Container-...`), prefixes its internal component graph, and connects it to the host rootfs (`SPDXRef-Debian`) using SPDX `CONTAINS` relationships. Downstream Debian defect tracking (`seine bugs`) automatically focuses on host Debian source packages while ignoring embedded container packages.
+
 
 ## playbook
 

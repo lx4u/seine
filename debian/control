@@ -28,7 +28,9 @@ Depends: ${misc:Depends},
          python3-guestfs,
          qemu-kvm,
          seine-vault-image
-Recommends: gnupg
+Recommends: gnupg,
+            skopeo,
+            syft
 Suggests: qemu-user-static
 Description: slim embedded images, now easy
  seine builds bootable images (disk images, rootfs tarballs, containers)
