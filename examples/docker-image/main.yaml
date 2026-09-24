@@ -1,0 +1,28 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier Apache-2.0
+
+requires:
+    - ../common/amd64
+    - ../common/bookworm
+    - ../common/conf-accounts
+    - ../common/conf-locales
+    - ../common/pc-image
+    - test-boot
+
+playbook:
+    - name: Install Docker engine
+      tasks:
+          - name: Install Docker engine
+            apt:
+                state: present
+                name:
+                    - docker.io
+                    [[ "- docker-cli" if distribution.release != "bookworm" else "" ]]
+
+containers:
+    - image: docker.io/library/alpine:3.19
+      digests:
+          amd64: sha256:b58899f069c47216f6002a6850143dc6fae0d35eb8b0df9300bbe6327b9c2171
+          arm64: sha256:5cd72f301a291887075a70d8b14aed6ee228fc9fd8f65e1e7eaa072f2115efd6
+
+

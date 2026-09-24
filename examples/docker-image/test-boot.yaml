@@ -1,0 +1,15 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier Apache-2.0
+
+test:
+    - name: Docker daemon is active
+      command: systemctl is-active docker
+      expect: active
+
+    - name: Preloaded container image is present
+      command: docker images --format "{{.Repository}}:{{.Tag}}"
+      expect: alpine:3.19
+
+    - name: Run preloaded container
+      command: docker run --rm alpine:3.19 uname -m
+      expect: x86_64
