@@ -17,3 +17,5 @@ vault/openbao/plugins/kmod/seine-kmod
 # Copied in from docs/ by setup.py's build_py override -- generated,
 # not committed.
 seine/data/docs
+tools/bbolt-normalize/bbolt-normalize
+

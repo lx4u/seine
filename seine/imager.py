@@ -138,7 +138,7 @@ done
 exec "{real_hv}" "${{args[@]}}"
 """
 
-from seine.containers.ingest import DockerIngestionHandler
+from seine.containers.ingest import ContainerdIngestionHandler, DockerIngestionHandler
 
 # Hooks around g.launch()'s real fork(), no-op for CLI builds. The TUI's
 # _wire_launch_guard() (seine/tui/target.py) uses these to disconnect and
@@ -1155,7 +1155,13 @@ class Imager:
                         raise FileNotFoundError("container archive '%s' not found" % arch_path)
                     if arch_path not in all_container_archives:
                         all_container_archives.append(arch_path)
-                    src_list.append(arch_path)
+                    src_list.append((
+                        arch_path,
+                        getattr(c, "target", "docker"),
+                        getattr(c, "root", "/var/lib/docker"),
+                        getattr(c, "namespace", None),
+                        c.image or getattr(c, "file", None) or os.path.basename(arch_path),
+                    ))
                 source_archives[s] = src_list
 
             need_ext = any(m["type"] in EXT_FSTYPES for m in ph.mounts)
@@ -1232,8 +1238,8 @@ class Imager:
                 for source in sources:
                     mounts = sorted(by_source[source], key=lambda m: m["_depth"])
                     container_devs = [
-                        archive_to_guest_path[a]
-                        for a in source_archives.get(source, [])
+                        (archive_to_guest_path[arch_path], target, root, ns, img_name)
+                        for (arch_path, target, root, ns, img_name) in source_archives.get(source, [])
                     ]
                     mount_devices = self._populate_source(
                         g, ph, source, mounts, part_devices, vol_devices, part_index,
@@ -1339,21 +1345,50 @@ class Imager:
         self._label_selinux(g, mounts)
         return mount_devices
 
-    # Ingests preloaded containers via headless dockerd inside the appliance,
+    # Ingests preloaded containers into their respective runtime storage inside the appliance,
     # then prunes daemon state and clamps mtimes for reproducibility.
     def _ingest_containers(self, g, container_devices):
-        print("Preloading Docker containers inside appliance...")
         epoch = self.source._epoch()
-        handler = DockerIngestionHandler()
-        g.debug("sh", [handler.generate_start_script(epoch)])
-        try:
-            for dev in container_devices:
-                img_name = dev[1] if isinstance(dev, tuple) and len(dev) > 1 else dev
-                print("  preloading container %s..." % img_name)
-                dev_path = dev[0] if isinstance(dev, tuple) else dev
-                g.debug("sh", [handler.generate_import_script(dev_path, epoch)])
-        finally:
-            g.debug("sh", [handler.generate_stop_script(epoch)])
+        normalized = []
+        for entry in container_devices:
+            if isinstance(entry, tuple):
+                if len(entry) == 5:
+                    dev, target, root, ns, img_name = entry
+                elif len(entry) == 4:
+                    dev, target, root, ns = entry
+                    img_name = os.path.basename(dev)
+                else:
+                    dev = entry[0]
+                    target, root, ns, img_name = "docker", "/var/lib/docker", None, os.path.basename(dev)
+                normalized.append((dev, target or "docker", root or "/var/lib/docker", ns, img_name))
+            else:
+                normalized.append((entry, "docker", "/var/lib/docker", None, os.path.basename(entry)))
+
+        groups = {}
+        for dev, target, root, ns, img_name in normalized:
+            key = (target, root, ns)
+            if key not in groups:
+                groups[key] = []
+            groups[key].append((dev, img_name))
+
+        for (target, root, ns), items in groups.items():
+            if target == "containerd":
+                print("Preloading containerd images inside appliance (%s, namespace %s)..."
+                      % (root, ns or "default"))
+                handler = ContainerdIngestionHandler(root=root, namespace=ns or "default")
+            else:
+                print("Preloading Docker containers inside appliance (%s)..." % root)
+                handler = DockerIngestionHandler(root=root)
+
+            g.debug("sh", [handler.generate_start_script(epoch)])
+            try:
+                for dev, img_name in items:
+                    print("  preloading container %s..." % img_name)
+                    g.debug("sh", [handler.generate_import_script(dev, epoch)])
+            finally:
+                if getattr(self, "reproducible", False):
+                    print("  normalizing %s container storage (%s)..." % (target, root))
+                g.debug("sh", [handler.generate_stop_script(epoch)])
 
     # 'update-grub' embeds the root LV's random LVM UUIDs as a boot
     # search hint. Safe to fake: it only speeds up the search, actual

@@ -27,6 +27,7 @@ execute_after_dh_auto_install-arch:
 	for d in debian/seine/usr/lib/python3*/dist-packages; do \
 		echo /usr/share/seine/pylibs > "$$d/seine-extras.pth"; \
 	done
+	HOSTARCH=$(DEB_HOST_ARCH) debian/build-tools.py debian/seine/usr/lib/seine/bbolt-normalize
 
 execute_after_dh_auto_build-arch:
 	HOSTARCH=$(DEB_HOST_ARCH) debian/build-oci.py debian/build-oci

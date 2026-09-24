@@ -12,7 +12,11 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-from seine.containers.ingest import ContainerIngestionHandler, DockerIngestionHandler
+from seine.containers.ingest import (
+    ContainerIngestionHandler,
+    ContainerdIngestionHandler,
+    DockerIngestionHandler,
+)
 from seine.imager import Imager
 from seine.utils import HOST_ARCH
 from tests.testutils import prune_on_pass
@@ -28,12 +32,15 @@ class ContainersIngestUnitTests(avocado.Test):
         imager.source._epoch = mock.Mock(return_value=epoch)
         imager.source.options = {"files": [], "keep": False, "verbose": False}
         imager.verbose = False
+        imager.reproducible = False
         imager._output_dir = self.workdir
         return imager
 
     def test_ingest_containers_script_generation(self):
         imager = self._create_imager(epoch=1712345678)
         mock_g = mock.Mock()
+
+        imager._ingest_containers(mock_g, ["/dev/sdc", "/dev/sdd"])
 
         self.assertEqual(mock_g.debug.call_count, 4)
         script = "\n".join(call[0][1][0] for call in mock_g.debug.call_args_list)
@@ -56,7 +63,7 @@ class ContainersIngestUnitTests(avocado.Test):
         self.assertIn("docker -H unix:///run/docker/docker.sock load", script)
 
         # Verify clean shutdown
-        self.assertIn("kill -TERM $D_PID", script)
+        self.assertIn('kill -TERM "$pid"', script)
 
         # Verify deterministic normalization
         self.assertIn("PY_NORMALIZE", script)
@@ -71,6 +78,54 @@ class ContainersIngestUnitTests(avocado.Test):
 
         # Verify timestamp clamping to build epoch
         self.assertIn("find /sysroot/var/lib/docker -exec touch -h -d @1712345678 {} +", script)
+
+    def test_ingest_containerd_script_generation(self):
+        imager = self._create_imager(epoch=1712345678)
+        mock_g = mock.Mock()
+
+        devices = [
+            ("/dev/sdc", "containerd", "/var/lib/rancher/k3s/agent/containerd", "k8s.io"),
+            ("/dev/sdd", "containerd", "/var/lib/rancher/k3s/agent/containerd", "k8s.io"),
+        ]
+        imager._ingest_containers(mock_g, devices)
+
+        self.assertEqual(mock_g.debug.call_count, 4)
+        script = "\n".join(call[0][1][0] for call in mock_g.debug.call_args_list)
+
+        # Verify containerd flags and socket
+        self.assertIn("--root=/sysroot/var/lib/rancher/k3s/agent/containerd", script)
+        self.assertIn("--state=/run/containerd", script)
+        self.assertIn("--address=/run/containerd/containerd.sock", script)
+
+        # Verify ctr import commands with namespace and all-platforms
+        self.assertIn('ctr -a /run/containerd/containerd.sock -n "k8s.io" images import', script)
+        self.assertIn("--all-platforms", script)
+        self.assertIn("/dev/sdc", script)
+        self.assertIn("/dev/sdd", script)
+
+        # Verify normalization and timestamp clamping
+        self.assertIn("bbolt-normalize", script)
+        self.assertIn("io.containerd.content.v1.content", script)
+        self.assertIn('find "/sysroot/var/lib/rancher/k3s/agent/containerd" -exec touch -h -d "@1712345678" {} +', script)
+
+    def test_ingest_containers_mixed_dispatch(self):
+        imager = self._create_imager(epoch=1712345678)
+        mock_g = mock.Mock()
+
+        devices = [
+            ("/dev/sdc", "docker", "/var/lib/docker", None),
+            ("/dev/sdd", "containerd", "/var/lib/containerd", "default"),
+        ]
+        imager._ingest_containers(mock_g, devices)
+
+        self.assertEqual(mock_g.debug.call_count, 6)
+        scripts = [call[0][1][0] for call in mock_g.debug.call_args_list]
+
+        # One docker start script and one containerd start script
+        docker_scripts = [s for s in scripts if "/usr/sbin/dockerd" in s]
+        containerd_scripts = [s for s in scripts if "/usr/bin/ctr" in s]
+        self.assertEqual(len(docker_scripts), 1)
+        self.assertEqual(len(containerd_scripts), 1)
 
     def test_populate_source_wires_container_devices(self):
         imager = self._create_imager()
@@ -124,15 +179,33 @@ class ContainersIngestUnitTests(avocado.Test):
         handler = DockerIngestionHandler(root="/var/lib/docker")
         self.assertIsInstance(handler, ContainerIngestionHandler)
 
-        norm_py = handler.generate_normalize_script(1712345678)
-        self.assertIn("ROOT = \"/sysroot/var/lib/docker\"", norm_py)
-        self.assertIn("layerdb", norm_py)
-        self.assertIn("overlay2", norm_py)
+        norm_sh = handler.generate_normalize_script(1712345678)
+        self.assertIn("/sysroot/var/lib/docker", norm_sh)
+        self.assertIn("layerdb", norm_sh)
+        self.assertIn("overlay2", norm_sh)
 
         script = handler.generate_ingest_script(["/dev/sdb1"], 1712345678)
         self.assertIn("/usr/sbin/dockerd", script)
         self.assertIn("/dev/sdb1", script)
         self.assertIn("find /sysroot/var/lib/docker -exec touch -h -d @1712345678 {} +", script)
+
+    def test_containerd_ingestion_handler_direct(self):
+        handler = ContainerdIngestionHandler(
+            root="/var/lib/rancher/k3s/agent/containerd", namespace="k8s.io"
+        )
+        self.assertIsInstance(handler, ContainerIngestionHandler)
+
+        norm_sh = handler.generate_normalize_script(1712345678)
+        self.assertIn("/sysroot/var/lib/rancher/k3s/agent/containerd", norm_sh)
+        self.assertIn("bbolt-normalize", norm_sh)
+        self.assertIn("1712345678", norm_sh)
+
+        script = handler.generate_ingest_script(["/dev/sdc1"], 1712345678)
+        self.assertIn("/usr/bin/containerd", script)
+        self.assertIn("--root=/sysroot/var/lib/rancher/k3s/agent/containerd", script)
+        self.assertIn('ctr -a /run/containerd/containerd.sock -n "k8s.io" images import', script)
+        self.assertIn("/dev/sdc1", script)
+        self.assertIn('find "/sysroot/var/lib/rancher/k3s/agent/containerd" -exec touch -h -d "@1712345678" {} +', script)
 
 
 class DockerImageBuildAndBoot(avocado.Test):
