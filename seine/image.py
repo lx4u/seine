@@ -12,6 +12,7 @@ import time
 
 from seine               import analyze
 from seine               import cache_index
+from seine               import containers
 from seine               import logindex
 from seine               import packages
 from seine               import progress
@@ -61,6 +62,7 @@ class Image:
         # something safe to read, instead of parse()/tasks() hitting
         # an AttributeError on an unparsed spec.
         self.packages = []
+        self.containers = []
         # Set by shared_tasks(), read back after tasks.run() by build()'s
         # logindex.record() call -- cache-hit packages never got a Task,
         # so this is the only place their entries can come from.
@@ -121,6 +123,10 @@ class Image:
         self.packages = packages.parse(
             spec, check_uki=not self.options.get("defer_uki_check"))
 
+        files = self.options.get("files") or []
+        spec_dir = os.path.dirname(files[0]) if len(files) > 0 else "."
+        self.containers = containers.parse(spec, spec_dir=spec_dir)
+
         # Validated here too, so a typo doesn't wait for 'seine vendor' to
         # catch it.
         from seine import vendor
@@ -129,6 +135,11 @@ class Image:
 
         if self.options.get("require_hashes"):
             self._require_hashes()
+            containers.validate_hashes(self.containers, distro["architecture"])
+
+
+        if self.options.get("offline") or distro.get("apt-pull-mode") == "offline":
+            containers.validate_offline(self.containers, distro["architecture"], spec_dir=spec_dir)
 
         spec = self._parse_playbooks(spec)
 
@@ -303,11 +314,36 @@ class Image:
         return build.image._output
 
     def _size_partitions(self):
+        main_files = self.options.get("files") or []
+        main_spec_dir = os.path.dirname(main_files[0]) if len(main_files) > 0 else "."
         for source in [None] + self._referenced_sources():
             tar = tarfile.open(self._tarball_for(source), "r")
             for f in tar.getmembers():
                 self.partitionHandler.distribute(f, source=source)
             tar.close()
+
+            containers_list = self.containers if source is None else \
+                getattr(self.subbuilds[source].image, "containers", [])
+            distro = self.spec["distribution"] if source is None else \
+                self.subbuilds[source].spec["distribution"]
+            sdir = main_spec_dir if source is None else \
+                (os.path.dirname(self.subbuilds[source].options.get("files")[0])
+                 if (self.subbuilds[source].options.get("files") or []) else main_spec_dir)
+            fetch_dir = os.path.join(self.options.get("build_dir") or "build", "containers")
+
+            archives = []
+            for c in containers_list:
+                archive = c.archive_for(distro["architecture"], spec_dir=sdir)
+                if archive and os.path.exists(archive):
+                    archives.append(archive)
+                elif c.image:
+                    archive = c.fetch_archive(distro["architecture"], fetch_dir)
+                    archives.append(archive)
+            if archives:
+                self.partitionHandler.distribute_container_archives(
+                    archives, target_mount_path="/var/lib/docker", source=source)
+
+
         self.partitionHandler.compute_sizes()
         self.partitionHandler.print_stats()
 

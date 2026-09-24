@@ -5,6 +5,7 @@ of the following sections:
 
  * distribution
  * packages
+ * containers
  * playbook
  * image
  * test
@@ -1110,6 +1111,49 @@ libguestfs's appliance builder, cannot cross-build). This runs the target
 architecture under emulation to build the appliance once, then caches it --
 the first cross-arch build is noticeably slower than same-arch builds, but
 that cost isn't paid again on subsequent builds.
+
+## containers
+
+A flat list of container images to preload into the target system's Docker daemon:
+
+```yaml
+containers:
+    # Single multi-arch index or single-arch digest:
+    - image: docker.io/library/alpine:3.19
+      digest: sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
+    # Per-architecture pinned digests:
+    - image: ghcr.io/my-org/backend:v1.0
+      digests:
+          amd64: sha256:cf4fd9eaf3086aeef25c678e7359a3418f4b9af203469243b48ac5d22e052dff
+          arm64: sha256:4b49b6b7f36979ff96a1a47738f6575971a8f948f9e612b7a9aa3bfa182f7c0a
+      auth:
+          vault: secret/data/ci/registry-token
+    # Per-architecture source mapping (files and digests):
+    - image: custom-app:latest
+      architectures:
+          amd64:
+              digest: sha256:88ab10ff3245cba8971203498172340918230918230918230918230918230918
+          arm64:
+              file: files/custom-app-arm64.tar
+```
+
+Seine downloads the containers, boots the imager appliance with Docker tooling, loads the images directly into the target disk filesystem, and normalizes `/var/lib/docker` for bit-for-bit build reproducibility. Images are present on first boot without network access.
+
+| Setting         | Required | Description |
+| --------------- | -------- | ----------- |
+| `image`         | yes*     | Image reference (registry, repository, and tag) |
+| `digest`        | no       | Manifest digest (`sha256:...`); required with `--require-hashes` |
+| `digests`       | no       | Mapping of Debian architecture names (`amd64`, `arm64`, `armhf`, etc.) to pinned digests |
+| `architectures` | no       | Mapping of Debian architecture names to per-architecture definitions (`digest:`, `file:`) |
+| `file`          | no       | Path to a local container archive relative to the specification |
+| `auth`          | no       | Registry credentials, or a `vault:` secret reference |
+
+(*) Required unless `file` is provided with an internal image tag.
+
+### Partition auto-sizing for container stores
+
+When container images are declared, Seine automatically inspects the uncompressed layer archives before partitioning. Required storage is calculated using 4KB block alignment, inode allocation overhead (256 bytes per entry), and 15% ext4 metadata slack. The resulting size is credited directly to the partition covering `/var/lib/docker` (or `/` if no dedicated container partition is defined), ensuring target partitions are sized accurately without manual padding.
+
 
 ## playbook
 

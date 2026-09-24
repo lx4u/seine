@@ -71,6 +71,7 @@ class BuildCmd(Cmd):
         "jobs=",
         "keep",
         "no-color",
+        "offline",
         "packages-only",
         "parallel=",
         "rebuild",
@@ -93,6 +94,7 @@ class BuildCmd(Cmd):
         self.options = { "ansible_library": [], "build": True, "color": None,
                          "debug": False, "dry_run": False,
                          "jobs": settings.load().get("jobs") or 1, "keep": False,
+                         "offline": False,
                          "packages_only": False, "parallel": None,
                          "rebuild": False, "reproducible": False,
                          "require_hashes": False,
@@ -136,6 +138,7 @@ class BuildCmd(Cmd):
     # name a later file sets. Each file's lock sibling (foo.yaml ->
     # foo.lock.yaml) is auto-spliced in right after it.
     def load_all(self, yaml_files):
+        self.options.setdefault("files", list(yaml_files))
         expanded = []
         for yaml_file in yaml_files:
             expanded.append(yaml_file)
@@ -178,6 +181,8 @@ class BuildCmd(Cmd):
     # traceback). A file reached twice via different paths is not a loop
     # and loads again, on purpose.
     def load(self, yaml_file):
+        if not self.options.get("files"):
+            self.options["files"] = [yaml_file]
         if self._probing is False and len(self._loading) == 0 \
                 and os.path.realpath(yaml_file) not in self._probed:
             self._probe(yaml_file)
@@ -1023,11 +1028,22 @@ class BuildCmd(Cmd):
         self._merge_vendor_exclude(spec)
         self._merge_playbooks(spec, peer=peer)
         self._merge_tests(spec, peer=peer)
+        self._merge_containers(spec)
         if "image" in spec:
             self._merge_image(spec, peer=peer)
         if "initrd" in spec:
             self._merge_initrd(spec)
         return self.spec
+
+    def _merge_containers(self, spec):
+        if "containers" not in spec:
+            return
+        if "containers" not in self.spec:
+            self.spec["containers"] = spec["containers"]
+            return
+        from seine.containers import merge_containers
+        self.spec["containers"] = merge_containers(
+            self.spec.get("containers") or [], spec.get("containers") or [])
 
     def parse(self):
         if self.image is None:
@@ -1041,7 +1057,7 @@ class BuildCmd(Cmd):
             self.spec = self.partitionHandler.parse(self.spec)
             self.spec = self.image.parse(self.spec)
             module.check_kbuild(self.image.packages)
-        elif "initrd" in self.spec or "packages" in self.spec or "playbook" in self.spec:
+        elif "initrd" in self.spec or "packages" in self.spec or "playbook" in self.spec or "containers" in self.spec:
             # No 'image:' section, but something to build: the root
             # file-system tarball itself becomes this build's real
             # output (Image.parse()/own_tasks()).
@@ -1271,6 +1287,8 @@ class BuildCmd(Cmd):
                 self.options["rebuild"] = True
             elif o in ("--reproducible"):
                 self.options["reproducible"] = True
+            elif o in ("--offline",):
+                self.options["offline"] = True
             elif o in ("--sign-key"):
                 self.options["sign_key"] = a
             elif o in ("--sbom"):
