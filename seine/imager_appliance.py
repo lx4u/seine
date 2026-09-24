@@ -60,16 +60,26 @@ CONTAINER_KMOD_HOSTFILES = [
     "/lib/modules/*/kernel/fs/9p/*",
 ]
 
-CONTAINER_APT_PACKAGES = [
+CONTAINERD_APT_PACKAGES = ["containerd", "runc"]
+CONTAINERD_SUPERMIN_PACKAGES = ["containerd", "runc"]
+CONTAINERD_HOSTFILES = [
+    "/usr/bin/containerd",
+    "/usr/bin/containerd-shim-runc-v2",
+    "/usr/bin/runc",
+    "/usr/bin/ctr",
+] + CONTAINER_KMOD_HOSTFILES
+
+DOCKER_APT_PACKAGES = [
     "docker.io", "containerd", "runc", "iptables"
 ]
-CONTAINER_SUPERMIN_PACKAGES = ["docker.io", "containerd", "runc"]
-CONTAINER_HOSTFILES = [
+DOCKER_SUPERMIN_PACKAGES = ["docker.io", "containerd", "runc"]
+DOCKER_HOSTFILES = [
     "/usr/bin/docker",
     "/usr/sbin/dockerd",
     "/usr/bin/containerd",
     "/usr/bin/containerd-shim-runc-v2",
     "/usr/bin/runc",
+    "/usr/bin/ctr",
 ] + CONTAINER_KMOD_HOSTFILES
 CONTAINER_MEMSIZE = 2048
 
@@ -91,13 +101,44 @@ class ImagerAppliance(Bootstrap):
                 "default is known for architecture '%s'" % distro["architecture"])
         super().__init__(distro, source.options)
 
-    def has_containers(self):
-        if getattr(self.source, "containers", None) or (getattr(self.source, "spec", {}) or {}).get("containers"):
-            return True
+    def container_targets(self):
+        targets = set()
+        for c in getattr(self.source, "containers", []) or []:
+            targets.add(getattr(c, "target", "docker"))
+        spec_containers = (getattr(self.source, "spec", {}) or {}).get("containers")
+        if isinstance(spec_containers, list):
+            for c in spec_containers:
+                if isinstance(c, dict):
+                    targets.add(c.get("target", "docker"))
+        elif isinstance(spec_containers, dict):
+            sec_target = spec_containers.get("target", "docker")
+            targets.add(sec_target)
+            for c in spec_containers.get("images", []) or []:
+                if isinstance(c, dict):
+                    targets.add(c.get("target") or sec_target)
+
         for build in (getattr(self.source, "subbuilds", {}) or {}).values():
-            if getattr(getattr(build, "image", None), "containers", None) or (getattr(build, "spec", {}) or {}).get("containers"):
-                return True
-        return False
+            for c in getattr(getattr(build, "image", None), "containers", []) or []:
+                targets.add(getattr(c, "target", "docker"))
+            sub_spec = (getattr(build, "spec", {}) or {}).get("containers")
+            if isinstance(sub_spec, list):
+                for c in sub_spec:
+                    if isinstance(c, dict):
+                        targets.add(c.get("target", "docker"))
+            elif isinstance(sub_spec, dict):
+                sec_target = sub_spec.get("target", "docker")
+                targets.add(sec_target)
+                for c in sub_spec.get("images", []) or []:
+                    if isinstance(c, dict):
+                        targets.add(c.get("target") or sec_target)
+
+        return targets
+
+    def has_containers(self):
+        return len(self.container_targets()) > 0
+
+    def has_docker_target(self):
+        return "docker" in self.container_targets()
 
     def memsize(self):
         return CONTAINER_MEMSIZE if self.has_containers() else None
@@ -114,16 +155,29 @@ class ImagerAppliance(Bootstrap):
             raise NotImplementedError(
                 "building the imager appliance for architecture "
                 "'%s' is not yet supported (unknown multiarch triplet)" % arch)
+        has_docker = self.has_docker_target()
         has_containers = self.has_containers()
-        container_apt_packages = (
-            CONTAINER_APT_PACKAGES + (["docker-cli"] if self.distro["release"] != "bookworm" else [])
-            if has_containers else []
-        )
+
+        if has_docker:
+            container_apt_packages = (
+                DOCKER_APT_PACKAGES + (["docker-cli"] if self.distro["release"] != "bookworm" else [])
+            )
+            container_supermin = DOCKER_SUPERMIN_PACKAGES
+            container_hostfiles = DOCKER_HOSTFILES
+        elif has_containers:
+            container_apt_packages = CONTAINERD_APT_PACKAGES
+            container_supermin = CONTAINERD_SUPERMIN_PACKAGES
+            container_hostfiles = CONTAINERD_HOSTFILES
+        else:
+            container_apt_packages = []
+            container_supermin = []
+            container_hostfiles = []
+
         apt_packages = (APT_PACKAGES + EXTRA_APPLIANCE_PACKAGES
                         + container_apt_packages
                         + (UKI_APT_PACKAGES if self.distro["release"] != "bookworm" else []))
-        extra_packages = EXTRA_APPLIANCE_PACKAGES + (CONTAINER_SUPERMIN_PACKAGES if has_containers else [])
-        hostfiles = ["/usr/sbin/.lvm-real/lvm"] + (CONTAINER_HOSTFILES if has_containers else [])
+        extra_packages = EXTRA_APPLIANCE_PACKAGES + container_supermin
+        hostfiles = ["/usr/sbin/.lvm-real/lvm"] + container_hostfiles
         return self.build(
             IMAGER_APPLIANCE_SCRIPT.format(
                 base=self.source.targetBootstrap.name,
