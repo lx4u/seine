@@ -1,0 +1,23 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+test:
+    - name: K3s service is active
+      command: systemctl is-active k3s
+      expect: active
+
+    - name: Preloaded pause container is present in CRI
+      command: crictl images --output json
+      expect: docker.io/rancher/mirrored-pause:3.6
+
+    - name: Preloaded coredns container is present in CRI
+      command: crictl images --output json
+      expect: docker.io/rancher/mirrored-coredns-coredns:1.10.1
+
+    - name: Preloaded traefik container is present in CRI
+      command: crictl images --output json
+      expect: docker.io/rancher/mirrored-library-traefik:2.10.7
+
+    - name: Kubernetes node is ready
+      command: kubectl get nodes --no-headers
+      expect: Ready
