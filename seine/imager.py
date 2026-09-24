@@ -138,151 +138,7 @@ done
 exec "{real_hv}" "${{args[@]}}"
 """
 
-CONTAINER_INGEST_SCRIPT = """\
-set -e
-mkdir -p /sys/fs/cgroup /sysroot/var/lib/docker
-mount -t cgroup2 cgroup2 /sys/fs/cgroup 2>/dev/null || true
-mount -t tmpfs tmpfs /run 2>/dev/null || true
-mkdir -p /run/containerd /run/docker /run/containers
-modprobe overlay 2>/dev/null || true
-modprobe 9pnet_virtio 2>/dev/null || true
-modprobe 9p 2>/dev/null || true
-if ! mountpoint -q /run/containers 2>/dev/null; then
-  mount -t 9p -o trans=virtio,ro,version=9p2000.L seine_containers /run/containers 2>/dev/null || \\
-  mount -t 9p -o trans=virtio,ro seine_containers /run/containers 2>/dev/null || true
-fi
-
-containerd --address /run/containerd/containerd.sock >/tmp/containerd.log 2>&1 &
-CD_PID=$!
-for i in $(seq 1 30); do
-  [ -S /run/containerd/containerd.sock ] && break
-  sleep 0.1
-done
-
-/usr/sbin/dockerd \\
-  --data-root=/sysroot/var/lib/docker \\
-  --exec-root=/run/docker \\
-  --host=unix:///run/docker/docker.sock \\
-  --iptables=false --bridge=none --ip-masq=false --userland-proxy=false >/tmp/dockerd.log 2>&1 &
-D_PID=$!
-
-READY=0
-for i in $(seq 1 50); do
-  if docker -H unix:///run/docker/docker.sock info >/dev/null 2>&1; then
-    READY=1
-    break
-  fi
-  sleep 0.1
-done
-if [ "$READY" -ne 1 ]; then
-  cat /tmp/dockerd.log || true
-  cat /tmp/containerd.log || true
-  exit 1
-fi
-
-for dev in {dev_list}; do
-  docker -H unix:///run/docker/docker.sock load < "$dev"
-done
-
-kill -TERM $D_PID $CD_PID 2>/dev/null || true
-wait $D_PID 2>/dev/null || true
-wait $CD_PID 2>/dev/null || true
-
-python3 - << 'PY_NORMALIZE'
-import os
-import shutil
-import hashlib
-
-ROOT = "/sysroot/var/lib/docker"
-
-for d in ["volumes", "network", "containerd", "engine-id", "runc", "tmp",
-          "buildkit", "builder", "containers", "plugins", "swarm", "trust"]:
-    p = os.path.join(ROOT, d)
-    if os.path.islink(p) or os.path.isfile(p):
-        os.remove(p)
-    elif os.path.isdir(p):
-        shutil.rmtree(p, ignore_errors=True)
-
-layerdb = os.path.join(ROOT, "image", "overlay2", "layerdb", "sha256")
-overlay2 = os.path.join(ROOT, "overlay2")
-l_dir = os.path.join(overlay2, "l")
-
-if os.path.isdir(layerdb) and os.path.isdir(overlay2):
-    chain_to_old_cache = {{}}
-    chain_to_new_cache = {{}}
-    chain_to_new_link = {{}}
-    old_link_to_new_link = {{}}
-
-    for chain_id in sorted(os.listdir(layerdb)):
-        chain_dir = os.path.join(layerdb, chain_id)
-        cache_id_file = os.path.join(chain_dir, "cache-id")
-        if not os.path.isfile(cache_id_file):
-            continue
-        with open(cache_id_file, "r") as f:
-            old_cache = f.read().strip()
-
-        new_cache = hashlib.sha256(("cache:" + chain_id).encode()).hexdigest()
-        new_link = hashlib.sha256(("link:" + chain_id).encode()).hexdigest()[:26].upper()
-
-        chain_to_old_cache[chain_id] = old_cache
-        chain_to_new_cache[chain_id] = new_cache
-        chain_to_new_link[chain_id] = new_link
-
-        old_link_file = os.path.join(overlay2, old_cache, "link")
-        if os.path.isfile(old_link_file):
-            with open(old_link_file, "r") as f:
-                old_link = f.read().strip()
-            old_link_to_new_link[old_link] = new_link
-
-    if os.path.isdir(l_dir):
-        shutil.rmtree(l_dir, ignore_errors=True)
-    os.makedirs(l_dir, exist_ok=True)
-
-    for chain_id, old_cache in chain_to_old_cache.items():
-        new_cache = chain_to_new_cache[chain_id]
-        old_dir = os.path.join(overlay2, old_cache)
-        tmp_dir = os.path.join(overlay2, "tmp_" + new_cache)
-        if os.path.exists(old_dir):
-            os.rename(old_dir, tmp_dir)
-
-    for chain_id, new_cache in chain_to_new_cache.items():
-        tmp_dir = os.path.join(overlay2, "tmp_" + new_cache)
-        new_dir = os.path.join(overlay2, new_cache)
-        if os.path.exists(tmp_dir):
-            os.rename(tmp_dir, new_dir)
-
-        cache_id_file = os.path.join(layerdb, chain_id, "cache-id")
-        with open(cache_id_file, "w") as f:
-            f.write(new_cache)
-
-        new_link = chain_to_new_link[chain_id]
-        link_file = os.path.join(new_dir, "link")
-        with open(link_file, "w") as f:
-            f.write(new_link)
-
-        symlink_path = os.path.join(l_dir, new_link)
-        target_path = os.path.join("..", new_cache, "diff")
-        os.symlink(target_path, symlink_path)
-
-        lower_file = os.path.join(new_dir, "lower")
-        if os.path.isfile(lower_file):
-            with open(lower_file, "r") as f:
-                lower_content = f.read().strip()
-            parts = lower_content.split(":")
-            new_parts = []
-            for p in parts:
-                if p.startswith("l/"):
-                    old_l = p[2:]
-                    new_l = old_link_to_new_link.get(old_l, old_l)
-                    new_parts.append("l/" + new_l)
-                else:
-                    new_parts.append(p)
-            with open(lower_file, "w") as f:
-                f.write(":".join(new_parts))
-PY_NORMALIZE
-
-find /sysroot/var/lib/docker -exec touch -h -d @{epoch} {{}} +
-"""
+from seine.containers.ingest import DockerIngestionHandler
 
 # Hooks around g.launch()'s real fork(), no-op for CLI builds. The TUI's
 # _wire_launch_guard() (seine/tui/target.py) uses these to disconnect and
@@ -1488,11 +1344,16 @@ class Imager:
     def _ingest_containers(self, g, container_devices):
         print("Preloading Docker containers inside appliance...")
         epoch = self.source._epoch()
-        dev_list = " ".join(container_devices)
-        script = CONTAINER_INGEST_SCRIPT.format(
-            dev_list=dev_list,
-            epoch=epoch)
-        g.debug("sh", [script])
+        handler = DockerIngestionHandler()
+        g.debug("sh", [handler.generate_start_script(epoch)])
+        try:
+            for dev in container_devices:
+                img_name = dev[1] if isinstance(dev, tuple) and len(dev) > 1 else dev
+                print("  preloading container %s..." % img_name)
+                dev_path = dev[0] if isinstance(dev, tuple) else dev
+                g.debug("sh", [handler.generate_import_script(dev_path, epoch)])
+        finally:
+            g.debug("sh", [handler.generate_stop_script(epoch)])
 
     # 'update-grub' embeds the root LV's random LVM UUIDs as a boot
     # search hint. Safe to fake: it only speeds up the search, actual
