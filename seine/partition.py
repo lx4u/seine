@@ -1,9 +1,11 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier Apache-2.0
 
+import json
 import math
 import os
 import re
+import tarfile
 
 RO_FSTYPES = {"squashfs", "erofs"}
 
@@ -254,6 +256,57 @@ class PartitionHandler:
                 continue
             if mount["_prefix"] is not None and name.startswith(mount["_prefix"]):
                 mount["_size"] = mount["_size"] + self._size_file(f, mount)
+                return mount
+        return None
+
+    # Sizes container storage from layer payload blocks (4KB-aligned),
+    # inode allocation overhead, and 15% ext4 metadata slack.
+    def distribute_container_archives(self, archives, target_mount_path="/var/lib/docker", source=None):
+        total_uncompressed_bytes = 0
+        estimated_file_count = 0
+
+        for archive_path in archives:
+            with tarfile.open(archive_path, "r") as tar:
+                try:
+                    manifest_member = tar.getmember("manifest.json")
+                except KeyError:
+                    continue
+                manifest_file = tar.extractfile(manifest_member)
+                if manifest_file is None:
+                    continue
+                manifest = json.loads(manifest_file.read().decode("utf-8"))
+                if not isinstance(manifest, list):
+                    manifest = [manifest]
+                for item in manifest:
+                    for layer_tar_name in item.get("Layers", []):
+                        try:
+                            layer_member = tar.getmember(layer_tar_name)
+                        except KeyError:
+                            continue
+                        layer_file = tar.extractfile(layer_member)
+                        if layer_file is None:
+                            continue
+                        with tarfile.open(fileobj=layer_file, mode="r|*") as layer_tar:
+                            for member in layer_tar:
+                                estimated_file_count += 1
+                                size = member.size
+                                aligned = math.ceil(size / 4096) * 4096 if size > 0 else 4096
+                                total_uncompressed_bytes += aligned
+
+        inode_overhead = estimated_file_count * 256
+        slack_overhead = int(total_uncompressed_bytes * 0.15)
+        total_required = total_uncompressed_bytes + inode_overhead + slack_overhead
+
+        target_norm = os.path.normpath(target_mount_path)
+        if not target_norm.endswith("/"):
+            target_norm += "/"
+
+        for mount in self.mounts:
+            if mount.get("source") != source:
+                continue
+            prefix = mount.get("_prefix")
+            if prefix and target_norm.startswith(prefix):
+                mount["_size"] += total_required
                 return mount
         return None
 
