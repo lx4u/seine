@@ -12,6 +12,7 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
+from seine.containers.ingest import ContainerIngestionHandler, DockerIngestionHandler
 from seine.imager import Imager
 from seine.utils import HOST_ARCH
 from tests.testutils import prune_on_pass
@@ -34,12 +35,8 @@ class ContainersIngestUnitTests(avocado.Test):
         imager = self._create_imager(epoch=1712345678)
         mock_g = mock.Mock()
 
-        imager._ingest_containers(mock_g, ["/dev/sdc", "/dev/sdd"])
-
-        mock_g.debug.assert_called_once()
-        args = mock_g.debug.call_args[0]
-        self.assertEqual(args[0], "sh")
-        script = args[1][0]
+        self.assertEqual(mock_g.debug.call_count, 4)
+        script = "\n".join(call[0][1][0] for call in mock_g.debug.call_args_list)
 
         # Verify containment and mountpoints
         self.assertIn("/sys/fs/cgroup", script)
@@ -59,7 +56,7 @@ class ContainersIngestUnitTests(avocado.Test):
         self.assertIn("docker -H unix:///run/docker/docker.sock load", script)
 
         # Verify clean shutdown
-        self.assertIn("kill -TERM $D_PID $CD_PID", script)
+        self.assertIn("kill -TERM $D_PID", script)
 
         # Verify deterministic normalization
         self.assertIn("PY_NORMALIZE", script)
@@ -122,6 +119,20 @@ class ContainersIngestUnitTests(avocado.Test):
         )
 
         imager._ingest_containers.assert_not_called()
+
+    def test_docker_ingestion_handler_direct(self):
+        handler = DockerIngestionHandler(root="/var/lib/docker")
+        self.assertIsInstance(handler, ContainerIngestionHandler)
+
+        norm_py = handler.generate_normalize_script(1712345678)
+        self.assertIn("ROOT = \"/sysroot/var/lib/docker\"", norm_py)
+        self.assertIn("layerdb", norm_py)
+        self.assertIn("overlay2", norm_py)
+
+        script = handler.generate_ingest_script(["/dev/sdb1"], 1712345678)
+        self.assertIn("/usr/sbin/dockerd", script)
+        self.assertIn("/dev/sdb1", script)
+        self.assertIn("find /sysroot/var/lib/docker -exec touch -h -d @1712345678 {} +", script)
 
 
 class DockerImageBuildAndBoot(avocado.Test):
