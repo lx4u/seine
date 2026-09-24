@@ -6,9 +6,13 @@
 # use (index()).
 
 import collections
+import hashlib
+import json
 import os
+import re
 import shutil
 import subprocess
+import tempfile
 
 from seine.cache_index import VENDOR, Index, say
 from seine.container import ContainerEngine

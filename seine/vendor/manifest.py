@@ -464,25 +464,44 @@ def _expand_binaries(sources):
     return expanded
 
 # Writes the lock at 'path' with every suite the doc knows, so a run
+
 # scoped to one suite never drops what an earlier run froze for another.
-def save_lock(path, suites):
+def save_lock(path, suites, containers=None):
     temporary = "%s.new" % path
     compact = {suite: dict(doc, sources=_compress_binaries(
                   _compress_files(doc.get("sources", {}))))
               for suite, doc in suites.items()}
+    lock_dict = {}
+    if compact:
+        lock_dict["vendor"] = compact
+    if containers is not None:
+        lock_dict["containers"] = containers
+    elif os.path.exists(path):
+        existing = load_lock_containers(path)
+        if existing:
+            lock_dict["containers"] = existing
     with open(temporary, "w") as f:
-        yaml.safe_dump({"vendor": compact}, f, sort_keys=True,
+        yaml.safe_dump(lock_dict, f, sort_keys=True,
                        default_flow_style=False)
     os.replace(temporary, path)
 
 # Reads a lock file directly, without going through BuildCmd's spec
 # loader -- always expanded (never the on-disk compact shape).
 def load_lock(path):
+    if not os.path.exists(path):
+        return {}
     with open(path) as f:
         data = (yaml.safe_load(f) or {}).get("vendor", {})
     return {suite: dict(doc, sources=_expand_binaries(
                _expand_files(doc.get("sources", {}))))
            for suite, doc in data.items()}
+
+def load_lock_containers(path):
+    if not os.path.exists(path):
+        return []
+    with open(path) as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("containers", [])
 
 # Digest of everything in a suite's 'vendor:' section that would change
 # what a resolve decides (entries, excludes, profiles/options, feeds) --

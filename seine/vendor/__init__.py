@@ -9,6 +9,7 @@
 from seine.bootstrap import HostBootstrap
 from seine import snapshot
 
+from seine.containers import container_archive_filename
 from .manifest import (BUILD_CONTEXT, GRAPH_VERSION, MANIFEST, VendorPackage,
                        _binary_file_path, _binary_filename,
                        _binary_filename_legacy, _binary_hashes,
@@ -17,12 +18,14 @@ from .manifest import (BUILD_CONTEXT, GRAPH_VERSION, MANIFEST, VendorPackage,
                        _file_hashes, _local_sha1, _lock_sources,
                        _manifest_path, _reverse_of,
                        _save_source_snapshot_cache, _suite_distro,
-                       architectures, deploy_repository, entries_for,
-                       exclusions, extra_architectures, feeds_for_suite,
-                       is_deployed, load_lock, load_manifest, lock_manifest,
-                       manifest_digest, named_suites, offline_build_context,
-                       offline_dockerfile_digest, parse, repository,
-                       save_lock, save_manifest, suites, unconfigured_suites)
+                       architectures, deploy_repository,
+                       entries_for, exclusions, extra_architectures, feeds_for_suite,
+                       is_deployed, load_lock, load_lock_containers, load_manifest,
+                       lock_manifest, manifest_digest, named_suites,
+                       offline_build_context, offline_dockerfile_digest, parse,
+                       repository, save_lock, save_manifest, suites,
+                       unconfigured_suites)
+
 from .resolve import (REQUEST_FILE, RESOLVE_MOUNT, RESOLVE_SCRIPT,
                       RESPONSE_FILE, VENDOR_RESOLVER_IMAGE_SCRIPT,
                       VendorResolver, VendorResolverImage)

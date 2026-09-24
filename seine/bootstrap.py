@@ -180,6 +180,26 @@ class HostBootstrap(Bootstrap):
         return os.path.join("bootstrap", self.distro["source"],
                             self.distro["release"], mode)
 
+    def exec(self, args, volumes=None, workdir=None, network="host"):
+        cmd = ["container", "run", "--rm"]
+        if network is not None:
+            cmd += ["--network", network]
+        for host, container in (volumes or []):
+            cmd += ["-v", "%s:%s" % (host, container)]
+        if workdir is not None:
+            cmd += ["-w", workdir]
+        return ContainerEngine.run(cmd + [self.name] + args)
+
+    def output(self, args, volumes=None, workdir=None, network="host"):
+        cmd = ["container", "run", "--rm"]
+        if network is not None:
+            cmd += ["--network", network]
+        for host, container in (volumes or []):
+            cmd += ["-v", "%s:%s" % (host, container)]
+        if workdir is not None:
+            cmd += ["-w", workdir]
+        return ContainerEngine.check_output(cmd + [self.name] + args)
+
 class TargetBootstrap(Bootstrap):
     # The root file-system itself, which is what an export leaves behind.
     kind = ROOTFS_KIND
@@ -270,7 +290,7 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,id={2},sharing=locked {4} 
      {3} &&                                       \
      apt-get update -qqy &&                       \
      apt-get install -qqy --no-install-recommends \
-         arch-test debian-archive-keyring gpg mmdebstrap && \
+         arch-test debian-archive-keyring gpg mmdebstrap skopeo && \
      {6}
 FROM base AS clean-base
 RUN {7}
