@@ -358,4 +358,4 @@ The goal is narrower:
 * `docs/testing.md` — target testing
 * `docs/tui.md` — interactive interface
 
-See `examples/` for complete specifications, including `examples/vendor/` for a vendor-only build covering a realistic Debian package set across Bookworm/Trixie and amd64/arm64.
+See `examples/` for complete specifications, including `examples/vendor/` for a vendor-only build covering a realistic Debian package set across Bookworm/Trixie and amd64/arm64, `examples/docker-image/` for preloaded Docker containers, and `examples/k3s-image/` for a Kubernetes appliance with preloaded containerd control-plane images.

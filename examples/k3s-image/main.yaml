@@ -1,0 +1,145 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+requires:
+    - ../common/amd64
+    - ../common/bookworm
+    - ../common/conf-accounts
+    - ../common/conf-locales
+    - ../common/conf-sysctl
+    - ../common/conf-timezone
+    - ../common/networkd
+    - ../common/pc-image
+    - test-boot
+
+playbook:
+    - name: Install K3s control-plane
+      tasks:
+          - name: Install dependencies
+            apt:
+                state: present
+                name:
+                    - curl
+                    - ca-certificates
+                    - iptables
+                    - iproute2
+
+          - name: Set KUBECONFIG in environment and profile
+            copy:
+                dest: "{{ item.dest }}"
+                content: "{{ item.content }}"
+                mode: '0644'
+            loop:
+                - dest: /etc/profile.d/k3s.sh
+                  content: |
+                      export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+                - dest: /etc/environment
+                  content: |
+                      KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+          - name: Download K3s binary
+            get_url:
+                url: https://github.com/k3s-io/k3s/releases/download/v1.30.4+k3s1/k3s[[ "-arm64" if distribution.architecture == "arm64" else "" ]]
+                dest: /usr/local/bin/k3s
+                mode: '0755'
+
+          - name: Create K3s CLI symlinks
+            file:
+                src: /usr/local/bin/k3s
+                dest: "/usr/local/bin/{{ item }}"
+                state: link
+            loop:
+                - kubectl
+                - crictl
+                - ctr
+
+          - name: Configure crictl for K3s containerd
+            copy:
+                dest: /etc/crictl.yaml
+                content: |
+                    runtime-endpoint: unix:///run/k3s/containerd/containerd.sock
+                    image-endpoint: unix:///run/k3s/containerd/containerd.sock
+                    timeout: 10
+                    debug: false
+
+          - name: Create K3s systemd service
+            copy:
+                dest: /etc/systemd/system/k3s.service
+                content: |
+                    [Unit]
+                    Description=Lightweight Kubernetes
+                    Documentation=https://k3s.io
+                    After=network-online.target firewalld.service
+                    Wants=network-online.target
+
+                    [Service]
+                    Type=notify
+                    EnvironmentFile=-/etc/default/%N
+                    EnvironmentFile=-/etc/sysconfig/%N
+                    EnvironmentFile=-/etc/systemd/system/%N.env
+                    KillMode=process
+                    Delegate=yes
+                    LimitNOFILE=1048576
+                    LimitNPROC=infinity
+                    LimitCORE=infinity
+                    TasksMax=infinity
+                    TimeoutStartSec=0
+                    Restart=always
+                    RestartSec=5s
+                    ExecStartPre=-/sbin/modprobe br_netfilter
+                    ExecStartPre=-/sbin/modprobe overlay
+                    ExecStart=/usr/local/bin/k3s server
+
+                    [Install]
+                    WantedBy=multi-user.target
+
+          - name: Enable K3s service
+            systemd:
+                name: k3s
+                enabled: true
+
+containers:
+    target: containerd
+    namespace: k8s.io
+    root: /var/lib/rancher/k3s/agent/containerd
+
+    images:
+        - image: docker.io/rancher/mirrored-pause:3.6
+          digests:
+              amd64: sha256:c2280d2f5f56cf9c9a01bb64b2db4651e35efd6d62a54dcfc12049fe6449c5e4
+              arm64: sha256:fd05cc99606e9180b261362fb625dc3759fc57cbb6f6bd4fecccec64cc85ddfd
+
+        - image: docker.io/rancher/mirrored-coredns-coredns:1.10.1
+          digests:
+              amd64: sha256:be7652ce0b43b1339f3d14d9b14af9f588578011092c1f7893bd55432d83a378
+              arm64: sha256:74130b944396a0b0ca9af923ee6e03b08a35d98fc1bbaef4e35cf9acc5599105
+
+        - image: docker.io/rancher/mirrored-metrics-server:v0.7.0
+          digests:
+              amd64: sha256:1a7c305befcde0bb325ce081e97834f471cb9b7efa337bb52201caf3ed9ffaca
+              arm64: sha256:41ec9fc294e18d2b209ce551383600cb26e2a5973d99c7d2f78df0ab361480cc
+
+        - image: docker.io/rancher/local-path-provisioner:v0.0.28
+          digests:
+              amd64: sha256:cdf9953e88a7afd3674b1203e3179c5be45b7c4f25c1596bb4885519b768601a
+              arm64: sha256:08da24d54e6cffddad77b0a8b401c74025bc97d9dc448c6813c10947a7d9d532
+
+        - image: docker.io/rancher/klipper-lb:v0.4.9
+          digests:
+              amd64: sha256:76b0a00574983bb0bcd8c50c13bfa13fb8fc07ce1101854ba1bfc045e269788e
+              arm64: sha256:00e4ef5a328f187bf2d9715f4786fbe09aaff02cdbb5bd7b79b52fa84c8a72b4
+
+        - image: docker.io/rancher/klipper-helm:v0.8.4-build20240523
+          digests:
+              amd64: sha256:70655df8551c85eee94ae3ff9bec65d90cacbbd6d2d02b12de75f55a1b1ea433
+              arm64: sha256:e690c53f820c904f5f96496faf94bb4aeb06758fb82cce489a8f3487d76fd0d7
+
+        - image: docker.io/rancher/mirrored-library-traefik:2.10.7
+          digests:
+              amd64: sha256:a6b19e415e41b0e48b5c81713f3a60693a38f292059bd7347eef78bc9ae8044a
+              arm64: sha256:31571f6625901a60fdd7b234c15668222f5b2093a558ed2a3829a208cb3660de
+
+        - image: docker.io/rancher/mirrored-library-busybox:1.36.1
+          digests:
+              amd64: sha256:ec15a5bd53cf9507beb851574654669e778a9735f8e605e0ee3d71fd07debbe1
+              arm64: sha256:e0bbe9e057ce9f090b5e9538acbbfa3a736ea289d60c99660e8bca00d47b6895
