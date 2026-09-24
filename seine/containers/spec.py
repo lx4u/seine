@@ -7,9 +7,16 @@ from typing import Any, Dict, List, Optional
 
 
 class ContainerImage:
-    def __init__(self, spec: Dict[str, Any], index: int, spec_dir: str = "."):
+    def __init__(
+        self,
+        spec: Dict[str, Any],
+        index: int,
+        spec_dir: str = ".",
+        defaults: Optional[Dict[str, Any]] = None,
+    ):
         self.index = index
         self.spec = spec
+        defaults = defaults or {}
         if not isinstance(self.spec, dict):
             raise ValueError(f"container #{self.index} is not a dictionary!")
         self.image: Optional[str] = spec.get("image")
@@ -18,6 +25,9 @@ class ContainerImage:
         self.file: Optional[str] = spec.get("file")
         self.auth: Optional[Dict[str, Any]] = spec.get("auth")
         self.architectures: Optional[Dict[str, Any]] = spec.get("architectures")
+        self.target: str = spec.get("target") or defaults.get("target") or "docker"
+        self.root: Optional[str] = spec.get("root") or defaults.get("root")
+        self.namespace: Optional[str] = spec.get("namespace") or defaults.get("namespace")
         self.resolved_file: Optional[str] = None
         self._validate(spec_dir)
 
@@ -30,6 +40,28 @@ class ContainerImage:
             raise ValueError(
                 f"container #{self.index} must declare either 'image:' or 'file:'"
             )
+
+        if self.target not in ("docker", "containerd"):
+            raise ValueError(
+                f"container #{self.index}: invalid target '{self.target}'. Expected 'docker' or 'containerd'"
+            )
+
+        if self.root is None:
+            if self.target == "docker":
+                self.root = "/var/lib/docker"
+            else:
+                self.root = "/var/lib/containerd"
+        elif not isinstance(self.root, str) or not self.root.startswith("/"):
+            raise ValueError(f"container #{self.index}: 'root' must be an absolute path string")
+
+        if self.namespace is None:
+            if self.target == "containerd":
+                if "k3s" in self.root or "rancher" in self.root:
+                    self.namespace = "k8s.io"
+                else:
+                    self.namespace = "default"
+        elif not isinstance(self.namespace, str):
+            raise ValueError(f"container #{self.index}: 'namespace' must be a string")
 
         if self.image is not None:
             if not isinstance(self.image, str) or not self.image.strip():
@@ -102,7 +134,6 @@ class ContainerImage:
                         if d:
                             return d
         return None
-
 
     def has_digest(self, arch: Optional[str] = None) -> bool:
         return self.digest_for(arch) is not None
@@ -188,12 +219,34 @@ class ContainerImage:
 
 
 def parse(spec: Dict[str, Any], spec_dir: str = ".") -> List[ContainerImage]:
-    raw = spec.get("containers", [])
+    raw = spec.get("containers")
     if raw is None:
         return []
-    if not isinstance(raw, list):
-        raise ValueError("'containers:' shall be a list of container definitions!")
-    return [ContainerImage(entry, i + 1, spec_dir=spec_dir) for i, entry in enumerate(raw)]
+    if isinstance(raw, list):
+        return [ContainerImage(entry, i + 1, spec_dir=spec_dir) for i, entry in enumerate(raw)]
+    if isinstance(raw, dict):
+        defaults = {
+            "target": raw.get("target"),
+            "root": raw.get("root"),
+            "namespace": raw.get("namespace"),
+        }
+        if defaults["target"] is not None and defaults["target"] not in ("docker", "containerd"):
+            raise ValueError(
+                f"invalid target '{defaults['target']}'. Expected 'docker' or 'containerd'"
+            )
+        images = raw.get("images", [])
+        if images is None:
+            return []
+        if not isinstance(images, list):
+            raise ValueError("'containers: images:' shall be a list of container definitions!")
+        return [
+            ContainerImage(entry, i + 1, spec_dir=spec_dir, defaults=defaults)
+            for i, entry in enumerate(images)
+        ]
+    raise ValueError("'containers:' shall be a list or dictionary of container definitions!")
+
+
+parse_containers_spec = parse
 
 
 def validate_hashes(containers: List[ContainerImage], arch: Optional[str] = None):
@@ -221,7 +274,9 @@ def validate_offline(containers: List[ContainerImage], arch: str, spec_dir: str 
         )
 
 
-def merge_containers(base_list: List[Dict[str, Any]], overlay_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _merge_container_lists(
+    base_list: List[Dict[str, Any]], overlay_list: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
     merged = [dict(e) for e in base_list if isinstance(e, dict)]
     image_map = {e.get("image"): e for e in merged if e.get("image")}
     file_map = {e.get("file"): e for e in merged if e.get("file")}
@@ -249,3 +304,30 @@ def merge_containers(base_list: List[Dict[str, Any]], overlay_list: List[Dict[st
             if new_e.get("file"):
                 file_map[new_e["file"]] = new_e
     return merged
+
+
+def merge_containers(base_raw: Any, overlay_raw: Any) -> Any:
+    if base_raw is None:
+        return overlay_raw
+    if overlay_raw is None:
+        return base_raw
+
+    base_is_dict = isinstance(base_raw, dict)
+    overlay_is_dict = isinstance(overlay_raw, dict)
+
+    if not base_is_dict and not overlay_is_dict:
+        return _merge_container_lists(base_raw, overlay_raw)
+
+    base_dict = base_raw if base_is_dict else {"images": base_raw}
+    overlay_dict = overlay_raw if overlay_is_dict else {"images": overlay_raw}
+
+    merged_dict = dict(base_dict)
+    for k in ("target", "root", "namespace"):
+        if k in overlay_dict and overlay_dict[k] is not None:
+            merged_dict[k] = overlay_dict[k]
+
+    base_images = base_dict.get("images") or []
+    overlay_images = overlay_dict.get("images") or []
+    merged_dict["images"] = _merge_container_lists(base_images, overlay_images)
+
+    return merged_dict

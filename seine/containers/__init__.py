@@ -15,6 +15,7 @@ from seine.containers.spec import (
     ContainerImage,
     merge_containers,
     parse,
+    parse_containers_spec,
     validate_hashes,
     validate_offline,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "fetch_container",
     "merge_containers",
     "parse",
+    "parse_containers_spec",
     "resolve_container",
     "run_skopeo",
     "to_container_arch",

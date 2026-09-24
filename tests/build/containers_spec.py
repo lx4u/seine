@@ -88,7 +88,7 @@ class ContainersSpec(avocado.Test):
                         - label: root
                           where: /
                 containers: not-a-list
-            """, "'containers:' shall be a list of container definitions!"),
+            """, "'containers:' shall be a list or dictionary of container definitions!"),
             ("""
                 image:
                     filename: test.img
@@ -177,6 +177,37 @@ class ContainersSpec(avocado.Test):
                 containers:
                     - file: 123
             """, "container #1: 'file' must be a string path"),
+            ("""
+                image:
+                    filename: test.img
+                    partitions:
+                        - label: root
+                          where: /
+                containers:
+                    - image: alpine
+                      target: podman
+            """, "container #1: invalid target 'podman'. Expected 'docker' or 'containerd'"),
+            ("""
+                image:
+                    filename: test.img
+                    partitions:
+                        - label: root
+                          where: /
+                containers:
+                    target: invalid-runtime
+                    images:
+                        - image: alpine
+            """, "invalid target 'invalid-runtime'. Expected 'docker' or 'containerd'"),
+            ("""
+                image:
+                    filename: test.img
+                    partitions:
+                        - label: root
+                          where: /
+                containers:
+                    - image: alpine
+                      root: relative/path
+            """, "container #1: 'root' must be an absolute path string"),
         ]
         for yml, expected_err in cases:
             build = BuildCmd()
@@ -270,6 +301,108 @@ class ContainersSpec(avocado.Test):
         self.assertEqual(containers.to_debian_arch("arm", "v6"), "armel")
         self.assertEqual(containers.to_debian_arch("386"), "i386")
         self.assertEqual(containers.to_debian_arch("ppc64le"), "ppc64el")
+
+    def test_containerd_target_defaults(self):
+        build = BuildCmd()
+        build.loads("""
+            image:
+                filename: test.img
+                partitions:
+                    - label: root
+                      where: /
+            containers:
+                - image: alpine:3.19
+                  target: containerd
+                - image: rancher/mirrored-pause:3.6
+                  target: containerd
+                  root: /var/lib/rancher/k3s/agent/containerd
+                - image: custom:v1
+                  target: containerd
+                  namespace: my-ns
+                  root: /custom/root
+                - image: docker-app:latest
+                  target: docker
+        """)
+        build.parse()
+        parsed = build.image.containers
+        self.assertEqual(len(parsed), 4)
+
+        self.assertEqual(parsed[0].target, "containerd")
+        self.assertEqual(parsed[0].root, "/var/lib/containerd")
+        self.assertEqual(parsed[0].namespace, "default")
+
+        self.assertEqual(parsed[1].target, "containerd")
+        self.assertEqual(parsed[1].root, "/var/lib/rancher/k3s/agent/containerd")
+        self.assertEqual(parsed[1].namespace, "k8s.io")
+
+        self.assertEqual(parsed[2].target, "containerd")
+        self.assertEqual(parsed[2].root, "/custom/root")
+        self.assertEqual(parsed[2].namespace, "my-ns")
+
+        self.assertEqual(parsed[3].target, "docker")
+        self.assertEqual(parsed[3].root, "/var/lib/docker")
+
+    def test_section_level_defaults(self):
+        build = BuildCmd()
+        build.loads("""
+            image:
+                filename: test.img
+                partitions:
+                    - label: root
+                      where: /
+            containers:
+                target: containerd
+                namespace: k8s.io
+                root: /var/lib/rancher/k3s/agent/containerd
+                images:
+                    - image: rancher/mirrored-pause:3.6
+                    - image: redis:7-alpine
+                      target: docker
+                      root: /var/lib/docker
+        """)
+        build.parse()
+        parsed = build.image.containers
+        self.assertEqual(len(parsed), 2)
+
+        self.assertEqual(parsed[0].target, "containerd")
+        self.assertEqual(parsed[0].namespace, "k8s.io")
+        self.assertEqual(parsed[0].root, "/var/lib/rancher/k3s/agent/containerd")
+
+        self.assertEqual(parsed[1].target, "docker")
+        self.assertEqual(parsed[1].root, "/var/lib/docker")
+
+    def test_section_defaults_merging(self):
+        build = BuildCmd()
+        build.loads("""
+            image:
+                filename: test.img
+                partitions:
+                    - label: root
+                      where: /
+            containers:
+                target: containerd
+                namespace: k8s.io
+                root: /var/lib/rancher/k3s/agent/containerd
+                images:
+                    - image: rancher/mirrored-pause:3.6
+        """)
+        build.loads("""
+            containers:
+                images:
+                    - image: rancher/mirrored-coredns-coredns:1.10.1
+        """)
+        spec = build.parse()
+        self.assertEqual(spec["containers"]["target"], "containerd")
+        self.assertEqual(spec["containers"]["namespace"], "k8s.io")
+        self.assertEqual(spec["containers"]["root"], "/var/lib/rancher/k3s/agent/containerd")
+        parsed = build.image.containers
+        self.assertEqual(len(parsed), 2)
+        self.assertEqual(parsed[0].image, "rancher/mirrored-pause:3.6")
+        self.assertEqual(parsed[0].target, "containerd")
+        self.assertEqual(parsed[0].namespace, "k8s.io")
+        self.assertEqual(parsed[1].image, "rancher/mirrored-coredns-coredns:1.10.1")
+        self.assertEqual(parsed[1].target, "containerd")
+        self.assertEqual(parsed[1].namespace, "k8s.io")
 
 
 class ContainerFetchArchive(avocado.Test):
