@@ -1152,7 +1152,7 @@ Seine downloads the containers, boots the imager appliance with Docker tooling, 
 
 ### Partition auto-sizing for container stores
 
-When container images are declared, Seine automatically inspects the uncompressed layer archives before partitioning. Required storage is calculated using 4KB block alignment, inode allocation overhead (256 bytes per entry), and 15% ext4 metadata slack. The resulting size is credited directly to the partition covering `/var/lib/docker` (or `/` if no dedicated container partition is defined), ensuring target partitions are sized accurately without manual padding.
+When container images are declared, Seine automatically inspects the uncompressed layer archives before partitioning. Required storage is calculated using 4KB block alignment, inode allocation overhead (256 bytes per entry), and 15% ext4 metadata slack. For each container storage root (such as `/var/lib/docker`, `/var/lib/containerd`, or `/var/lib/rancher/k3s/agent/containerd`), required storage is credited to the partition matching the longest mount prefix (e.g. `/var/lib/rancher`, `/var`, or `/` if no dedicated container partition is defined), ensuring target partitions are sized accurately without manual padding.
 
 ### Unified Software Bill of Materials (SBOM)
 
