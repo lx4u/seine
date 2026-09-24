@@ -1114,20 +1114,26 @@ that cost isn't paid again on subsequent builds.
 
 ## containers
 
-A flat list of container images to preload into the target system's Docker daemon:
+A list of container images to preload into the target system's container runtime (`docker` or `containerd`), or a mapping with section-level target defaults:
 
 ```yaml
+# List format with per-image target overrides:
 containers:
-    # Single multi-arch index or single-arch digest:
+    # Docker image (default target):
     - image: docker.io/library/alpine:3.19
       digest: sha256:6baf43584bcb78f2e5847d1de515f23499913ac9f12bdf834811a3145eb11ca1
-    # Per-architecture pinned digests:
+
+    # Containerd image:
     - image: ghcr.io/my-org/backend:v1.0
+      target: containerd
+      namespace: default
+      root: /var/lib/containerd
       digests:
           amd64: sha256:cf4fd9eaf3086aeef25c678e7359a3418f4b9af203469243b48ac5d22e052dff
           arm64: sha256:4b49b6b7f36979ff96a1a47738f6575971a8f948f9e612b7a9aa3bfa182f7c0a
       auth:
           vault: secret/data/ci/registry-token
+
     # Per-architecture source mapping (files and digests):
     - image: custom-app:latest
       architectures:
@@ -1137,11 +1143,29 @@ containers:
               file: files/custom-app-arm64.tar
 ```
 
-Seine downloads the containers, boots the imager appliance with Docker tooling, loads the images directly into the target disk filesystem, and normalizes `/var/lib/docker` for bit-for-bit build reproducibility. Images are present on first boot without network access.
+Section-level defaults can also be configured for containerd or K3s images:
+
+```yaml
+containers:
+    target: containerd
+    namespace: k8s.io
+    root: /var/lib/rancher/k3s/agent/containerd
+
+    images:
+        - image: docker.io/rancher/mirrored-pause:3.6
+          digests:
+              amd64: sha256:74c05562cf34c44934c9c2288126b42aeec29ff100742f5518b87ee8d5427d09
+              arm64: sha256:88998ab9cb4d50eb7bc79eb46d03d35fb4c4ca4d2e82531d04eb581c7e9c5097
+```
+
+Seine downloads the containers, boots the imager appliance with the runtime tooling, loads the images directly into the target disk filesystem, and normalizes the container store for bit-for-bit build reproducibility. Images are present on first boot without network access.
 
 | Setting         | Required | Description |
 | --------------- | -------- | ----------- |
 | `image`         | yes*     | Image reference (registry, repository, and tag) |
+| `target`        | no       | Container runtime target: `docker` (default) or `containerd` |
+| `root`          | no       | Target filesystem path where containers are stored (`/var/lib/docker` for docker, `/var/lib/containerd` for containerd) |
+| `namespace`     | no       | Containerd namespace (`default` by default, or `k8s.io` when root is k3s; ignored for docker) |
 | `digest`        | no       | Manifest digest (`sha256:...`); required with `--require-hashes` |
 | `digests`       | no       | Mapping of Debian architecture names (`amd64`, `arm64`, `armhf`, etc.) to pinned digests |
 | `architectures` | no       | Mapping of Debian architecture names to per-architecture definitions (`digest:`, `file:`) |
