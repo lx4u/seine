@@ -1,0 +1,76 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Boots the k3s image and verifies k3s service, node readiness, preloaded
+# CRI images, and workload execution via a sample pod. Run with:
+#   seine test examples/k3s-image/test-boot.yaml
+#   seine test examples/k3s-image/main.yaml
+
+requires:
+    - ../common/conf-accounts
+
+test:
+    - name: k3s boot
+      tags: [smoke, boot, k3s]
+      setup:
+          connect_target: {}
+      teardown:
+          disconnect_target: {}
+      tests:
+          - name: k3s service is active and node reaches ready status
+            steps:
+                - power_cycle: {settle: 2s}
+                - log_in: {}
+                - set: {name: K3S_ACTIVE, value: ""}
+                - retry_until: "'active' in $K3S_ACTIVE"
+                  timeout: 60s
+                  interval: 2s
+                  do:
+                      - console_run: {command: "systemctl is-active k3s 2>&1", assign: K3S_ACTIVE}
+                - should_contain: ["${K3S_ACTIVE}", active]
+                - set: {name: NODE_STATUS, value: ""}
+                - retry_until: "'Ready' in $NODE_STATUS"
+                  timeout: 60s
+                  interval: 2s
+                  do:
+                      - console_run: {command: "kubectl get nodes --no-headers 2>&1", assign: NODE_STATUS}
+                - should_contain: ["${NODE_STATUS}", Ready]
+
+          - name: preloaded container images are present in containerd CRI
+            steps:
+                - power_cycle: {settle: 2s}
+                - log_in: {}
+                - console_run: {command: "crictl images --output json", assign: CRI_IMAGES}
+                - should_contain: ["${CRI_IMAGES}", "docker.io/rancher/mirrored-pause:3.10.2"]
+                - should_contain: ["${CRI_IMAGES}", "docker.io/rancher/mirrored-coredns-coredns:1.14.7"]
+                - should_contain: ["${CRI_IMAGES}", "docker.io/rancher/mirrored-metrics-server:v0.9.0"]
+                - should_contain: ["${CRI_IMAGES}", "docker.io/rancher/local-path-provisioner:v0.0.37"]
+                - should_contain: ["${CRI_IMAGES}", "docker.io/rancher/klipper-lb:v0.4.17"]
+                - should_contain: ["${CRI_IMAGES}", "docker.io/rancher/klipper-helm:v0.13.3-build20260727"]
+                - should_contain: ["${CRI_IMAGES}", "docker.io/rancher/mirrored-library-traefik:3.7.13"]
+                - should_contain: ["${CRI_IMAGES}", "docker.io/rancher/mirrored-library-busybox:1.37.0"]
+
+          - name: sample busybox pod runs and executes commands
+            steps:
+                - power_cycle: {settle: 2s}
+                - log_in: {}
+                - set: {name: NODE_STATUS, value: ""}
+                - retry_until: "'Ready' in $NODE_STATUS"
+                  timeout: 60s
+                  interval: 2s
+                  do:
+                      - console_run: {command: "kubectl get nodes --no-headers 2>&1", assign: NODE_STATUS}
+                - console_run: {command: "kubectl delete pod test-busybox --ignore-not-found=true 2>&1"}
+                - console_run: {command: "kubectl run test-busybox --image=docker.io/rancher/mirrored-library-busybox:1.37.0 --image-pull-policy=Never --restart=Never -- sleep 3600", assign: RUN_OUT}
+                - should_contain: ["${RUN_OUT}", "pod/test-busybox created"]
+                - set: {name: POD_STATUS, value: ""}
+                - retry_until: "'Running' in $POD_STATUS"
+                  timeout: 60s
+                  interval: 2s
+                  do:
+                      - console_run: {command: "kubectl get pod test-busybox --no-headers 2>&1", assign: POD_STATUS}
+                - should_contain: ["${POD_STATUS}", Running]
+                - console_run: {command: "kubectl exec test-busybox -- uname -s", assign: EXEC_OUT}
+                - should_contain: ["${EXEC_OUT}", Linux]
+                - console_run: {command: "kubectl delete pod test-busybox --now 2>&1", assign: DEL_OUT}
+                - should_contain: ["${DEL_OUT}", "deleted"]
