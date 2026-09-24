@@ -259,56 +259,80 @@ class PartitionHandler:
                 return mount
         return None
 
+    def _inspect_container_archive(self, archive_path):
+        uncompressed_bytes = 0
+        inodes = 0
+        with tarfile.open(archive_path, "r") as tar:
+            try:
+                manifest_member = tar.getmember("manifest.json")
+            except KeyError:
+                return 0, 0
+            manifest_file = tar.extractfile(manifest_member)
+            if manifest_file is None:
+                return 0, 0
+            manifest = json.loads(manifest_file.read().decode("utf-8"))
+            if not isinstance(manifest, list):
+                manifest = [manifest]
+            for item in manifest:
+                for layer_tar_name in item.get("Layers", []):
+                    try:
+                        layer_member = tar.getmember(layer_tar_name)
+                    except KeyError:
+                        continue
+                    layer_file = tar.extractfile(layer_member)
+                    if layer_file is None:
+                        continue
+                    with tarfile.open(fileobj=layer_file, mode="r|*") as layer_tar:
+                        for member in layer_tar:
+                            inodes += 1
+                            size = member.size
+                            aligned = math.ceil(size / 4096) * 4096 if size > 0 else 4096
+                            uncompressed_bytes += aligned
+        return uncompressed_bytes, inodes
+
     # Sizes container storage from layer payload blocks (4KB-aligned),
-    # inode allocation overhead, and 15% ext4 metadata slack.
+    # inode allocation overhead, and 15% ext4 metadata slack, routing
+    # storage to the partition matching each archive's target root.
     def distribute_container_archives(self, archives, target_mount_path="/var/lib/docker", source=None):
-        total_uncompressed_bytes = 0
-        estimated_file_count = 0
+        groups = {}
+        for item in archives:
+            if isinstance(item, (tuple, list)):
+                archive_path, root = item
+            else:
+                archive_path, root = item, target_mount_path
+            groups.setdefault(root, []).append(archive_path)
 
-        for archive_path in archives:
-            with tarfile.open(archive_path, "r") as tar:
-                try:
-                    manifest_member = tar.getmember("manifest.json")
-                except KeyError:
+        matched_mounts = []
+        for target_root, root_archives in groups.items():
+            total_uncompressed = 0
+            total_inodes = 0
+            for archive_path in root_archives:
+                bytes_count, inodes = self._inspect_container_archive(archive_path)
+                total_uncompressed += bytes_count
+                total_inodes += inodes
+
+            archive_bytes = sum(os.path.getsize(a) for a in root_archives if os.path.exists(a))
+            inode_overhead = total_inodes * 256
+            slack_overhead = int((total_uncompressed + archive_bytes) * 0.20) + 128 * 1024 * 1024
+            total_required = total_uncompressed + archive_bytes + inode_overhead + slack_overhead
+
+            target_norm = os.path.normpath(target_root)
+            if not target_norm.endswith("/"):
+                target_norm += "/"
+
+            for mount in self.mounts:
+                if mount.get("source") != source:
                     continue
-                manifest_file = tar.extractfile(manifest_member)
-                if manifest_file is None:
-                    continue
-                manifest = json.loads(manifest_file.read().decode("utf-8"))
-                if not isinstance(manifest, list):
-                    manifest = [manifest]
-                for item in manifest:
-                    for layer_tar_name in item.get("Layers", []):
-                        try:
-                            layer_member = tar.getmember(layer_tar_name)
-                        except KeyError:
-                            continue
-                        layer_file = tar.extractfile(layer_member)
-                        if layer_file is None:
-                            continue
-                        with tarfile.open(fileobj=layer_file, mode="r|*") as layer_tar:
-                            for member in layer_tar:
-                                estimated_file_count += 1
-                                size = member.size
-                                aligned = math.ceil(size / 4096) * 4096 if size > 0 else 4096
-                                total_uncompressed_bytes += aligned
+                prefix = mount.get("_prefix")
+                if prefix and target_norm.startswith(prefix):
+                    mount["_size"] += total_required
+                    if mount not in matched_mounts:
+                        matched_mounts.append(mount)
+                    break
 
-        inode_overhead = estimated_file_count * 256
-        slack_overhead = int(total_uncompressed_bytes * 0.15)
-        total_required = total_uncompressed_bytes + inode_overhead + slack_overhead
-
-        target_norm = os.path.normpath(target_mount_path)
-        if not target_norm.endswith("/"):
-            target_norm += "/"
-
-        for mount in self.mounts:
-            if mount.get("source") != source:
-                continue
-            prefix = mount.get("_prefix")
-            if prefix and target_norm.startswith(prefix):
-                mount["_size"] += total_required
-                return mount
-        return None
+        if not matched_mounts:
+            return None
+        return matched_mounts[0] if len(matched_mounts) == 1 else matched_mounts
 
     def compute_sizes(self):
         for bootlet in self.bootlets:

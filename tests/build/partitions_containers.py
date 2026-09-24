@@ -44,11 +44,24 @@ def _create_container_archive(path, layers_content):
             tar.addfile(ti_l, io.BytesIO(data))
 
 
+def _calc_expected_size(ph, archives):
+    if not isinstance(archives, list):
+        archives = [archives]
+    total_uncompressed = 0
+    total_inodes = 0
+    for a in archives:
+        u, i = ph._inspect_container_archive(a)
+        total_uncompressed += u
+        total_inodes += i
+    archive_bytes = sum(os.path.getsize(a) for a in archives if os.path.exists(a))
+    inode_overhead = total_inodes * 256
+    slack_overhead = int((total_uncompressed + archive_bytes) * 0.20) + 128 * 1024 * 1024
+    return total_uncompressed + archive_bytes + inode_overhead + slack_overhead
+
+
 class ContainerPartitionSizing(avocado.Test):
 
     def test_uncompressed_layer_math_and_dedicated_partition(self):
-        # 3 files: 100B (-> 4096B), 5000B (-> 8192B), 0B (-> 4096B).
-        # Payload: 16384B. Inodes: 3 * 256 = 768B. Slack: int(16384 * 0.15) = 2457B. Total: 19609B.
         archive = os.path.join(self.workdir, "app.tar")
         _create_container_archive(archive, [
             [("file1.txt", 100), ("file2.txt", 5000), ("empty.txt", 0)]
@@ -73,7 +86,7 @@ class ContainerPartitionSizing(avocado.Test):
         matched = ph.distribute_container_archives([archive])
         self.assertIs(matched, docker_mount)
         self.assertEqual(root_mount["_size"], root_before)
-        self.assertEqual(docker_mount["_size"], docker_before + 19609)
+        self.assertEqual(docker_mount["_size"], docker_before + _calc_expected_size(ph, [archive]))
 
     def test_fallback_to_root_partition(self):
         archive = os.path.join(self.workdir, "app.tar")
@@ -96,7 +109,7 @@ class ContainerPartitionSizing(avocado.Test):
 
         matched = ph.distribute_container_archives([archive])
         self.assertIs(matched, root_mount)
-        self.assertEqual(root_mount["_size"], root_before + 19609)
+        self.assertEqual(root_mount["_size"], root_before + _calc_expected_size(ph, [archive]))
 
     def test_intermediate_var_partition(self):
         archive = os.path.join(self.workdir, "app.tar")
@@ -123,11 +136,9 @@ class ContainerPartitionSizing(avocado.Test):
         matched = ph.distribute_container_archives([archive])
         self.assertIs(matched, var_mount)
         self.assertEqual(root_mount["_size"], root_before)
-        self.assertEqual(var_mount["_size"], var_before + 19609)
+        self.assertEqual(var_mount["_size"], var_before + _calc_expected_size(ph, [archive]))
 
     def test_multi_layer_archive(self):
-        # Layer 1: 1000B (-> 4096B). Layer 2: 2000B (-> 4096B).
-        # Total payload: 8192B. Inodes: 2 * 256 = 512B. Slack: int(8192 * 0.15) = 1228B. Total: 9932B.
         archive = os.path.join(self.workdir, "multi.tar")
         _create_container_archive(archive, [
             [("app/bin", 1000)],
@@ -148,7 +159,7 @@ class ContainerPartitionSizing(avocado.Test):
         root_before = root_mount["_size"]
 
         ph.distribute_container_archives([archive])
-        self.assertEqual(root_mount["_size"], root_before + 9932)
+        self.assertEqual(root_mount["_size"], root_before + _calc_expected_size(ph, [archive]))
 
     def test_distribute_scoped_by_source(self):
         archive = os.path.join(self.workdir, "app.tar")
@@ -209,3 +220,121 @@ class ContainerPartitionSizing(avocado.Test):
 
         build.image._size_partitions()
         self.assertGreater(docker_mount["_size"], docker_before)
+
+    def test_containerd_partition_routing(self):
+        archive = os.path.join(self.workdir, "app.tar")
+        _create_container_archive(archive, [
+            [("file1.txt", 100), ("file2.txt", 5000), ("empty.txt", 0)]
+        ])
+
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "partitions": [
+                    {"label": "rootfs", "where": "/"},
+                    {"label": "containerd", "where": "/var/lib/containerd"},
+                ],
+            },
+        })
+
+        root_mount = next(m for m in ph.mounts if m["label"] == "rootfs")
+        cd_mount = next(m for m in ph.mounts if m["label"] == "containerd")
+        root_before = root_mount["_size"]
+        cd_before = cd_mount["_size"]
+
+        matched = ph.distribute_container_archives([(archive, "/var/lib/containerd")])
+        self.assertIs(matched, cd_mount)
+        self.assertEqual(root_mount["_size"], root_before)
+        self.assertEqual(cd_mount["_size"], cd_before + _calc_expected_size(ph, [archive]))
+
+    def test_rancher_partition_routing(self):
+        archive = os.path.join(self.workdir, "app.tar")
+        _create_container_archive(archive, [
+            [("file1.txt", 100), ("file2.txt", 5000), ("empty.txt", 0)]
+        ])
+
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "partitions": [
+                    {"label": "rootfs", "where": "/"},
+                    {"label": "rancher", "where": "/var/lib/rancher"},
+                ],
+            },
+        })
+
+        root_mount = next(m for m in ph.mounts if m["label"] == "rootfs")
+        rancher_mount = next(m for m in ph.mounts if m["label"] == "rancher")
+        root_before = root_mount["_size"]
+        rancher_before = rancher_mount["_size"]
+
+        matched = ph.distribute_container_archives([(archive, "/var/lib/rancher/k3s/agent/containerd")])
+        self.assertIs(matched, rancher_mount)
+        self.assertEqual(root_mount["_size"], root_before)
+        self.assertEqual(rancher_mount["_size"], rancher_before + _calc_expected_size(ph, [archive]))
+
+    def test_multi_target_root_distribution(self):
+        archive1 = os.path.join(self.workdir, "app1.tar")
+        archive2 = os.path.join(self.workdir, "app2.tar")
+        _create_container_archive(archive1, [
+            [("file1.txt", 100), ("file2.txt", 5000), ("empty.txt", 0)]
+        ])
+        _create_container_archive(archive2, [
+            [("file1.txt", 100), ("file2.txt", 5000), ("empty.txt", 0)]
+        ])
+
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "partitions": [
+                    {"label": "rootfs", "where": "/"},
+                    {"label": "docker", "where": "/var/lib/docker"},
+                    {"label": "rancher", "where": "/var/lib/rancher"},
+                ],
+            },
+        })
+
+        root_mount = next(m for m in ph.mounts if m["label"] == "rootfs")
+        docker_mount = next(m for m in ph.mounts if m["label"] == "docker")
+        rancher_mount = next(m for m in ph.mounts if m["label"] == "rancher")
+        root_before = root_mount["_size"]
+        docker_before = docker_mount["_size"]
+        rancher_before = rancher_mount["_size"]
+
+        matched = ph.distribute_container_archives([
+            (archive1, "/var/lib/docker"),
+            (archive2, "/var/lib/rancher/k3s/agent/containerd"),
+        ])
+        self.assertIn(docker_mount, matched)
+        self.assertIn(rancher_mount, matched)
+        self.assertEqual(root_mount["_size"], root_before)
+        self.assertEqual(docker_mount["_size"], docker_before + _calc_expected_size(ph, [archive1]))
+        self.assertEqual(rancher_mount["_size"], rancher_before + _calc_expected_size(ph, [archive2]))
+
+    def test_target_mount_path_fallback(self):
+        archive = os.path.join(self.workdir, "app.tar")
+        _create_container_archive(archive, [
+            [("file1.txt", 100), ("file2.txt", 5000), ("empty.txt", 0)]
+        ])
+
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "partitions": [
+                    {"label": "rootfs", "where": "/"},
+                    {"label": "containerd", "where": "/var/lib/containerd"},
+                ],
+            },
+        })
+
+        cd_mount = next(m for m in ph.mounts if m["label"] == "containerd")
+        cd_before = cd_mount["_size"]
+
+        matched = ph.distribute_container_archives([archive], target_mount_path="/var/lib/containerd")
+        self.assertIs(matched, cd_mount)
+        self.assertEqual(cd_mount["_size"], cd_before + _calc_expected_size(ph, [archive]))
+

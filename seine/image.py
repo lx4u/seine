@@ -331,17 +331,17 @@ class Image:
                  if (self.subbuilds[source].options.get("files") or []) else main_spec_dir)
             fetch_dir = os.path.join(self.options.get("build_dir") or "build", "containers")
 
-            archives = []
+            archives_with_roots = []
             for c in containers_list:
                 archive = c.archive_for(distro["architecture"], spec_dir=sdir)
                 if archive and os.path.exists(archive):
-                    archives.append(archive)
+                    archives_with_roots.append((archive, getattr(c, "root", "/var/lib/docker")))
                 elif c.image:
                     archive = c.fetch_archive(distro["architecture"], fetch_dir)
-                    archives.append(archive)
-            if archives:
+                    archives_with_roots.append((archive, getattr(c, "root", "/var/lib/docker")))
+            if archives_with_roots:
                 self.partitionHandler.distribute_container_archives(
-                    archives, target_mount_path="/var/lib/docker", source=source)
+                    archives_with_roots, source=source)
 
 
         self.partitionHandler.compute_sizes()
