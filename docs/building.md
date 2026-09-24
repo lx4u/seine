@@ -56,6 +56,9 @@ seine build --offline spec.yaml
 When `--offline` is set, `seine build` sources container archives exclusively from
 `vendor/containers/` and fails if any required archive is missing.
 
+During image creation, the imager appliance launches headless `dockerd` or `containerd` daemons to ingest preloaded archives into the target storage tree (e.g. `/var/lib/docker` or `/var/lib/containerd`). The imager normalizes transient metadata and clamps filesystem timestamps to `SOURCE_DATE_EPOCH` to preserve bit-for-bit build reproducibility.
+
+
 ## Check the plan
 
 Before a slow or important build, inspect its plan:

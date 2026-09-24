@@ -67,6 +67,7 @@ CONTAINERD_HOSTFILES = [
     "/usr/bin/containerd-shim-runc-v2",
     "/usr/bin/runc",
     "/usr/bin/ctr",
+    "/usr/bin/bbolt-normalize",
 ] + CONTAINER_KMOD_HOSTFILES
 
 DOCKER_APT_PACKAGES = [
@@ -80,6 +81,7 @@ DOCKER_HOSTFILES = [
     "/usr/bin/containerd-shim-runc-v2",
     "/usr/bin/runc",
     "/usr/bin/ctr",
+    "/usr/bin/bbolt-normalize",
 ] + CONTAINER_KMOD_HOSTFILES
 CONTAINER_MEMSIZE = 2048
 
@@ -173,6 +175,26 @@ class ImagerAppliance(Bootstrap):
             container_supermin = []
             container_hostfiles = []
 
+        options = list(packages.build_volumes(self.distro) or [])
+        bbolt_step = ""
+        if has_containers:
+            from seine.containers.tools import ensure_bbolt_normalize
+            bbolt_bin = ensure_bbolt_normalize(arch)
+            if not bbolt_bin or not os.path.isfile(bbolt_bin):
+                raise RuntimeError(
+                    "bbolt-normalize binary for architecture '%s' is required to "
+                    "normalize containerd storage but could not be built or found" % arch
+                )
+            import hashlib
+            with open(bbolt_bin, "rb") as bf:
+                bbolt_hash = hashlib.sha256(bf.read()).hexdigest()
+            options += ["-v", "%s:/seine-tools:ro" % os.path.dirname(bbolt_bin)]
+            bbolt_step = (
+                f"RUN echo '{bbolt_hash}' > /seine-bbolt.hash && "
+                "cp /seine-tools/bbolt-normalize /usr/bin/bbolt-normalize && "
+                "chmod +x /usr/bin/bbolt-normalize\n\n"
+            )
+
         apt_packages = (APT_PACKAGES + EXTRA_APPLIANCE_PACKAGES
                         + container_apt_packages
                         + (UKI_APT_PACKAGES if self.distro["release"] != "bookworm" else []))
@@ -189,9 +211,10 @@ class ImagerAppliance(Bootstrap):
                 host_cpu=info["host_cpu"],
                 triplet=info["triplet"],
                 binaries=" ".join(BINARIES),
-                lvm_wrapper=LVM_WRAPPER_SCRIPT),
+                lvm_wrapper=LVM_WRAPPER_SCRIPT,
+                bbolt_step=bbolt_step),
             base=self.source.targetBootstrap.name,
-            options=packages.build_volumes(self.distro))
+            options=options)
 
     # Flat, not real paths like /usr/bin: /usr may be the mount being
     # packed away on a usrmerged system.
@@ -344,7 +367,7 @@ RUN libfaketime=$(dpkg -L libfaketime | grep -E '/libfaketime\\.so\\.[0-9]+$') &
     sed -i "s#@LIBFAKETIME@#$libfaketime#" /usr/sbin/lvm && \\
     chmod +x /usr/sbin/lvm
 
-RUN supermin --build --verbose --copy-kernel -f ext2 --host-cpu {host_cpu} \\
+{bbolt_step}RUN supermin --build --verbose --copy-kernel -f ext2 --host-cpu {host_cpu} \\
         /usr/lib/{triplet}/guestfs/supermin.d /seine-hints -o /appliance && \\
     for bin in {binaries}; do \\
         cp --parents "$bin" /extra-tools; \\
