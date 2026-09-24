@@ -57,11 +57,20 @@ def cache_path(sbom_path):
     return sbom_path + ".bugs.json"
 
 # Source package names straight from the SBOM debsbom wrote -- sorted,
-# deduplicated, no empty entries.
+# deduplicated, no empty entries. Ignores container-level packages.
 def sources_from_sbom(sbom_path):
     with open(sbom_path) as f:
         spdx = json.load(f)
-    return sorted({entry.get("name", "") for entry in spdx.get("packages", [])} - {""})
+    sources = set()
+    for entry in spdx.get("packages", []):
+        spdx_id = entry.get("SPDXID", "")
+        if spdx_id.startswith("SPDXRef-Container-"):
+            continue
+        name = entry.get("name", "")
+        if not name or "/" in name or ":" in name:
+            continue
+        sources.add(name)
+    return sorted(sources)
 
 # One UDD query URL for a chunk of sources. 'distro' maps to UDD's
 # 'release' (the 'affects_*' scope); unknown distros query 'any'.
