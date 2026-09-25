@@ -307,14 +307,11 @@ class AnsibleContainerRunner:
                     "/var/log/apt/term.log /var/log/apt/eipp.log.xz "
                     "/var/log/dpkg.log "
                     "/var/log/alternatives.log 2>/dev/null; true"])
-        # Must be gone, not just empty: systemd only treats the next
-        # boot as a real first boot (and generates sshd host keys) if
-        # this file is missing. dbus keeps its own copy, written by its
-        # postinst when /etc/machine-id doesn't exist yet -- a fresh
-        # random ID every build, so it must go too.
+        # systemd needs "uninitialized" to trigger first boot and bind-mount
+        # /run/machine-id on early read-only root. dbus drops its build-time ID.
         self._exec(["sh", "-c",
-                    "rm -f /etc/machine-id /var/lib/dbus/machine-id "
-                    "2>/dev/null; true"])
+                    "printf 'uninitialized\\n' > /etc/machine-id; "
+                    "rm -f /var/lib/dbus/machine-id 2>/dev/null; true"])
         # _seed_downloads() copied every .deb the shared per-release cache
         # ever held into here, saved back by _save_downloads() already --
         # a build cache, not part of the image, else the shipped rootfs
