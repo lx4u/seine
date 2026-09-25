@@ -1,0 +1,87 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+requires:
+    - ../common/golang
+
+# k3s and the flannel CNI plugin are built from source, so their
+# dependencies are known to seine. Both build with the Go toolchain of
+# ../common/golang, the version in their go.mod.
+packages:
+    - source: git://github.com/flannel-io/cni-plugin.git;branch=v1.4.0-flannel1;rev=v1.4.0-flannel1
+      version: "1.4.0+flannel1"
+      extends:
+          go:
+              commands:
+                  - package: .
+                    binary: flannel
+
+    - source: git://github.com/k3s-io/k3s.git;branch=v1.30.4+k3s1;rev=v1.30.4+k3s1
+      version: "1.30.4+k3s1"
+      extends:
+          go:
+              # Same package and cgo setting as k3s' own scripts/build.
+              cgo: true
+              ldflags: >-
+                  -w -s
+                  -X github.com/k3s-io/k3s/pkg/version.Version=v1.30.4+k3s1
+                  -X github.com/k3s-io/k3s/pkg/version.GitCommit=v1.30.4+k3s1
+                  -X github.com/k3s-io/k3s/pkg/version.UpstreamGolang=go1.22.4
+                  -X k8s.io/client-go/pkg/version.gitVersion=v1.30.4+k3s1
+                  -X k8s.io/component-base/version.gitVersion=v1.30.4+k3s1
+              commands:
+                  - package: ./cmd/server
+                    binary: k3s
+                    alternatives: [kubectl, crictl]
+              build-depends: [libbtrfs-dev, libdevmapper-dev]
+              runtime-depends:
+                  - iptables
+                  - iproute2
+                  - containernetworking-plugins
+                  - socat
+                  - conntrack
+                  - containerd
+                  - runc
+                  - cni-plugin
+              runtime-suggests: [ca-certificates]
+              systemd-unit: |
+                  [Unit]
+                  Description=Lightweight Kubernetes
+                  Documentation=https://k3s.io
+                  After=network-online.target firewalld.service
+                  Wants=network-online.target
+
+                  [Service]
+                  Type=notify
+                  Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/cni:/opt/cni/bin
+                  EnvironmentFile=-/etc/default/%N
+                  EnvironmentFile=-/etc/sysconfig/%N
+                  EnvironmentFile=-/etc/systemd/system/%N.env
+                  KillMode=process
+                  Delegate=yes
+                  LimitNOFILE=1048576
+                  LimitNPROC=infinity
+                  LimitCORE=infinity
+                  TasksMax=infinity
+                  TimeoutStartSec=0
+                  Restart=always
+                  RestartSec=5s
+                  ExecStartPre=-/sbin/modprobe br_netfilter
+                  ExecStartPre=-/sbin/modprobe overlay
+                  ExecStart=/usr/bin/k3s server
+
+                  [Install]
+                  WantedBy=multi-user.target
+              copyright: |
+                  Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+                  Upstream-Name: k3s
+                  Source: https://github.com/k3s-io/k3s
+
+                  Files: *
+                  Copyright: The K3s authors
+                  License: Apache-2.0
+                  Comment: The Go modules in vendor/ keep their own licenses.
+
+                  License: Apache-2.0
+                   On Debian systems, the full text of the Apache License 2.0
+                   is in /usr/share/common-licenses/Apache-2.0.

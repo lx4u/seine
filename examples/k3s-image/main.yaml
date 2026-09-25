@@ -10,20 +10,12 @@ requires:
     - ../common/conf-timezone
     - ../common/networkd
     - ../common/pc-image
+    - package
     - test-boot
 
 playbook:
     - name: Install K3s control-plane
       tasks:
-          - name: Install dependencies
-            apt:
-                state: present
-                name:
-                    - curl
-                    - ca-certificates
-                    - iptables
-                    - iproute2
-
           - name: Set KUBECONFIG in environment and profile
             copy:
                 dest: "{{ item.dest }}"
@@ -37,21 +29,37 @@ playbook:
                   content: |
                       KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
-          - name: Download K3s binary
-            get_url:
-                url: https://github.com/k3s-io/k3s/releases/download/v1.30.4+k3s1/k3s[[ "-arm64" if distribution.architecture == "arm64" else "" ]]
-                dest: /usr/local/bin/k3s
+          - name: Install K3s (built from source, see package.yaml)
+            apt:
+                state: present
+                name:
+                    - k3s
+                    - cni-plugin
+
+          - name: Disable standalone containerd service (k3s manages its own instance)
+            systemd:
+                name: containerd
+                enabled: false
+                masked: true
+
+          - name: Ensure /opt/cni/bin directory exists
+            file:
+                path: /opt/cni/bin
+                state: directory
                 mode: '0755'
 
-          - name: Create K3s CLI symlinks
-            file:
-                src: /usr/local/bin/k3s
-                dest: "/usr/local/bin/{{ item }}"
-                state: link
-            loop:
-                - kubectl
-                - crictl
-                - ctr
+          - name: Symlink CNI plugins to PATH and /opt/cni/bin
+            shell: |
+                for bin in /usr/lib/cni/*; do
+                    if [ -f "$bin" ]; then
+                        ln -sf "$bin" /opt/cni/bin/$(basename "$bin")
+                        ln -sf "$bin" /usr/bin/$(basename "$bin")
+                    fi
+                done
+                if [ -f /usr/bin/flannel ]; then
+                    ln -sf /usr/bin/flannel /opt/cni/bin/flannel
+                    ln -sf /usr/bin/flannel /usr/lib/cni/flannel
+                fi
 
           - name: Configure crictl for K3s containerd
             copy:
@@ -61,42 +69,6 @@ playbook:
                     image-endpoint: unix:///run/k3s/containerd/containerd.sock
                     timeout: 10
                     debug: false
-
-          - name: Create K3s systemd service
-            copy:
-                dest: /etc/systemd/system/k3s.service
-                content: |
-                    [Unit]
-                    Description=Lightweight Kubernetes
-                    Documentation=https://k3s.io
-                    After=network-online.target firewalld.service
-                    Wants=network-online.target
-
-                    [Service]
-                    Type=notify
-                    EnvironmentFile=-/etc/default/%N
-                    EnvironmentFile=-/etc/sysconfig/%N
-                    EnvironmentFile=-/etc/systemd/system/%N.env
-                    KillMode=process
-                    Delegate=yes
-                    LimitNOFILE=1048576
-                    LimitNPROC=infinity
-                    LimitCORE=infinity
-                    TasksMax=infinity
-                    TimeoutStartSec=0
-                    Restart=always
-                    RestartSec=5s
-                    ExecStartPre=-/sbin/modprobe br_netfilter
-                    ExecStartPre=-/sbin/modprobe overlay
-                    ExecStart=/usr/local/bin/k3s server
-
-                    [Install]
-                    WantedBy=multi-user.target
-
-          - name: Enable K3s service
-            systemd:
-                name: k3s
-                enabled: true
 
 containers:
     target: containerd
