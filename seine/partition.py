@@ -178,9 +178,7 @@ class PartitionHandler:
                 raise ValueError("target 'group' not defined for partition '%s'!" % label)
             elif part["group"] not in self.groups:
                 self.groups.append(part["group"])
-            if "size" not in part:
-                raise ValueError("'size' of LVM partition '%s' was not defined!" % label)
-            else:
+            if "size" in part:
                 part["_size"] = part["size"]
         if is_verity_hash:
             if "verity-for" not in part:
@@ -283,21 +281,26 @@ class PartitionHandler:
         start = self._to_rounded_mib(start)
         self._start_offset = start
 
-        # +1 MiB at the end of the disk for the backup GPT
-        self._min_size = (start + 1) * 1024 * 1024
-
         for mount in self.mounts:
             mount["_size"] = self._to_rounded_mib(mount["_size"]) * 1024 * 1024
             if "size" in mount and mount["size"] > mount["_size"]:
                 mount["_size"] = mount["size"]
-            self._min_size = self._min_size + mount["_size"]
 
-        # Unmounted partitions (LVM PV, verity-hash) have no entry in
-        # self.mounts, so add their already-final '_size' here too.
+        # Compute sizes for LVM physical volume partitions and unmounted partitions
         mounted = {id(m) for m in self.mounts}
         for part in self.partitions:
-            if id(part) not in mounted:
-                self._min_size = self._min_size + self._to_rounded_mib(part["_size"]) * 1024 * 1024
+            if part.get("_lvm"):
+                group = part.get("group")
+                vols = [v for v in self.volumes if v.get("group") == group]
+                pv_min = sum(v["_size"] for v in vols) + 16 * 1024 * 1024
+                if "extra" in part:
+                    pv_min += self._from_human_size(part["extra"])
+                if "size" in part and part["size"] > pv_min:
+                    part["_size"] = part["size"]
+                else:
+                    part["_size"] = self._to_rounded_mib(pv_min) * 1024 * 1024
+            elif id(part) not in mounted:
+                part["_size"] = self._to_rounded_mib(part["_size"]) * 1024 * 1024
 
         # self.mounts and self.partitions share the same dicts, so
         # every part's '_size' is now final -- lay out start/end in MiB.
@@ -306,6 +309,9 @@ class PartitionHandler:
             part["_start_mib"] = layout_start
             layout_start = layout_start + self._to_rounded_mib(part["_size"])
             part["_end_mib"] = layout_start
+
+        # +1 MiB at the end of the disk for the backup GPT
+        self._min_size = (layout_start + 1) * 1024 * 1024
 
     def print_stats(self):
         print("prologue:\t%s" % self._to_human_size(self._start_offset))

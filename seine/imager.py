@@ -1235,7 +1235,7 @@ class Imager:
 
         vol_devices = {}
         for vol in ph.volumes:
-            g.lvcreate(vol["label"], vol["group"], ph._to_rounded_mib(vol["size"]))
+            g.lvcreate(vol["label"], vol["group"], ph._to_rounded_mib(vol["_size"]))
             voldev = "/dev/%s/%s" % (vol["group"], vol["label"])
             self._mkfs(g, vol, voldev)
             vol_devices[id(vol)] = voldev
