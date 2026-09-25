@@ -1,0 +1,43 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier Apache-2.0
+
+playbook:
+    - name: install network packages
+      priority: 500
+      tasks:
+          - name: install network and DNS resolution packages
+            apt:
+                name:
+                    - systemd-resolved
+                    - libnss-resolve
+                state: present
+
+    - name: configure network via systemd-networkd and systemd-resolved
+      priority: 800
+      tasks:
+          - name: enable systemd-networkd and systemd-resolved
+            systemd:
+                name: '{{ item }}'
+                enabled: true
+            loop:
+                - systemd-networkd
+                - systemd-resolved
+
+          - name: symlink /etc/resolv.conf to systemd-resolved stub
+            file:
+                src: /run/systemd/resolve/stub-resolv.conf
+                dest: /etc/resolv.conf
+                state: link
+                force: true
+
+          - name: configure dynamic wired network
+            copy:
+                dest: /etc/systemd/network/80-wired.network
+                content: |
+                    [Match]
+                    Name=en* eth*
+
+                    [Network]
+                    DHCP=yes
+                    IPv6AcceptRA=yes
+                    LinkLocalAddressing=yes
