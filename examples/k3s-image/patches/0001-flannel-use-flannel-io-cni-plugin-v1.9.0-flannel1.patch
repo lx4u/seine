@@ -1,0 +1,92 @@
+Use flannel-io/cni-plugin v1.9.0-flannel1 for the flannel plugin, as the
+k3s build script does, instead of the copy in rancher/plugins.
+
+diff --git a/plugins/meta/flannel/flannel.go b/plugins/meta/flannel/flannel.go
+index 5728135..b9d675a 100644
+--- a/plugins/meta/flannel/flannel.go
++++ b/plugins/meta/flannel/flannel.go
+@@ -23,6 +23,7 @@ import (
+ 	"context"
+ 	"encoding/json"
+ 	"fmt"
++	"io"
+ 	"net"
+ 	"os"
+ 	"path/filepath"
+@@ -42,10 +43,9 @@ const (
+ )
+ 
+ var (
+-	Program   string
+-	Version   string
+-	Commit    string
+-	buildDate string
++	Program string
++	Version string
++	Commit  string
+ )
+ 
+ type NetConf struct {
+@@ -203,11 +203,32 @@ func loadFlannelSubnetEnv(fn string) (*subnetEnv, error) {
+ }
+ 
+ func saveScratchNetConf(containerID, dataDir string, netconf []byte) error {
+-	if err := os.MkdirAll(dataDir, 0o700); err != nil {
++	if err := os.MkdirAll(dataDir, 0700); err != nil {
+ 		return err
+ 	}
+ 	path := filepath.Join(dataDir, containerID)
+-	return os.WriteFile(path, netconf, 0o600)
++	return writeAndSyncFile(path, netconf, 0600)
++}
++
++// WriteAndSyncFile behaves just like ioutil.WriteFile in the standard library,
++// but calls Sync before closing the file. WriteAndSyncFile guarantees the data
++// is synced if there is no error returned.
++func writeAndSyncFile(filename string, data []byte, perm os.FileMode) error {
++	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
++	if err != nil {
++		return err
++	}
++	n, err := f.Write(data)
++	if err == nil && n < len(data) {
++		err = io.ErrShortWrite
++	}
++	if err == nil {
++		err = f.Sync()
++	}
++	if err1 := f.Close(); err == nil {
++		err = err1
++	}
++	return err
+ }
+ 
+ func consumeScratchNetConf(containerID, dataDir string) (func(error), []byte, error) {
+@@ -259,11 +280,11 @@ func isString(i interface{}) bool {
+ func cmdAdd(args *skel.CmdArgs) error {
+ 	n, err := loadFlannelNetConf(args.StdinData)
+ 	if err != nil {
+-		return fmt.Errorf("loadFlannelNetConf failed: %w", err)
++		return fmt.Errorf("failed to load flannel netconf file: %w", err)
+ 	}
+ 	fenv, err := loadFlannelSubnetEnv(n.SubnetFile)
+ 	if err != nil {
+-		return fmt.Errorf("loadFlannelSubnetEnv failed: %w", err)
++		return fmt.Errorf("failed to load flannel 'subnet.env' file: %w. Check the flannel pod log for this node.", err)
+ 	}
+ 
+ 	if n.Delegate == nil {
+@@ -304,11 +325,11 @@ func cmdDel(args *skel.CmdArgs) error {
+ }
+ 
+ func Main() {
+-	fullVer := fmt.Sprintf("CNI Plugin %s version %s (%s/%s) commit %s built on %s", Program, Version, runtime.GOOS, runtime.GOARCH, Commit, buildDate)
++	fullVer := fmt.Sprintf("CNI Plugin %s version %s (%s/%s) commit %s", Program, Version, runtime.GOOS, runtime.GOARCH, Commit)
+ 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, cni.All, fullVer)
+ }
+ 
+-func cmdCheck(_ *skel.CmdArgs) error {
++func cmdCheck(args *skel.CmdArgs) error {
+ 	// TODO: implement
+ 	return nil
+ }
