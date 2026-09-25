@@ -1,0 +1,159 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+requires:
+    - ../common/golang
+
+# k3s and the programs it runs are built from source, so their dependencies
+# are known to seine. Each one is built like k3s' own scripts/build does,
+# with the version and Go toolchain that k3s pins.
+packages:
+    - name: k3s-cni-plugins
+      source: git://github.com/rancher/plugins.git;branch=v1.9.1-k3s1;rev=v1.9.1-k3s1
+      version: "1.9.1+k3s1"
+      patches:
+          - patches/0001-flannel-use-flannel-io-cni-plugin-v1.9.0-flannel1.patch
+      extends:
+          go:
+              tags: >-
+                  ctrd netcgo osusergo providerless urfave_cli_no_docs
+                  sqlite_omit_load_extension apparmor seccomp selinux
+              ldflags: >-
+                  -w -s
+                  -X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=v1.9.1-k3s1
+                  -X github.com/containernetworking/plugins/plugins/meta/flannel.Program=flannel
+                  -X github.com/containernetworking/plugins/plugins/meta/flannel.Version=v1.9.0-flannel1+v0.28.4
+                  -X github.com/containernetworking/plugins/plugins/meta/flannel.Commit=HEAD
+              commands:
+                  - package: .
+                    binary: cni
+                    links: [bandwidth, bridge, firewall, flannel, host-local, loopback, portmap]
+
+    - name: k3s-containerd-shim
+      source: git://github.com/k3s-io/containerd.git;branch=v2.3.4-k3s1;rev=v2.3.4-k3s1
+      version: "2.3.4+k3s1"
+      extends:
+          go:
+              tags: >-
+                  ctrd netgo osusergo providerless urfave_cli_no_docs
+                  sqlite_omit_load_extension apparmor seccomp selinux
+              ldflags: >-
+                  -w -s
+                  -X github.com/containerd/containerd/v2/version.Version=v2.3.4-k3s1
+                  -X github.com/containerd/containerd/v2/version.Package=github.com/k3s-io/containerd/v2
+              commands:
+                  - package: ./cmd/containerd-shim-runc-v2
+                    binary: containerd-shim-runc-v2
+
+    - source: git://github.com/opencontainers/runc.git;branch=v1.4.2;rev=v1.4.2
+      version: "1.4.2"
+      extends:
+          go:
+              cgo: true
+              tags: apparmor seccomp selinux
+              ldflags: -w -s -X main.gitCommit=v1.4.2-0-gc909e4c
+              commands:
+                  - package: .
+                    binary: runc
+              build-depends: [libseccomp-dev, pkg-config]
+
+    - source: git://github.com/k3s-io/k3s.git;branch=v1.37.0+k3s1;rev=v1.37.0+k3s1
+      version: "1.37.0+k3s1"
+      extends:
+          go:
+              cgo: true
+              cgo-cflags: -DSQLITE_ENABLE_DBSTAT_VTAB=1 -DSQLITE_USE_ALLOCA=1
+              tags: >-
+                  ctrd netcgo osusergo providerless urfave_cli_no_docs
+                  sqlite_omit_load_extension apparmor seccomp selinux
+              ldflags: >-
+                  -w -s
+                  -X github.com/k3s-io/k3s/pkg/version.Version=v1.37.0+k3s1
+                  -X github.com/k3s-io/k3s/pkg/version.GitCommit=bb7cf065
+                  -X k8s.io/client-go/pkg/version.gitVersion=v1.37.0+k3s1
+                  -X k8s.io/client-go/pkg/version.gitCommit=bb7cf0657bafdfbb4349d1740810442d09c2248a
+                  -X k8s.io/client-go/pkg/version.gitTreeState=clean
+                  -X k8s.io/component-base/version.gitVersion=v1.37.0+k3s1
+                  -X k8s.io/component-base/version.gitCommit=bb7cf0657bafdfbb4349d1740810442d09c2248a
+                  -X k8s.io/component-base/version.gitTreeState=clean
+                  -X sigs.k8s.io/cri-tools/pkg/version.Version=v1.37.0-k3s1
+                  -X github.com/containerd/containerd/v2/version.Version=v2.3.4-k3s1
+                  -X github.com/containerd/containerd/v2/version.Package=github.com/k3s-io/containerd/v2
+                  -X github.com/cloudnativelabs/kube-router/v2/pkg/version.Version=v2.6.3-k3s1
+                  -X github.com/Mirantis/cri-dockerd/cmd/version.Version=v0.3.19-k3s5
+                  -X github.com/Mirantis/cri-dockerd/cmd/version.GitCommit=HEAD
+                  -X go.etcd.io/etcd/api/v3/version.GitSHA=HEAD
+                  -X github.com/k3s-io/helm-controller/pkg/controllers/chart.DefaultJobImage=rancher/klipper-helm:v0.13.3-build20260727
+              # go:embed needs these, and the source does not carry them.
+              files:
+                  - from: manifests
+                    to: pkg/deploy/embed
+                  - url: https://k3s.io/k3s-charts/assets/gateway-api-crd/gateway-api-crd-1.6.103.tgz;sha256sum=968f8bcf3ec81f9a0b8a686336b999c43df145d87d29c305a714c1ff0402687c
+                    to: pkg/static/embed/charts/gateway-api-crd-1.6.103.tgz
+                  - url: https://k3s.io/k3s-charts/assets/traefik-crd/traefik-crd-41.4.2+up41.4.0.tgz;sha256sum=ce6acfefa2c9a991ac7906c3d8164be0b28721c00fa9e8d9f884d3f88a81db35
+                    to: pkg/static/embed/charts/traefik-crd-41.4.2+up41.4.0.tgz
+                  - url: https://k3s.io/k3s-charts/assets/traefik/traefik-41.4.2+up41.4.0.tgz;sha256sum=b78f0b7d76c88daf9b8cdf6993bde76a4e93b90980dbfb75209e44764971e98c
+                    to: pkg/static/embed/charts/traefik-41.4.2+up41.4.0.tgz
+              commands:
+                  - package: ./cmd/server
+                    binary: k3s
+                    links:
+                        - containerd
+                        - ctr
+                        - k3s-agent
+                        - k3s-server
+                        - k3s-token
+                        - k3s-etcd-snapshot
+                        - k3s-secrets-encrypt
+                        - k3s-certificate
+                        - k3s-completion
+                    alternatives: [kubectl, crictl]
+              build-depends: [libbtrfs-dev, libseccomp-dev, pkg-config]
+              runtime-depends:
+                  - iptables
+                  - iproute2
+                  - socat
+                  - conntrack
+                  - k3s-cni-plugins
+                  - k3s-containerd-shim
+                  - runc
+              runtime-suggests: [ca-certificates]
+              systemd-unit: |
+                  [Unit]
+                  Description=Lightweight Kubernetes
+                  Documentation=https://k3s.io
+                  After=network-online.target
+                  Wants=network-online.target
+
+                  [Service]
+                  Type=notify
+                  EnvironmentFile=-/etc/default/%N
+                  EnvironmentFile=-/etc/sysconfig/%N
+                  EnvironmentFile=-/etc/systemd/system/%N.env
+                  ExecStartPre=/bin/sh -xc '! /usr/bin/systemctl is-enabled --quiet nm-cloud-setup.service 2>/dev/null'
+                  ExecStart=/usr/bin/k3s server
+                  KillMode=process
+                  Delegate=yes
+                  LimitNOFILE=1048576
+                  LimitNPROC=infinity
+                  LimitCORE=infinity
+                  TasksMax=infinity
+                  TimeoutStartSec=0
+                  Restart=always
+                  RestartSec=5s
+
+                  [Install]
+                  WantedBy=multi-user.target
+              copyright: |
+                  Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+                  Upstream-Name: k3s
+                  Source: https://github.com/k3s-io/k3s
+
+                  Files: *
+                  Copyright: The K3s authors
+                  License: Apache-2.0
+                  Comment: The Go modules in vendor/ keep their own licenses.
+
+                  License: Apache-2.0
+                   On Debian systems, the full text of the Apache License 2.0
+                   is in /usr/share/common-licenses/Apache-2.0.
