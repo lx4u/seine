@@ -20,6 +20,7 @@ from email.utils import format_datetime
 from seine        import kernel
 from seine        import kmod_sign
 from seine.deb    import repack
+from seine.extends import go
 from seine.extends import registry
 from seine.extends import texts
 from seine.extends import uki
@@ -35,6 +36,7 @@ from seine.tasks  import Task
 from seine.sbuild import OUTPUT
 from seine.sbuild import REPOSITORY
 from seine.sbuild import SbuildChroot
+from seine.sbuild import TOOLCHAINS
 from seine.utils  import apt_sources
 from seine.utils  import feeds
 from seine.utils  import locked
@@ -1028,6 +1030,9 @@ class Builder:
     def build(self, package, workdir, dsc, epoch, architecture, output):
         volumes = [(workdir, WORKDIR), (self.repository(), REPOSITORY),
                    (output, OUTPUT)]
+        # The build phase has no network: the Go toolchain is mounted in.
+        if "go" in package.ext:
+            volumes.append((go.toolchain_root(), TOOLCHAINS))
 
         # sbuild forwards SOURCE_DATE_EPOCH and DEB_BUILD_OPTIONS into
         # the build; dpkg-buildpackage would derive the date itself, but

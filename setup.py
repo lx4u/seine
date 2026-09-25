@@ -29,7 +29,7 @@ setup(
     packages=find_packages(),
     package_data={"seine": ["data/*.yml", "data/*.txt", "data/changelog",
                             "data/prompt/*.txt",
-                            "data/module/*", "data/cross/*",
+                            "data/go/*", "data/module/*", "data/cross/*",
                             "data/uki-ukify/*", "data/uki-efibootguard/*",
                             "data/uki-addon/*", "data/uefi-keys/*",
                             "data/docs/*.md", "data/ansible/action_plugins/*.py"]},

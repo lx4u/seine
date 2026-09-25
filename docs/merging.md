@@ -100,6 +100,7 @@ between two real files on disk.
 | `imager` | scalar setting | last-loaded wins | |
 | `multiconfig` | group name | last-loaded wins | a group named again replaces its whole file list outright, the same as `imager`'s own settings -- not appended to |
 | `defaults` (`packages` only) | source package | last-loaded wins | deliberately the opposite of `packages` |
+| `defaults` (`extends`) | kind (`go`) | last-loaded wins | the settings of a kind are replaced together, never merged one by one |
 | `packages` | name, else parsed from `source:` | first-loaded wins within `requires:`, peer amends by field | `extends:` merges kind-by-kind the same way, some settings (`derived-flavours`, `kernel.configs`, a module's own kernel list) are additive instead |
 | `vendor` | `name` | first-loaded wins within `requires:`, peer amends by field | same shape as `packages`, without `extends:`; a lock file's own `vendor:` (a dict, not a list) is a different case entirely -- always last-loaded wins, see `_merge_vendor()` |
 | `vendor-exclude` | exact source package name | additive, deduplicated | order doesn't matter, only presence |

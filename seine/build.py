@@ -21,6 +21,7 @@ from seine.container import ContainerEngine
 from seine.utils import distribution, locked
 from seine.utils      import lock_sibling, redact, redactions
 from seine.diffing    import colorless, diff, recall, remember
+from seine.extends import registry
 from seine.extends import texts
 from seine.extends.templates import TEMPLATE
 
@@ -717,10 +718,10 @@ class BuildCmd(Cmd):
         if type(defaults) != type({}):
             raise ValueError("'defaults' shall be a dictionary!")
         for setting in defaults:
-            if setting not in ("packages", "vault", "sign-key"):
+            if setting not in ("packages", "extends", "vault", "sign-key"):
                 raise ValueError(
-                    "'defaults' holds package entries, 'vault' or 'sign-key', not '%s'"
-                    % setting)
+                    "'defaults' holds package entries, 'extends', 'vault' or "
+                    "'sign-key', not '%s'" % setting)
 
         merged = self.spec.setdefault("defaults", {}).setdefault("packages", [])
         for package in defaults.get("packages") or []:
@@ -730,6 +731,11 @@ class BuildCmd(Cmd):
                 merged.append(package)
             else:
                 self._override_package(existing[0], package)
+
+        kinds = defaults.get("extends")
+        if kinds is not None:
+            registry.check_defaults(kinds)
+            self.spec["defaults"].setdefault("extends", {}).update(kinds)
 
         vault = defaults.get("vault")
         if vault is not None:
@@ -794,6 +800,7 @@ class BuildCmd(Cmd):
 
         held = self.spec.get("defaults") or {}
         defaults = held.pop("packages", None) or []
+        kinds = held.pop("extends", None) or {}
         # 'vault' stays: Builder/Imager read it later, once the vault is
         # actually needed. Only drop 'defaults' once nothing is left.
         if len(held) == 0:
@@ -805,6 +812,9 @@ class BuildCmd(Cmd):
             for package in self.spec.get("packages") or []:
                 if self._package_name(package) == name:
                     self._merge_package(package, default)
+        for package in self.spec.get("packages") or []:
+            if type(package) == type({}):
+                registry.fill_defaults(package.get("extends"), kinds)
 
     # A default may name a kernel this spec doesn't build -- not a
     # mistake, just "if we build our own kernel, add modules to it too".

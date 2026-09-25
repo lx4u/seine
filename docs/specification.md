@@ -415,12 +415,33 @@ the `flavour` its architecture gave it. Entries are matched by source
 package, as under `packages`, so a default written `apt://linux` applies
 to a specification that pinned `apt://linux=6.12.101-1`.
 
+`extends` under `defaults` gives a kind's settings to every package that
+uses that kind, so a specification need not repeat them. The Go toolchain
+is the one kind with defaults for now:
+
+```
+# examples/common/golang.yaml
+defaults:
+    extends:
+        go:
+            toolchain: "1.22.4"
+            toolchain-sha256:
+                amd64: ba79d4526102575196273416239cca418a651e049c2b099f3159db85e7bade7d
+                arm64: a8e177c354d2e4a1b61020aca3562e27ea3e8f8247eca3170e3fa1e0c2f9e771
+```
+
+A default only fills in a package that says `extends: go`, and never makes
+one. `toolchain` and `toolchain-sha256` are given together, and a package
+that sets one of them takes neither from the defaults: a hash is never
+used with another version. As above, the last default loaded wins and the
+package's own settings beat them.
+
 A default is parsed whether or not anything uses it: a misspelt setting
 in an architecture file is reported by the file that holds it rather than
 waiting for the one image that rebuilds a kernel.
 
-`defaults` holds package entries, `vault` seeds for the dev vault, and a
-`sign-key` fallback for repository signing. Playbooks and tests already
+`defaults` holds package entries, `extends` settings, `vault` seeds for
+the dev vault, and a `sign-key` fallback for repository signing. Playbooks and tests already
 merge by name (see [`playbook`](#playbook)/[`test`](#test)), and the
 other sections are merged by key.
 
@@ -468,7 +489,7 @@ The following attributes are supported:
 | apt-preferences   | no       | What this build may install (see [Pinning a build](#pinning-a-build)) |
 | before            | no       | Packages that shall be built after this one     |
 | cross             | no       | Cross-compile (see [Cross-compiling](building.md#cross-compiling)) |
-| extends           | no       | Settings for a kind of package (see [Packaging seine writes](#packaging-seine-writes) and [Bring your own modules](kernels.md#bring-your-own-modules)) |
+| extends           | no       | Settings for a kind of package (see [Packaging seine writes](#packaging-seine-writes), [Bring your own modules](kernels.md#bring-your-own-modules) and [Building a Go program](#building-a-go-program)) |
 | name              | no       | The source package this builds, when the URI does not say |
 | options           | no       | Debian build options (`DEB_BUILD_OPTIONS`)      |
 | patches           | no       | Patches to apply, relative to this YAML file    |
@@ -830,14 +851,14 @@ anything here.
 
 ### Packaging seine writes
 
-`extends: module:`, `uki:`, `uki-addon:` and `uefi-keys:` write the
+`extends: module:`, `go:`, `uki:`, `uki-addon:` and `uefi-keys:` write the
 `debian/` directory themselves, replacing any the tree came with. The
 specification says what the tree cannot: the `name` of the package and its
 `version`, a string (yaml reads an unquoted `1.10` as `1.1`).
 
 | Kind                          | `source`                                |
 | ----------------------------- | --------------------------------------- |
-| `module`                      | The tree to build                       |
+| `module`, `go`                | The tree to build                       |
 | `uki`, `uki-addon`, `uefi-keys` | None: nothing is fetched, seine writes it all |
 
 These settings work under each of them:
@@ -969,6 +990,68 @@ A kernel takes one role. It is configured per architecture, down to the
 name of its flavour, so one entry cannot describe two; list the
 architectures as separate packages, each with the flavour that
 architecture has.
+
+### Building a Go program
+
+A Go program that has no `debian/` directory is built by `extends: go:`,
+and seine writes the packaging for it. The Go toolchain is a pinned
+upstream release, not the one in the distribution, which is often too old.
+
+```
+packages:
+    - source: git://github.com/k3s-io/k3s.git;rev=v1.30.4+k3s1
+      version: "1.30.4+k3s1"
+      extends:
+          go:
+              toolchain: "1.22.4"
+              toolchain-sha256:
+                  amd64: ba79d4526102575196273416239cca418a651e049c2b099f3159db85e7bade7d
+                  arm64: a8e177c354d2e4a1b61020aca3562e27ea3e8f8247eca3170e3fa1e0c2f9e771
+              cgo: true
+              commands:
+                  - {package: "./cmd/server", binary: k3s}
+```
+
+The digest is the one listed at <https://go.dev/dl/>, one per architecture
+that may build the package: the toolchain runs on the build machine,
+whatever the package is built for.
+
+| Setting          | Required | Description                                  |
+| ---------------- |:--------:| -------------------------------------------- |
+| commands         | yes      | Programs to build: a Go `package`, the `binary` name it is installed as in `/usr/bin`, and optional `links` and `alternatives` |
+| toolchain        | yes      | Go version to build with, usually the one in `go.mod`, or from [`defaults`](#defaults) |
+| toolchain-sha256 | yes      | sha256 of the toolchain, per Debian architecture, or from [`defaults`](#defaults) |
+| build            | no       | Directory that holds `go.mod`, `.` by default |
+| build-depends    | no       | What the tree needs to compile                |
+| cgo              | no       | Build with cgo, `false` by default            |
+| ldflags          | no       | Passed to `go build -ldflags`                 |
+| runtime-depends  | no       | What the program needs once installed         |
+| runtime-suggests | no       | What it can use, but does not need (`Suggests`) |
+| tags             | no       | Passed to `go build -tags`                    |
+
+A program that is also known by other names, as k3s is `kubectl`, is
+given `links` (symbolic links in the package) or `alternatives`
+(registered with `update-alternatives`, for names that other packages
+provide too). A name is put next to the binary; an absolute path puts it
+elsewhere, but not under `/usr/local`, which packages cannot install
+into. An alternative is a name, or `{link: <name>, priority: <number>}`
+(`50` by default).
+
+```
+commands:
+    - package: ./cmd/server
+      binary: k3s
+      links: [ctr, /usr/sbin/k3s-ctr]
+      alternatives: [kubectl, {link: crictl, priority: 10}]
+```
+
+Go modules are fetched when the source is prepared, into `vendor/`,
+unless the tree has one already. The build itself has no network. Cross
+compiling needs no emulation: Go builds for another architecture on its
+own, and `cgo` adds the C cross compiler.
+
+`examples/rebuild-go-hello/` builds a small program,
+and `examples/k3s-image/` builds k3s.
 
 ## vendor
 

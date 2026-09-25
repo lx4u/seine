@@ -19,6 +19,7 @@ from seine.build import BuildCmd
 from seine.extends import registry
 from seine.extends import templates
 from seine.packages import Builder
+from seine.utils import HOST_ARCH
 from seine.sbuild import BuilderImage
 
 os.environ["SEINE_CACHE_DIR"] = tempfile.mkdtemp(prefix="seine-tests-")
@@ -35,6 +36,22 @@ IMAGE = {"filename": "digest-test.img",
 
 # One package per kind, and the settings whose change must be a rebuild.
 CASES = {
+    "go": {
+        "spec": {"source": "git://h/k3s.git;rev=abc", "name": "k3s",
+                 "version": "1", "extends": {"go": {
+                     "toolchain": "1.22.4", "toolchain-sha256": {
+                         HOST_ARCH: "a" * 64},
+                     "build": "a", "cgo": False, "ldflags": "-s",
+                     "tags": "x", "build-depends": ["x"],
+                     "runtime-depends": ["y"], "runtime-suggests": ["z"],
+                     "commands": [{"package": "./a", "binary": "a"}]}}},
+        "changes": {"toolchain": "1.23.0",
+                    "toolchain-sha256": {HOST_ARCH: "b" * 64},
+                    "build": "b", "cgo": True, "ldflags": "-w", "tags": "y",
+                    "build-depends": ["w"], "runtime-depends": ["w"],
+                    "runtime-suggests": ["w"], "copyright": "Foo",
+                    "commands": [{"package": "./b", "binary": "b"}]},
+        "data": "go"},
     "module": {
         "spec": {"source": "git://h/nvidia.git;rev=abc", "name": "mod",
                  "version": "1", "extends": {"module": {
@@ -167,6 +184,12 @@ class TheExcerptShowsEveryKind(DigestFixture):
         builder, packages, name = self.parsed(kind)
         package = [p for p in packages if p.name == name][0]
         return builder.digest_excerpt(package)["extends"]
+
+    def test_go(self):
+        shown = self.excerpt("go")["go"]
+        self.assertEqual(shown["toolchain"], "1.22.4")
+        self.assertEqual(shown["commands"][0]["binary"], "a")
+        self.assertNotIn("cgo", shown)
 
     def test_module(self):
         shown = self.excerpt("module")["module"]

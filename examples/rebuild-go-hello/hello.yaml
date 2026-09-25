@@ -1,0 +1,31 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# A Go program built from source with a pinned Go toolchain, its own
+# rather than the one in ../common/golang. 'weave' is the only command
+# in golang/example's root module: the other examples there are modules
+# of their own.
+
+packages:
+    - source: git://github.com/golang/example.git;rev=7f05d217867b2af52b0a28c6d1c91df97e1b5b39
+      name: golang-example-weave
+      version: "0+git20240925"
+      extends:
+          go:
+              toolchain: "1.23.0"
+              # One sha256 per architecture that may build this package.
+              toolchain-sha256:
+                  amd64: 905a297f19ead44780548933e0ff1a1b86e8327bb459e92f9c0012569f76f5e3
+                  arm64: 62788056693009bcf7020eedc778cdd1781941c6145eab7688bd087bce0f8659
+              commands:
+                  - {package: "./internal/cmd/weave", binary: weave}
+
+playbook:
+    - name: install the go-built weave example
+      priority: 250
+      tasks:
+          - name: weave
+            apt:
+                state: present
+                name:
+                    - golang-example-weave

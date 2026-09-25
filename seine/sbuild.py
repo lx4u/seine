@@ -26,6 +26,10 @@ from seine.utils     import PRIVILEGED_RUN_OPTIONS
 # entry works in both places.
 REPOSITORY = "/packages"
 
+# Where the Go toolchains (seine/extends/go.py) are mounted, in the builder
+# container and in the chroot.
+TOOLCHAINS = "/goroot"
+
 # Where a build writes its output. Builds share one repository, so each
 # gets its own output dir instead; the publish step moves files across.
 OUTPUT = "/output"
@@ -47,6 +51,7 @@ class BuilderImage(Bootstrap):
             self._sources(),
             "apt-{}".format(self.distro["release"]),
             REPOSITORY,
+            TOOLCHAINS,
             APT_CLEANUP)
 
     # Same feeds the image itself uses, plus deb-src for 'apt-get source'.
@@ -263,15 +268,16 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,id={4},sharing=locked \
 # rebuilds -- jinja2/kernel-wedge/dh_listpackages back the kernel's own
 # debian/control generator, dacite reads defines.toml (6.12 sources only).
 # iproute2: sbuild needs 'ip link set lo up' and dies without it.
-RUN {6}
+RUN {7}
 RUN echo 'root:1:65535' > /etc/subuid && \
     echo 'root:1:65535' > /etc/subgid
 # sbuild's chroot is a separate root our bind mounts don't reach, so
 # sbuild bind-mounts the package repository into it at the same path too
 # -- a package can then build against ones rebuilt before it via a plain
-# sources.list entry. Trailing '1;' is required: it's a perl config file.
-RUN mkdir -p /etc/sbuild && \
-    echo '$unshare_bind_mounts = [ {{ directory => "{5}", mountpoint => "{5}" }} ];' \
+# sources.list entry. The Go toolchains are mounted the same way.
+# Trailing '1;' is required: it's a perl config file.
+RUN mkdir -p /etc/sbuild {5} {6} && \
+    echo '$unshare_bind_mounts = [ {{ directory => "{5}", mountpoint => "{5}" }}, {{ directory => "{6}", mountpoint => "{6}" }} ];' \
         > /etc/sbuild/sbuild.conf && \
     echo '1;' >> /etc/sbuild/sbuild.conf
 """

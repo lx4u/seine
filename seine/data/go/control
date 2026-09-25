@@ -1,0 +1,17 @@
+Source: [[ name ]]
+Section: devel
+Priority: optional
+Maintainer: [[ maintainer ]] <[[ email ]]>
+Build-Depends: debhelper-compat (= 13)[% for arch in cross_architectures %],
+               crossbuild-essential-[[ arch ]]:native <cross>[% endfor %][[ ",\n               " + build_depends|join(",\n               ") if build_depends else "" ]]
+Rules-Requires-Root: no
+
+Package: [[ name ]]
+Architecture: any
+Depends: ${misc:Depends}, ${shlibs:Depends}[[ ", " + runtime_depends|join(", ") if runtime_depends else "" ]]
+[% if runtime_suggests %]
+Suggests: [[ runtime_suggests|join(", ") ]]
+[% endif %]
+Description: [[ name ]], rebuilt from source by seine
+ Built with a pinned upstream Go [[ toolchain ]] toolchain instead of the
+ distribution's own, from [[ source ]].

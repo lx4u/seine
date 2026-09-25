@@ -1,0 +1,73 @@
+#!/usr/bin/make -f
+# Written by seine from seine/data/go/rules.
+
+# The toolchain is for [[ host_arch ]], the machine that runs 'go build',
+# whatever GOARCH below cross-compiles for.
+GOROOT = /goroot/[[ toolchain_name ]]/go
+export GOTOOLCHAIN = local
+export GOFLAGS = -mod=vendor
+export GOCACHE = $(CURDIR)/.gocache
+export GOPATH = $(CURDIR)/.gopath
+export PATH := $(GOROOT)/bin:$(PATH)
+export CGO_ENABLED = [[ "1" if cgo else "0" ]]
+export GOOS = linux
+
+BUILD = [[ build_dir ]]
+LDFLAGS = [[ ldflags ]]
+TAGS = [[ tags ]]
+
+[% for arch, values in goarch %]
+GOARCH_[[ arch ]] = [[ values.GOARCH ]]
+[% if "GOARM" in values %]
+GOARM_[[ arch ]] = [[ values.GOARM ]]
+[% endif %]
+[% endfor %]
+export GOARCH = $(GOARCH_$(DEB_HOST_ARCH))
+export GOARM = $(GOARM_$(DEB_HOST_ARCH))
+
+ifeq ($(GOARCH),)
+$(error seine has no GOARCH for $(DEB_HOST_ARCH). Add it to the GOARCH \
+	table in seine/extends/go.py.)
+endif
+
+[% if cgo %]
+# Only cgo needs a C cross compiler.
+ifneq ($(DEB_BUILD_ARCH),$(DEB_HOST_ARCH))
+export CC  = $(DEB_HOST_GNU_TYPE)-gcc
+export CXX = $(DEB_HOST_GNU_TYPE)-g++
+endif
+[% endif %]
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+
+override_dh_auto_test:
+
+# dwz fails on the compressed debug sections Go writes.
+override_dh_dwz:
+
+# Not built into debian/[[ name ]]/ directly: dh_prep empties it before install.
+override_dh_auto_build:
+	mkdir -p $(CURDIR)/.gobuild
+	set -e; cd $(BUILD); \
+[% for command in commands %]
+	go build -trimpath -ldflags "$(LDFLAGS)" -tags "$(TAGS)" \
+	    -o $(CURDIR)/.gobuild/[[ command.binary ]] \
+	    [[ command.package ]]; \
+[% endfor %]
+	true
+
+override_dh_auto_install:
+	mkdir -p debian/[[ name ]]/usr/bin
+[% for command in commands %]
+	install -m 0755 .gobuild/[[ command.binary ]] debian/[[ name ]]/usr/bin/
+[% endfor %]
+[% for link in links %]
+	mkdir -p debian/[[ name ]][[ link.directory ]]
+	ln -s [[ link.target ]] debian/[[ name ]][[ link.path ]]
+[% endfor %]
+
+override_dh_auto_clean:
+	rm -rf $(CURDIR)/.gocache $(CURDIR)/.gopath $(CURDIR)/.gobuild

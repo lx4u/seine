@@ -20,6 +20,8 @@ DISTRO = {"source": "debian", "release": "trixie", "architecture": "amd64",
 
 UKI = {"tool": "ukify", "linux-image": "linux-image-x", "initrd": "/i"}
 KEYS = {"signing-key": "vault:k"}
+GO = {"toolchain": "1.22.4", "toolchain-sha256": {"amd64": "a" * 64},
+      "commands": [{"package": "./a", "binary": "a"}]}
 MODULE = {"modules": ["a"], "amd64-kernels": ["apt://linux-headers-x"]}
 
 def package(kind, settings, **spec):
@@ -31,7 +33,7 @@ class TheTable(avocado.Test):
         names = [extension.name for extension in registry.EXTENSIONS]
         self.assertEqual(sorted(names), sorted(set(names)))
         self.assertEqual(sorted(names), [
-            "kernel", "module", "uefi-keys", "uki", "uki-addon"])
+            "go", "kernel", "module", "uefi-keys", "uki", "uki-addon"])
 
 class KindsAreChecked(avocado.Test):
     def test_an_unknown_kind_lists_the_known_ones(self):
@@ -63,10 +65,11 @@ class WhatAKindGenerates(avocado.Test):
             self.assertEqual(registry.generator(built).name, kind)
             self.assertFalse(registry.no_changelog(built))
 
-    def test_a_module_is_fetched_and_has_no_changelog(self):
-        built = package("module", MODULE, source="apt://x", version="1")
-        self.assertIsNone(registry.generator(built))
-        self.assertTrue(registry.no_changelog(built))
+    def test_a_module_or_a_go_build_is_fetched_and_has_no_changelog(self):
+        for kind, settings in [("module", MODULE), ("go", GO)]:
+            built = package(kind, settings, source="apt://x", version="1")
+            self.assertIsNone(registry.generator(built))
+            self.assertTrue(registry.no_changelog(built))
 
     def test_a_plain_package_uses_no_kind(self):
         built = Package({"source": "apt://busybox"}, 1)
@@ -80,10 +83,12 @@ class VersionIsNeeded(avocado.Test):
                 package(kind, settings)
             self.assertIn("'version' is not set", str(refused.exception))
 
-    def test_a_module_asks_for_it_when_it_builds(self):
-        with self.assertRaises(ValueError) as refused:
-            package("module", MODULE, source="apt://x")
-        self.assertIn("out-of-tree module", str(refused.exception))
+    def test_a_module_or_a_go_build_asks_for_it_when_it_builds(self):
+        for kind, settings, what in [("module", MODULE, "out-of-tree module"),
+                                     ("go", GO, "Go build")]:
+            with self.assertRaises(ValueError) as refused:
+                package(kind, settings, source="apt://x")
+            self.assertIn(what, str(refused.exception))
 
     def test_an_entry_that_only_describes_a_package_does_not(self):
         package("module", MODULE)
@@ -97,6 +102,7 @@ class CopyrightIsShared(avocado.Test):
     def test_every_kind_that_writes_packaging_takes_it(self):
         for kind, settings, spec in [
                 ("module", MODULE, {"source": "apt://x"}),
+                ("go", GO, {"source": "apt://x"}),
                 ("uki", UKI, {}), ("uki-addon", ADDON, {}),
                 ("uefi-keys", KEYS, {})]:
             built = package(kind, dict(settings, copyright="Foo"),

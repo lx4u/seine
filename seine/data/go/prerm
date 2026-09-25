@@ -1,0 +1,11 @@
+#!/bin/sh
+# Written by seine from seine/data/go/prerm.
+set -e
+
+if [ "$1" = remove ]; then
+[% for link in alternatives %]
+	update-alternatives --remove [[ link.name ]] [[ link.binary ]]
+[% endfor %]
+fi
+
+#DEBHELPER#
