@@ -1,0 +1,9 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+requires:
+    - ../common/amd64
+    - ../common/bookworm
+    - ../common/golang
+    - ../common/pc-image
+    - hello

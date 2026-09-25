@@ -53,6 +53,7 @@ whole project. The ones in use are:
 | `deps`         | seine's own dependencies and packaging                |
 | `distribution` | The `distribution` section: releases, feeds, mirrors  |
 | `examples`     | The specifications under `examples/`                  |
+| `go`           | What `extends: go` means: Go programs built from source |
 | `image`        | Assembling the root file-system and the disk image    |
 | `imager`       | The libguestfs appliance that writes the disk image   |
 | `issues`       | CVE scanning against an SBOM: `seine issues`, `/issues`, `sbom2cve_program` |
