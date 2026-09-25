@@ -1,0 +1,12 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# The Go toolchain 'extends: go' builds with, unless a package names its
+# own. One sha256 per architecture that may build.
+defaults:
+    extends:
+        go:
+            toolchain: "1.22.4"
+            toolchain-sha256:
+                amd64: ba79d4526102575196273416239cca418a651e049c2b099f3159db85e7bade7d
+                arm64: a8e177c354d2e4a1b61020aca3562e27ea3e8f8247eca3170e3fa1e0c2f9e771

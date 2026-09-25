@@ -1,0 +1,11 @@
+#!/bin/sh
+# Written by seine from seine/data/go/postinst.
+set -e
+
+if [ "$1" = configure ]; then
+[% for link in alternatives %]
+	update-alternatives --install [[ link.path ]] [[ link.name ]] [[ link.binary ]] [[ link.priority ]]
+[% endfor %]
+fi
+
+#DEBHELPER#
