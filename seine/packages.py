@@ -1404,7 +1404,7 @@ class Builder:
         # each concatenated into one file in the order given.
         if package.uefi_keys:
             extend_digest(digest, recipe, "uefi_keys_packaging",
-                          "".join(uefi_keys.uefi_keys_packaging().values()))
+                          uefi_keys.uefi_keys_packaging()[1])
             extend_digest(digest, recipe, "uefi_keys_pk", str(package.uefi_keys_pk))
             extend_digest(digest, recipe, "uefi_keys_kek", ",".join(package.uefi_keys_kek))
             extend_digest(digest, recipe, "uefi_keys_db", ",".join(package.uefi_keys_db))

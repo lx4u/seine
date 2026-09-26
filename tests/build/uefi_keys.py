@@ -14,6 +14,7 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
+from seine.extends import templates
 from seine.extends import uefi_keys
 from seine.build import BuildCmd
 from seine.packages import Builder
@@ -286,18 +287,19 @@ class PackagingTemplateContentChangesTheStamp(avocado.Test):
     def test(self):
         extra = "                              signing-key: vault:x\n"
         before = uefi_keys_stamp(extra)
-        edited = os.path.join(self.workdir, "uefi-keys")
-        shutil.copytree(uefi_keys.UEFI_KEYS_PACKAGING, edited)
-        with open(os.path.join(edited, "provision-keys"), "a") as f:
+        data = os.path.join(self.workdir, "data")
+        shutil.copytree(os.path.join(templates.DATA, "uefi-keys"),
+                        os.path.join(data, "uefi-keys"))
+        with open(os.path.join(data, "uefi-keys", "provision-keys"), "a") as f:
             f.write("\n# edited\n")
-        original = uefi_keys.UEFI_KEYS_PACKAGING
-        uefi_keys.UEFI_KEYS_PACKAGING = edited
-        uefi_keys.uefi_keys_packaging.cache_clear()
+        original = templates.DATA
+        templates.DATA = data
+        templates.load_templates.cache_clear()
         try:
             after = uefi_keys_stamp(extra)
         finally:
-            uefi_keys.UEFI_KEYS_PACKAGING = original
-            uefi_keys.uefi_keys_packaging.cache_clear()
+            templates.DATA = original
+            templates.load_templates.cache_clear()
         self.assertNotEqual(before, after)
 
 
