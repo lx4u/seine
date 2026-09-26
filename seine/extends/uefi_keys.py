@@ -145,7 +145,9 @@ def extend(builder, package, sourcedir, epoch):
     _write_certs(builder._vault(), os.path.join(debian, "certs"), package)
 
     context = {
-        **templates.base_context(package, epoch),
+        **templates.base_context(
+            package, epoch,
+            "Packaged by seine to provision UEFI Secure Boot variables."),
         # Stable per package name, not random: identical specs keep
         # identical digests across runs.
         "owner_guid": str(uuid.uuid5(uuid.NAMESPACE_DNS, package.name)),
