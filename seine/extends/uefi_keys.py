@@ -144,6 +144,17 @@ def digest_fields(builder, package, architecture):
         ("packaging", uefi_keys_packaging()[1]),
     ]
 
+def excerpt(package):
+    settings = package.ext["uefi-keys"]
+    named = lambda names: [parsing.VAULT_PREFIX + name for name in names]
+    shown = {"pk": parsing.VAULT_PREFIX + settings.pk,
+             "kek": named(settings.kek), "db": named(settings.db)}
+    if settings.dbx:
+        shown["dbx"] = named(settings.dbx)
+    if settings.reboot:
+        shown["reboot"] = True
+    return shown
+
 def extend(builder, package, sourcedir, epoch):
     if not is_uefi_keys_package(package):
         return

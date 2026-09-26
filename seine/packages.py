@@ -1316,11 +1316,9 @@ class Builder:
                 self._portable_path(package, "patches", p)
                 for p in package.patch_files()]
 
-        extends = {}
+        extends = registry.excerpts(package)
         if package.kernel:
             extends["kernel"] = self._kernel_excerpt(package)
-        if "module" in package.ext:
-            extends["module"] = self._module_excerpt(package)
         if extends:
             excerpt["extends"] = extends
 
@@ -1355,18 +1353,6 @@ class Builder:
             settings["keep-patches"] = sorted(package.kernel_keep_patches)
         if package.kernel_drop_patches:
             settings["drop-patches"] = sorted(package.kernel_drop_patches)
-        return settings
-
-    def _module_excerpt(self, package):
-        settings = {"build": package.ext["module"].build, "target": package.ext["module"].target}
-        if package.ext["module"].modules:
-            settings["modules"] = sorted(package.ext["module"].modules)
-        if package.ext["module"].build_depends:
-            settings["build-depends"] = sorted(package.ext["module"].build_depends)
-        if package.ext["module"].runtime_depends:
-            settings["runtime-depends"] = sorted(package.ext["module"].runtime_depends)
-        if package.ext["module"].make_vars:
-            settings["make-vars"] = dict(package.ext["module"].make_vars)
         return settings
 
     # Where an excerpt lives: same basename as its stamp, but in the
