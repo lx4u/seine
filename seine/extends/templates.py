@@ -62,6 +62,12 @@ def reset_debian(sourcedir):
     return debian
 
 # 'note' is the one line the changelog entry says.
+# debian/copyright, when the specification gives one.
+def write_copyright(debian, text):
+    if text is not None:
+        write(os.path.join(debian, "copyright"),
+              text if text.endswith("\n") else text + "\n")
+
 def base_context(package, epoch, note):
     return {
         "note": note,
