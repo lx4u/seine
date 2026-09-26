@@ -322,6 +322,19 @@ def digest_fields(builder, package, architecture):
         ("packaging", module_packaging()[1]),
     ]
 
+def excerpt(package):
+    settings = package.ext["module"]
+    shown = {"build": settings.build, "target": settings.target}
+    if settings.modules:
+        shown["modules"] = sorted(settings.modules)
+    if settings.build_depends:
+        shown["build-depends"] = sorted(settings.build_depends)
+    if settings.runtime_depends:
+        shown["runtime-depends"] = sorted(settings.runtime_depends)
+    if settings.make_vars:
+        shown["make-vars"] = dict(settings.make_vars)
+    return shown
+
 # Writes packaging for an out-of-tree module into its source tree,
 # replacing whatever came with it (usually dkms, which builds on the
 # install machine -- the opposite of what 'extends: module' wants).

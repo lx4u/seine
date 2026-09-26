@@ -107,6 +107,13 @@ def digest_fields(builder, package, architecture):
         ("packaging", uki_addon_packaging()[1]),
     ]
 
+def excerpt(package):
+    settings = package.ext["uki-addon"]
+    shown = {"uki": settings.uki, "cmdline": settings.cmdline}
+    if settings.signing_key:
+        shown["signing-key"] = parsing.VAULT_PREFIX + settings.signing_key
+    return shown
+
 def extend(builder, package, sourcedir, epoch):
     if not is_uki_addon_package(package):
         return

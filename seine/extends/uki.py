@@ -128,6 +128,16 @@ def digest_fields(builder, package, architecture):
         ("packaging", uki_packaging(settings.tool)[1]),
     ]
 
+def excerpt(package):
+    settings = package.ext["uki"]
+    shown = {"tool": settings.tool, "linux-image": settings.linux_image,
+             "initrd": settings.initrd}
+    if settings.cmdline:
+        shown["cmdline"] = settings.cmdline
+    if settings.signing_key:
+        shown["signing-key"] = parsing.VAULT_PREFIX + settings.signing_key
+    return shown
+
 def extend(builder, package, sourcedir, epoch):
     if "uki" not in package.ext:
         return

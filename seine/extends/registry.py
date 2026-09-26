@@ -18,25 +18,27 @@ from seine.extends import uki_addon
 Extension = collections.namedtuple(
     "Extension",
     ["name", "settings", "revision", "parse", "extend", "digest_fields",
-     "what", "generates_source", "no_changelog", "extra_setting"],
-    defaults=[None, None, None, False, False, None])
+     "excerpt", "what", "generates_source", "no_changelog", "extra_setting"],
+    defaults=[None, None, None, None, False, False, None])
 
 # Kernels are grafted onto a tree, not written from templates: no extend()
 # here, kernel.extend() runs later with its own arguments.
 EXTENSIONS = [
     Extension("kernel", kernel.SETTINGS, None, kernel.parse),
     Extension("module", module.SETTINGS, module.REVISION, module.parse,
-              module.extend, module.digest_fields, "an out-of-tree module",
-              no_changelog=True,
+              module.extend, module.digest_fields, module.excerpt,
+              "an out-of-tree module", no_changelog=True,
               extra_setting=(module.MODULE_KERNELS, "<architecture>-kernels")),
     Extension("uefi-keys", uefi_keys.SETTINGS, uefi_keys.REVISION,
               uefi_keys.parse, uefi_keys.extend, uefi_keys.digest_fields,
-              "the UEFI key provisioning", generates_source=True),
+              uefi_keys.excerpt, "the UEFI key provisioning",
+              generates_source=True),
     Extension("uki", uki.SETTINGS, uki.REVISION, uki.parse, uki.extend,
-              uki.digest_fields, "a UKI wrapper", generates_source=True),
+              uki.digest_fields, uki.excerpt, "a UKI wrapper",
+              generates_source=True),
     Extension("uki-addon", uki_addon.SETTINGS, uki_addon.REVISION,
               uki_addon.parse, uki_addon.extend, uki_addon.digest_fields,
-              "a UKI addon", generates_source=True),
+              uki_addon.excerpt, "a UKI addon", generates_source=True),
 ]
 
 BY_NAME = {extension.name: extension for extension in EXTENSIONS}
@@ -73,10 +75,10 @@ def _check_settings(package, extension, settings):
             f"'extends: {extension.name}' has no '{setting}' setting, "
             "expected one of " + ", ".join(expected))
 
-# The kinds this package extends, in table order.
+# The kinds this package extends, in table order (never the kernel).
 def in_use(package):
     return [extension for extension in EXTENSIONS
-            if extension.name in package.extends]
+            if extension.name in package.ext]
 
 # The kind that writes this package's whole tree, if any.
 def generator(package):
@@ -102,6 +104,12 @@ def digest_fields(builder, package, architecture):
                        for label, value in extension.digest_fields(
                            builder, package, architecture)]
     return fields
+
+# The settings behind a build, per kind, as 'cache' shows them.
+def excerpts(package):
+    return {extension.name: extension.excerpt(package)
+            for extension in in_use(package)
+            if extension.excerpt is not None}
 
 # Writes each kind's packaging into the tree.
 def extend_all(builder, package, sourcedir, epoch):
