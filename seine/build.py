@@ -21,21 +21,12 @@ from seine.container import ContainerEngine
 from seine.utils import distribution, locked
 from seine.utils      import lock_sibling, redact, redactions
 from seine.diffing    import colorless, diff, recall, remember
+from seine.extends.templates import TEMPLATE
 
-# Specs render before parsing (one file covers several
-# archs/releases). Custom delimiters keep ansible's own '{{ }}'
-# untouched. StrictUndefined: a missing value fails loudly, not
-# silently building for the wrong machine.
-TEMPLATE = jinja2.Environment(
-    variable_start_string="[[", variable_end_string="]]",
-    block_start_string="[%", block_end_string="%]",
-    comment_start_string="[#", comment_end_string="#]",
-    trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True,
-    undefined=jinja2.StrictUndefined)
-
-# Same, but for the probe pass: unresolved names render empty instead
-# of raising, since this output is only used to collect what names
-# get set, then thrown away.
+# TEMPLATE renders specs before parsing (one file covers several
+# archs/releases): a missing value fails loudly, not silently building
+# for the wrong machine. PROBE is the same, but unresolved names render
+# empty: its output only collects what names get set, then is thrown away.
 PROBE = TEMPLATE.overlay(undefined=jinja2.ChainableUndefined)
 
 def parse_resources(text, previous=None):
