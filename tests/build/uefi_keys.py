@@ -60,10 +60,10 @@ class SigningKeyFillsEveryRole(avocado.Test):
     def test(self):
         package = parse_package(
             "                              signing-key: vault:uefi-secureboot")
-        self.assertEqual(package.uefi_keys_pk, "uefi-secureboot")
-        self.assertEqual(package.uefi_keys_kek, ["uefi-secureboot"])
-        self.assertEqual(package.uefi_keys_db, ["uefi-secureboot"])
-        self.assertEqual(package.uefi_keys_dbx, [])
+        self.assertEqual(package.ext["uefi-keys"].pk, "uefi-secureboot")
+        self.assertEqual(package.ext["uefi-keys"].kek, ["uefi-secureboot"])
+        self.assertEqual(package.ext["uefi-keys"].db, ["uefi-secureboot"])
+        self.assertEqual(package.ext["uefi-keys"].dbx, [])
         self.assertIsNone(package.source)
         self.assertEqual(package.upstream_version, "1")
 
@@ -78,10 +78,10 @@ class ExplicitRolesOverrideTheFallback(avocado.Test):
             "                              db: vault:prod-db\n"
             "                              dbx:\n"
             "                                  - vault:retired-key\n")
-        self.assertEqual(package.uefi_keys_pk, "prod-pk")
-        self.assertEqual(package.uefi_keys_kek, ["prod-kek", "backup-kek"])
-        self.assertEqual(package.uefi_keys_db, ["prod-db"])
-        self.assertEqual(package.uefi_keys_dbx, ["retired-key"])
+        self.assertEqual(package.ext["uefi-keys"].pk, "prod-pk")
+        self.assertEqual(package.ext["uefi-keys"].kek, ["prod-kek", "backup-kek"])
+        self.assertEqual(package.ext["uefi-keys"].db, ["prod-db"])
+        self.assertEqual(package.ext["uefi-keys"].dbx, ["retired-key"])
 
 class MissingPkWithNoFallbackIsRejected(avocado.Test):
     def test(self):
@@ -140,13 +140,13 @@ class RebootDefaultsToFalse(avocado.Test):
     def test(self):
         package = parse_package(
             "                              signing-key: vault:x\n")
-        self.assertEqual(package.uefi_keys_reboot, False)
+        self.assertEqual(package.ext["uefi-keys"].reboot, False)
 
     def test_parsed(self):
         package = parse_package(
             "                              signing-key: vault:x\n"
             "                              reboot: true\n")
-        self.assertEqual(package.uefi_keys_reboot, True)
+        self.assertEqual(package.ext["uefi-keys"].reboot, True)
 
 class RebootNotABooleanIsRejected(avocado.Test):
     def test(self):
@@ -191,11 +191,7 @@ class NotExtendedLeavesDefaults(avocado.Test):
                       name: busybox
         """)
         package = build.image.packages[0]
-        self.assertEqual(package.uefi_keys, False)
-        self.assertIsNone(package.uefi_keys_pk)
-        self.assertEqual(package.uefi_keys_kek, [])
-        self.assertEqual(package.uefi_keys_db, [])
-        self.assertEqual(package.uefi_keys_dbx, [])
+        self.assertNotIn("uefi-keys", package.ext)
 
 
 DISTRO = {"source": "debian", "release": "trixie",
@@ -317,13 +313,12 @@ class FakeBuilder:
 
 class ExtendFixture(avocado.Test):
     def package(self, pk="pk-key", kek=None, db=None, dbx=None, reboot=False):
-        package = types.SimpleNamespace(
-            name="uefi-provision-keys", source=None,
-            upstream_version="1", uefi_keys=True,
-            uefi_keys_pk=pk, uefi_keys_kek=kek or ["kek-key"],
-            uefi_keys_db=db or ["db-key"], uefi_keys_dbx=dbx or [],
-            uefi_keys_reboot=reboot)
-        return package
+        settings = types.SimpleNamespace(
+            pk=pk, kek=kek or ["kek-key"], db=db or ["db-key"],
+            dbx=dbx or [], reboot=reboot)
+        return types.SimpleNamespace(
+            name="uefi-provision-keys", source=None, upstream_version="1",
+            ext={"uefi-keys": settings})
 
     def extend(self, package):
         sourcedir = os.path.join(self.workdir, "src")
@@ -416,7 +411,7 @@ class OwnerGuidIsStableAcrossRuns(ExtendFixture):
 class NotExtendedTouchesNothing(ExtendFixture):
     def test(self):
         package = self.package()
-        package.uefi_keys = False
+        package.ext = {}
         sourcedir = os.path.join(self.workdir, "src")
         os.makedirs(sourcedir)
         uefi_keys.extend(FakeBuilder(), package, sourcedir, 946684800)
