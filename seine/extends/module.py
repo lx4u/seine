@@ -25,6 +25,10 @@ from seine.sbuild import REPOSITORY
 from seine.utils  import HOST_ARCH
 
 
+# Bump when this code changes what a module is built into, so what
+# was built before is built again.
+REVISION = 1
+
 SETTINGS = ["build", "build-depends", "make-vars", "modules",
             "runtime-depends", "signing-key", "target"]
 
@@ -282,6 +286,34 @@ def _fetch_cross_args(builder, package, architecture):
             "apt-get source $source=$version"
             % {"headers": headers, "architecture": architecture,
                "repository": REPOSITORY}]
+
+# What the build reads besides the source, for the digest of a build.
+def digest_fields(builder, package, architecture):
+    return [
+        ("build", package.module_build),
+        ("target", package.module_target),
+        ("build-depends", ",".join(package.module_build_depends)),
+        ("runtime-depends", ",".join(package.module_runtime_depends)),
+        ("modules", ",".join(sorted(package.module_modules))),
+        ("make-vars",
+         ",".join("%s=%s" % (name, package.module_make_vars[name])
+                  for name in sorted(package.module_make_vars))),
+        # A kernel built here is covered by the dependency digest, as its
+        # ABI is not known yet.
+        ("kernels",
+         ",".join(sorted(package.module_kernels.get(architecture, [])))),
+        # What a moving reference (e.g. 'linux-headers-amd64') resolved
+        # to: an update can change it without the spec changing.
+        ("resolved-kernels",
+         ",".join(f"{reference}={headers}"
+                  for (a, reference), headers
+                  in sorted(builder.metapackages.items())
+                  if a == architecture)),
+        # A different (or no) vault key changes the signatures in the
+        # .debs, so a cache from another key is rebuilt, not adopted.
+        ("signing-key", str(package.module_signing_key)),
+        ("packaging", module_packaging()[1]),
+    ]
 
 # Writes packaging for an out-of-tree module into its source tree,
 # replacing whatever came with it (usually dkms, which builds on the

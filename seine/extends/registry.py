@@ -14,27 +14,29 @@ from seine.extends import uki_addon
 
 # generates_source: no 'source:', extend() writes the whole tree.
 # no_changelog: the fetched tree has none to date the build by.
-# extra_setting: (pattern, name) for settings not on a fixed list.
+# revision: bump when the code changes what is built (a kernel has none).
 Extension = collections.namedtuple(
     "Extension",
-    ["name", "settings", "parse", "extend", "what", "generates_source",
-     "no_changelog", "extra_setting"],
-    defaults=[None, None, False, False, None])
+    ["name", "settings", "revision", "parse", "extend", "digest_fields",
+     "what", "generates_source", "no_changelog", "extra_setting"],
+    defaults=[None, None, None, False, False, None])
 
 # Kernels are grafted onto a tree, not written from templates: no extend()
 # here, kernel.extend() runs later with its own arguments.
 EXTENSIONS = [
-    Extension("kernel", kernel.SETTINGS, kernel.parse),
-    Extension("module", module.SETTINGS, module.parse, module.extend,
-              "an out-of-tree module", no_changelog=True,
+    Extension("kernel", kernel.SETTINGS, None, kernel.parse),
+    Extension("module", module.SETTINGS, module.REVISION, module.parse,
+              module.extend, module.digest_fields, "an out-of-tree module",
+              no_changelog=True,
               extra_setting=(module.MODULE_KERNELS, "<architecture>-kernels")),
-    Extension("uefi-keys", uefi_keys.SETTINGS, uefi_keys.parse,
-              uefi_keys.extend, "the UEFI key provisioning",
-              generates_source=True),
-    Extension("uki", uki.SETTINGS, uki.parse, uki.extend, "a UKI wrapper",
-              generates_source=True),
-    Extension("uki-addon", uki_addon.SETTINGS, uki_addon.parse,
-              uki_addon.extend, "a UKI addon", generates_source=True),
+    Extension("uefi-keys", uefi_keys.SETTINGS, uefi_keys.REVISION,
+              uefi_keys.parse, uefi_keys.extend, uefi_keys.digest_fields,
+              "the UEFI key provisioning", generates_source=True),
+    Extension("uki", uki.SETTINGS, uki.REVISION, uki.parse, uki.extend,
+              uki.digest_fields, "a UKI wrapper", generates_source=True),
+    Extension("uki-addon", uki_addon.SETTINGS, uki_addon.REVISION,
+              uki_addon.parse, uki_addon.extend, uki_addon.digest_fields,
+              "a UKI addon", generates_source=True),
 ]
 
 BY_NAME = {extension.name: extension for extension in EXTENSIONS}
@@ -81,6 +83,21 @@ def generator(package):
 
 def no_changelog(package):
     return any(extension.no_changelog for extension in in_use(package))
+
+# What the digest of a build reads for each kind in use, as
+# ('<kind>.<setting>', value). Changes to a kind's code count through its
+# revision.
+def digest_fields(builder, package, architecture):
+    fields = []
+    for extension in in_use(package):
+        if extension.revision is not None:
+            fields.append(
+                (f"{extension.name}.revision", str(extension.revision)))
+        if extension.digest_fields is not None:
+            fields += [(f"{extension.name}.{label}", value)
+                       for label, value in extension.digest_fields(
+                           builder, package, architecture)]
+    return fields
 
 # Writes each kind's packaging into the tree.
 def extend_all(builder, package, sourcedir, epoch):

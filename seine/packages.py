@@ -1179,11 +1179,9 @@ class Builder:
                 extend_digest(digest, recipe, "file:%s" % path, f.read())
 
         self._stamp_kernel_graft(digest, recipe, package)
-        self._stamp_module(digest, recipe, package)
+        for label, value in registry.digest_fields(self, package, architecture):
+            extend_digest(digest, recipe, label, value)
         self._stamp_cross_headers(digest, recipe, package)
-        self._stamp_uki(digest, recipe, package)
-        self._stamp_uki_addon(digest, recipe, package)
-        self._stamp_uefi_keys(digest, recipe, package)
 
         # A package built against another must rebuild when that one
         # changes -- the dependency's digest already carries its own,
@@ -1266,37 +1264,11 @@ class Builder:
                      # Same reasoning as 'signer': a different (or no)
                      # vault key changes module signatures in the .debs,
                      # so a cache from another key is rebuilt, not adopted.
-                     ("module_signing_key", str(package.kernel_signing_key
-                         or package.module_signing_key)),
+                     ("kernel_signing_key", str(package.kernel_signing_key)),
                      # Whether this build makes the arch-all binaries,
                      # which depends on what the *other* builds are:
                      # widening 'scope' can move that job elsewhere.
                      ("indep_architecture", str(architecture == self.indep_architecture(package))),
-                     # Kernels this module is built against, as named --
-                     # adding/removing one changes the binaries produced.
-                     # For a kernel built by this spec, what actually
-                     # matters is its ABI, which is not knowable here;
-                     # that is carried instead by the dependency digest
-                     # below, since a module is built after its kernels.
-                     ("module_kernels",
-                      ",".join(sorted(package.module_kernels.get(architecture, [])))),
-                     # What a moving-target reference (e.g.
-                     # 'linux-headers-amd64') actually resolved to -- a
-                     # security update can move this without the spec
-                     # changing at all.
-                     ("metapackages",
-                      ",".join("%s=%s" % (reference, headers)
-                              for (a, reference), headers
-                              in sorted(self.metapackages.items())
-                              if a == architecture)),
-                     ("module_build", str(package.module_build)),
-                     ("module_target", str(package.module_target)),
-                     ("module_build_depends", ",".join(package.module_build_depends)),
-                     ("module_runtime_depends", ",".join(package.module_runtime_depends)),
-                     ("module_modules", ",".join(sorted(package.module_modules))),
-                     ("module_make_vars",
-                      ",".join("%s=%s" % (name, package.module_make_vars[name])
-                              for name in sorted(package.module_make_vars))),
                      ("upstream_version", str(package.upstream_version))]:
             extend_digest(digest, recipe, label, part)
 
@@ -1307,12 +1279,6 @@ class Builder:
             extend_digest(digest, recipe, "kernel_graft_rules", kernel.kernel_rules().content)
             extend_digest(digest, recipe, "kernel_graft_version", str(kernel.GRAFT_VERSION))
 
-    def _stamp_module(self, digest, recipe, package):
-        # A module is built by the packaging seine writes for it -- that
-        # decides the output too, so it is hashed by content.
-        if package.module:
-            extend_digest(digest, recipe, "module_packaging", module.module_packaging()[1])
-
     def _stamp_cross_headers(self, digest, recipe, package):
         # A cross headers package belongs to one kernel and is made up
         # rather than described by the settings above -- its kernel's
@@ -1321,52 +1287,6 @@ class Builder:
             extend_digest(digest, recipe, "cross_kernel_release", package.cross_kernel.release)
             extend_digest(digest, recipe, "cross_kernel_headers", package.cross_kernel.headers)
             extend_digest(digest, recipe, "cross_packaging", module.cross_packaging()[1])
-
-    def _stamp_uki(self, digest, recipe, package):
-        # A uki package is built from these settings plus the named
-        # 'initrd:' artifact's own bytes -- neither is caught above.
-        if package.uki:
-            extend_digest(digest, recipe, "uki_tool", package.uki_tool)
-            extend_digest(digest, recipe, "uki_linux_image", package.uki_linux_image)
-            extend_digest(digest, recipe, "uki_cmdline", package.uki_cmdline)
-            # Same reasoning as 'module_signing_key': a different (or
-            # no) vault key changes the '.efi' bytes, so a cache from
-            # another key is rebuilt, not adopted.
-            extend_digest(digest, recipe, "uki_signing_key", str(package.uki_signing_key))
-            initrd = uki.initrd_path(self.distro, package.uki_initrd)
-            # Digests are computed for the whole task graph up front, so
-            # an 'after:'-ordered initrd may not be built yet. A missing
-            # file can never match a real hash, forcing one rebuild
-            # instead of a false cache hit.
-            if os.path.isfile(initrd):
-                with open(initrd, "rb") as f:
-                    extend_digest(digest, recipe, "uki_initrd", f.read())
-            else:
-                extend_digest(digest, recipe, "uki_initrd", b"<initrd not yet built>")
-
-    def _stamp_uki_addon(self, digest, recipe, package):
-        # An unset key inherits the parent's own -- already covered by
-        # the 'depends:<uki>' entry the recipe digest folds in above,
-        # since a uki's digest already carries its own signing key.
-        if package.uki_addon:
-            extend_digest(digest, recipe, "uki_addon_uki", package.uki_addon_uki)
-            extend_digest(digest, recipe, "uki_addon_cmdline", package.uki_addon_cmdline)
-            extend_digest(digest, recipe, "uki_addon_signing_key",
-                          str(package.uki_addon_signing_key))
-
-    def _stamp_uefi_keys(self, digest, recipe, package):
-        # A generated package: the packaging seine writes for it
-        # decides the output as much as these settings do (same
-        # reasoning as _stamp_module) -- order matters for kek/db/dbx,
-        # each concatenated into one file in the order given.
-        if package.uefi_keys:
-            extend_digest(digest, recipe, "uefi_keys_packaging",
-                          uefi_keys.uefi_keys_packaging()[1])
-            extend_digest(digest, recipe, "uefi_keys_pk", str(package.uefi_keys_pk))
-            extend_digest(digest, recipe, "uefi_keys_kek", ",".join(package.uefi_keys_kek))
-            extend_digest(digest, recipe, "uefi_keys_db", ",".join(package.uefi_keys_db))
-            extend_digest(digest, recipe, "uefi_keys_dbx", ",".join(package.uefi_keys_dbx))
-            extend_digest(digest, recipe, "uefi_keys_reboot", str(package.uefi_keys_reboot))
 
     # A hashed file's path, written the way the spec wrote it (relative
     # to the file that declared it) rather than the absolute path
