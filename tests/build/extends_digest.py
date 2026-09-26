@@ -47,7 +47,7 @@ CASES = {
                     "build-depends": ["z"], "runtime-depends": ["z"],
                     "make-vars": {"A": "2"},
                     "amd64-kernels": ["apt://linux-headers-6.12.2-amd64"],
-                    "signing-key": "vault:two"},
+                    "signing-key": "vault:two", "copyright": "Foo"},
         "data": "module"},
     "uki": {
         "spec": {"name": "uki-a", "version": "1", "extends": {"uki": {
@@ -55,12 +55,14 @@ CASES = {
             "initrd": "@initrd", "cmdline": "quiet",
             "signing-key": "vault:one"}}},
         "changes": {"tool": "efibootguard", "linux-image": "linux-image-b",
-                    "cmdline": "debug", "signing-key": "vault:two"},
+                    "cmdline": "debug", "signing-key": "vault:two",
+                    "copyright": "Foo"},
         "data": "uki-ukify"},
     "uki-addon": {
         "spec": {"name": "addon-a", "version": "1", "extends": {"uki-addon": {
             "uki": "uki-a", "cmdline": "quiet", "signing-key": "vault:one"}}},
-        "changes": {"cmdline": "debug", "signing-key": "vault:two"},
+        "changes": {"cmdline": "debug", "signing-key": "vault:two",
+                    "copyright": "Foo"},
         "data": "uki-addon"},
     "uefi-keys": {
         "spec": {"name": "keys-a", "version": "1", "extends": {"uefi-keys": {
@@ -68,7 +70,7 @@ CASES = {
             "dbx": ["vault:dbx"], "reboot": False}}},
         "changes": {"pk": "vault:pk2", "kek": ["vault:kek2"],
                     "db": ["vault:db2"], "dbx": ["vault:dbx2"],
-                    "reboot": True},
+                    "reboot": True, "copyright": "Foo"},
         "data": "uefi-keys"},
 }
 
