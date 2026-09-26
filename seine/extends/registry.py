@@ -5,9 +5,13 @@
 # means a module and one entry below.
 
 import collections
+import os
 
 from seine import kernel
 from seine.extends import module
+from seine.extends import parsing
+from seine.extends import templates
+from seine.extends import texts
 from seine.extends import uefi_keys
 from seine.extends import uki
 from seine.extends import uki_addon
@@ -43,6 +47,9 @@ EXTENSIONS = [
 
 BY_NAME = {extension.name: extension for extension in EXTENSIONS}
 
+# Settings of every kind that writes packaging (has an extend()).
+COMMON_SETTINGS = ["copyright"]
+
 # Checks 'extends:' as written, then keeps what each kind read from it in
 # 'package.ext', by kind name. A kind the package does not use has no entry.
 # A kernel is the exception: it keeps its own 'kernel_*' attributes.
@@ -58,17 +65,24 @@ def parse_all(package, extends):
     package.ext = {}
     for extension in EXTENSIONS:
         parsed = extension.parse(package, extends)
-        if parsed is not None:
-            package.ext[extension.name] = parsed
+        if parsed is None:
+            continue
+        if extension.extend is not None:
+            parsed.copyright = texts.parse(
+                package, extension.name, extends[extension.name], "copyright")
+        package.ext[extension.name] = parsed
 
 def _check_settings(package, extension, settings):
+    known = list(extension.settings)
+    if extension.extend is not None:
+        known += COMMON_SETTINGS
     for setting in settings:
-        if setting in extension.settings:
+        if setting in known:
             continue
         if (extension.extra_setting is not None
                 and extension.extra_setting[0].match(setting)):
             continue
-        expected = sorted(extension.settings)
+        expected = sorted(known)
         if extension.extra_setting is not None:
             expected.append(extension.extra_setting[1])
         raise package._error(
@@ -99,6 +113,9 @@ def digest_fields(builder, package, architecture):
         if extension.revision is not None:
             fields.append(
                 (f"{extension.name}.revision", str(extension.revision)))
+        if extension.extend is not None:
+            fields.append((f"{extension.name}.copyright",
+                           str(package.ext[extension.name].copyright)))
         if extension.digest_fields is not None:
             fields += [(f"{extension.name}.{label}", value)
                        for label, value in extension.digest_fields(
@@ -116,3 +133,6 @@ def extend_all(builder, package, sourcedir, epoch):
     for extension in in_use(package):
         if extension.extend is not None:
             extension.extend(builder, package, sourcedir, epoch)
+            templates.write_copyright(
+                os.path.join(sourcedir, "debian"),
+                texts.read(builder, package.ext[extension.name].copyright))
