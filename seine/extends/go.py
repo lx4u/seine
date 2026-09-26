@@ -13,6 +13,7 @@ import types
 from seine.container import ContainerEngine
 from seine.extends   import parsing
 from seine.extends   import templates
+from seine.extends   import texts
 from seine.utils     import HOST_ARCH
 from seine.utils     import WORKDIR
 
@@ -23,8 +24,8 @@ REVISION = 1
 DEFAULTS = ["toolchain", "toolchain-sha256"]
 
 SETTINGS = ["build", "build-depends", "cgo", "commands", "ldflags",
-            "runtime-depends", "runtime-suggests", "tags", "toolchain",
-            "toolchain-sha256"]
+            "runtime-depends", "runtime-suggests", "systemd-unit", "tags",
+            "toolchain", "toolchain-sha256"]
 
 # Debian architecture -> Go names. The generated rules pick from this
 # with $(DEB_HOST_ARCH), as the target may not be the machine's own.
@@ -84,7 +85,8 @@ def parse(package, extends):
         runtime_depends=parsing.parse_relationships(
             package, "go", settings, "runtime-depends"),
         runtime_suggests=parsing.parse_relationships(
-            package, "go", settings, "runtime-suggests"))
+            package, "go", settings, "runtime-suggests"),
+        systemd_unit=texts.parse(package, "go", settings, "systemd-unit"))
 
 # One digest per Debian architecture, as the toolchain is downloaded
 # for the machine that builds (HOST_ARCH), not for the target.
@@ -297,6 +299,7 @@ def digest_fields(builder, package, architecture):
         ("build-depends", ",".join(settings.build_depends)),
         ("runtime-depends", ",".join(settings.runtime_depends)),
         ("runtime-suggests", ",".join(settings.runtime_suggests)),
+        ("systemd-unit", str(settings.systemd_unit)),
         ("packaging", go_packaging()[1]),
     ]
 
@@ -346,3 +349,5 @@ def extend(builder, package, sourcedir, epoch):
         found = {name: text for name, text in found.items()
                  if name not in GO_SCRIPTS}
     templates.render_files(debian, found, context, names=scripts)
+    templates.write_systemd_unit(
+        debian, package.name, texts.read(builder, settings.systemd_unit))

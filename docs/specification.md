@@ -1027,6 +1027,7 @@ whatever the package is built for.
 | ldflags          | no       | Passed to `go build -ldflags`                 |
 | runtime-depends  | no       | What the program needs once installed         |
 | runtime-suggests | no       | What it can use, but does not need (`Suggests`) |
+| systemd-unit     | no       | Service to install with the program (see below) |
 | tags             | no       | Passed to `go build -tags`                    |
 
 A program that is also known by other names, as k3s is `kubectl`, is
@@ -1043,6 +1044,23 @@ commands:
       binary: k3s
       links: [ctr, /usr/sbin/k3s-ctr]
       alternatives: [kubectl, {link: crictl, priority: 10}]
+```
+
+A program that runs as a service is given its unit as `systemd-unit`, a
+text like [`copyright`](#packaging-seine-writes): inline, a `file://` path
+or a URL with its hash. It is installed as `<name>.service`, and enabled
+when the package is installed, as for any Debian package.
+
+```
+systemd-unit: |
+    [Unit]
+    Description=K3s
+
+    [Service]
+    ExecStart=/usr/bin/k3s server
+
+    [Install]
+    WantedBy=multi-user.target
 ```
 
 Go modules are fetched when the source is prepared, into `vendor/`,

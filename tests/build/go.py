@@ -364,6 +364,106 @@ class GoLinksAndAlternativesRender(avocado.Test):
         self.assertIn("#DEBHELPER#", postinst)
         self.assertIn("update-alternatives --remove y /usr/bin/x", render("prerm"))
 
+UNIT = """[Unit]
+Description=k3s
+
+[Service]
+ExecStart=/usr/bin/k3s server
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+def with_unit(unit=None, commands=None):
+    commands = commands or '[{package: "./cmd/k3s", binary: k3s}]'
+    settings = f"""
+                              toolchain: "1.23.0"
+                              {TOOLCHAIN_SHA256_YAML}
+                              commands: {commands}
+"""
+    if unit is not None:
+        settings += "                              systemd-unit: |\n" + "".join(
+            f"                                  {line}\n"
+            for line in unit.splitlines())
+    return parse_for("amd64", K3S % settings).image.packages[0]
+
+class GoSystemdUnit(avocado.Test):
+    def written(self, package):
+        from seine.packages import Builder
+        from seine.sbuild import BuilderImage
+        distro = {"source": "debian", "release": "trixie",
+                  "architecture": "amd64", "uri": "http://example.com/debian"}
+        builder = Builder(distro, {}, BuilderImage(distro, {}))
+        builder.packages = [package]
+        # A tree with its modules already vendored fetches nothing.
+        os.makedirs(os.path.join(self.workdir, "vendor"))
+        seine.extends.go.extend(builder, package, self.workdir, 946684800)
+        return os.path.join(self.workdir, "debian")
+
+    def test_it_is_optional(self):
+        self.assertIsNone(with_unit().ext["go"].systemd_unit)
+        debian = self.written(with_unit())
+        self.assertEqual(sorted(os.listdir(debian)),
+                         ["changelog", "control", "rules", "source"])
+
+    def test_it_is_written_for_debhelper(self):
+        debian = self.written(with_unit(UNIT))
+        with open(os.path.join(debian, "k3s.service")) as f:
+            self.assertEqual(f.read(), UNIT)
+
+    def test_it_may_be_a_file(self):
+        path = os.path.join(self.workdir, "k3s.service")
+        with open(path, "w") as f:
+            f.write(UNIT)
+        package = parse_for("amd64", K3S % f"""
+                              toolchain: "1.23.0"
+                              {TOOLCHAIN_SHA256_YAML}
+                              commands: [{{package: "./cmd/k3s", binary: k3s}}]
+                              systemd-unit: file://{path}
+        """).image.packages[0]
+        self.assertIn(path, package.referenced_files())
+        debian = self.written(package)
+        with open(os.path.join(debian, "k3s.service")) as f:
+            self.assertEqual(f.read(), UNIT)
+
+    def test_it_must_not_be_empty(self):
+        with self.assertRaises(ValueError) as refused:
+            parse_for("amd64", K3S % ("""
+                              toolchain: "1.23.0"
+                              %s
+                              commands: [{package: "./cmd/k3s", binary: k3s}]
+                              systemd-unit: ""
+            """ % TOOLCHAIN_SHA256_YAML))
+        self.assertIn("'extends: go: systemd-unit'", str(refused.exception))
+
+    def test_a_unit_alone_leaves_the_maintainer_scripts_to_debhelper(self):
+        debian = self.written(with_unit(UNIT))
+        self.assertFalse(os.path.exists(os.path.join(debian, "k3s.postinst")))
+
+    def test_the_scripts_with_alternatives_still_let_debhelper_in(self):
+        debian = self.written(with_unit(UNIT, '[{package: "./cmd/k3s", '
+                                              'binary: k3s, alternatives: [kubectl]}]'))
+        for script in ["k3s.postinst", "k3s.prerm"]:
+            with open(os.path.join(debian, script)) as f:
+                text = f.read()
+            self.assertIn("update-alternatives", text)
+            self.assertIn("#DEBHELPER#", text)
+
+    def test_the_unit_is_part_of_the_stamp(self):
+        self.assertNotEqual(
+            stamp_of_package(with_unit(UNIT)),
+            stamp_of_package(with_unit(UNIT.replace("k3s server", "k3s agent"))))
+        self.assertNotEqual(stamp_of_package(with_unit()),
+                            stamp_of_package(with_unit(UNIT)))
+
+def stamp_of_package(package):
+    from seine.packages import Builder
+    from seine.sbuild import BuilderImage
+    distro = {"source": "debian", "release": "trixie",
+              "architecture": "amd64", "uri": "http://example.com/debian"}
+    builder = Builder(distro, {}, BuilderImage(distro, {}))
+    return os.path.basename(builder.stamp(package)).rsplit("_", 1)[1]
+
 def stamp_of(sha256_yaml, architecture="amd64"):
     from seine.packages import Builder
     from seine.sbuild import BuilderImage

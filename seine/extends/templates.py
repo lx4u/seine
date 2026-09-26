@@ -68,6 +68,12 @@ def write_copyright(debian, text):
         write(os.path.join(debian, "copyright"),
               text if text.endswith("\n") else text + "\n")
 
+# The service the package installs and debhelper enables.
+def write_systemd_unit(debian, name, text):
+    if text is not None:
+        write(os.path.join(debian, f"{name}.service"),
+              text if text.endswith("\n") else text + "\n")
+
 def base_context(package, epoch, note):
     return {
         "note": note,
