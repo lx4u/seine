@@ -7,19 +7,9 @@
 # own -- modeled on uki.py, minus everything that wraps a kernel.
 # Needs systemd >= 254 (trixie and later; bookworm ships 252).
 
-import functools
-import os
-import shutil
-
-from datetime import datetime
-from datetime import timezone
-from email.utils import format_datetime
-
-import jinja2
-
+from seine.extends import parsing
+from seine.extends import templates
 from seine.extends import uki
-from seine.utils import GIT_EMAIL
-from seine.utils import GIT_NAME
 from seine.utils import distribution
 
 SETTINGS = ["cmdline", "signing-key", "uki"]
@@ -36,41 +26,16 @@ def parse(package, extends):
         package.uki_addon_signing_key = None
         return
 
-    if package.source is not None:
-        raise package._error(
-            "'extends: uki-addon' packages are generated entirely by "
-            "seine: name the package with 'name:' alone, without a "
-            "'source:'")
-    package.source_name = package.name
-
-    uki_name = settings.get("uki")
-    if type(uki_name) != type("") or len(uki_name) == 0:
-        raise package._error(
-            "'extends: uki-addon: uki' shall name the 'extends: uki:' "
-            "package this addon extends, as a string")
-    package.uki_addon_uki = uki_name
-
-    cmdline = settings.get("cmdline")
-    if type(cmdline) != type("") or len(cmdline) == 0:
-        raise package._error(
-            "'extends: uki-addon: cmdline' shall be a non-empty string")
-    for forbidden in uki.FORBIDDEN_CMDLINE:
-        if forbidden in cmdline:
-            raise package._error(
-                "'extends: uki-addon: cmdline' contains '%s', which a "
-                "kernel command line may not" % forbidden.strip())
-    package.uki_addon_cmdline = cmdline
-
+    parsing.require_generated_source(package, "uki-addon")
+    package.uki_addon_uki = parsing.parse_string(
+        package, "uki-addon", settings, "uki",
+        hint="the 'extends: uki:' package this addon extends")
+    package.uki_addon_cmdline = parsing.parse_string(
+        package, "uki-addon", settings, "cmdline", shell_safe=True)
     # Same vault-only shape as 'extends: uki: signing-key'. None means
     # "inherit the parent's own key" -- resolved_signing_key() below.
-    package.uki_addon_signing_key = settings.get("signing-key")
-    if package.uki_addon_signing_key is not None:
-        if (type(package.uki_addon_signing_key) != type("")
-                or not package.uki_addon_signing_key.startswith("vault:")):
-            raise package._error(
-                "'extends: uki-addon: signing-key' shall be 'vault:<name>'")
-        package.uki_addon_signing_key = \
-            package.uki_addon_signing_key[len("vault:"):]
+    package.uki_addon_signing_key = parsing.parse_vault_key(
+        package, "uki-addon", settings, "signing-key")
 
 # Checked right after parsing, before ordering -- a bad reference
 # should fail here with its own message, not with order()'s generic
@@ -122,54 +87,21 @@ def resolved_signing_key(builder, package):
         return package.uki_addon_signing_key
     return _parent(builder, package).uki_signing_key
 
-def _sh_quote(value):
-    return "'" + value.replace("'", "'\\''") + "'"
-
-_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-UKI_ADDON_PACKAGING = os.path.join(_DATA_DIR, "uki-addon")
-UKI_ADDON_FILES = ["changelog", "control", "rules"]
-
-@functools.lru_cache(maxsize=None)
 def uki_addon_packaging():
-    templates = {}
-    for name in UKI_ADDON_FILES:
-        with open(os.path.join(UKI_ADDON_PACKAGING, name), "rb") as f:
-            templates[name] = f.read().decode()
-    return templates
-
-UKI_ADDON_TEMPLATE = jinja2.Environment(
-    variable_start_string="[[", variable_end_string="]]",
-    block_start_string="[%", block_end_string="%]",
-    comment_start_string="[#", comment_end_string="#]",
-    trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True,
-    undefined=jinja2.StrictUndefined)
-
-def _write(path, content):
-    with open(path, "w") as f:
-        f.write(content)
+    return templates.load_templates("uki-addon")
 
 def extend(builder, package, sourcedir, epoch):
     if package.uki_addon == False:
         return
 
-    debian = os.path.join(sourcedir, "debian")
-    if os.path.isdir(debian):
-        shutil.rmtree(debian)
-    os.makedirs(os.path.join(debian, "source"), exist_ok=True)
-    _write(os.path.join(debian, "source", "format"), "3.0 (native)\n")
+    debian = templates.reset_debian(sourcedir)
 
     context = {
-        "name": package.name,
-        "version": package.upstream_version,
-        "maintainer": GIT_NAME,
-        "email": GIT_EMAIL,
-        "date": format_datetime(datetime.fromtimestamp(epoch, timezone.utc)),
+        **templates.base_context(package, epoch),
         "uki_name": package.uki_addon_uki,
         "ukify_cmd": " ".join(uki.ukify_argv(
-            None, None, _sh_quote(package.uki_addon_cmdline),
+            None, None, templates.sh_quote(package.uki_addon_cmdline),
             "debian/$(PACKAGE)/boot/EFI/Linux/%s.efi.extra.d/"
             "$(PACKAGE).addon.efi" % package.uki_addon_uki)),
     }
-    for name, template in uki_addon_packaging().items():
-        _write(os.path.join(debian, name),
-               UKI_ADDON_TEMPLATE.from_string(template).render(context))
+    templates.render_files(debian, uki_addon_packaging()[0], context)
