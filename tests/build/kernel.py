@@ -334,7 +334,7 @@ class ArchitecturesAreMappedBothWays(avocado.Test):
 
     def test_an_unmapped_architecture_stops_the_build(self):
         from seine.kernel import kernel_architecture
-        from seine.module import module_packaging
+        from seine.extends.module import module_packaging
         templates, _ = module_packaging()
         # Rather than handing the tree an empty ARCH, which a tree that
         # falls back to uname reads as the builder's own. Refused in the

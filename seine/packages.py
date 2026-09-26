@@ -20,12 +20,12 @@ from email.utils import format_datetime
 from seine        import kernel
 from seine        import kmod_sign
 from seine.deb    import repack
-from seine.kernel import uki
-from seine.kernel import uki_addon
-from seine        import module
+from seine.extends import uki
+from seine.extends import uki_addon
+from seine.extends import module
 from seine        import signing
 from seine        import uefi_auth_sign
-from seine        import uefi_keys
+from seine.extends import uefi_keys
 from seine        import uki_sign
 from seine.cache_index import PACKAGE, Index, say, since
 from seine.sbuild import BuilderImage
