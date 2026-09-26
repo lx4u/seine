@@ -7,6 +7,8 @@
 import os
 import re
 
+from seine.extends import parsing
+
 from . import (CONFIG_LINE, CONFIG_LINE_DISABLED, DEFAULT_FEATURESET,
               TARBALL_SUFFIXES, UPSTREAM_SCHEMES)
 
@@ -210,10 +212,5 @@ def parse(package, extends):
     # Names the vault key this kernel's modules are signed with,
     # post-build (seine/kmod_sign.py). Only the certificate half
     # reaches the build; the private key never leaves the vault.
-    package.kernel_signing_key = settings.get("signing-key")
-    if package.kernel_signing_key is not None:
-        if (type(package.kernel_signing_key) != type("")
-                or not package.kernel_signing_key.startswith("vault:")):
-            raise package._error(
-                "'extends: kernel: signing-key' shall be 'vault:<name>'")
-        package.kernel_signing_key = package.kernel_signing_key[len("vault:"):]
+    package.kernel_signing_key = parsing.parse_vault_key(
+        package, "kernel", settings, "signing-key")
