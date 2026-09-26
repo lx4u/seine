@@ -41,8 +41,9 @@ EXTENSIONS = [
 
 BY_NAME = {extension.name: extension for extension in EXTENSIONS}
 
-# Checks 'extends:' as written, then reads it onto the package: every
-# kind is parsed, so a package always has all its extension attributes.
+# Checks 'extends:' as written, then keeps what each kind read from it in
+# 'package.ext', by kind name. A kind the package does not use has no entry.
+# A kernel is the exception: it keeps its own 'kernel_*' attributes.
 def parse_all(package, extends):
     for kind, settings in extends.items():
         if kind not in BY_NAME:
@@ -52,8 +53,11 @@ def parse_all(package, extends):
         if type(settings) != type({}):
             raise package._error(f"'extends: {kind}' shall be a dictionary")
         _check_settings(package, BY_NAME[kind], settings)
+    package.ext = {}
     for extension in EXTENSIONS:
-        extension.parse(package, extends)
+        parsed = extension.parse(package, extends)
+        if parsed is not None:
+            package.ext[extension.name] = parsed
 
 def _check_settings(package, extension, settings):
     for setting in settings:

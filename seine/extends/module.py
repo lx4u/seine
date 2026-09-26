@@ -12,6 +12,7 @@ import glob
 import os
 import re
 import shutil
+import types
 
 from seine.extends import parsing
 from seine.extends import templates
@@ -107,10 +108,11 @@ def cross_packaging():
 # digest (not its ABI, which a grafted kernel can't predict in advance).
 def depend_on_kernels(packages):
     for package in packages:
-        if package.module == False:
+        if "module" not in package.ext:
             continue
-        for architecture in sorted(package.module_kernels):
-            for kernel in package.module_kernels[architecture]:
+        settings = package.ext["module"]
+        for architecture in sorted(settings.kernels):
+            for kernel in settings.kernels[architecture]:
                 if is_built_kernel(kernel) and kernel not in package.after:
                     package.after.append(kernel)
 
@@ -120,10 +122,11 @@ def depend_on_kernels(packages):
 def check_references(packages):
     built = {package.name for package in packages}
     for package in packages:
-        if package.module == False:
+        if "module" not in package.ext:
             continue
-        for architecture in sorted(package.module_kernels):
-            for kernel in package.module_kernels[architecture]:
+        settings = package.ext["module"]
+        for architecture in sorted(settings.kernels):
+            for kernel in settings.kernels[architecture]:
                 if "://" in kernel or kernel in built:
                     continue
                 raise package._error(
@@ -140,17 +143,18 @@ def check_kernels(packages, spec):
     target = (spec.get("distribution") or {}).get("architecture")
     missing = []
     for package in packages:
-        if package.module == False:
+        if "module" not in package.ext:
             continue
+        settings = package.ext["module"]
         wanted = []
         if "target" in package.scope and target is not None:
             wanted.append(target)
         if "host" in package.scope:
             wanted.append(HOST_ARCH)
         for architecture in sorted(set(wanted)):
-            if len(package.module_kernels.get(architecture, [])) > 0:
+            if len(settings.kernels.get(architecture, [])) > 0:
                 continue
-            named = sorted(package.module_kernels)
+            named = sorted(settings.kernels)
             missing.append(
                 "package '%s' builds no kernel modules for %s: it names "
                 "kernels for %s. Add '%s-kernels' to its 'extends: module', "
@@ -161,37 +165,39 @@ def check_kernels(packages, spec):
     if len(missing) > 0:
         raise ValueError("\n".join(missing))
 
-# Reads 'extends: module:' onto the package it was written on, the way
-# kernel.parse() does for a kernel.
+# Reads 'extends: module:' into the settings kept in 'package.ext', the
+# way kernel.parse() does for a kernel.
 def parse(package, extends):
-    settings = extends.get("module", {})
-    package.module = "module" in extends
-    # Subdirectory holding the module's own makefile, e.g. NVIDIA's
-    # kernel-open. Defaults to the tree's root.
-    package.module_build = parsing.parse_string(
-        package, "module", settings, "build", ".")
-    # Make target to build. 'modules' is kbuild's own default but not
-    # every out-of-tree tree follows it (some use 'all' or 'default').
-    package.module_target = parsing.parse_string(
-        package, "module", settings, "target", "modules")
-    # .ko files the build must produce, named rather than discovered so
-    # a build producing none (or only some) doesn't silently pass.
-    package.module_modules = parsing.parse_string_list(
-        package, "module", settings, "modules")
-    # Extra Build-Depends the tree needs, taken as-is (Debian's syntax).
-    package.module_build_depends = parsing.parse_relationships(
-        package, "module", settings, "build-depends")
-    # Extra runtime dependencies; the kernel built against is added
-    # automatically since seine already knows that relationship.
-    package.module_runtime_depends = parsing.parse_relationships(
-        package, "module", settings, "runtime-depends")
-    package.module_make_vars = _parse_make_vars(package, settings)
-    package.module_kernels = _parse_module_kernels(package, settings)
-    # Names the vault key this module's .ko files are signed with,
-    # post-build (seine/kmod_sign.py); independent of any kernel this
-    # module builds against.
-    package.module_signing_key = parsing.parse_vault_key(
-        package, "module", settings, "signing-key")
+    if "module" not in extends:
+        return None
+    settings = extends["module"]
+    return types.SimpleNamespace(
+        # Subdirectory holding the module's own makefile, e.g. NVIDIA's
+        # kernel-open. Defaults to the tree's root.
+        build=parsing.parse_string(
+            package, "module", settings, "build", "."),
+        # Make target to build. 'modules' is kbuild's own default but not
+        # every out-of-tree tree follows it (some use 'all' or 'default').
+        target=parsing.parse_string(
+            package, "module", settings, "target", "modules"),
+        # .ko files the build must produce, named rather than discovered so
+        # a build producing none (or only some) doesn't silently pass.
+        modules=parsing.parse_string_list(
+            package, "module", settings, "modules"),
+        # Extra Build-Depends the tree needs, taken as-is (Debian's syntax).
+        build_depends=parsing.parse_relationships(
+            package, "module", settings, "build-depends"),
+        # Extra runtime dependencies; the kernel built against is added
+        # automatically since seine already knows that relationship.
+        runtime_depends=parsing.parse_relationships(
+            package, "module", settings, "runtime-depends"),
+        make_vars=_parse_make_vars(package, settings),
+        kernels=_parse_module_kernels(package, settings),
+        # Names the vault key this module's .ko files are signed with,
+        # post-build (seine/kmod_sign.py); independent of any kernel this
+        # module builds against.
+        signing_key=parsing.parse_vault_key(
+            package, "module", settings, "signing-key"))
 
 # Extra make variables, e.g. NVIDIA's SYSSRC. Taken as written.
 def _parse_make_vars(package, settings):
@@ -289,19 +295,20 @@ def _fetch_cross_args(builder, package, architecture):
 
 # What the build reads besides the source, for the digest of a build.
 def digest_fields(builder, package, architecture):
+    settings = package.ext["module"]
     return [
-        ("build", package.module_build),
-        ("target", package.module_target),
-        ("build-depends", ",".join(package.module_build_depends)),
-        ("runtime-depends", ",".join(package.module_runtime_depends)),
-        ("modules", ",".join(sorted(package.module_modules))),
+        ("build", settings.build),
+        ("target", settings.target),
+        ("build-depends", ",".join(settings.build_depends)),
+        ("runtime-depends", ",".join(settings.runtime_depends)),
+        ("modules", ",".join(sorted(settings.modules))),
         ("make-vars",
-         ",".join("%s=%s" % (name, package.module_make_vars[name])
-                  for name in sorted(package.module_make_vars))),
+         ",".join(f"{name}={settings.make_vars[name]}"
+                  for name in sorted(settings.make_vars))),
         # A kernel built here is covered by the dependency digest, as its
         # ABI is not known yet.
         ("kernels",
-         ",".join(sorted(package.module_kernels.get(architecture, [])))),
+         ",".join(sorted(settings.kernels.get(architecture, [])))),
         # What a moving reference (e.g. 'linux-headers-amd64') resolved
         # to: an update can change it without the spec changing.
         ("resolved-kernels",
@@ -311,7 +318,7 @@ def digest_fields(builder, package, architecture):
                   if a == architecture)),
         # A different (or no) vault key changes the signatures in the
         # .debs, so a cache from another key is rebuilt, not adopted.
-        ("signing-key", str(package.module_signing_key)),
+        ("signing-key", str(settings.signing_key)),
         ("packaging", module_packaging()[1]),
     ]
 
@@ -321,8 +328,10 @@ def digest_fields(builder, package, architecture):
 # Run before the local changelog entry is added, since this writes the
 # changelog that entry reads.
 def extend(builder, package, sourcedir, epoch):
-    if package.module == False:
+    if "module" not in package.ext:
         return
+
+    settings = package.ext["module"]
 
     debian = templates.reset_debian(sourcedir)
 
@@ -331,7 +340,7 @@ def extend(builder, package, sourcedir, epoch):
     # each with build-dependencies qualified by architecture.
     builds = []
     described = {}
-    for architecture in sorted(package.module_kernels):
+    for architecture in sorted(settings.kernels):
         kernels = resolved_kernels(builder, package, architecture,
                                    builder.packages)
         _describe_once(package, described, architecture, kernels)
@@ -353,20 +362,20 @@ def extend(builder, package, sourcedir, epoch):
             package, epoch, f"Packaged by seine from {package.source}."),
         "source": package.source,
         "builds": builds,
-        "build_dir": package.module_build,
-        "target": package.module_target,
-        "build_depends": package.module_build_depends,
-        "runtime_depends": package.module_runtime_depends,
+        "build_dir": settings.build,
+        "target": settings.target,
+        "build_depends": settings.build_depends,
+        "runtime_depends": settings.runtime_depends,
         "kernel_architectures": sorted(KERNEL_ARCHITECTURES.items()),
         "kernel_machines": sorted(KERNEL_MACHINES.items()),
-        "modules": " ".join(sorted(package.module_modules)),
+        "modules": " ".join(sorted(settings.modules)),
         # Double-quoted (not shlex.quote) so $KERNEL_SRC etc. still
         # expand; every '$' doubled since make reads this before the
         # shell does.
         "make_vars": " ".join(
-            '%s="%s"' % (name, package.module_make_vars[name]
+            '%s="%s"' % (name, settings.make_vars[name]
                          .replace('"', '\\"').replace("$", "$$"))
-            for name in sorted(package.module_make_vars)),
+            for name in sorted(settings.make_vars)),
     }
     templates.render_files(debian, found, context)
 
@@ -438,7 +447,7 @@ def cross_version(kernel):
 def cross_headers(builder, packages):
     wanted = {}
     for package in packages:
-        if package.module == False:
+        if "module" not in package.ext:
             continue
         for architecture in builder.architectures(package):
             if builder.cross(package, architecture) == False:
@@ -464,7 +473,7 @@ def _cross_package(kernel, index):
 # resolve_kernels() before this runs.
 def resolved_kernels(builder, package, architecture, packages=None):
     kernels = []
-    for reference in package.module_kernels.get(architecture, []):
+    for reference in package.ext["module"].kernels.get(architecture, []):
         if is_built_kernel(reference):
             kernels.append(
                 _built_kernel(builder, package, reference, packages))
@@ -494,10 +503,11 @@ def resolve_kernels(builder, packages, hostBootstrap):
     builder.packages = list(packages)
     wanted = {}
     for package in packages:
-        if package.module == False:
+        if "module" not in package.ext:
             continue
-        for architecture in sorted(package.module_kernels):
-            for reference in package.module_kernels.get(architecture, []):
+        settings = package.ext["module"]
+        for architecture in sorted(settings.kernels):
+            for reference in settings.kernels.get(architecture, []):
                 if is_built_kernel(reference):
                     continue
                 if is_kernel_metapackage(reference) == False:
@@ -595,10 +605,11 @@ def _abiname_built_earlier(builder, kernel):
 def check_kbuild(packages):
     built = {p.name: p for p in packages if p.kernel}
     for package in packages:
-        if package.module == False:
+        if "module" not in package.ext:
             continue
-        for architecture in sorted(package.module_kernels):
-            for reference in package.module_kernels[architecture]:
+        settings = package.ext["module"]
+        for architecture in sorted(settings.kernels):
+            for reference in settings.kernels[architecture]:
                 kernel = built.get(reference)
                 if kernel is None or NO_TOOLS not in kernel.profiles:
                     continue

@@ -2184,7 +2184,7 @@ class AnUnresolvableOriginLeavesThePathAsIs(DigestExcerpt):
         package = types.SimpleNamespace(
             source="apt://linux", revision="mod1", profiles=[], options=[],
             sha256=None, patches=["a.patch"],
-            kernel=False, module=False)
+            kernel=False, ext={})
         package.origin_of = lambda setting: None
         package.patch_files = lambda: ["a.patch"]
         excerpt = self.builder().digest_excerpt(package)
