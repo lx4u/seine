@@ -127,7 +127,9 @@ def extend(builder, package, sourcedir, epoch):
             "uki.EFI_ARCH" % (package.name, architecture))
 
     context = {
-        **templates.base_context(package, epoch),
+        **templates.base_context(
+            package, epoch, "Packaged by seine from %s and %s."
+            % (package.uki_linux_image, INITRD_NAME)),
         "linux_image": package.uki_linux_image,
         "tool_build_depends": TOOL_BUILD_DEPENDS[package.uki_tool],
         "initrd": INITRD_NAME,

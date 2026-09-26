@@ -31,8 +31,8 @@ class TemplatesAreLoadedFromData(avocado.Test):
         found, content = templates.load_templates("module")
         self.assertEqual(sorted(found), sorted(templates.FILES))
         joined = b""
-        for name in templates.FILES:
-            with open(os.path.join(templates.DATA, "module", name), "rb") as f:
+        for path in ["changelog", "module/control", "module/rules"]:
+            with open(os.path.join(templates.DATA, path), "rb") as f:
                 joined += f.read()
         self.assertEqual(content, joined)
 
@@ -64,10 +64,20 @@ class FilesAreRendered(avocado.Test):
         self.assertTrue(mode & stat.S_IXUSR)
         self.assertFalse(os.path.exists(os.path.join(debian, "service")))
 
+class ChangelogIsShared(avocado.Test):
+    def test_the_note_is_the_entry(self):
+        found, _ = templates.load_templates("uki-addon")
+        package = types.SimpleNamespace(name="foo", upstream_version="1.2")
+        context = templates.base_context(package, 946684800, "Packaged.")
+        text = templates.TEMPLATE.from_string(found["changelog"]).render(context)
+        self.assertTrue(text.startswith("foo (1.2) unstable; urgency=low\n"))
+        self.assertIn("\n  * Packaged.\n", text)
+
 class ContextHasWhatEveryChangelogNeeds(avocado.Test):
     def test_fields(self):
         package = types.SimpleNamespace(name="foo", upstream_version="1.2")
-        context = templates.base_context(package, 946684800)
+        context = templates.base_context(package, 946684800, "Packaged.")
+        self.assertEqual(context["note"], "Packaged.")
         self.assertEqual(context["name"], "foo")
         self.assertEqual(context["version"], "1.2")
         self.assertEqual(context["date"], "Sat, 01 Jan 2000 00:00:00 +0000")

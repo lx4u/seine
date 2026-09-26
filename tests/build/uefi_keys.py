@@ -290,6 +290,7 @@ class PackagingTemplateContentChangesTheStamp(avocado.Test):
         data = os.path.join(self.workdir, "data")
         shutil.copytree(os.path.join(templates.DATA, "uefi-keys"),
                         os.path.join(data, "uefi-keys"))
+        shutil.copy(os.path.join(templates.DATA, "changelog"), data)
         with open(os.path.join(data, "uefi-keys", "provision-keys"), "a") as f:
             f.write("\n# edited\n")
         original = templates.DATA

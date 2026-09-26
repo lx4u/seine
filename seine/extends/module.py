@@ -317,7 +317,8 @@ def extend(builder, package, sourcedir, epoch):
 
     found, _ = module_packaging()
     context = {
-        **templates.base_context(package, epoch),
+        **templates.base_context(
+            package, epoch, f"Packaged by seine from {package.source}."),
         "source": package.source,
         "builds": builds,
         "build_dir": package.module_build,
@@ -362,7 +363,10 @@ def extend_cross_headers(builder, package, sourcedir, epoch, debs):
 
     found, _ = cross_packaging()
     context = {
-        **templates.base_context(package, epoch),
+        **templates.base_context(
+            package, epoch,
+            f"Kernel headers for {kernel.release} with kbuild tools for "
+            f"{HOST_ARCH}, packaged by seine."),
         "version": cross_version(kernel),
         "release": kernel.release,
         "architecture": HOST_ARCH,
