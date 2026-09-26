@@ -11,7 +11,12 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.extends import registry
+from seine.packages import Builder
 from seine.packages import Package
+from seine.sbuild import BuilderImage
+
+DISTRO = {"source": "debian", "release": "trixie", "architecture": "amd64",
+          "uri": "http://example.com/debian"}
 
 UKI = {"tool": "ukify", "linux-image": "linux-image-x", "initrd": "/i"}
 KEYS = {"signing-key": "vault:k"}
@@ -85,6 +90,49 @@ class VersionIsNeeded(avocado.Test):
 
     def test_a_kernel_never_does(self):
         package("kernel", {}, source="apt://linux")
+
+ADDON = {"uki": "uki-a", "cmdline": "quiet"}
+
+class CopyrightIsShared(avocado.Test):
+    def test_every_kind_that_writes_packaging_takes_it(self):
+        for kind, settings, spec in [
+                ("module", MODULE, {"source": "apt://x"}),
+                ("uki", UKI, {}), ("uki-addon", ADDON, {}),
+                ("uefi-keys", KEYS, {})]:
+            built = package(kind, dict(settings, copyright="Foo"),
+                            version="1", **spec)
+            self.assertEqual(built.ext[kind].copyright, "Foo")
+
+    def test_it_is_optional(self):
+        self.assertIsNone(package("uki-addon", ADDON, version="1")
+                          .ext["uki-addon"].copyright)
+
+    def test_a_kernel_keeps_debians_own(self):
+        with self.assertRaises(ValueError) as refused:
+            package("kernel", {"copyright": "Foo"}, source="apt://linux")
+        self.assertIn("'extends: kernel' has no 'copyright' setting",
+                      str(refused.exception))
+
+    def test_it_is_text(self):
+        for bad in ["", 1, ["Foo"]]:
+            with self.assertRaises(ValueError) as refused:
+                package("uki-addon", dict(ADDON, copyright=bad), version="1")
+            self.assertIn("'extends: uki-addon: copyright'",
+                          str(refused.exception))
+
+class CopyrightIsWritten(avocado.Test):
+    def written(self, **settings):
+        built = package("uki-addon", dict(ADDON, **settings), version="1")
+        builder = Builder(DISTRO, {}, BuilderImage(DISTRO, {}))
+        registry.extend_all(builder, built, self.workdir, 946684800)
+        return os.path.join(self.workdir, "debian", "copyright")
+
+    def test_the_text_is_kept_as_written(self):
+        with open(self.written(copyright="Files: *\nLicense: MIT")) as f:
+            self.assertEqual(f.read(), "Files: *\nLicense: MIT\n")
+
+    def test_no_text_no_file(self):
+        self.assertFalse(os.path.exists(self.written()))
 
 if __name__ == "__main__":
     avocado.main()

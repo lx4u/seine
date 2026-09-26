@@ -468,7 +468,7 @@ The following attributes are supported:
 | apt-preferences   | no       | What this build may install (see [Pinning a build](#pinning-a-build)) |
 | before            | no       | Packages that shall be built after this one     |
 | cross             | no       | Cross-compile (see [Cross-compiling](building.md#cross-compiling)) |
-| extends           | no       | Settings for a kind of package (see [Bring your own modules](kernels.md#bring-your-own-modules)) |
+| extends           | no       | Settings for a kind of package (see [Packaging seine writes](#packaging-seine-writes) and [Bring your own modules](kernels.md#bring-your-own-modules)) |
 | name              | no       | The source package this builds, when the URI does not say |
 | options           | no       | Debian build options (`DEB_BUILD_OPTIONS`)      |
 | patches           | no       | Patches to apply, relative to this YAML file    |
@@ -827,6 +827,56 @@ release being built -- changing another release's does not rebuild
 anything here.
 
 [apt_preferences(5)]: https://manpages.debian.org/stable/apt/apt_preferences.5.en.html
+
+### Packaging seine writes
+
+`extends: module:`, `uki:`, `uki-addon:` and `uefi-keys:` write the
+`debian/` directory themselves, replacing any the tree came with. The
+specification says what the tree cannot: the `name` of the package and its
+`version`, a string (yaml reads an unquoted `1.10` as `1.1`).
+
+| Kind                          | `source`                                |
+| ----------------------------- | --------------------------------------- |
+| `module`                      | The tree to build                       |
+| `uki`, `uki-addon`, `uefi-keys` | None: nothing is fetched, seine writes it all |
+
+These settings work under each of them:
+
+| Setting   | Required | Description                                       |
+| --------- |:--------:| ------------------------------------------------- |
+| copyright | no       | Text for `debian/copyright` (see below)           |
+
+A `signing-key` is always `vault:<name>`, wherever a kind takes one.
+
+`copyright` lets the image say what is in it: the file ends up in
+`/usr/share/doc/<package>/copyright`. Write it in the
+[machine-readable format](https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/)
+if you can, so tools can read it.
+
+A text setting like `copyright` is given in one of three ways:
+
+| Value                              | Meaning                              |
+| ---------------------------------- | ------------------------------------ |
+| Plain text                         | Used as written                      |
+| `file://<path>`                    | A file, relative to the YAML file naming it |
+| `https://<url>;sha256sum=<sha256>` | Downloaded, and checked against the hash |
+
+The hash is required, and `http://` works too: the hash is what vouches
+for the download. Text that itself starts with `file://`, `http://` or `https://` is
+read as a path or a URL. The file, or the hash, is part of what decides
+whether the package is rebuilt.
+
+```
+copyright: file://files/copyright
+```
+
+```
+copyright: |
+    Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+    Files: *
+    Copyright: 2025 The Authors
+    License: Apache-2.0
+```
 
 ### Host packages
 

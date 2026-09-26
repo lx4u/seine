@@ -21,6 +21,7 @@ from seine.container import ContainerEngine
 from seine.utils import distribution, locked
 from seine.utils      import lock_sibling, redact, redactions
 from seine.diffing    import colorless, diff, recall, remember
+from seine.extends import texts
 from seine.extends.templates import TEMPLATE
 
 # TEMPLATE renders specs before parsing (one file covers several
@@ -398,6 +399,13 @@ class BuildCmd(Cmd):
                     names[name] = [
                         os.path.normpath(os.path.join(dirname, f))
                         if type(f) == type("") else f for f in fragments]
+
+        # A text setting ('copyright') may name a file the same way.
+        for settings in (extends.values() if type(extends) == type({}) else []):
+            if type(settings) == type({}):
+                for name in texts.NAMES:
+                    if name in settings:
+                        settings[name] = texts.resolve(settings[name], dirname)
 
         # 'source: file://' names a directory the same way 'patches' names
         # a file -- relative to this spec, not a plain list so FILE_LISTS

@@ -21,6 +21,7 @@ from seine        import kernel
 from seine        import kmod_sign
 from seine.deb    import repack
 from seine.extends import registry
+from seine.extends import texts
 from seine.extends import uki
 from seine.extends import uki_addon
 from seine.extends import module
@@ -410,7 +411,7 @@ class Package:
     # Every local file this package's spec entry names.
     def referenced_files(self):
         return (self.patch_files() + self.kernel_fragment_files()
-               + self.kernel_derived_flavour_files())
+               + self.kernel_derived_flavour_files() + texts.files(self))
 
     def _files(self, names):
         return [os.path.normpath(n) for n in names]
