@@ -7,6 +7,7 @@
 
 import os
 import shutil
+import types
 
 from seine.container import ContainerEngine
 from seine.extends import parsing
@@ -35,40 +36,34 @@ EFI_ARCH = {
 INITRD_NAME = "initrd.img"
 
 def is_uki_package(package):
-    return getattr(package, "uki", False)
+    return "uki" in package.ext
 
 def parse(package, extends):
-    settings = extends.get("uki", {})
-    package.uki = "uki" in extends
-    if package.uki == False:
-        package.uki_tool = None
-        package.uki_linux_image = None
-        package.uki_initrd = None
-        package.uki_cmdline = ""
-        package.uki_signing_key = None
-        return
-
+    if "uki" not in extends:
+        return None
+    settings = extends["uki"]
     parsing.require_generated_source(package, "uki")
 
     tool = settings.get("tool")
     if tool not in TOOLS:
         raise package._error(
             "'extends: uki: tool' shall be one of %s" % ", ".join(TOOLS))
-    package.uki_tool = tool
-    package.uki_linux_image = parsing.parse_string(
-        package, "uki", settings, "linux-image",
-        hint="the 'linux-image' package this UKI wraps")
-    package.uki_initrd = parsing.parse_string(
-        package, "uki", settings, "initrd",
-        hint="the 'initrd:' artifact this UKI is built from")
-    # Also shell-quoted before reaching debian/rules; belt and suspenders.
-    package.uki_cmdline = parsing.parse_string(
-        package, "uki", settings, "cmdline", "", shell_safe=True)
-    # Names the vault key this UKI's '.efi' is signed with, post-build
-    # (seine/uki_sign.py) -- sbuild's unshare chroot has no network to
-    # reach a vault from, so signing can't happen inside 'ukify build'.
-    package.uki_signing_key = parsing.parse_vault_key(
-        package, "uki", settings, "signing-key")
+    return types.SimpleNamespace(
+        tool=tool,
+        linux_image=parsing.parse_string(
+            package, "uki", settings, "linux-image",
+            hint="the 'linux-image' package this UKI wraps"),
+        initrd=parsing.parse_string(
+            package, "uki", settings, "initrd",
+            hint="the 'initrd:' artifact this UKI is built from"),
+        # Also shell-quoted before reaching debian/rules; belt and suspenders.
+        cmdline=parsing.parse_string(
+            package, "uki", settings, "cmdline", "", shell_safe=True),
+        # Names the vault key this UKI's '.efi' is signed with, post-build
+        # (seine/uki_sign.py) -- sbuild's unshare chroot has no network to
+        # reach a vault from, so signing can't happen inside 'ukify build'.
+        signing_key=parsing.parse_vault_key(
+            package, "uki", settings, "signing-key"))
 
 def initrd_path(distro, filename):
     if os.path.isabs(filename):
@@ -76,12 +71,13 @@ def initrd_path(distro, filename):
     return os.path.join(ContainerEngine.deploy_root(), distro["release"], filename)
 
 def _require_initrd(package, distro):
-    path = initrd_path(distro, package.uki_initrd)
+    settings = package.ext["uki"]
+    path = initrd_path(distro, settings.initrd)
     if os.path.isfile(path) == False:
         raise ValueError(
             "package '%s': 'extends: uki: initrd' names '%s', which is "
             "not a deployed file (%s) -- build its own specification "
-            "first" % (package.name, package.uki_initrd, path))
+            "first" % (package.name, settings.initrd, path))
     return path
 
 # Checked right after parsing, before any bootstrap or fetch work starts.
@@ -114,7 +110,8 @@ def ukify_argv(linux, initrd, cmdline, output, extra=()):
 
 # The named 'initrd:' is read as its own bytes, not by name.
 def digest_fields(builder, package, architecture):
-    initrd = initrd_path(builder.distro, package.uki_initrd)
+    settings = package.ext["uki"]
+    initrd = initrd_path(builder.distro, settings.initrd)
     # Digests are computed up front, so an 'after:'-ordered initrd may not
     # exist yet. A missing file matches no real hash: one rebuild.
     content = b"<initrd not yet built>"
@@ -122,18 +119,20 @@ def digest_fields(builder, package, architecture):
         with open(initrd, "rb") as f:
             content = f.read()
     return [
-        ("tool", package.uki_tool),
-        ("linux-image", package.uki_linux_image),
-        ("cmdline", package.uki_cmdline),
+        ("tool", settings.tool),
+        ("linux-image", settings.linux_image),
+        ("cmdline", settings.cmdline),
         # A different (or no) vault key changes the '.efi' bytes.
-        ("signing-key", str(package.uki_signing_key)),
+        ("signing-key", str(settings.signing_key)),
         ("initrd", content),
-        ("packaging", uki_packaging(package.uki_tool)[1]),
+        ("packaging", uki_packaging(settings.tool)[1]),
     ]
 
 def extend(builder, package, sourcedir, epoch):
-    if package.uki == False:
+    if "uki" not in package.ext:
         return
+
+    settings = package.ext["uki"]
 
     debian = templates.reset_debian(sourcedir)
 
@@ -142,7 +141,7 @@ def extend(builder, package, sourcedir, epoch):
 
     architecture = builder.distro["architecture"]
     efi_arch = EFI_ARCH.get(architecture)
-    if package.uki_tool == "efibootguard" and efi_arch is None:
+    if settings.tool == "efibootguard" and efi_arch is None:
         raise ValueError(
             "package '%s': 'extends: uki: tool: efibootguard' has no "
             "EFI stub name for architecture '%s' -- add it to "
@@ -150,17 +149,17 @@ def extend(builder, package, sourcedir, epoch):
 
     context = {
         **templates.base_context(
-            package, epoch, "Packaged by seine from %s and %s."
-            % (package.uki_linux_image, INITRD_NAME)),
-        "linux_image": package.uki_linux_image,
-        "tool_build_depends": TOOL_BUILD_DEPENDS[package.uki_tool],
+            package, epoch,
+            f"Packaged by seine from {settings.linux_image} and {INITRD_NAME}."),
+        "linux_image": settings.linux_image,
+        "tool_build_depends": TOOL_BUILD_DEPENDS[settings.tool],
         "initrd": INITRD_NAME,
         "efi_arch": efi_arch,
-        "cmdline_arg": ("--cmdline=%s" % templates.sh_quote(package.uki_cmdline)
-                        if package.uki_cmdline else ""),
+        "cmdline_arg": ("--cmdline=%s" % templates.sh_quote(settings.cmdline)
+                        if settings.cmdline else ""),
         "ukify_cmd": " ".join(ukify_argv(
             '"$$vmlinuz"', INITRD_NAME,
-            templates.sh_quote(package.uki_cmdline) if package.uki_cmdline else "",
+            templates.sh_quote(settings.cmdline) if settings.cmdline else "",
             "debian/$(PACKAGE)/boot/EFI/Linux/$(PACKAGE).efi")),
     }
-    templates.render_files(debian, uki_packaging(package.uki_tool)[0], context)
+    templates.render_files(debian, uki_packaging(settings.tool)[0], context)
