@@ -20,6 +20,7 @@ from email.utils import format_datetime
 from seine        import kernel
 from seine        import kmod_sign
 from seine.deb    import repack
+from seine.extends import registry
 from seine.extends import uki
 from seine.extends import uki_addon
 from seine.extends import module
@@ -61,16 +62,6 @@ DEFAULT_SCOPE = ["target"]
 
 # Key for a package's apt-preferences text when it names no release.
 ANY_RELEASE = None
-
-# Build types 'extends' knows about, each a module with its own settings.
-EXTENSIONS = {
-    "kernel": kernel.SETTINGS,
-    "module": module.SETTINGS,
-    "uefi-keys": uefi_keys.SETTINGS,
-    "uki": uki.SETTINGS,
-    "uki-addon": uki_addon.SETTINGS,
-}
-
 
 # Date a build is pinned to when the source gives none (no changelog, no
 # dated revision). Fixed, not "now", so rebuilds stay reproducible.
@@ -254,33 +245,7 @@ class Package:
         if type(extends) != type({}):
             raise self._error("'extends' shall be a dictionary of build types")
 
-        for kind in extends:
-            if kind not in EXTENSIONS:
-                raise self._error(
-                    "'extends' has no '%s' build type, expected one of %s"
-                    % (kind, ", ".join(sorted(EXTENSIONS))))
-            settings = extends[kind]
-            if type(settings) != type({}):
-                raise self._error("'extends: %s' shall be a dictionary" % kind)
-            for setting in settings:
-                if setting in EXTENSIONS[kind]:
-                    continue
-                # A module names its kernels per architecture, so
-                # '<arch>-kernels' is not on the fixed settings list.
-                if kind == "module" and module.MODULE_KERNELS.match(setting):
-                    continue
-                expected = ", ".join(sorted(EXTENSIONS[kind]))
-                if kind == "module":
-                    expected += ", <architecture>-kernels"
-                raise self._error(
-                    "'extends: %s' has no '%s' setting, expected one of %s"
-                    % (kind, setting, expected))
-
-        kernel.parse(self, extends)
-        module.parse(self, extends)
-        uefi_keys.parse(self, extends)
-        uki.parse(self, extends)
-        uki_addon.parse(self, extends)
+        registry.parse_all(self, extends)
         return extends
 
     # Upstream version of a source, as written in the specification.
@@ -294,21 +259,16 @@ class Package:
             raise self._error(
                 "'version' shall be a string: write it in quotes, since a "
                 "version is not a number -- yaml reads 1.10 as 1.1")
-        if self.module and version is None and self.source is not None:
-            raise self._error(
-                "'version' is not set. seine writes the packaging for an "
-                "out-of-tree module, so nothing in the tree says what "
-                "version is being built -- the specification has to.")
-        if self.uki and version is None:
-            raise self._error(
-                "'version' is not set. seine writes the packaging for a "
-                "UKI wrapper from nothing, so there is no upstream tree "
-                "to read one from -- the specification has to say it.")
-        if self.uki_addon and version is None:
-            raise self._error(
-                "'version' is not set. seine writes the packaging for a "
-                "UKI addon from nothing, so there is no upstream tree "
-                "to read one from -- the specification has to say it.")
+        if version is None:
+            for extension in registry.in_use(self):
+                # An entry under 'defaults' only describes a package.
+                if extension.what is None or (
+                        self.source is None and not extension.generates_source):
+                    continue
+                raise self._error(
+                    "'version' is not set. seine writes the packaging for "
+                    f"{extension.what}, so nothing in the tree says what "
+                    "version is being built -- the specification has to.")
         return version
 
     # apt preferences to put in front of this build, written verbatim as
@@ -636,10 +596,8 @@ class Builder:
                 volumes=volumes, workdir=WORKDIR)
             return self._source_dir(package.name, workdir)
 
-        # A uki/uki-addon/uefi-keys package fetches nothing; extend()
-        # writes the tree.
-        if (uki.is_uki_package(package) or uki_addon.is_uki_addon_package(package)
-                or uefi_keys.is_uefi_keys_package(package)):
+        # A package whose kind writes the whole tree fetches nothing.
+        if registry.generator(package) is not None:
             sourcedir = os.path.join(workdir, package.name)
             os.makedirs(sourcedir)
             return sourcedir
@@ -887,12 +845,11 @@ class Builder:
         # A module's tree has no changelog yet -- its revision date is
         # used instead, since that is a property of the source rather
         # than of the machine or day.
-        if package.module:
+        if registry.no_changelog(package):
             return self._committed(package, sourcedir)
-        # A uki/uki-addon/uefi-keys package has no revision either;
-        # same fallback as _committed()'s own.
-        if (uki.is_uki_package(package) or uki_addon.is_uki_addon_package(package)
-                or uefi_keys.is_uefi_keys_package(package)):
+        # A generated package has no revision either; same fallback as
+        # _committed()'s own.
+        if registry.generator(package) is not None:
             return FALLBACK_EPOCH
         source = os.path.join(WORKDIR, os.path.basename(sourcedir))
         timestamp = self.builderImage.output(
@@ -1901,13 +1858,10 @@ class Builder:
     def _fetch_key(self, package):
         if module.is_cross_package(package):
             return None
-        # Never shared: a uki/uki-addon/uefi-keys package fetches nothing.
-        if uki.is_uki_package(package):
-            return ("uki", package.name)
-        if uki_addon.is_uki_addon_package(package):
-            return ("uki-addon", package.name)
-        if uefi_keys.is_uefi_keys_package(package):
-            return ("uefi-keys", package.name)
+        # Never shared: a generated package fetches nothing.
+        generator = registry.generator(package)
+        if generator is not None:
+            return (generator.name, package.name)
         return tuple(self._fetch_args(package))
 
     # As _fetch_key(), for kernel.fetch_upstream()'s own download -- the
@@ -2051,12 +2005,8 @@ class Builder:
         if package.kernel_upstream is not None:
             sourcedir = kernel.graft(self, package, workdir, sourcedir, epoch)
         # Before patches/local changelog: both need a debian/ directory,
-        # which for a module, uki, or uki-addon wrapper is what this
-        # step creates.
-        module.extend(self, package, sourcedir, epoch)
-        uefi_keys.extend(self, package, sourcedir, epoch)
-        uki.extend(self, package, sourcedir, epoch)
-        uki_addon.extend(self, package, sourcedir, epoch)
+        # which for a generated package is what this step creates.
+        registry.extend_all(self, package, sourcedir, epoch)
         self.patch(package, sourcedir, epoch)
         # After them, since the series may already cover it.
         if package.kernel_upstream is not None:
@@ -2388,12 +2338,10 @@ def parse(spec, check_uki=True):
 
     parsed = [Package(p, i + 1) for i, p in enumerate(packages)]
     # A package with no 'source' describes nothing to build -- that
-    # belongs under 'defaults' instead. A uki/uki-addon/uefi-keys
-    # package is the exception: it generates its own source.
+    # belongs under 'defaults' instead. A generated package is the
+    # exception: it writes its own source.
     for package in parsed:
-        if (package.source is None and uki.is_uki_package(package) == False
-                and uki_addon.is_uki_addon_package(package) == False
-                and uefi_keys.is_uefi_keys_package(package) == False):
+        if package.source is None and registry.generator(package) is None:
             raise ValueError(
                 "package '%s' has no 'source' to build from. An entry under "
                 "'packages' asks for a package to be built; one that only "
