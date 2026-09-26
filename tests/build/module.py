@@ -13,7 +13,7 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-import seine.module
+import seine.extends.module
 
 from seine.build import BuildCmd
 
@@ -141,7 +141,7 @@ class ModulesCrossCompileLikeAnythingElse(avocado.Test):
         builder = self.builder(HOST_ARCH)
         self.assertEqual(builder.cross(build.image.packages[0], HOST_ARCH),
                          False)
-        self.assertEqual(seine.module.cross_headers(builder, build.image.packages), [])
+        self.assertEqual(seine.extends.module.cross_headers(builder, build.image.packages), [])
 
 # A module is built against its kernel's headers, which depend on the
 # linux-kbuild of the same ABI -- and 'pkg.linux.notools' is the one
@@ -171,7 +171,7 @@ class AKernelWithModulesKeepsItsKbuild(avocado.Test):
         distro = {"source": "debian", "release": "trixie",
                   "architecture": "amd64", "uri": "http://example.com/debian"}
         builder = Builder(distro, {}, BuilderImage(distro, {}))
-        seine.module.check_kbuild(build.image.packages)
+        seine.extends.module.check_kbuild(build.image.packages)
 
     def test_notools_is_refused(self):
         from seine.kernel import MIN_TOOLS
@@ -225,7 +225,7 @@ class AnAbiSurvivesTheBuildThatMadeIt(avocado.Test):
             f.write("linux-headers-6.18+unreleased-common_1_all.deb\n")
             f.write("linux-image-6.18+unreleased-amd64_1_amd64.deb\n")
 
-        kernels = seine.module.resolved_kernels(builder, module, "amd64", packages)
+        kernels = seine.extends.module.resolved_kernels(builder, module, "amd64", packages)
         self.assertEqual([k.release for k in kernels],
                          ["6.18+unreleased-amd64"])
 
@@ -257,7 +257,7 @@ class AGraftSupersedesTheMetapackageItReplaces(avocado.Test):
         builder.metapackages[("amd64", "apt://linux-headers-amd64")] = \
             "linux-headers-6.12.101+deb13-amd64"
         module = [p for p in build.image.packages if p.module][0]
-        return seine.module.resolved_kernels(builder, module, "amd64", build.image.packages)
+        return seine.extends.module.resolved_kernels(builder, module, "amd64", build.image.packages)
 
     def test_the_graft_is_what_is_left(self):
         kernels = self.resolved("linux, apt://linux-headers-amd64")
@@ -283,7 +283,7 @@ class AGraftSupersedesTheMetapackageItReplaces(avocado.Test):
         builder = Builder(distro, {}, BuilderImage(distro, {}))
         builder.metapackages[("amd64", "apt://linux-headers-amd64")] = \
             "linux-headers-6.12.101+deb13-amd64"
-        kernels = seine.module.resolved_kernels(builder, build.image.packages[0],
+        kernels = seine.extends.module.resolved_kernels(builder, build.image.packages[0],
                                                 "amd64",
                                            build.image.packages)
         self.assertEqual([k.release for k in kernels],
@@ -432,7 +432,7 @@ class ResolvedKernels(avocado.Test):
                               amd64-kernels:
                                   - apt://linux-headers-6.12.101+deb13-amd64
         """)
-        kernels = seine.module.resolved_kernels(
+        kernels = seine.extends.module.resolved_kernels(
             self.builder(), build.image.packages[0], "amd64")
         self.assertEqual([k.release for k in kernels],
                          ["6.12.101+deb13-amd64"])
@@ -444,7 +444,7 @@ class ResolvedKernels(avocado.Test):
                               amd64-kernels:
                                   - apt://linux-headers-6.12.101+deb13-rt-amd64
         """)
-        kernels = seine.module.resolved_kernels(
+        kernels = seine.extends.module.resolved_kernels(
             self.builder(), build.image.packages[0], "amd64")
         # 'rt-amd64' is a flavour within a featureset and not two things
         # to be told apart: what is stripped is the prefix, nothing else.
@@ -473,7 +473,7 @@ class ResolvedKernels(avocado.Test):
         # been regenerated. Nothing predicts it: an UNRELEASED changelog
         # is what turns a version into '6.18+unreleased'.
         builder.abinames["linux"] = "6.18+unreleased"
-        kernels = seine.module.resolved_kernels(builder, module, "amd64", packages)
+        kernels = seine.extends.module.resolved_kernels(builder, module, "amd64", packages)
         self.assertEqual([k.release for k in kernels],
                          ["6.18+unreleased-amd64"])
         self.assertEqual([k.headers for k in kernels],
@@ -516,7 +516,7 @@ class ResolvedKernels(avocado.Test):
         packages = build.image.packages
         module = [p for p in packages if p.name == "driver"][0]
         try:
-            seine.module.resolved_kernels(self.builder(), module, "amd64", packages)
+            seine.extends.module.resolved_kernels(self.builder(), module, "amd64", packages)
             self.fail("a kernel with no ABI yet resolved to something!")
         except ValueError:
             pass
@@ -551,7 +551,7 @@ class GeneratedPackaging(avocado.Test):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w") as f:
                 f.write(content)
-        seine.module.extend(builder, package, source, 1700000000)
+        seine.extends.module.extend(builder, package, source, 1700000000)
         self.source = source
         written = {}
         for name in ["changelog", "control", "rules", "source/format"]:
@@ -845,7 +845,7 @@ class MakeVarsNameTheKernelBeingBuiltFor(avocado.Test):
 
 class PackagingDecidesWhetherToRebuild(avocado.Test):
     def test(self):
-        from seine.module import module_packaging
+        from seine.extends.module import module_packaging
         # The packaging is data, and the digest reads it: editing the
         # rules has to be enough to ask for a rebuild, or the modules go
         # on being the ones the old rules produced.
@@ -866,7 +866,7 @@ class UnresolvedMetapackagesAreRefused(avocado.Test):
                               arm64-kernels: [apt://linux-headers-arm64]
         """)
         try:
-            seine.module.resolved_kernels(builder, build.image.packages[0], "arm64",
+            seine.extends.module.resolved_kernels(builder, build.image.packages[0], "arm64",
                                      build.image.packages)
             self.fail("a metapackage nobody resolved was named anyway!")
         except ValueError as e:
@@ -903,21 +903,21 @@ class CrossHeadersAreBuiltOncePerKernel(avocado.Test):
 
     def test_two_modules_on_one_kernel_need_one_package(self):
         build = self.modules("arm64", ["apt://linux-headers-6.12.101+deb13-arm64"])
-        headers = seine.module.cross_headers(self.builder(), build.image.packages)
+        headers = seine.extends.module.cross_headers(self.builder(), build.image.packages)
         self.assertEqual([p.name for p in headers],
                          ["linux-headers-6.12.101+deb13-arm64-cross"])
 
     def test_two_kernels_need_one_each(self):
         build = self.modules("arm64", ["apt://linux-headers-6.12.101+deb13-arm64",
                                        "apt://linux-headers-6.12.101+deb13-rt-arm64"])
-        headers = seine.module.cross_headers(self.builder(), build.image.packages)
+        headers = seine.extends.module.cross_headers(self.builder(), build.image.packages)
         self.assertEqual(sorted(p.name for p in headers),
                          ["linux-headers-6.12.101+deb13-arm64-cross",
                           "linux-headers-6.12.101+deb13-rt-arm64-cross"])
 
     def test_they_are_built_for_the_machine_doing_the_building(self):
         build = self.modules("arm64", ["apt://linux-headers-6.12.101+deb13-arm64"])
-        headers = seine.module.cross_headers(self.builder(), build.image.packages)
+        headers = seine.extends.module.cross_headers(self.builder(), build.image.packages)
         # 'host', so the tools in it run where the compiler runs rather
         # than where the modules will.
         self.assertEqual(headers[0].scope, ["host"])
@@ -929,7 +929,7 @@ class CrossHeadersAreBuiltOncePerKernel(avocado.Test):
                              cross=False)
         # Built on the architecture it is built for -- emulated or
         # otherwise -- the tools it needs are the ones it has.
-        self.assertEqual(seine.module.cross_headers(self.builder(), build.image.packages), [])
+        self.assertEqual(seine.extends.module.cross_headers(self.builder(), build.image.packages), [])
 
 # The packaging seine writes for a cross headers package: a kernel's
 # headers as its own build left them, with kbuild tools rebuilt for the
@@ -939,13 +939,13 @@ class GeneratedCrossPackaging(avocado.Test):
                   debs=("linux-headers-6.18+unreleased-arm64_1_arm64.deb",
                         "linux-headers-6.18+unreleased-common_1_all.deb")):
         from seine.packages import Builder
-        from seine.module import Kernel
+        from seine.extends.module import Kernel
         from seine.sbuild import BuilderImage
         distro = {"source": "debian", "release": "trixie",
                   "architecture": target, "uri": "http://example.com/debian"}
         builder = Builder(distro, {}, BuilderImage(distro, {}))
         kernel = Kernel("linux", "linux-headers-%s" % release, release, None)
-        package = seine.module._cross_package(kernel, 1)
+        package = seine.extends.module._cross_package(kernel, 1)
 
         source = os.path.join(self.workdir, "linux")
         staged = os.path.join(self.workdir, "debs")
@@ -954,7 +954,7 @@ class GeneratedCrossPackaging(avocado.Test):
         for name in debs:
             with open(os.path.join(staged, name), "w") as f:
                 f.write("not really a deb")
-        seine.module.extend_cross_headers(builder, package, source, 1700000000, staged)
+        seine.extends.module.extend_cross_headers(builder, package, source, 1700000000, staged)
 
         written = {}
         for name in ["changelog", "control", "rules"]:
@@ -1016,17 +1016,17 @@ class GeneratedCrossPackaging(avocado.Test):
 class CrossHeadersAreFetchedAndStamped(avocado.Test):
     def parts(self, release="6.18+unreleased-arm64"):
         from seine.packages import Builder
-        from seine.module import Kernel
+        from seine.extends.module import Kernel
         from seine.sbuild import BuilderImage
         distro = {"source": "debian", "release": "trixie",
                   "architecture": "arm64", "uri": "http://example.com/debian"}
         builder = Builder(distro, {}, BuilderImage(distro, {}))
         kernel = Kernel("linux", "linux-headers-%s" % release, release, None)
-        return builder, seine.module._cross_package(kernel, 1)
+        return builder, seine.extends.module._cross_package(kernel, 1)
 
     def test_the_source_is_asked_of_apt_rather_than_named(self):
         builder, package = self.parts()
-        command = " ".join(seine.module._fetch_cross_args(builder, package, "arm64")[2].split())
+        command = " ".join(seine.extends.module._fetch_cross_args(builder, package, "arm64")[2].split())
         # Which source a headers package came from is written in the
         # headers package. Guessing 'linux' is right for Debian's kernel
         # and wrong for anybody else's.
@@ -1040,7 +1040,7 @@ class CrossHeadersAreFetchedAndStamped(avocado.Test):
 
     def test_the_repository_this_build_fills_is_asked_too(self):
         builder, package = self.parts()
-        command = " ".join(seine.module._fetch_cross_args(builder, package, "arm64")[2].split())
+        command = " ".join(seine.extends.module._fetch_cross_args(builder, package, "arm64")[2].split())
         # A kernel built here is in that repository and in no archive.
         # Both indexes: the headers are downloaded, the source they name
         # is fetched.
@@ -1068,7 +1068,7 @@ class CrossHeadersAreFetchedAndStamped(avocado.Test):
 
 class MetapackagesAreRecognised(avocado.Test):
     def test(self):
-        from seine.module import is_kernel_metapackage, is_built_kernel
+        from seine.extends.module import is_kernel_metapackage, is_built_kernel
         # An ABI starts with the kernel's version, which is what tells
         # one kernel from whichever kernel is current.
         for reference in ["apt://linux-headers-amd64",
@@ -1096,7 +1096,7 @@ class ResolvedMetapackages(avocado.Test):
             "    linux-headers-6.12.101+deb13-common\n"
             "  Depends: linux-headers-6.12.101+deb13-arm64:arm64\n")
         self.assertEqual(
-            seine.module._resolved_headers("apt://linux-headers-arm64", "arm64",
+            seine.extends.module._resolved_headers("apt://linux-headers-arm64", "arm64",
                                       output),
             "linux-headers-6.12.101+deb13-arm64")
 
@@ -1107,7 +1107,7 @@ class ResolvedMetapackages(avocado.Test):
                   "architecture": "amd64", "uri": "http://example.com/debian"}
         builder = Builder(distro, {}, BuilderImage(distro, {}))
         try:
-            seine.module._resolved_headers("apt://linux-headers-riscv64",
+            seine.extends.module._resolved_headers("apt://linux-headers-riscv64",
                                       "riscv64", "N: Unable to locate package")
             self.fail("a metapackage that resolved to nothing was accepted!")
         except ValueError:
@@ -1145,7 +1145,7 @@ class ResolvedMetapackages(avocado.Test):
         distro = {"source": "debian", "release": "trixie",
                   "architecture": "amd64", "uri": "http://example.com/debian"}
         builder = Builder(distro, {}, BuilderImage())
-        seine.module.resolve_kernels(builder, build.image.packages, HostBootstrap())
+        seine.extends.module.resolve_kernels(builder, build.image.packages, HostBootstrap())
         self.assertEqual(order, ["bootstrap", "builder", "asked"],
                          "the builder image was made before the bootstrap it "
                          "is built FROM")

@@ -17,7 +17,7 @@ from email.utils import format_datetime
 
 import jinja2
 
-from seine.kernel import uki
+from seine.extends import uki
 from seine.utils import GIT_EMAIL
 from seine.utils import GIT_NAME
 from seine.utils import distribution

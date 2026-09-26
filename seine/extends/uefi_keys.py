@@ -124,7 +124,7 @@ def parse(package, extends):
     package.uefi_keys_reboot = _bool(
         package, "extends: uefi-keys: reboot", settings, "reboot")
 
-_DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 UEFI_KEYS_PACKAGING = os.path.join(_DATA_DIR, "uefi-keys")
 UEFI_KEYS_FILES = ["changelog", "control", "rules", "service",
                    "check-setup-mode", "provision-keys"]

@@ -99,8 +99,8 @@ def supersede_grafted(kernels):
 
 # Packaging templates for an out-of-tree module, kept as files rather
 # than inline so editing them looks like editing what they produce.
-MODULE_PACKAGING = os.path.join(os.path.dirname(__file__), "data", "module")
-CROSS_PACKAGING = os.path.join(os.path.dirname(__file__), "data", "cross")
+MODULE_PACKAGING = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "module")
+CROSS_PACKAGING = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "cross")
 MODULE_FILES = ["changelog", "control", "rules"]
 
 @functools.lru_cache(maxsize=None)
