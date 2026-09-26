@@ -127,6 +127,13 @@ have:
 # SPDX-License-Identifier Apache-2.0
 ```
 
+## Changing an `extends:` kind
+
+Each kind in `seine/extends/` has a `REVISION`. Bump it when a change to
+its code alters what it builds, so packages built before are built again.
+Edits to its templates in `seine/data/` are noticed without it. A kernel
+graft has `GRAFT_VERSION` in `seine/kernel/`.
+
 ## Licence
 
 seine is licensed under the Apache License 2.0. Contributions are
