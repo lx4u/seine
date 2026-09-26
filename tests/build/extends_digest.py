@@ -81,7 +81,7 @@ class DigestFixture(avocado.Test):
         with open(self.initrd, "w") as f:
             f.write("initrd")
 
-    def stamp(self, kind, spec=None):
+    def parsed(self, kind, spec=None):
         spec = copy.deepcopy(spec or CASES[kind]["spec"])
         packages = [spec]
         if kind == "uki-addon":
@@ -93,8 +93,12 @@ class DigestFixture(avocado.Test):
         build.loads(text)
         build.parse()
         builder = Builder(DISTRO, {}, BuilderImage(DISTRO, {}))
+        return builder, build.image.packages, spec["name"]
+
+    def stamp(self, kind, spec=None):
+        builder, packages, name = self.parsed(kind, spec)
         return {p.name: os.path.basename(s).rsplit("_", 1)[1]
-                for p, a, s in builder.stamps(build.image.packages)}[spec["name"]]
+                for p, a, s in builder.stamps(packages)}[name]
 
     def changed(self, kind, setting, value):
         spec = copy.deepcopy(CASES[kind]["spec"])
@@ -155,6 +159,32 @@ class RevisionChangesTheStamp(DigestFixture):
             finally:
                 registry.EXTENSIONS[position] = original
             self.assertNotEqual(base, after, kind)
+
+class TheExcerptShowsEveryKind(DigestFixture):
+    def excerpt(self, kind):
+        builder, packages, name = self.parsed(kind)
+        package = [p for p in packages if p.name == name][0]
+        return builder.digest_excerpt(package)["extends"]
+
+    def test_module(self):
+        shown = self.excerpt("module")["module"]
+        self.assertEqual(shown["modules"], ["a"])
+        self.assertEqual(shown["make-vars"], {"A": "1"})
+
+    def test_uki(self):
+        self.assertEqual(self.excerpt("uki")["uki"], {
+            "tool": "ukify", "linux-image": "linux-image-a",
+            "initrd": self.initrd, "cmdline": "quiet",
+            "signing-key": "vault:one"})
+
+    def test_uki_addon(self):
+        self.assertEqual(self.excerpt("uki-addon")["uki-addon"], {
+            "uki": "uki-a", "cmdline": "quiet", "signing-key": "vault:one"})
+
+    def test_uefi_keys(self):
+        self.assertEqual(self.excerpt("uefi-keys")["uefi-keys"], {
+            "pk": "vault:pk", "kek": ["vault:kek"], "db": ["vault:db"],
+            "dbx": ["vault:dbx"]})
 
 if __name__ == "__main__":
     avocado.main()
