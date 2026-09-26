@@ -14,7 +14,7 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-from seine import uefi_keys
+from seine.extends import uefi_keys
 from seine.build import BuildCmd
 from seine.packages import Builder
 from seine.sbuild import BuilderImage
