@@ -8,17 +8,13 @@
 # imported module.
 
 import collections
-import functools
 import glob
-import jinja2
 import os
 import re
 import shutil
 
-from datetime import datetime
-from datetime import timezone
-from email.utils import format_datetime
-
+from seine.extends import parsing
+from seine.extends import templates
 from seine.kernel import DEFAULT_FEATURESET
 from seine.kernel import KERNEL_ARCHITECTURES
 from seine.kernel import KERNEL_MACHINES
@@ -26,8 +22,6 @@ from seine.kernel import MIN_TOOLS
 from seine.kernel import NO_TOOLS
 from seine.kernel import kernel_architecture
 from seine.sbuild import REPOSITORY
-from seine.utils  import GIT_EMAIL
-from seine.utils  import GIT_NAME
 from seine.utils  import HOST_ARCH
 
 
@@ -97,39 +91,11 @@ def supersede_grafted(kernels):
             if is_built_kernel(kernel.reference)
             or kernel.flavour not in grafted]
 
-# Packaging templates for an out-of-tree module, kept as files rather
-# than inline so editing them looks like editing what they produce.
-MODULE_PACKAGING = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "module")
-CROSS_PACKAGING = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "cross")
-MODULE_FILES = ["changelog", "control", "rules"]
-
-@functools.lru_cache(maxsize=None)
 def module_packaging():
-    return _packaging(MODULE_PACKAGING)
+    return templates.load_templates("module")
 
-@functools.lru_cache(maxsize=None)
 def cross_packaging():
-    return _packaging(CROSS_PACKAGING)
-
-def _packaging(directory):
-    templates = {}
-    content = b""
-    for name in MODULE_FILES:
-        with open(os.path.join(directory, name), "rb") as f:
-            raw = f.read()
-        content += raw
-        templates[name] = raw.decode()
-    return templates, content
-
-# Same '[[ ]]' delimiters as spec rendering, so one notation is used
-# throughout. Avoid bash's '[[ ]]' test in rules recipes because of it;
-# '[' works the same and dh runs recipes under /bin/sh anyway.
-MODULE_TEMPLATE = jinja2.Environment(
-    variable_start_string="[[", variable_end_string="]]",
-    block_start_string="[%", block_end_string="%]",
-    comment_start_string="[#", comment_end_string="#]",
-    trim_blocks=True, lstrip_blocks=True, keep_trailing_newline=True,
-    undefined=jinja2.StrictUndefined)
+    return templates.load_templates("cross")
 
 
 # Adds each named kernel this specification builds to 'after', so a
@@ -198,49 +164,30 @@ def parse(package, extends):
     package.module = "module" in extends
     # Subdirectory holding the module's own makefile, e.g. NVIDIA's
     # kernel-open. Defaults to the tree's root.
-    package.module_build = settings.get("build", ".")
-    if type(package.module_build) != type(""):
-        raise package._error("'extends: module: build' shall be a string")
+    package.module_build = parsing.parse_string(
+        package, "module", settings, "build", ".")
     # Make target to build. 'modules' is kbuild's own default but not
     # every out-of-tree tree follows it (some use 'all' or 'default').
-    package.module_target = settings.get("target", "modules")
-    if type(package.module_target) != type(""):
-        raise package._error("'extends: module: target' shall be a string")
+    package.module_target = parsing.parse_string(
+        package, "module", settings, "target", "modules")
     # .ko files the build must produce, named rather than discovered so
     # a build producing none (or only some) doesn't silently pass.
-    package.module_modules = package._parse_list(settings, "modules")
-    for name in package.module_modules:
-        if type(name) != type(""):
-            raise package._error(
-                "'extends: module: modules' shall be a list of module "
-                "names")
+    package.module_modules = parsing.parse_string_list(
+        package, "module", settings, "modules")
     # Extra Build-Depends the tree needs, taken as-is (Debian's syntax).
-    package.module_build_depends = package._parse_list(settings,
-                                                       "build-depends")
+    package.module_build_depends = parsing.parse_relationships(
+        package, "module", settings, "build-depends")
     # Extra runtime dependencies; the kernel built against is added
     # automatically since seine already knows that relationship.
-    package.module_runtime_depends = package._parse_list(settings,
-                                                         "runtime-depends")
-    for setting, listed in [("build-depends", package.module_build_depends),
-                            ("runtime-depends", package.module_runtime_depends)]:
-        for depends in listed:
-            if type(depends) != type("") or "\n" in depends:
-                raise package._error(
-                    "'extends: module: %s' shall be a list of package "
-                    "relationships, one per entry, as debian/control "
-                    "writes them" % setting)
+    package.module_runtime_depends = parsing.parse_relationships(
+        package, "module", settings, "runtime-depends")
     package.module_make_vars = _parse_make_vars(package, settings)
     package.module_kernels = _parse_module_kernels(package, settings)
     # Names the vault key this module's .ko files are signed with,
     # post-build (seine/kmod_sign.py); independent of any kernel this
     # module builds against.
-    package.module_signing_key = settings.get("signing-key")
-    if package.module_signing_key is not None:
-        if (type(package.module_signing_key) != type("")
-                or not package.module_signing_key.startswith("vault:")):
-            raise package._error(
-                "'extends: module: signing-key' shall be 'vault:<name>'")
-        package.module_signing_key = package.module_signing_key[len("vault:"):]
+    package.module_signing_key = parsing.parse_vault_key(
+        package, "module", settings, "signing-key")
 
 # Extra make variables, e.g. NVIDIA's SYSSRC. Taken as written.
 def _parse_make_vars(package, settings):
@@ -257,7 +204,7 @@ def _parse_make_vars(package, settings):
         # Values are shell-quoted in the generated rules so
         # $KERNEL_SRC etc. still expand; block anything that could
         # run a command instead.
-        for forbidden in ["`", "$(", ";", "&", "|", "\n"]:
+        for forbidden in parsing.SHELL_UNSAFE:
             if forbidden in str(value):
                 raise package._error(
                     "'extends: module: make-vars' has '%s', whose value "
@@ -345,10 +292,7 @@ def extend(builder, package, sourcedir, epoch):
     if package.module == False:
         return
 
-    debian = os.path.join(sourcedir, "debian")
-    if os.path.isdir(debian):
-        shutil.rmtree(debian)
-    os.makedirs(os.path.join(debian, "source"), exist_ok=True)
+    debian = templates.reset_debian(sourcedir)
 
     # Every architecture's kernels are described, since one source
     # package is published for all of them and control has to name
@@ -371,17 +315,10 @@ def extend(builder, package, sourcedir, epoch):
                                     % (package.name, kernel.release)}
                         for kernel in kernels]})
 
-    # Native: a tree with no upstream tarball to diff against.
-    _write(os.path.join(debian, "source", "format"), "3.0 (native)\n")
-
-    templates, _ = module_packaging()
+    found, _ = module_packaging()
     context = {
-        "name": package.name,
-        "version": package.upstream_version,
+        **templates.base_context(package, epoch),
         "source": package.source,
-        "maintainer": GIT_NAME,
-        "email": GIT_EMAIL,
-        "date": format_datetime(datetime.fromtimestamp(epoch, timezone.utc)),
         "builds": builds,
         "build_dir": package.module_build,
         "target": package.module_target,
@@ -398,10 +335,7 @@ def extend(builder, package, sourcedir, epoch):
                          .replace('"', '\\"').replace("$", "$$"))
             for name in sorted(package.module_make_vars)),
     }
-    for name in MODULE_FILES:
-        _write(os.path.join(debian, name),
-               MODULE_TEMPLATE.from_string(templates[name]).render(context),
-               mode=0o755 if name == "rules" else None)
+    templates.render_files(debian, found, context)
 
 # A kernel built here is for one architecture only; if two architecture
 # lists resolve to the same release, that's a mistake to report.
@@ -417,42 +351,26 @@ def _describe_once(package, described, architecture, kernels):
                 % (architecture, seen[0], seen[1], kernel.release))
         described[kernel.release] = (architecture, kernel.reference)
 
-def _write(path, content, mode=None):
-    with open(path, "w") as f:
-        f.write(content)
-    if mode is not None:
-        os.chmod(path, mode)
-
 # Writes packaging for a cross headers package into the kernel source
 # tree it's built from. 'debs' holds the kernel's own staged headers
 # .debs, needed since Module.symvers can't be regenerated otherwise.
 def extend_cross_headers(builder, package, sourcedir, epoch, debs):
     kernel = package.cross_kernel
-    debian = os.path.join(sourcedir, "debian")
     # Replace the kernel source's own debian/: this builds headers and
     # tools, not the kernel.
-    if os.path.isdir(debian):
-        shutil.rmtree(debian)
-    os.makedirs(os.path.join(debian, "source"), exist_ok=True)
+    debian = templates.reset_debian(sourcedir)
 
-    _write(os.path.join(debian, "source", "format"), "3.0 (native)\n")
-    templates, _ = cross_packaging()
+    found, _ = cross_packaging()
     context = {
-        "name": package.name,
+        **templates.base_context(package, epoch),
         "version": cross_version(kernel),
         "release": kernel.release,
         "architecture": HOST_ARCH,
         "kernel_arch": kernel_architecture(builder.distro["architecture"]),
         "target_architecture": builder.distro["architecture"],
         "debs_dir": CROSS_STAGED,
-        "maintainer": GIT_NAME,
-        "email": GIT_EMAIL,
-        "date": format_datetime(datetime.fromtimestamp(epoch, timezone.utc)),
     }
-    for name in MODULE_FILES:
-        _write(os.path.join(debian, name),
-               MODULE_TEMPLATE.from_string(templates[name]).render(context),
-               mode=0o755 if name == "rules" else None)
+    templates.render_files(debian, found, context)
 
     # Staged inside the source tree, since a source package can't
     # reach outside itself.
