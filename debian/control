@@ -5,6 +5,7 @@ Maintainer: Cedric Hombourger <chombourger@gmail.com>
 Build-Depends: debhelper-compat (= 13),
                dh-python,
                python3-all,
+               python3-jinja2,
                python3-pip,
                python3-requests,
                python3-rich,
