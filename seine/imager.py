@@ -23,7 +23,7 @@ from seine.packages          import FALLBACK_EPOCH
 from seine.partition        import RO_FSTYPES
 from seine.partition        import VERITY_HASH_TYPE
 from seine.tasks import Task
-from seine.kernel.uki        import ukify_argv
+from seine.extends.uki import ukify_argv
 from seine.container import ContainerEngine
 from seine.utils            import HOST_ARCH
 
@@ -672,7 +672,7 @@ class Imager:
 
     # systemd-repart's scheme: a verity pair's root hash is its two GPT
     # GUIDs concatenated (data = high 128 bits, hash = low 128). Not
-    # authentication alone -- pinning it needs a signed UKI (kernel/uki.py).
+    # authentication alone -- pinning it needs a signed UKI (seine/extends/uki.py).
     def _hex_to_gpt_guid(self, hexstr):
         return "%s-%s-%s-%s-%s" % (
             hexstr[0:8], hexstr[8:12], hexstr[12:16], hexstr[16:20], hexstr[20:32])

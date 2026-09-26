@@ -15,8 +15,8 @@ sys.path.append(path_to_sources)
 
 from seine.build import BuildCmd
 from seine.container import ContainerEngine
-from seine import module
-from seine.kernel import uki_addon
+from seine.extends import module
+from seine.extends import uki_addon
 from seine.packages import Builder
 from seine.sbuild import BuilderImage
 

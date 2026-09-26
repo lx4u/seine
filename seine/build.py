@@ -13,7 +13,7 @@ import yaml
 
 from seine            import settings
 from seine.image      import Image
-from seine            import module
+from seine.extends import module
 from seine.cmd        import Cmd
 from seine.partition  import PartitionHandler
 from seine.tasks      import Interrupted
@@ -870,7 +870,7 @@ class BuildCmd(Cmd):
     # kernels a module targets, and 'kernel: derived-flavours'/'configs'
     # -- "first stands" would silently drop what a second file added.
     def _appends(self, kind, setting):
-        from seine.module import MODULE_KERNELS
+        from seine.extends.module import MODULE_KERNELS
         if kind == "module" and MODULE_KERNELS.match(setting) is not None:
             return True
         return kind == "kernel" and setting in ("derived-flavours", "configs")
