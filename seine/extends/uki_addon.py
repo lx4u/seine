@@ -97,7 +97,9 @@ def extend(builder, package, sourcedir, epoch):
     debian = templates.reset_debian(sourcedir)
 
     context = {
-        **templates.base_context(package, epoch),
+        **templates.base_context(
+            package, epoch, "Packaged by seine as a systemd-stub cmdline "
+            "addon for %s." % package.uki_addon_uki),
         "uki_name": package.uki_addon_uki,
         "ukify_cmd": " ".join(uki.ukify_argv(
             None, None, templates.sh_quote(package.uki_addon_cmdline),

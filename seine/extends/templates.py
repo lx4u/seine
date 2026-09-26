@@ -31,13 +31,15 @@ TEMPLATE = jinja2.Environment(
     undefined=jinja2.StrictUndefined)
 
 # The templates in seine/data/<directory>, and their bytes joined: what
-# a package is built from, for its digest.
+# a package is built from, for its digest. The changelog is one shared file.
 @functools.lru_cache(maxsize=None)
 def load_templates(directory, files=FILES):
     templates = {}
     content = b""
     for name in files:
-        with open(os.path.join(DATA, directory, name), "rb") as f:
+        path = os.path.join(DATA, name if name == "changelog"
+                            else os.path.join(directory, name))
+        with open(path, "rb") as f:
             raw = f.read()
         content += raw
         templates[name] = raw.decode()
@@ -59,8 +61,10 @@ def reset_debian(sourcedir):
     write(os.path.join(debian, "source", "format"), "3.0 (native)\n")
     return debian
 
-def base_context(package, epoch):
+# 'note' is the one line the changelog entry says.
+def base_context(package, epoch, note):
     return {
+        "note": note,
         "name": package.name,
         "version": package.upstream_version,
         "maintainer": GIT_NAME,
