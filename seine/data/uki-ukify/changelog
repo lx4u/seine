@@ -1,5 +1,0 @@
-[[ name ]] ([[ version ]]) unstable; urgency=low
-
-  * Packaged by seine from [[ linux_image ]] and [[ initrd ]].
-
- -- [[ maintainer ]] <[[ email ]]>  [[ date ]]
