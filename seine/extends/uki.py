@@ -13,6 +13,9 @@ from seine.extends import parsing
 from seine.extends import templates
 from seine.utils import distribution
 
+# Bump when this code changes what a UKI is built into.
+REVISION = 1
+
 SETTINGS = ["cmdline", "initrd", "linux-image", "signing-key", "tool"]
 
 TOOLS = ["ukify", "efibootguard"]
@@ -108,6 +111,25 @@ def ukify_argv(linux, initrd, cmdline, output, extra=()):
     argv.extend(extra)
     argv.append("--output=%s" % output)
     return argv
+
+# The named 'initrd:' is read as its own bytes, not by name.
+def digest_fields(builder, package, architecture):
+    initrd = initrd_path(builder.distro, package.uki_initrd)
+    # Digests are computed up front, so an 'after:'-ordered initrd may not
+    # exist yet. A missing file matches no real hash: one rebuild.
+    content = b"<initrd not yet built>"
+    if os.path.isfile(initrd):
+        with open(initrd, "rb") as f:
+            content = f.read()
+    return [
+        ("tool", package.uki_tool),
+        ("linux-image", package.uki_linux_image),
+        ("cmdline", package.uki_cmdline),
+        # A different (or no) vault key changes the '.efi' bytes.
+        ("signing-key", str(package.uki_signing_key)),
+        ("initrd", content),
+        ("packaging", uki_packaging(package.uki_tool)[1]),
+    ]
 
 def extend(builder, package, sourcedir, epoch):
     if package.uki == False:

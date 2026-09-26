@@ -12,6 +12,9 @@ import uuid
 from seine.extends import parsing
 from seine.extends import templates
 
+# Bump when this code changes what the package is built into.
+REVISION = 1
+
 SETTINGS = ["db", "dbx", "include-microsoft-keys", "include-standard-dbx",
             "kek", "pk", "reboot", "signing-key"]
 
@@ -135,6 +138,17 @@ def _install_commands(package):
         lines.append("cat %s > debian/$(PACKAGE)/usr/share/$(PACKAGE)/%s.esl"
                      % (" ".join(esls), role))
     return "; \\\n\t".join(lines)
+
+# The order of kek/db/dbx counts: each is joined into one file as given.
+def digest_fields(builder, package, architecture):
+    return [
+        ("pk", str(package.uefi_keys_pk)),
+        ("kek", ",".join(package.uefi_keys_kek)),
+        ("db", ",".join(package.uefi_keys_db)),
+        ("dbx", ",".join(package.uefi_keys_dbx)),
+        ("reboot", str(package.uefi_keys_reboot)),
+        ("packaging", uefi_keys_packaging()[1]),
+    ]
 
 def extend(builder, package, sourcedir, epoch):
     if package.uefi_keys == False:

@@ -12,6 +12,9 @@ from seine.extends import templates
 from seine.extends import uki
 from seine.utils import distribution
 
+# Bump when this code changes what an addon is built into.
+REVISION = 1
+
 SETTINGS = ["cmdline", "signing-key", "uki"]
 
 def is_uki_addon_package(package):
@@ -89,6 +92,16 @@ def resolved_signing_key(builder, package):
 
 def uki_addon_packaging():
     return templates.load_templates("uki-addon")
+
+# An unset key inherits the parent's own, which the parent's digest
+# already carries.
+def digest_fields(builder, package, architecture):
+    return [
+        ("uki", package.uki_addon_uki),
+        ("cmdline", package.uki_addon_cmdline),
+        ("signing-key", str(package.uki_addon_signing_key)),
+        ("packaging", uki_addon_packaging()[1]),
+    ]
 
 def extend(builder, package, sourcedir, epoch):
     if package.uki_addon == False:
