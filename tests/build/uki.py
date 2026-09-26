@@ -61,11 +61,11 @@ class UkiExtension(avocado.Test):
     def test(self):
         build = parse(UKI % "")
         package = build.image.packages[0]
-        self.assertEqual(package.uki, True)
-        self.assertEqual(package.uki_tool, "ukify")
-        self.assertEqual(package.uki_linux_image, "linux-image-amd64")
-        self.assertEqual(package.uki_initrd, "minimal.img")
-        self.assertEqual(package.uki_cmdline, "")
+        self.assertIn("uki", package.ext)
+        self.assertEqual(package.ext["uki"].tool, "ukify")
+        self.assertEqual(package.ext["uki"].linux_image, "linux-image-amd64")
+        self.assertEqual(package.ext["uki"].initrd, "minimal.img")
+        self.assertEqual(package.ext["uki"].cmdline, "")
         self.assertIsNone(package.source)
         self.assertEqual(package.upstream_version, "1")
 
@@ -75,7 +75,7 @@ class UkiTakesACmdline(avocado.Test):
                               cmdline: "console=ttyS0 ro"
         """)
         package = build.image.packages[0]
-        self.assertEqual(package.uki_cmdline, "console=ttyS0 ro")
+        self.assertEqual(package.ext["uki"].cmdline, "console=ttyS0 ro")
 
 class MissingTool(avocado.Test):
     def test(self):
@@ -138,12 +138,12 @@ class SigningKeyParsed(avocado.Test):
         build = parse(UKI % """
                               signing-key: vault:pc-uki-secureboot
         """)
-        self.assertEqual(build.image.packages[0].uki_signing_key,
+        self.assertEqual(build.image.packages[0].ext["uki"].signing_key,
                          "pc-uki-secureboot")
 
     def test_defaults_to_none(self):
         build = parse(UKI % "")
-        self.assertEqual(build.image.packages[0].uki_signing_key, None)
+        self.assertEqual(build.image.packages[0].ext["uki"].signing_key, None)
 
 class SigningKeyNotAString(avocado.Test):
     def test(self):

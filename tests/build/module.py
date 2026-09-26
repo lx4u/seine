@@ -87,11 +87,11 @@ class ModuleExtension(avocado.Test):
                               flavour: amd64
         """)
         package = [p for p in build.image.packages if p.name == "nvidia-open"][0]
-        self.assertEqual(package.module, True)
-        self.assertEqual(package.module_build, "kernel-open")
-        self.assertEqual(package.module_modules, ["nvidia", "nvidia-drm"])
-        self.assertEqual(package.module_make_vars, {"SYSSRC": "/usr/src/linux"})
-        self.assertEqual(package.module_kernels,
+        self.assertIn("module", package.ext)
+        self.assertEqual(package.ext["module"].build, "kernel-open")
+        self.assertEqual(package.ext["module"].modules, ["nvidia", "nvidia-drm"])
+        self.assertEqual(package.ext["module"].make_vars, {"SYSSRC": "/usr/src/linux"})
+        self.assertEqual(package.ext["module"].kernels,
                          {"amd64": ["apt://linux-headers-amd64", "linux"]})
         self.assertEqual(package.upstream_version, "580.95.05")
 
@@ -102,9 +102,9 @@ class ModuleDefaults(avocado.Test):
         """)
         package = build.image.packages[0]
         # The tree's root, for packaging that keeps its makefile there.
-        self.assertEqual(package.module_build, ".")
-        self.assertEqual(package.module_modules, [])
-        self.assertEqual(package.module_make_vars, {})
+        self.assertEqual(package.ext["module"].build, ".")
+        self.assertEqual(package.ext["module"].modules, [])
+        self.assertEqual(package.ext["module"].make_vars, {})
 
 class ModulesCrossCompileLikeAnythingElse(avocado.Test):
     def builder(self, architecture):
@@ -214,7 +214,7 @@ class AnAbiSurvivesTheBuildThatMadeIt(avocado.Test):
         builder = Builder(distro, {}, BuilderImage(distro, {}))
         packages = build.image.packages
         kernel = [p for p in packages if p.kernel][0]
-        module = [p for p in packages if p.module][0]
+        module = [p for p in packages if "module" in p.ext][0]
 
         # Nothing recorded, as on the second build of a specification.
         self.assertEqual(builder.abinames, {})
@@ -256,7 +256,7 @@ class AGraftSupersedesTheMetapackageItReplaces(avocado.Test):
         builder.abinames["linux"] = "6.18+unreleased"
         builder.metapackages[("amd64", "apt://linux-headers-amd64")] = \
             "linux-headers-6.12.101+deb13-amd64"
-        module = [p for p in build.image.packages if p.module][0]
+        module = [p for p in build.image.packages if "module" in p.ext][0]
         return seine.extends.module.resolved_kernels(builder, module, "amd64", build.image.packages)
 
     def test_the_graft_is_what_is_left(self):
@@ -413,7 +413,7 @@ class ModuleKernelsAreCheckedPerArchitecture(avocado.Test):
         except ValueError as e:
             self.fail("a module naming this architecture's kernels was "
                       "refused: %s" % e)
-        self.assertEqual(sorted(build.image.packages[0].module_kernels),
+        self.assertEqual(sorted(build.image.packages[0].ext["module"].kernels),
                          ["amd64", "arm64"])
 
 # What a kernel reference turns into, which decides the name of every
@@ -542,7 +542,7 @@ class GeneratedPackaging(avocado.Test):
         builder.packages = build.image.packages
         for key, value in (resolved or {}).items():
             builder.metapackages[key] = value
-        package = [p for p in build.image.packages if p.module][0]
+        package = [p for p in build.image.packages if "module" in p.ext][0]
         source = os.path.join(self.workdir, package.name)
         os.makedirs(source, exist_ok=True)
         # Packaging the tree came with, as the fetch would leave it.
@@ -840,7 +840,7 @@ class MakeVarsNameTheKernelBeingBuiltFor(avocado.Test):
         """)
         # The variables the rules set per kernel are what a value is for:
         # the kernel differs on every turn of the loop.
-        self.assertEqual(build.image.packages[0].module_make_vars,
+        self.assertEqual(build.image.packages[0].ext["module"].make_vars,
                          {"SYSSRC": "$KERNEL_SRC", "SYSOUT": "$KERNEL_OBJ"})
 
 class PackagingDecidesWhetherToRebuild(avocado.Test):

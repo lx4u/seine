@@ -7,6 +7,7 @@
 # service) while firmware is still in Setup Mode. No upstream to fetch.
 
 import os
+import types
 import uuid
 
 from seine.extends import parsing
@@ -19,7 +20,7 @@ SETTINGS = ["db", "dbx", "include-microsoft-keys", "include-standard-dbx",
             "kek", "pk", "reboot", "signing-key"]
 
 def is_uefi_keys_package(package):
-    return getattr(package, "uefi_keys", False)
+    return "uefi-keys" in package.ext
 
 def _vault_list(package, path, value, fallback):
     if value is None:
@@ -32,16 +33,9 @@ def _vault_list(package, path, value, fallback):
     return [parsing.vault_name(package, path, item) for item in value]
 
 def parse(package, extends):
-    settings = extends.get("uefi-keys", {})
-    package.uefi_keys = "uefi-keys" in extends
-    if package.uefi_keys == False:
-        package.uefi_keys_pk = None
-        package.uefi_keys_kek = []
-        package.uefi_keys_db = []
-        package.uefi_keys_dbx = []
-        package.uefi_keys_reboot = False
-        return
-
+    if "uefi-keys" not in extends:
+        return None
+    settings = extends["uefi-keys"]
     parsing.require_generated_source(package, "uefi-keys")
 
     # No fallback to 'image: secure-boot: private-key': package
@@ -57,23 +51,21 @@ def parse(package, extends):
             raise package._error(
                 "'extends: uefi-keys' needs 'pk' or a fallback "
                 "'signing-key' to name the Platform Key")
-        package.uefi_keys_pk = signing_key
-    else:
-        package.uefi_keys_pk = pk
+        pk = signing_key
 
-    package.uefi_keys_kek = _vault_list(
+    kek = _vault_list(
         package, "extends: uefi-keys: kek", settings.get("kek"), fallback)
-    if len(package.uefi_keys_kek) == 0:
+    if len(kek) == 0:
         raise package._error(
             "'extends: uefi-keys' needs 'kek' or a fallback 'signing-key'")
 
-    package.uefi_keys_db = _vault_list(
+    db = _vault_list(
         package, "extends: uefi-keys: db", settings.get("db"), fallback)
-    if len(package.uefi_keys_db) == 0:
+    if len(db) == 0:
         raise package._error(
             "'extends: uefi-keys' needs 'db' or a fallback 'signing-key'")
 
-    package.uefi_keys_dbx = _vault_list(
+    dbx = _vault_list(
         package, "extends: uefi-keys: dbx", settings.get("dbx"), [])
 
     # No bundled trust anchors ship in this checkout: refusing beats
@@ -92,8 +84,9 @@ def parse(package, extends):
             "Microsoft certificates in this checkout -- list them "
             "individually under 'kek:'/'db:' instead")
 
-    package.uefi_keys_reboot = parsing.parse_bool(
-        package, "uefi-keys", settings, "reboot")
+    return types.SimpleNamespace(
+        pk=pk, kek=kek, db=db, dbx=dbx,
+        reboot=parsing.parse_bool(package, "uefi-keys", settings, "reboot"))
 
 UEFI_KEYS_FILES = ("changelog", "control", "rules", "service",
                    "check-setup-mode", "provision-keys")
@@ -108,9 +101,9 @@ def uefi_keys_packaging():
 def _write_certs(vault, certdir, package):
     os.makedirs(certdir, exist_ok=True)
     templates.write(os.path.join(certdir, "pk.pem"),
-                    vault.sbsign_cert(package.uefi_keys_pk))
+                    vault.sbsign_cert(package.ext["uefi-keys"].pk))
     for role in ("kek", "db", "dbx"):
-        for i, name in enumerate(getattr(package, "uefi_keys_%s" % role)):
+        for i, name in enumerate(getattr(package.ext["uefi-keys"], role)):
             templates.write(os.path.join(certdir, "%s-%d.pem" % (role, i)),
                             vault.sbsign_cert(name))
 
@@ -125,7 +118,7 @@ def _install_commands(package):
     lines = ["cert-to-efi-sig-list -g $(OWNER_GUID) debian/certs/pk.pem "
             "debian/$(PACKAGE)/usr/share/$(PACKAGE)/pk.auth"]
     for role in ("kek", "db", "dbx"):
-        names = getattr(package, "uefi_keys_%s" % role)
+        names = getattr(package.ext["uefi-keys"], role)
         if len(names) == 0:
             continue
         esls = []
@@ -141,17 +134,18 @@ def _install_commands(package):
 
 # The order of kek/db/dbx counts: each is joined into one file as given.
 def digest_fields(builder, package, architecture):
+    settings = package.ext["uefi-keys"]
     return [
-        ("pk", str(package.uefi_keys_pk)),
-        ("kek", ",".join(package.uefi_keys_kek)),
-        ("db", ",".join(package.uefi_keys_db)),
-        ("dbx", ",".join(package.uefi_keys_dbx)),
-        ("reboot", str(package.uefi_keys_reboot)),
+        ("pk", str(settings.pk)),
+        ("kek", ",".join(settings.kek)),
+        ("db", ",".join(settings.db)),
+        ("dbx", ",".join(settings.dbx)),
+        ("reboot", str(settings.reboot)),
         ("packaging", uefi_keys_packaging()[1]),
     ]
 
 def extend(builder, package, sourcedir, epoch):
-    if package.uefi_keys == False:
+    if not is_uefi_keys_package(package):
         return
 
     debian = templates.reset_debian(sourcedir)
@@ -166,7 +160,7 @@ def extend(builder, package, sourcedir, epoch):
         # identical digests across runs.
         "owner_guid": str(uuid.uuid5(uuid.NAMESPACE_DNS, package.name)),
         "install_commands": _install_commands(package),
-        "reboot": package.uefi_keys_reboot,
+        "reboot": package.ext["uefi-keys"].reboot,
     }
     templates.render_files(
         debian, uefi_keys_packaging()[0], context,

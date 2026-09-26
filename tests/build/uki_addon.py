@@ -100,9 +100,9 @@ class UkiAddonExtension(avocado.Test):
     def test(self):
         build = parse_addon()
         package = addon_package(build)
-        self.assertEqual(package.uki_addon, True)
-        self.assertEqual(package.uki_addon_uki, "linux-uki-amd64")
-        self.assertEqual(package.uki_addon_cmdline, "quiet loglevel=0")
+        self.assertIn("uki-addon", package.ext)
+        self.assertEqual(package.ext["uki-addon"].uki, "linux-uki-amd64")
+        self.assertEqual(package.ext["uki-addon"].cmdline, "quiet loglevel=0")
         self.assertIsNone(package.source)
         self.assertEqual(package.upstream_version, "1")
 
@@ -229,12 +229,12 @@ class SigningKeyParsed(avocado.Test):
     def test(self):
         build = parse_addon(
             "                              signing-key: vault:pc-uki-secureboot")
-        self.assertEqual(addon_package(build).uki_addon_signing_key,
+        self.assertEqual(addon_package(build).ext["uki-addon"].signing_key,
                          "pc-uki-secureboot")
 
     def test_defaults_to_none(self):
         build = parse_addon()
-        self.assertEqual(addon_package(build).uki_addon_signing_key, None)
+        self.assertEqual(addon_package(build).ext["uki-addon"].signing_key, None)
 
 class SigningKeyNotAString(avocado.Test):
     def test(self):

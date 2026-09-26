@@ -920,7 +920,7 @@ class Builder:
     # Once per kernel, not per module: a second module against the same
     # kernel finds the first module's package already in the repository.
     def _cross_headers_built(self, package, architecture):
-        if package.module == False:
+        if "module" not in package.ext:
             return
         if self.cross(package, architecture) == False:
             return
@@ -1319,7 +1319,7 @@ class Builder:
         extends = {}
         if package.kernel:
             extends["kernel"] = self._kernel_excerpt(package)
-        if package.module:
+        if "module" in package.ext:
             extends["module"] = self._module_excerpt(package)
         if extends:
             excerpt["extends"] = extends
@@ -1358,15 +1358,15 @@ class Builder:
         return settings
 
     def _module_excerpt(self, package):
-        settings = {"build": package.module_build, "target": package.module_target}
-        if package.module_modules:
-            settings["modules"] = sorted(package.module_modules)
-        if package.module_build_depends:
-            settings["build-depends"] = sorted(package.module_build_depends)
-        if package.module_runtime_depends:
-            settings["runtime-depends"] = sorted(package.module_runtime_depends)
-        if package.module_make_vars:
-            settings["make-vars"] = dict(package.module_make_vars)
+        settings = {"build": package.ext["module"].build, "target": package.ext["module"].target}
+        if package.ext["module"].modules:
+            settings["modules"] = sorted(package.ext["module"].modules)
+        if package.ext["module"].build_depends:
+            settings["build-depends"] = sorted(package.ext["module"].build_depends)
+        if package.ext["module"].runtime_depends:
+            settings["runtime-depends"] = sorted(package.ext["module"].runtime_depends)
+        if package.ext["module"].make_vars:
+            settings["make-vars"] = dict(package.ext["module"].make_vars)
         return settings
 
     # Where an excerpt lives: same basename as its stamp, but in the
@@ -1622,7 +1622,7 @@ class Builder:
             # A module is the exception to preparing early: its
             # packaging depends on the ABI of the kernel it names, which
             # does not exist until that kernel is built.
-            if package.module:
+            if "module" in package.ext:
                 needs += depends
             prepare = "prepare:%s" % name
             tasks.append(Task(prepare,
@@ -2074,20 +2074,23 @@ class Builder:
             print("rebuilding '%s' for %s" % (package.source, architecture))
             self.build(package, workdir, dsc, epoch, architecture, output)
 
-            key = package.kernel_signing_key or package.module_signing_key
+            key = package.kernel_signing_key
+            if "module" in package.ext:
+                key = key or package.ext["module"].signing_key
             if key is not None:
                 self._sign_modules(output, key)
 
-            if package.uki_signing_key is not None:
-                self._sign_uki(output, package.uki_signing_key, epoch)
+            if uki.is_uki_package(package):
+                if package.ext["uki"].signing_key is not None:
+                    self._sign_uki(output, package.ext["uki"].signing_key, epoch)
 
-            if package.uki_addon:
+            if uki_addon.is_uki_addon_package(package):
                 addon_key = uki_addon.resolved_signing_key(self, package)
                 if addon_key is not None:
                     self._sign_uki(output, addon_key, epoch)
 
-            if package.uefi_keys:
-                self._sign_pk(output, package.uefi_keys_pk, epoch)
+            if uefi_keys.is_uefi_keys_package(package):
+                self._sign_pk(output, package.ext["uefi-keys"].pk, epoch)
 
             # Handed to the step that publishes it, since a dependent
             # package needs this one's .deb in the repository to build

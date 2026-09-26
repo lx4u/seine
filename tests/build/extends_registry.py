@@ -43,7 +43,7 @@ class KindsAreChecked(avocado.Test):
 
     def test_a_module_names_its_kernels_per_architecture(self):
         built = package("module", MODULE, source="apt://x", version="1")
-        self.assertEqual(built.module_kernels,
+        self.assertEqual(built.ext["module"].kernels,
                          {"amd64": ["apt://linux-headers-x"]})
 
     def test_the_extra_setting_is_named_in_the_error(self):
