@@ -1,6 +1,7 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
 import datetime
 import hashlib
 import json
@@ -152,6 +153,8 @@ class Imager:
         self.keep = source.options["keep"]
         self.verbose = source.options["verbose"]
         self.reproducible = source.options["reproducible"]
+        self._output_dir = None
+        self._hypervisor_path = None
 
     # Keeps only entries for files that made it into the tarball: getfattr
     # walked the live container filesystem, which still had packages later
@@ -1084,14 +1087,27 @@ class Imager:
         ]
 
     def _prepare(self):
+        if self.source._image_current():
+            return
         # Scratch dir for the unpacked appliance/tools, not kept.
         self._output_dir = tempfile.mkdtemp(dir=ContainerEngine.scratch(),
                                            prefix="imager-")
         self._hypervisor_path = self._prepare_appliance(self._output_dir)
 
     def _build(self):
+        digest = self.source._image_digest()
+        if self.source._image_current(digest):
+            print(f"disk image up to date ({utils.display_path(self.source._output)})")
+            return
         self.create()
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(self.source._image_digest_file())
         os.rename(self.source._image, self.source._output)
+        self.source._image = None
+        stamp = f"{self.source._image_digest_file()}.partial"
+        with open(stamp, "w") as f:
+            f.write(f"{digest}\n")
+        os.replace(stamp, self.source._image_digest_file())
 
     def create(self):
         ph = self.source.partitionHandler
