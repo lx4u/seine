@@ -239,9 +239,13 @@ class SBOM:
                     tar.extract(member, path=root)
 
     # Needs the tarball, not the disk image, for dpkg's package list.
+    # 'image._output' is None for an 'initrd:' build, which deploys
+    # '_initrd_output' instead -- fall back to that for the SBOM's name.
     def task(self, image):
         return Task("sbom",
-                    lambda: self.generate(image._tarball, image._output, image_obj=image),
+                    lambda: self.generate(image._tarball,
+                                          image._output or image._initrd_output,
+                                          image_obj=image),
                     needs=["rootfs"])
 
     def generate(self, tarball, output, image_obj=None, containers=None):
