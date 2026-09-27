@@ -353,6 +353,25 @@ class VaultSbsign(avocado.Test):
         self.assertIsNotNone(found)
         self.assertEqual(pe_cert.fingerprint(found), pe_cert.fingerprint(expected))
 
+    def test_pe_cert_handles_padded_authenticode_signature(self):
+        dev = DevVault()
+        self._devs.append(dev)
+        with open(EFI_FIXTURE, "rb") as f:
+            data = f.read()
+        signed = dev.sbsign_sign("db", data, 1767225600)
+        directory = pe_cert._security_directory(signed)
+        offset = directory[0]
+        length, revision, cert_type = struct.unpack_from("<IHH", signed, offset)
+        padded_signed = (signed[:offset] +
+                         struct.pack("<IHH", length + 4, revision, cert_type) +
+                         signed[offset + 8:offset + length] +
+                         b"\x00\x00\x00\x00" +
+                         signed[offset + length:])
+        expected = x509.load_pem_x509_certificate(dev.sbsign_cert("db").encode())
+        found = pe_cert.extract_signer_cert(padded_signed)
+        self.assertIsNotNone(found)
+        self.assertEqual(pe_cert.fingerprint(found), pe_cert.fingerprint(expected))
+
 
 class ImagerWiring(avocado.Test):
     def imager(self, secure_boot):
