@@ -29,6 +29,24 @@ def _security_directory(pe):
     offset, size = struct.unpack_from("<II", pe, entry)
     return (offset, size) if size else None
 
+# Authenticode WIN_CERTIFICATE structures are padded with null bytes to
+# align entries on 8-byte boundaries. Trim trailing padding by reading
+# the ASN.1 length of the outer TLV so strict DER parsers don't fail
+# with ExtraData.
+def _der_payload(data):
+    if len(data) < 2:
+        return data
+    if data[1] < 0x80:
+        total = 2 + data[1]
+    elif data[1] == 0x80:
+        return data
+    else:
+        num_octets = data[1] & 0x7f
+        if len(data) < 2 + num_octets:
+            return data
+        total = 2 + num_octets + int.from_bytes(data[2:2 + num_octets], "big")
+    return data[:total] if total <= len(data) else data
+
 # The leaf's subject never appears as another embedded cert's issuer;
 # falls back to the first cert if that heuristic can't tell.
 def _leaf(certs):
@@ -46,8 +64,8 @@ def extract_signer_cert(pe):
     while offset < end:
         length, revision, cert_type = struct.unpack_from("<IHH", pe, offset)
         if cert_type == WIN_CERT_TYPE_PKCS_SIGNED_DATA:
-            certs = pkcs7.load_der_pkcs7_certificates(
-                pe[offset + 8:offset + length])
+            data = _der_payload(pe[offset + 8:offset + length])
+            certs = pkcs7.load_der_pkcs7_certificates(data)
             if certs:
                 return _leaf(certs)
         offset += (length + 7) & ~7  # entries are 8-byte aligned
