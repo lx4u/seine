@@ -275,3 +275,55 @@ class InstalledPackagesAreReadFromDpkgStatus(avocado.Test):
         with open(garbage, "w") as f:
             f.write("this is not a tarball")
         self.assertEqual(installed_packages(garbage), [])
+
+class SBOMIsReusedWhileRootfsIsUnchanged(avocado.Test):
+    def setUp(self):
+        self.tar = tarball(os.path.join(self.workdir, "root.tar"))
+        self.image = os.path.join(self.workdir, "pc-image.img")
+        self.sbom_path = os.path.join(self.workdir, "pc-image-sbom.spdx.json")
+        self.digest_path = self.tar + ".digest"
+        with open(self.digest_path, "w") as f:
+            f.write("d19e57\n")
+        with open(self.sbom_path, "w") as f:
+            f.write("{}")
+
+    def test_sbom_is_reused_when_current(self):
+        class MockImage:
+            spec = {"distribution": DISTRO}
+            def _rootfs_digest(self, vendor_digest):
+                return "d19e57"
+            def _rootfs_current(self, digest):
+                return True
+
+        with Engine(self) as engine:
+            SBOM(DISTRO, {"sbom": True}).generate(
+                self.tar, self.image, image_obj=MockImage())
+        self.assertEqual(engine.commands, [])
+
+    def test_sbom_is_rebuilt_when_rootfs_changes(self):
+        class MockImage:
+            spec = {"distribution": DISTRO}
+            def _rootfs_digest(self, vendor_digest):
+                return "different"
+            def _rootfs_current(self, digest):
+                return False
+
+        with Engine(self) as engine:
+            SBOM(DISTRO, {"sbom": True}).generate(
+                self.tar, self.image, image_obj=MockImage())
+        self.assertGreater(len(engine.commands), 0)
+
+    def test_sbom_is_built_when_file_is_missing(self):
+        os.unlink(self.sbom_path)
+        class MockImage:
+            spec = {"distribution": DISTRO}
+            def _rootfs_digest(self, vendor_digest):
+                return "d19e57"
+            def _rootfs_current(self, digest):
+                return True
+
+        with Engine(self) as engine:
+            SBOM(DISTRO, {"sbom": True}).generate(
+                self.tar, self.image, image_obj=MockImage())
+        self.assertGreater(len(engine.commands), 0)
+
