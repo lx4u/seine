@@ -505,5 +505,13 @@ class ImagePin(avocado.Test):
         self.assertEqual(shipped[-1].split()[1], DevVault.IMAGE)
 
 
+class EnsureImage(avocado.Test):
+    def test_missing_image_returns_none_without_inspect_error(self):
+        from seine.vault.dev import _image_label, CUSTOM_IMAGE
+        with mock.patch.object(ContainerEngine, "hasImage", return_value=False) as mock_has:
+            self.assertIsNone(_image_label())
+            mock_has.assert_called_once_with(CUSTOM_IMAGE)
+
+
 if __name__ == "__main__":
     avocado.main()
