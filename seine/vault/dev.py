@@ -96,19 +96,14 @@ def ensure_image():
         # Installed package, no source checkout to build or hash from:
         # trust whatever the bundled tarball imported.
         import_bundled()
-        ContainerEngine.check_output(["image", "inspect", CUSTOM_IMAGE])
+        if not ContainerEngine.hasImage(CUSTOM_IMAGE):
+            raise VaultError("bundled vault image not found and no source to build from")
         return
-    try:
-        if _image_label() == _sources_digest():
-            return
-    except (OSError, subprocess.CalledProcessError):
-        pass
+    if _image_label() == _sources_digest():
+        return
     import_bundled()
-    try:
-        if _image_label() == _sources_digest():
-            return
-    except (OSError, subprocess.CalledProcessError):
-        pass
+    if _image_label() == _sources_digest():
+        return
     ContainerEngine.run([
         "build", "--label", "%s=%s" % (SOURCES_LABEL, _sources_digest()),
         "--label", "%s=%s" % (KIND_LABEL, VAULT_KIND),
@@ -116,9 +111,7 @@ def ensure_image():
 
 
 def _image_label():
-    return ContainerEngine.check_output(
-        ["image", "inspect", "-f", "{{index .Labels \"%s\"}}" % SOURCES_LABEL,
-         CUSTOM_IMAGE]).decode().strip()
+    return ContainerEngine.imageLabel(CUSTOM_IMAGE, SOURCES_LABEL)
 
 
 # What the image was built from: plugin sources plus the Dockerfile
