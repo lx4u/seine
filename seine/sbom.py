@@ -204,6 +204,34 @@ class SBOM:
             output = output + '-sbom'
         return output
 
+    def current(self, tarball, output, image_obj=None):
+        if self.options.get("rebuild"):
+            return False
+        if not isinstance(output, str) and hasattr(output, "_output"):
+            image_obj = output
+            output = output._output
+        output_file = self._output_file(output)
+        if output_file is None:
+            return True
+        sbom_path = output_file + ".spdx.json"
+        if not os.path.isfile(sbom_path):
+            return False
+        if not tarball or not os.path.isfile(tarball):
+            return False
+        digest_file = f"{tarball}.digest"
+        if not os.path.isfile(digest_file):
+            return False
+        if image_obj is not None and hasattr(image_obj, "_rootfs_digest"):
+            try:
+                from seine import vendor
+                distro = image_obj.spec["distribution"]
+                vendor_digest = vendor.offline_dockerfile_digest(image_obj.spec, distro)
+                digest = image_obj._rootfs_digest(vendor_digest)
+                return image_obj._rootfs_current(digest)
+            except Exception:
+                return False
+        return True
+
     def _extract(self, tarball, root):
         with tarfile.open(tarball, "r") as tar:
             for member in tar:
@@ -222,6 +250,11 @@ class SBOM:
             output = output._output
         output_file = self._output_file(output)
         if output_file is not None:
+            target_sbom = output_file + ".spdx.json"
+            if self.current(tarball, output, image_obj=image_obj):
+                print(f"SBOM up to date ({target_sbom})")
+                return
+
             dir = os.path.dirname(output_file)
             with tempfile.TemporaryDirectory(dir=ContainerEngine.scratch()) as root:
                 self._extract(tarball, root)

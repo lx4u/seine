@@ -857,8 +857,18 @@ class Image:
                 if self._rootfs_current(rootfs_digest):
                     already_built.append(("rootfs", os.path.basename(self._rootfs)))
                     hidden_tasks.add("rootfs")
+                    if self.options.get("sbom"):
+                        sbom_inst = SBOM(distro, self.options)
+                        if sbom_inst.current(self._rootfs, self._output, image_obj=self):
+                            sbom_file = sbom_inst._output_file(self._output)
+                            if sbom_file:
+                                already_built.append(("sbom", os.path.basename(sbom_file + ".spdx.json")))
+                                hidden_tasks.add("sbom")
             except Exception:
                 pass
+
+        if not self.options.get("sbom"):
+            hidden_tasks.add("sbom")
 
         all_tasks = self.tasks()
         names = {t.name for t in all_tasks}
