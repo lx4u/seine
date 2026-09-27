@@ -301,18 +301,31 @@ def is_empty_barrier(name, names):
 # Prints the run order run() would take, without running anything.
 # An empty 'packages' barrier, and any mention of it in an 'after'
 # list, is left out.
-def describe(tasks):
+def describe(tasks, reasons=None, hidden=None):
     tasks = ordered(tasks)
     names = {t.name for t in tasks}
-    hidden = {t.name for t in tasks if is_empty_barrier(t.name, names)}
+    hide = {t.name for t in tasks if is_empty_barrier(t.name, names)}
+    if hidden:
+        hide |= set(hidden)
     for task in tasks:
-        if task.name in hidden:
+        if task.name in hide:
             continue
-        needs = [need for need in task.needs if need not in hidden]
+        needs = [need for need in task.needs if need not in hide]
         if len(needs) == 0:
             print("  %s" % task.name)
         else:
             print("  %-24s after %s" % (task.name, ", ".join(needs)))
+        if reasons and task.name in reasons:
+            r = reasons[task.name]
+            if isinstance(r, (list, tuple)):
+                if len(r) == 1:
+                    print("    why: %s" % r[0])
+                elif len(r) > 1:
+                    print("    why:")
+                    for item in r:
+                        print("      - %s" % item)
+            elif isinstance(r, str) and r.strip():
+                print("    why: %s" % r)
 
 def _capacity(cls, jobs, resources):
     return jobs if resources is None else resources.get(cls, jobs)

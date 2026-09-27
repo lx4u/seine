@@ -2294,7 +2294,7 @@ class MissReasonExplainsWhatChanged(DigestExcerpt):
                       options: [foo]
         """).image.packages[0]
         builder.stamps([second])
-        self.assertEqual(builder.miss_reason(second, "amd64"), ["options changed"])
+        self.assertEqual(builder.miss_reason(second, "amd64"), ["build options changed"])
 
         # Forgetting the superseded stamp drops its recipe too, same as
         # its excerpt -- nothing left to explain a build nobody kept.

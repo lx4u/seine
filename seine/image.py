@@ -648,6 +648,149 @@ class Image:
         self._size_partitions()
         self._empty_disk()
 
+    # Returns a mapping of task name to human-readable explanation of why it runs.
+    def reasons(self, builder=None):
+        distro = self.spec["distribution"]
+        if self.hostBootstrap is None:
+            from seine import vendor
+            vendor_digest = vendor.offline_dockerfile_digest(self.spec, distro)
+            self.hostBootstrap = HostBootstrap(distro, self.options,
+                                               vendor_digest=vendor_digest)
+        if self.targetBootstrap is None:
+            self.targetBootstrap = TargetBootstrap(distro, self.options)
+        self.targetBootstrap.hostBootstrap = self.hostBootstrap
+        if builder is None:
+            builder = packages.Builder(
+                distro, self.options, BuilderImage(distro, self.options),
+                redactions(self.spec), vault_defaults=self._vault_defaults(),
+                sign_key_default=self._sign_key_default())
+
+        reasons = {}
+        try:
+            if self.hostBootstrap.current(self.hostBootstrap.dockerfile()):
+                reasons["bootstrap-host"] = "cached in local container storage"
+            else:
+                if ContainerEngine.imageLabel(self.hostBootstrap.name, INPUTS_LABEL) is None:
+                    reasons["bootstrap-host"] = (
+                        "container '%s' not found in local storage"
+                        % self.hostBootstrap.name)
+                else:
+                    reasons["bootstrap-host"] = (
+                        "container inputs changed (distribution, apt sources, or vendor cache)")
+        except Exception:
+            pass
+
+        try:
+            hb_name = self.hostBootstrap.name if self.hostBootstrap else None
+            if self.targetBootstrap.current(self.targetBootstrap.dockerfile(), base=hb_name):
+                reasons["bootstrap-target"] = "cached in local container storage"
+            else:
+                if ContainerEngine.imageLabel(self.targetBootstrap.name, INPUTS_LABEL) is None:
+                    reasons["bootstrap-target"] = (
+                        "container '%s' not found in local storage"
+                        % self.targetBootstrap.name)
+                else:
+                    reasons["bootstrap-target"] = (
+                        "target bootstrap inputs changed (base feed or architecture)")
+        except Exception:
+            pass
+
+        builder_img = BuilderImage(distro, self.options)
+        try:
+            hb_name = self.hostBootstrap.name if self.hostBootstrap else None
+            if builder_img.current(builder_img.dockerfile(self.hostBootstrap), base=hb_name):
+                reasons["packages-prepare"] = (
+                    "prepares local apt repository index (builder container is cached)")
+            else:
+                reasons["packages-prepare"] = (
+                    "prepares builder container and local apt repository index")
+        except Exception:
+            reasons["packages-prepare"] = (
+                "prepares builder container and local apt repository index")
+
+        reasons["packages"] = "records package cache hits and gates downstream tasks"
+        reasons["vendor"] = "fetches vendor artifacts for offline repository"
+
+        stamps = builder.stamps(self.packages)
+        pending_names = set()
+        for pkg, arch, stamp in stamps:
+            if not os.path.isfile(stamp) or self.options.get("rebuild"):
+                pending_names.add(pkg.name)
+                step = "package:%s" % builder.label(pkg, arch)
+                miss = builder.miss_reason(pkg, arch)
+                if miss:
+                    reasons[step] = miss
+                else:
+                    reasons[step] = "package needs rebuilding"
+
+        for pkg in self.packages:
+            if pkg.name in pending_names:
+                reasons["prepare:%s" % pkg.name] = (
+                    "unpacks source and applies patches/fragments for %s" % pkg.name)
+                reasons["deploy:%s" % pkg.name] = (
+                    "publishes rebuilt .debs for %s to local repository" % pkg.name)
+                fetch_key = builder._fetch_key(pkg)
+                if fetch_key:
+                    name = builder._task_name("fetch", pkg.source_name, fetch_key, {})
+                    reasons[name] = "downloads source for %s" % pkg.source_name
+                upstream_key = builder._upstream_key(pkg)
+                if upstream_key:
+                    name = builder._task_name("fetch-upstream", pkg.kernel_upstream.name, upstream_key, {})
+                    reasons[name] = "downloads upstream kernel source for %s" % pkg.kernel_upstream.name
+
+        from seine import vendor
+        vendor_digest = vendor.offline_dockerfile_digest(self.spec, distro)
+        if self._from is None:
+            for playbook in self.spec.get("playbook") or []:
+                if isinstance(playbook, dict) and "baseline" in playbook:
+                    self._from = playbook["baseline"]
+                    break
+        if self._from is None and self.targetBootstrap:
+            self._from = self.targetBootstrap.name
+
+        try:
+            rootfs_digest = self._rootfs_digest(vendor_digest)
+            if self._rootfs_current(rootfs_digest):
+                reasons["rootfs"] = "deployed root file-system is up to date"
+            elif len(pending_names) > 0:
+                reasons["rootfs"] = (
+                    "assembles root filesystem with rebuilt package(s): %s"
+                    % ", ".join(sorted(pending_names)))
+            elif os.path.isfile(self._rootfs):
+                reasons["rootfs"] = (
+                    "assembles root filesystem (playbooks or inputs changed since last build)")
+            else:
+                reasons["rootfs"] = "assembles root filesystem from target bootstrap"
+        except Exception:
+            if len(pending_names) > 0:
+                reasons["rootfs"] = (
+                    "assembles root filesystem with rebuilt package(s): %s"
+                    % ", ".join(sorted(pending_names)))
+            else:
+                reasons["rootfs"] = "assembles root filesystem from target bootstrap"
+
+        if "initrd" in self.spec:
+            reasons["deploy-initrd"] = "extracts initrd from built root filesystem"
+
+        if "image" in self.spec and not self.options.get("rootfs_only"):
+            output_name = utils.display_path(self._output) if self._output else "disk image"
+            reasons["disk"] = "prepares disk image and partitions for '%s'" % output_name
+            reasons["appliance"] = "prepares libguestfs appliance for target architecture"
+            reasons["image"] = "populates disk partitions from root filesystem and installs bootloader"
+
+        reasons["sbom"] = "generates software bill of materials (SBOM)"
+
+        if len(self.subbuilds) > 0:
+            from seine import multiconfig
+            labels = {name: multiconfig._label(build, name=name)
+                      for name, build in self.subbuilds.items()}
+            for name, build in self.subbuilds.items():
+                group_label = labels[name]
+                for task_name, r in build.image.reasons().items():
+                    reasons["%s:%s" % (group_label, task_name)] = r
+
+        return reasons
+
     # Prints the same task graph build() would run, instead of running it.
     def plan(self):
         if self.spec is None:
@@ -659,28 +802,91 @@ class Image:
         elif self.options.get("rootfs_only"):
             what = "the root file-system"
         else:
-            what = "'%s'" % self._output
-        # Only mention parallelism when it's more than 1: "1 at a time" is
-        # the default and says nothing.
-        jobs = self.options.get("jobs", 1)
-        print("would build %s for %s/%s%s"
-              % (what, distro["release"], distro["architecture"],
-                 ", %d steps at a time" % jobs if jobs > 1 else ""))
+            what = "'%s'" % utils.display_path(self._output)
 
         builder = packages.Builder(
             distro, self.options, BuilderImage(distro, self.options),
             redactions(self.spec), vault_defaults=self._vault_defaults(),
             sign_key_default=self._sign_key_default())
-        current = builder.current(self.packages)
-        if len(current) > 0:
+        already_built = []
+        hidden_tasks = set()
+        rebuild = self.options.get("rebuild", False)
+
+        if self.hostBootstrap is None:
+            from seine import vendor
+            vendor_digest = vendor.offline_dockerfile_digest(self.spec, distro)
+            self.hostBootstrap = HostBootstrap(distro, self.options,
+                                               vendor_digest=vendor_digest)
+        if self.targetBootstrap is None:
+            self.targetBootstrap = TargetBootstrap(distro, self.options)
+        self.targetBootstrap.hostBootstrap = self.hostBootstrap
+
+        if not rebuild:
+            try:
+                if self.hostBootstrap.current(self.hostBootstrap.dockerfile()):
+                    already_built.append(("bootstrap-host", self.hostBootstrap.name))
+                    hidden_tasks.add("bootstrap-host")
+            except Exception:
+                pass
+
+            try:
+                hb_name = self.hostBootstrap.name if self.hostBootstrap else None
+                if self.targetBootstrap.current(self.targetBootstrap.dockerfile(), base=hb_name):
+                    already_built.append(("bootstrap-target", self.targetBootstrap.name))
+                    hidden_tasks.add("bootstrap-target")
+            except Exception:
+                pass
+
+        for package, architecture, stamp in builder.current(self.packages):
+            already_built.append((builder.label(package, architecture),
+                                  os.path.basename(stamp)))
+
+        if not rebuild:
+            try:
+                from seine import vendor
+                vendor_digest = vendor.offline_dockerfile_digest(self.spec, distro)
+                if self._from is None:
+                    for playbook in self.spec.get("playbook") or []:
+                        if isinstance(playbook, dict) and "baseline" in playbook:
+                            self._from = playbook["baseline"]
+                            break
+                if self._from is None and self.targetBootstrap:
+                    self._from = self.targetBootstrap.name
+
+                rootfs_digest = self._rootfs_digest(vendor_digest)
+                if self._rootfs_current(rootfs_digest):
+                    already_built.append(("rootfs", os.path.basename(self._rootfs)))
+                    hidden_tasks.add("rootfs")
+            except Exception:
+                pass
+
+        all_tasks = self.tasks()
+        names = {t.name for t in all_tasks}
+        hide = {t.name for t in all_tasks if tasks.is_empty_barrier(t.name, names)} | hidden_tasks
+        remaining = [t for t in all_tasks if t.name not in hide]
+
+        jobs = self.options.get("jobs", 1)
+        if len(remaining) > 0:
+            print("would build %s for %s/%s%s"
+                  % (what, distro["release"], distro["architecture"],
+                     ", %d steps at a time" % jobs if jobs > 1 else ""))
+        else:
+            print("up to date: %s for %s/%s"
+                  % (what, distro["release"], distro["architecture"]))
+
+        if len(already_built) > 0:
             print("\nalready built, and not built again:")
-            for package, architecture, stamp in current:
-                print("  %-30s %s" % (builder.label(package, architecture),
-                                      os.path.basename(stamp)))
+            width = max([len(label) for label, _ in already_built] + [30])
+            for label, identifier in already_built:
+                print("  %-*s %s" % (width, label, identifier))
+
+        if len(remaining) > 0:
+            print("\nsteps:")
+            tasks.describe(all_tasks, reasons=self.reasons(builder), hidden=hidden_tasks)
+
+        if len(already_built) > 0:
             print("\n'--rebuild' builds them anyway.")
 
-        print("\nsteps:")
-        tasks.describe(self.tasks())
         return 0
 
     # One directory per specification, a run of it per build: what it wrote

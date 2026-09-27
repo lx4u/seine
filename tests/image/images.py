@@ -797,7 +797,9 @@ class CarriedCache(avocado.Test):
                              + self.specification(built) + [changed],
                              "plan-changed")
         self.assertIn("package:busybox", planned)
-        self.assertNotIn("already built, and not built again", planned)
+        # The host bootstrap is listed as built; busybox must not be.
+        built = planned.partition("already built, and not built again")[2]
+        self.assertNotIn("busybox", built.partition("steps:")[0])
 
 # The two releases whose sbuild reads its cache directory differently. The
 # specification is the same one either way: what is being tested is what a

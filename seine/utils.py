@@ -567,3 +567,16 @@ PRIVILEGED_RUN_OPTIONS = [
     "--security-opt", "unmask=ALL",
 ]
 
+def display_path(path, start=None):
+    if not path:
+        return path
+    try:
+        base = os.path.abspath(start or os.getcwd())
+        abs_path = os.path.abspath(path)
+        if abs_path == base or abs_path.startswith(base.rstrip(os.sep) + os.sep):
+            return os.path.relpath(abs_path, base)
+        return path
+    except (ValueError, Exception):
+        return path
+
+
