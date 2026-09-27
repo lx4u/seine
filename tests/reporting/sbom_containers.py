@@ -14,7 +14,7 @@ sys.path.append(path_to_sources)
 from seine import sbom as sbom_module
 from seine.bugs import sources_from_sbom
 from seine.containers.spec import ContainerImage
-from seine.sbom import SBOM, scan_container, splice_container_sbom
+from seine.sbom import SBOM, scan_container, splice_container_sbom, splice_go_sboms
 
 
 class MockContainerEngine:
@@ -224,6 +224,88 @@ class ContainerSBOMSplice(avocado.Test):
         # Should only contain host packages ('Debian', 'bash'), not container 'busybox' or 'alpine:3.19'
         self.assertEqual(sources, ["Debian", "bash"])
 
+
+class GoSBOMSplice(avocado.Test):
+    def test_splices_into_the_package_found_by_name(self):
+        sbom_path = sample_root_sbom(self.workdir)
+        fragment = {
+            "packages": [{
+                "SPDXID": "SPDXRef-Package-go-module-foo-bar",
+                "name": "github.com/foo/bar",
+                "versionInfo": "v1.2.3",
+            }],
+            "relationships": [],
+        }
+        splice_go_sboms(sbom_path, [("bash", fragment)])
+
+        with open(sbom_path) as f:
+            result = json.load(f)
+
+        pkg_ids = [p["SPDXID"] for p in result["packages"]]
+        self.assertIn("SPDXRef-bash-amd64-Package-go-module-foo-bar", pkg_ids)
+        contains = any(
+            r["spdxElementId"] == "SPDXRef-bash-amd64"
+            and r["relatedSpdxElement"] == "SPDXRef-bash-amd64-Package-go-module-foo-bar"
+            and r["relationshipType"] == "CONTAINS"
+            for r in result["relationships"])
+        self.assertTrue(contains)
+
+    # debsbom emits both a source-package node and a binary-package node
+    # sharing the same name: the modules belong on the binary, the thing
+    # actually shipping them, not the abstract source package.
+    def test_prefers_the_binary_package_over_the_source_one(self):
+        sbom_path = sample_root_sbom(self.workdir)
+        with open(sbom_path) as f:
+            spdx = json.load(f)
+        spdx["packages"].append({
+            "SPDXID": "SPDXRef-bash-srcpkg",
+            "name": "bash",
+            "primaryPackagePurpose": "SOURCE",
+        })
+        for p in spdx["packages"]:
+            if p["SPDXID"] == "SPDXRef-bash-amd64":
+                p["primaryPackagePurpose"] = "LIBRARY"
+        with open(sbom_path, "w") as f:
+            json.dump(spdx, f)
+
+        fragment = {
+            "packages": [{"SPDXID": "SPDXRef-Package-go-module-foo-bar",
+                         "name": "github.com/foo/bar"}],
+            "relationships": [],
+        }
+        splice_go_sboms(sbom_path, [("bash", fragment)])
+
+        with open(sbom_path) as f:
+            result = json.load(f)
+        contains_from_source = [
+            r for r in result["relationships"]
+            if r["spdxElementId"] == "SPDXRef-bash-srcpkg"
+            and r["relationshipType"] == "CONTAINS"]
+        self.assertEqual(contains_from_source, [])
+        contains_from_binary = [
+            r for r in result["relationships"]
+            if r["spdxElementId"] == "SPDXRef-bash-amd64"
+            and r["relationshipType"] == "CONTAINS"]
+        self.assertEqual(len(contains_from_binary), 1)
+
+    def test_an_unmatched_package_name_is_skipped_not_an_error(self):
+        sbom_path = sample_root_sbom(self.workdir)
+        splice_go_sboms(sbom_path,
+                        [("does-not-exist", {"packages": [], "relationships": []})])
+        with open(sbom_path) as f:
+            result = json.load(f)
+        self.assertEqual(len(result["packages"]), 2)
+
+class SBOMCollectsGoFragments(avocado.Test):
+    def test(self):
+        root = os.path.join(self.workdir, "root")
+        doc_dir = os.path.join(root, "usr", "share", "doc", "k3s")
+        os.makedirs(doc_dir)
+        with open(os.path.join(doc_dir, "sbom.spdx.json"), "w") as f:
+            json.dump({"packages": []}, f)
+
+        fragments = SBOM({"release": "bookworm", "architecture": "amd64"})._collect_go_sboms(root)
+        self.assertEqual(fragments, [("k3s", {"packages": []})])
 
 class ScanContainerExecution(avocado.Test):
     def test_scan_container_invokes_engine(self):

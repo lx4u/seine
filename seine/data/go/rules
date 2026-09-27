@@ -71,6 +71,17 @@ override_dh_auto_install:
 	mkdir -p debian/[[ name ]][[ link.directory ]]
 	ln -s [[ link.target ]] debian/[[ name ]][[ link.path ]]
 [% endfor %]
+[% if license_scan %]
+	mkdir -p debian/[[ name ]]/usr/share/doc/[[ name ]]
+	install -m 0644 debian/go-sbom.spdx.json debian/[[ name ]]/usr/share/doc/[[ name ]]/sbom.spdx.json
+[% endif %]
 
 override_dh_auto_clean:
 	rm -rf $(CURDIR)/.gocache $(CURDIR)/.gopath $(CURDIR)/.gobuild
+
+[% if license_scan %]
+# Left uncompressed: seine/sbom.py matches its exact name to splice it
+# into the image-level SBOM.
+override_dh_compress:
+	dh_compress -Xsbom.spdx.json
+[% endif %]
