@@ -48,6 +48,9 @@ def print_trust_recap(entries):
 # tarballs are not reused.
 ROOTFS_REVISION = 1
 
+# Bump when the way the disk image is built changes.
+IMAGE_REVISION = 1
+
 # Sections that do not change the root file-system. Editing them must
 # not rebuild it.
 DISK_ONLY = ("image", "initrd", "containers", "multiconfig", "test", "tests",
@@ -286,6 +289,48 @@ class Image:
         try:
             with open(self._digest_file()) as f:
                 return f.read().strip() == digest and os.path.isfile(self._rootfs)
+        except OSError:
+            return False
+
+    def _image_digest_file(self):
+        return f"{self._output}.digest" if self._output else None
+
+    def _image_digest(self, vendor_digest=None):
+        if not self._output or self.spec is None:
+            return ""
+        if vendor_digest is None:
+            from seine import vendor
+            distro = self.spec["distribution"]
+            vendor_digest = vendor.offline_dockerfile_digest(self.spec, distro)
+        parts = [
+            IMAGE_REVISION,
+            analyze.spec_digest(self.spec),
+            self._rootfs_digest(vendor_digest),
+        ]
+        if len(self.subbuilds) > 0:
+            for source, build in sorted(self.subbuilds.items()):
+                s_distro = build.spec["distribution"]
+                from seine import vendor
+                s_vdigest = vendor.offline_dockerfile_digest(build.spec, s_distro)
+                parts.append(f"{source}:{build.image._rootfs_digest(s_vdigest)}")
+        return hashlib.sha256("\n".join(map(str, parts)).encode()).hexdigest()
+
+    def _image_current(self, digest=None):
+        if self.options.get("rebuild"):
+            return False
+        if not self._output or not os.path.isfile(self._output):
+            return False
+        digest_file = self._image_digest_file()
+        if not digest_file or not os.path.isfile(digest_file):
+            return False
+        if digest is None:
+            try:
+                digest = self._image_digest()
+            except Exception:
+                return False
+        try:
+            with open(digest_file) as f:
+                return f.read().strip() == digest and os.path.isfile(self._output)
         except OSError:
             return False
 
@@ -645,6 +690,8 @@ class Image:
         return named
 
     def _prepare_disk(self):
+        if self._image_current():
+            return
         self._size_partitions()
         self._empty_disk()
 
@@ -864,6 +911,13 @@ class Image:
                             if sbom_file:
                                 already_built.append(("sbom", os.path.basename(sbom_file + ".spdx.json")))
                                 hidden_tasks.add("sbom")
+
+                if "image" in self.spec and not self.options.get("rootfs_only"):
+                    if self._image_current():
+                        already_built.append(("image", os.path.basename(self._output)))
+                        hidden_tasks.add("disk")
+                        hidden_tasks.add("appliance")
+                        hidden_tasks.add("image")
             except Exception:
                 pass
 

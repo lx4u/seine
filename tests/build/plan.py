@@ -478,6 +478,30 @@ class PlanExplainsWhyTasksRun(avocado.Test):
             HostBootstrap.current = orig_host_current
             TargetBootstrap.current = orig_target_current
 
+    def test_plan_reports_cached_image(self):
+        build = BuildCmd()
+        build.loads(SPEC)
+        build.parse()
+        orig_current = build.image._image_current
+        try:
+            build.image._image_current = lambda digest=None: True
+            said = io.StringIO()
+            sys_stdout = sys.stdout
+            try:
+                sys.stdout = said
+                build.image.plan()
+            finally:
+                sys.stdout = sys_stdout
+            out = said.getvalue()
+            self.assertIn("already built, and not built again", out)
+            self.assertIn("image", out)
+            steps_section = out.split("steps:")[1] if "steps:" in out else ""
+            self.assertNotIn("disk", steps_section)
+            self.assertNotIn("appliance", steps_section)
+            self.assertNotIn("image", steps_section)
+        finally:
+            build.image._image_current = orig_current
+
     def test_plan_omits_steps_when_nothing_to_build(self):
         build = BuildCmd()
         build.loads(SPEC)
@@ -486,11 +510,12 @@ class PlanExplainsWhyTasksRun(avocado.Test):
         orig_host = HostBootstrap.current
         orig_target = TargetBootstrap.current
         orig_rootfs = build.image._rootfs_current
+        orig_image = build.image._image_current
         try:
             HostBootstrap.current = lambda self, df, base=None: True
             TargetBootstrap.current = lambda self, df, base=None: True
             build.image._rootfs_current = lambda digest: True
-            build.image.own_tasks = lambda **kw: []
+            build.image._image_current = lambda digest=None: True
             said = io.StringIO()
             sys_stdout = sys.stdout
             try:
@@ -506,6 +531,7 @@ class PlanExplainsWhyTasksRun(avocado.Test):
             HostBootstrap.current = orig_host
             TargetBootstrap.current = orig_target
             build.image._rootfs_current = orig_rootfs
+            build.image._image_current = orig_image
 
     def test_plan_display_path_relative_when_under_cwd(self):
         from seine.utils import display_path
