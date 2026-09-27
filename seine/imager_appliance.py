@@ -19,6 +19,11 @@ DEFAULT_PACKAGES = {
 # Files libguestfs expects in a LIBGUESTFS_PATH "fixed appliance" directory.
 APPLIANCE_FILES = ["kernel", "initrd", "root", "README.fixed"]
 
+# Tag segment for a kernel package: 'linux-image-amd64' -> 'amd64'.
+def kernel_slug(package):
+    prefix = "linux-image-"
+    return package[len(prefix):] if package.startswith(prefix) else package
+
 # Debian multiarch triplet and supermin --host-cpu value per architecture.
 ARCH_INFO = {
     "amd64": {"triplet": "x86_64-linux-gnu",   "host_cpu": "x86_64"},
@@ -60,16 +65,8 @@ CONTAINER_KMOD_HOSTFILES = [
     "/lib/modules/*/kernel/fs/9p/*",
 ]
 
-CONTAINERD_APT_PACKAGES = ["containerd", "runc"]
-CONTAINERD_SUPERMIN_PACKAGES = ["containerd", "runc"]
-CONTAINERD_HOSTFILES = [
-    "/usr/bin/containerd",
-    "/usr/bin/containerd-shim-runc-v2",
-    "/usr/bin/runc",
-    "/usr/bin/ctr",
-    "/usr/bin/bbolt-normalize",
-] + CONTAINER_KMOD_HOSTFILES
-
+# Always installed, even with no containers: docker.io already pulls
+# in containerd/runc/ctr, so this covers both container targets.
 DOCKER_APT_PACKAGES = [
     "docker.io", "containerd", "runc", "iptables"
 ]
@@ -85,9 +82,9 @@ DOCKER_HOSTFILES = [
 ] + CONTAINER_KMOD_HOSTFILES
 CONTAINER_MEMSIZE = 2048
 
-# One custom appliance per (source, release, architecture), built the
-# same way for every architecture. Bundles the fixed appliance and the
-# extra tool binaries in one container, so we build it only once.
+# One appliance per (source, release, architecture, kernel). Images
+# that share those four values share one cached appliance, instead of
+# rebuilding it each time an image's container settings differ.
 class ImagerAppliance(Bootstrap):
     kind = IMAGER_KIND
 
@@ -146,9 +143,9 @@ class ImagerAppliance(Bootstrap):
         return CONTAINER_MEMSIZE if self.has_containers() else None
 
     def defaultName(self):
-        prefix = "imager-appliance-containers" if self.has_containers() else "imager-appliance"
-        return os.path.join(prefix, self.distro["source"],
-                            self.distro["release"], self.distro["architecture"])
+        return os.path.join("imager-appliance", self.distro["source"],
+                            self.distro["release"], self.distro["architecture"],
+                            kernel_slug(self.package))
 
     def create(self):
         arch = self.distro["architecture"]
@@ -157,49 +154,33 @@ class ImagerAppliance(Bootstrap):
             raise NotImplementedError(
                 "building the imager appliance for architecture "
                 "'%s' is not yet supported (unknown multiarch triplet)" % arch)
-        has_docker = self.has_docker_target()
-        has_containers = self.has_containers()
-
-        if has_docker:
-            container_apt_packages = (
-                DOCKER_APT_PACKAGES + (["docker-cli"] if self.distro["release"] != "bookworm" else [])
-            )
-            container_supermin = DOCKER_SUPERMIN_PACKAGES
-            container_hostfiles = DOCKER_HOSTFILES
-        elif has_containers:
-            container_apt_packages = CONTAINERD_APT_PACKAGES
-            container_supermin = CONTAINERD_SUPERMIN_PACKAGES
-            container_hostfiles = CONTAINERD_HOSTFILES
-        else:
-            container_apt_packages = []
-            container_supermin = []
-            container_hostfiles = []
 
         options = list(packages.build_volumes(self.distro) or [])
-        bbolt_step = ""
-        if has_containers:
-            from seine.containers.tools import ensure_bbolt_normalize
-            bbolt_bin = ensure_bbolt_normalize(arch)
-            if not bbolt_bin or not os.path.isfile(bbolt_bin):
-                raise RuntimeError(
-                    "bbolt-normalize binary for architecture '%s' is required to "
-                    "normalize containerd storage but could not be built or found" % arch
-                )
-            import hashlib
-            with open(bbolt_bin, "rb") as bf:
-                bbolt_hash = hashlib.sha256(bf.read()).hexdigest()
-            options += ["-v", "%s:/seine-tools:ro" % os.path.dirname(bbolt_bin)]
-            bbolt_step = (
-                f"RUN echo '{bbolt_hash}' > /seine-bbolt.hash && "
-                "cp /seine-tools/bbolt-normalize /usr/bin/bbolt-normalize && "
-                "chmod +x /usr/bin/bbolt-normalize\n\n"
+        from seine.containers.tools import ensure_bbolt_normalize
+        bbolt_bin = ensure_bbolt_normalize(arch)
+        if not bbolt_bin or not os.path.isfile(bbolt_bin):
+            raise RuntimeError(
+                "bbolt-normalize binary for architecture '%s' is required to "
+                "normalize containerd storage but could not be built or found" % arch
             )
+        import hashlib
+        with open(bbolt_bin, "rb") as bf:
+            bbolt_hash = hashlib.sha256(bf.read()).hexdigest()
+        options += ["-v", "%s:/seine-tools:ro" % os.path.dirname(bbolt_bin)]
+        bbolt_step = (
+            f"RUN echo '{bbolt_hash}' > /seine-bbolt.hash && "
+            "cp /seine-tools/bbolt-normalize /usr/bin/bbolt-normalize && "
+            "chmod +x /usr/bin/bbolt-normalize\n\n"
+        )
 
+        container_apt_packages = (
+            DOCKER_APT_PACKAGES + (["docker-cli"] if self.distro["release"] != "bookworm" else [])
+        )
         apt_packages = (APT_PACKAGES + EXTRA_APPLIANCE_PACKAGES
                         + container_apt_packages
                         + (UKI_APT_PACKAGES if self.distro["release"] != "bookworm" else []))
-        extra_packages = EXTRA_APPLIANCE_PACKAGES + container_supermin
-        hostfiles = ["/usr/sbin/.lvm-real/lvm"] + container_hostfiles
+        extra_packages = EXTRA_APPLIANCE_PACKAGES + DOCKER_SUPERMIN_PACKAGES
+        hostfiles = ["/usr/sbin/.lvm-real/lvm"] + DOCKER_HOSTFILES
         return self.build(
             IMAGER_APPLIANCE_SCRIPT.format(
                 base=self.source.targetBootstrap.name,
