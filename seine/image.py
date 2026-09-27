@@ -286,11 +286,7 @@ class Image:
         return f"{self._rootfs}.digest"
 
     def _rootfs_current(self, digest):
-        try:
-            with open(self._digest_file()) as f:
-                return f.read().strip() == digest and os.path.isfile(self._rootfs)
-        except OSError:
-            return False
+        return utils.digest_file_current(self._digest_file(), digest, self._rootfs)
 
     def _image_digest_file(self):
         return f"{self._output}.digest" if self._output else None
@@ -328,11 +324,7 @@ class Image:
                 digest = self._image_digest()
             except Exception:
                 return False
-        try:
-            with open(digest_file) as f:
-                return f.read().strip() == digest and os.path.isfile(self._output)
-        except OSError:
-            return False
+        return utils.digest_file_current(digest_file, digest, self._output)
 
     # Written in the deploy directory so the final rename stays on one
     # filesystem. The digest file is written last: no digest, no reuse.
@@ -346,13 +338,9 @@ class Image:
             ContainerEngine.run(["container", "export", "-o", partial.name, self._cid], check=True)
             self._exported(partial.name)
             self._normalize_timestamps(partial.name)
-            with contextlib.suppress(FileNotFoundError):
-                os.unlink(self._digest_file())
+            utils.invalidate_digest_file(self._digest_file())
             os.replace(partial.name, self._rootfs)
-            stamp = f"{self._digest_file()}.partial"
-            with open(stamp, "w") as f:
-                f.write(f"{digest}\n")
-            os.replace(stamp, self._digest_file())
+            utils.write_digest_file(self._digest_file(), digest)
             failed = False
         finally:
             if failed:
