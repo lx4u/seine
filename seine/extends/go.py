@@ -12,21 +12,28 @@ import shutil
 import types
 
 from seine.container import ContainerEngine
+from seine.extends   import go_licenses
 from seine.extends   import parsing
 from seine.extends   import templates
 from seine.extends   import texts
 from seine.utils     import HOST_ARCH
 from seine.utils     import WORKDIR
 
+# What 'copyright:' must start with when 'license-scan: true' appends
+# vendored-module stanzas to it: free text has no place to put them.
+DEP5_HEADER = "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/"
+
 # Bump when this code changes what a Go build is built into.
 REVISION = 1
 
-# Given together, so 'defaults: extends: go:' can set them for every package.
-DEFAULTS = ["toolchain", "toolchain-sha256"]
+# Given together, so 'defaults: extends: go:' can set them for every
+# package. Overriding one (e.g. its own 'toolchain:') takes none of the
+# defaults: a package must repeat whichever of these it still wants.
+DEFAULTS = ["toolchain", "toolchain-sha256", "license-scan"]
 
 SETTINGS = ["build", "build-depends", "cgo", "cgo-cflags", "commands", "files",
-            "ldflags", "runtime-depends", "runtime-suggests", "systemd-unit",
-            "tags", "toolchain", "toolchain-sha256"]
+            "ldflags", "license-scan", "runtime-depends", "runtime-suggests",
+            "systemd-unit", "tags", "toolchain", "toolchain-sha256"]
 
 # Debian architecture -> Go names. The generated rules pick from this
 # with $(DEB_HOST_ARCH), as the target may not be the machine's own.
@@ -78,6 +85,7 @@ def parse(package, extends):
         commands=_parse_commands(package, settings),
         files=_parse_files(package, settings),
         cgo=parsing.parse_bool(package, "go", settings, "cgo"),
+        license_scan=parsing.parse_bool(package, "go", settings, "license-scan"),
         cgo_cflags=parsing.parse_string(
             package, "go", settings, "cgo-cflags", "", shell_safe=True),
         ldflags=parsing.parse_string(
@@ -122,6 +130,7 @@ def check_defaults(settings):
     package = Defaults()
     toolchain = parsing.parse_string(package, "go", settings, "toolchain")
     _parse_toolchain_sha256(package, settings, toolchain)
+    parsing.parse_bool(package, "go", settings, "license-scan")
 
 def _toolchain_sha256(package):
     digest = package.ext["go"].toolchain_sha256.get(HOST_ARCH)
@@ -352,6 +361,7 @@ def digest_fields(builder, package, architecture):
         ("commands", json.dumps(settings.commands, sort_keys=True)),
         ("files", json.dumps(settings.files, sort_keys=True)),
         ("cgo", str(settings.cgo)),
+        ("license-scan", str(settings.license_scan)),
         ("cgo-cflags", settings.cgo_cflags),
         ("ldflags", settings.ldflags),
         ("tags", settings.tags),
@@ -367,6 +377,7 @@ def excerpt(package):
     shown = {"toolchain": settings.toolchain, "build": settings.build,
              "commands": settings.commands}
     for name, value in [("cgo", settings.cgo),
+                        ("license-scan", settings.license_scan),
                         ("cgo-cflags", settings.cgo_cflags),
                         ("ldflags", settings.ldflags),
                         ("tags", settings.tags),
@@ -408,6 +419,7 @@ def extend(builder, package, sourcedir, epoch):
         "runtime_depends": settings.runtime_depends,
         "runtime_suggests": settings.runtime_suggests,
         "goarch": sorted(GOARCH.items()),
+        "license_scan": settings.license_scan,
     }
     scripts = {name: f"{package.name}.{name}" for name in GO_SCRIPTS}
     if len(alternatives) == 0:
@@ -416,3 +428,41 @@ def extend(builder, package, sourcedir, epoch):
     templates.render_files(debian, found, context, names=scripts)
     templates.write_systemd_unit(
         debian, package.name, texts.read(builder, settings.systemd_unit))
+    if settings.license_scan:
+        _scan_licenses(builder, package, settings, sourcedir, debian)
+
+# Builds 'debian/copyright' from a syft scan of the whole build tree:
+# the app's own top-level stanza (unless 'copyright:' already gives one)
+# plus one stanza per vendored module.
+def _scan_licenses(builder, package, settings, sourcedir, debian):
+    build_dir = os.path.join(sourcedir, settings.build)
+    author_text = texts.read(builder, settings.copyright)
+    if author_text is not None and not author_text.lstrip().startswith(DEP5_HEADER):
+        raise package._error(
+            "'extends: go: license-scan' needs 'copyright:' in DEP-5 "
+            f"format (starting with '{DEP5_HEADER}') when it is set, so "
+            "vendored modules can be appended to it as their own "
+            "'Files:' stanzas")
+
+    modules = go_licenses.parse_modules_txt(os.path.join(build_dir, "vendor"))
+    syft_doc = go_licenses.scan_tree(build_dir)
+    with open(os.path.join(debian, "go-sbom.spdx.json"), "w") as f:
+        json.dump(syft_doc, f)
+
+    # No 'copyright:' at all: the app's own top-level stanza is derived
+    # from its own module, the same way each vendored one is.
+    if author_text is None:
+        main = go_licenses.main_stanza(
+            go_licenses.parse_module_path(build_dir), syft_doc)
+        author_text = DEP5_HEADER + "\n\n" + main.rstrip("\n")
+
+    # A rebuilt tree starts from 'copyright:' again, not from an already
+    # composed one: append the stanzas only the first time around.
+    if go_licenses.MARKER not in author_text:
+        stanzas = go_licenses.license_stanzas(modules, syft_doc)
+        author_text = (author_text.rstrip("\n") + "\n\n"
+                       + go_licenses.MARKER + "\n\n" + stanzas)
+        settings.copyright = author_text
+    # Written here, not left to the generic post-extend() write: a caller
+    # that only invokes extend() (as tests do) still gets it.
+    templates.write_copyright(debian, author_text)

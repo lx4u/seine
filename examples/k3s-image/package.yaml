@@ -152,7 +152,6 @@ packages:
                   Files: *
                   Copyright: The K3s authors
                   License: Apache-2.0
-                  Comment: The Go modules in vendor/ keep their own licenses.
 
                   License: Apache-2.0
                    On Debian systems, the full text of the Apache License 2.0
