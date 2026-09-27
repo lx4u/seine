@@ -1,7 +1,6 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
-import contextlib
 import datetime
 import hashlib
 import json
@@ -18,6 +17,7 @@ import uuid
 import guestfs
 
 from seine                   import pe_cert
+from seine                   import utils
 from seine.bootloader        import detect as detect_bootloader
 from seine.imager_appliance import ImagerAppliance
 from seine.packages          import FALLBACK_EPOCH
@@ -1100,14 +1100,10 @@ class Imager:
             print(f"disk image up to date ({utils.display_path(self.source._output)})")
             return
         self.create()
-        with contextlib.suppress(FileNotFoundError):
-            os.unlink(self.source._image_digest_file())
+        utils.invalidate_digest_file(self.source._image_digest_file())
         os.rename(self.source._image, self.source._output)
         self.source._image = None
-        stamp = f"{self.source._image_digest_file()}.partial"
-        with open(stamp, "w") as f:
-            f.write(f"{digest}\n")
-        os.replace(stamp, self.source._image_digest_file())
+        utils.write_digest_file(self.source._image_digest_file(), digest)
 
     def create(self):
         ph = self.source.partitionHandler

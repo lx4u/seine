@@ -382,6 +382,27 @@ def digest(files, length=None):
     named = "\0".join(_portable_name(f) for f in files)
     return hashlib.sha256(named.encode()).hexdigest()[:length]
 
+# True if 'digest_file' holds exactly 'digest' and 'artifact' still exists.
+def digest_file_current(digest_file, digest, artifact):
+    try:
+        with open(digest_file) as f:
+            return f.read().strip() == digest and os.path.isfile(artifact)
+    except OSError:
+        return False
+
+# Drops a stale digest so a crash between this and the artifact write can
+# never leave a digest matching bytes that aren't actually there.
+def invalidate_digest_file(digest_file):
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(digest_file)
+
+# Written last, atomically: no digest, no reuse.
+def write_digest_file(digest_file, digest):
+    stamp = f"{digest_file}.partial"
+    with open(stamp, "w") as f:
+        f.write(f"{digest}\n")
+    os.replace(stamp, digest_file)
+
 # A file's name independent of where it was checked out (a raw abspath()
 # would give the same spec a different digest per clone). Named relative
 # to its git remote (or toplevel dir name if no remote); anything outside
