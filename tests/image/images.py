@@ -921,16 +921,14 @@ class ScopedRebuild(avocado.Test):
         # one step publishing them.
         for architecture in [HOST_ARCH, self.architecture]:
             self.assertIn("package:busybox:%s" % architecture, said)
-        # Match tasks.py's own once-per-step timing line, not every line the
+        # Match tasks.py's own once-per-step "done" line, not every line the
         # step's containers print (one per architecture, or one per apt file).
-        self.assertEqual(
-            len([line for line in said.splitlines()
-                 if line.strip().startswith("deploy:busybox:")]),
-            1, "publishing was not one step")
-        self.assertEqual(
-            len([line for line in said.splitlines()
-                 if line.strip().startswith("fetch:busybox:")]),
-            1, "busybox was fetched more than once")
+        for step, why in [("deploy", "publishing was not one step"),
+                          ("fetch", "busybox was fetched more than once")]:
+            self.assertEqual(
+                len(re.findall(r"^\[%s:busybox\+[0-9.]+s\] done$" % step,
+                               said, re.MULTILINE)),
+                1, why)
 
         # One repository holding both architectures, at the same version,
         # since one source package is what each build was handed.
