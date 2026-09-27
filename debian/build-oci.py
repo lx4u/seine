@@ -15,6 +15,10 @@
 # Not shipped in any package: run only at package-build time, straight
 # from the checkout, never installed.
 #
+# Also builds and bundles the bootstrap-host/target/appliance chain for
+# HOSTARCH's default kernel (see build_appliance_chain()), so a plain
+# 'seine build' gets a cache hit there too, not just on the pull above.
+#
 # Needs network access to pull 'debian:<release>', unlike a normal
 # 'dpkg-buildpackage' run.
 #
@@ -45,8 +49,10 @@ SOURCE = "debian"
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
 
+from seine.bootstrap import HostBootstrap, TargetBootstrap
 from seine.container import ContainerEngine
-from seine.utils import HOST_ARCH
+from seine.imager_appliance import ImagerAppliance
+from seine.utils import HOST_ARCH, distribution
 
 HOSTARCH = os.environ.get("HOSTARCH", HOST_ARCH)
 REFRESH = os.environ.get("REFRESH") == "1"
@@ -80,6 +86,35 @@ def repo_digest(tag):
         ["image", "inspect", "-f", "{{index .RepoDigests 0}}", tag])
     return out.decode().strip().split("@", 1)[1]
 
+# Minimal stand-in for a spec's Source object: only the attributes
+# ImagerAppliance actually reads.
+class _ApplianceSource:
+    def __init__(self, spec, options, target_bootstrap):
+        self.spec = spec
+        self.options = options
+        self.targetBootstrap = target_bootstrap
+
+# Builds host/target/appliance for hostarch's default kernel and
+# returns their tags. Bootstrap.build() caches by Dockerfile text, so
+# these tags match what a plain 'seine build' would produce later.
+def build_appliance_chain(release, hostarch):
+    options = {"keep": False}
+    distro = distribution({"distribution": {
+        "source": SOURCE, "release": release, "architecture": hostarch,
+    }})
+
+    host = HostBootstrap(distro, options, host_architecture=hostarch)
+    host.create()
+
+    target = TargetBootstrap(distro, options)
+    target.create(host)
+
+    appliance = ImagerAppliance(_ApplianceSource(
+        {"distribution": distro}, options, target))
+    appliance.create()
+
+    return [host.name, target.name, appliance.name]
+
 def build_release(release, out, lock):
     tag = "%s:%s" % (SOURCE, release)
     pull = ["pull"]
@@ -100,15 +135,17 @@ def build_release(release, out, lock):
         ContainerEngine.run(pull + [ref], check=True)
         ContainerEngine.run(["tag", ref, tag], check=True)
 
+    tags = [tag] + build_appliance_chain(release, HOSTARCH)
+
     release_out = os.path.join(out, release)
     os.makedirs(release_out, exist_ok=True)
     with gzip.open(os.path.join(release_out, "images.tar.gz"), "wb",
                    compresslevel=1) as gz:
-        podman = ContainerEngine.Popen(["save", tag], stdout=subprocess.PIPE)
+        podman = ContainerEngine.Popen(["save"] + tags, stdout=subprocess.PIPE)
         shutil.copyfileobj(podman.stdout, gz)
         podman.stdout.close()
         if podman.wait() != 0:
-            raise RuntimeError("podman could not save %s!" % tag)
+            raise RuntimeError("podman could not save %s!" % " ".join(tags))
 
 def main():
     out = sys.argv[1]
