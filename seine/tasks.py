@@ -436,7 +436,7 @@ def _run_one(task, verbose, logs, display=None, echo=False):
         if display is not None:
             display.finished(task.name, failed=failed)
     if verbose:
-        print("  %s: %.1fs" % (task.name, time.time() - started))
+        print("[%s+%.2fs] done" % (task.name, time.time() - started))
 
 # Prints a failed task's output, which went to its own log file instead
 # of the terminal.
