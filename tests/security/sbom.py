@@ -128,6 +128,25 @@ class TheSBOMSitsNextToTheImageItDescribes(avocado.Test):
                          "/tmp/pc-image-sbom")
         self.assertIsNone(SBOM(DISTRO, {"sbom": False})._output_file("/tmp/pc-image.img"))
 
+# An 'initrd:' build has no '_output' (only '_initrd_output'), so its
+# SBOM task must name the SBOM after that instead, not crash on None.
+class TheSBOMTaskFallsBackToTheInitrdOutput(avocado.Test):
+    def test(self):
+        class FakeImage:
+            _tarball = "/tmp/rootfs.tar"
+            _output = None
+            _initrd_output = "/tmp/initrd.img"
+
+        image = FakeImage()
+        seen = {}
+        sbom_inst = SBOM(DISTRO, {"sbom": True})
+        sbom_inst.generate = lambda tarball, output, image_obj=None: seen.update(
+            tarball=tarball, output=output)
+
+        sbom_inst.task(image).run()
+        self.assertEqual(seen["tarball"], "/tmp/rootfs.tar")
+        self.assertEqual(seen["output"], "/tmp/initrd.img")
+
 # 'output_path()': the same naming, but a plain lookup -- no SBOM
 # instance, no 'options' -- rather than SBOM._output_file()'s own "only
 # if options currently say --sbom" gate. Shared by every caller
