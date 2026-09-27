@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # The Go toolchain 'extends: go' builds with, unless a package names its
-# own. One sha256 per architecture that may build.
+# own. One sha256 per architecture that may build. Vendored modules are
+# scanned for their licenses by default; 'copyright:' must be DEP-5.
 defaults:
     extends:
         go:
@@ -10,3 +11,4 @@ defaults:
             toolchain-sha256:
                 amd64: ffb5f8de10c62550dfddab66b36b57030721e0a44a3218e9e1181d7b59f121ca
                 arm64: 5a4ec883379d51ee9ce1040d5e87f8d35e20387574dd8c947feb01eabc3c1b37
+            license-scan: true

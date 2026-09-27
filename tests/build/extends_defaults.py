@@ -34,6 +34,7 @@ defaults:
         go:
             toolchain: "{version}"
             toolchain-sha256: {{{HOST_ARCH}: "{digest(letter)}"}}
+            license-scan: true
 """
 
 MAIN = """
@@ -140,7 +141,8 @@ class DefaultsAreChecked(DefaultsFixture):
         message = self.refused(
             "defaults:\n    extends:\n        go:\n"
             "            toolchain: '1.22.4'\n"
-            f"            toolchain-sha256: {{{HOST_ARCH}: nope}}\n")
+            f"            toolchain-sha256: {{{HOST_ARCH}: nope}}\n"
+            "            license-scan: true\n")
         self.assertIn("'defaults: extends: go'", message)
         self.assertIn("is not a sha256", message)
 

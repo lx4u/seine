@@ -4,6 +4,7 @@
 
 import atexit
 import avocado
+import json
 import os
 import shutil
 import sys
@@ -17,6 +18,7 @@ sys.path.append(path_to_sources)
 
 import seine.extends.go
 
+from seine.extends import registry
 from seine.extends import templates
 
 from seine.build import BuildCmd
@@ -242,6 +244,7 @@ class GoTemplatesRender(avocado.Test):
             "build_depends": ["libbtrfs-dev"], "runtime_depends": ["iptables"],
             "runtime_suggests": ["ca-certificates"],
             "goarch": sorted(seine.extends.go.GOARCH.items()),
+            "license_scan": False,
         }
         for name in templates.FILES:
             rendered = templates.TEMPLATE.from_string(found[name]).render(context)
@@ -359,6 +362,7 @@ class GoLinksAndAlternativesRender(avocado.Test):
             "cross_architectures": [], "ldflags": "", "tags": "",
             "build_depends": [], "runtime_depends": [], "runtime_suggests": [],
             "goarch": sorted(seine.extends.go.GOARCH.items()),
+            "license_scan": False,
         }
         render = lambda name: templates.TEMPLATE.from_string(
             found[name]).render(context)
@@ -612,3 +616,150 @@ class GoFilesAreStaged(avocado.Test):
         os.symlink(self.workdir, os.path.join(self.workdir, "tree", "out"))
         with self.assertRaises(ValueError):
             self.stage("[{from: one.txt, to: out/x}]")
+
+def defaults_of(license_scan):
+    settings = {"toolchain": "1.23.0",
+               "toolchain-sha256": {HOST_ARCH: TOOLCHAIN_SHA256}}
+    if license_scan is not None:
+        settings["license-scan"] = license_scan
+    return settings
+
+class GoDefaultsCoverLicenseScan(avocado.Test):
+    def test_it_is_required_alongside_the_toolchain(self):
+        with self.assertRaises(ValueError):
+            registry.check_defaults({"go": defaults_of(None)})
+
+    def test_it_must_be_a_bool(self):
+        with self.assertRaises(ValueError):
+            registry.check_defaults({"go": defaults_of("yes")})
+
+    def test_it_is_accepted(self):
+        registry.check_defaults({"go": defaults_of(True)})
+
+DEP5 = """Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: k3s
+
+Files: *
+Copyright: 2019-2024 Rancher Labs, Inc.
+License: Apache-2.0
+"""
+
+MODULES_TXT = """# github.com/foo/bar v1.2.3
+## explicit; go 1.21
+github.com/foo/bar/baz
+"""
+
+SYFT_DOC = {
+    "packages": [{
+        "SPDXID": "SPDXRef-Package-go-module-foo-bar",
+        "name": "github.com/foo/bar",
+        "versionInfo": "v1.2.3",
+        "licenseConcluded": "MIT",
+        "copyrightText": "Copyright 2020 Foo Bar",
+        "externalRefs": [{
+            "referenceType": "purl",
+            "referenceLocator": "pkg:golang/github.com/foo/bar@v1.2.3",
+        }],
+    }],
+    "relationships": [],
+}
+
+def go_with_scan(copyright_text, license_scan="true", commands=None):
+    commands = commands or '[{package: "./cmd/k3s", binary: k3s}]'
+    settings = f"""
+                              toolchain: "1.23.0"
+                              {TOOLCHAIN_SHA256_YAML}
+                              commands: {commands}
+                              license-scan: {license_scan}
+"""
+    if copyright_text is not None:
+        settings += "                              copyright: |\n" + "".join(
+            f"                                  {line}\n"
+            for line in copyright_text.splitlines())
+    return parse_for("amd64", K3S % settings).image.packages[0]
+
+class GoLicenseScan(avocado.Test):
+    def written(self, package, syft_doc=SYFT_DOC, modules_txt=MODULES_TXT,
+               go_mod=None):
+        from seine.packages import Builder
+        from seine.sbuild import BuilderImage
+        distro = {"source": "debian", "release": "trixie",
+                  "architecture": "amd64", "uri": "http://example.com/debian"}
+        builder = Builder(distro, {}, BuilderImage(distro, {}))
+        builder.packages = [package]
+        os.makedirs(os.path.join(self.workdir, "vendor"), exist_ok=True)
+        with open(os.path.join(self.workdir, "vendor", "modules.txt"), "w") as f:
+            f.write(modules_txt)
+        if go_mod is not None:
+            with open(os.path.join(self.workdir, "go.mod"), "w") as f:
+                f.write(go_mod)
+        with mock.patch("seine.extends.go.fetch_toolchain"), \
+             mock.patch("seine.extends.go_licenses.scan_tree",
+                        return_value=syft_doc):
+            seine.extends.go.extend(builder, package, self.workdir, 946684800)
+        return os.path.join(self.workdir, "debian")
+
+    def test_it_is_off_by_default(self):
+        package = go_with("""[{package: "./cmd/k3s", binary: k3s}]""").image.packages[0]
+        debian = self.written(package)
+        self.assertFalse(
+            os.path.exists(os.path.join(debian, "go-sbom.spdx.json")))
+
+    def test_it_appends_a_stanza_per_vendored_module(self):
+        debian = self.written(go_with_scan(DEP5))
+        with open(os.path.join(debian, "copyright")) as f:
+            text = f.read()
+        self.assertIn("Format: https://www.debian.org", text)
+        self.assertIn("Files: vendor/github.com/foo/bar/*", text)
+        self.assertIn("License: MIT", text)
+        self.assertIn("Copyright: Copyright 2020 Foo Bar", text)
+
+    def test_it_writes_the_sbom_fragment(self):
+        debian = self.written(go_with_scan(DEP5))
+        with open(os.path.join(debian, "go-sbom.spdx.json")) as f:
+            self.assertEqual(json.load(f), SYFT_DOC)
+
+    def test_an_unclassified_module_is_flagged_for_review(self):
+        debian = self.written(go_with_scan(DEP5),
+                              syft_doc={"packages": [], "relationships": []})
+        with open(os.path.join(debian, "copyright")) as f:
+            text = f.read()
+        self.assertIn("License: NOASSERTION", text)
+
+    def test_copyright_must_already_be_dep5(self):
+        package = go_with_scan("Just some free text, not DEP-5.\n")
+        with self.assertRaises(ValueError) as refused:
+            self.written(package)
+        self.assertIn("license-scan", str(refused.exception))
+
+    def test_it_generates_a_top_level_stanza_when_copyright_is_absent(self):
+        syft_doc = {
+            "packages": SYFT_DOC["packages"] + [{
+                "SPDXID": "SPDXRef-Package-go-module-myapp",
+                "name": "github.com/example/myapp",
+                "licenseConcluded": "MIT",
+                "copyrightText": "Copyright 2024 Example Corp",
+                "externalRefs": [{
+                    "referenceType": "purl",
+                    "referenceLocator": "pkg:golang/github.com/example/myapp",
+                }],
+            }],
+            "relationships": [],
+        }
+        debian = self.written(go_with_scan(None), syft_doc=syft_doc,
+                              go_mod="module github.com/example/myapp\n\ngo 1.21\n")
+        with open(os.path.join(debian, "copyright")) as f:
+            text = f.read()
+        self.assertIn("Format: https://www.debian.org", text)
+        self.assertIn("Files: *\n", text)
+        self.assertIn("Copyright: Copyright 2024 Example Corp", text)
+        self.assertIn("Files: vendor/github.com/foo/bar/*", text)
+
+    def test_calling_extend_twice_does_not_double_the_stanzas(self):
+        package = go_with_scan(DEP5)
+        first = self.written(package)
+        with open(os.path.join(first, "copyright")) as f:
+            once = f.read()
+        twice = self.written(package)
+        with open(os.path.join(twice, "copyright")) as f:
+            self.assertEqual(f.read(), once)

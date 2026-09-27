@@ -112,6 +112,15 @@ class DebsbomInputsAreTakenFromTheTarball(avocado.Test):
         self.assertTrue(wanted("./var/lib/apt/extended_states"))
         self.assertTrue(wanted("var/lib/apt/lists/deb.debian.org_dists_trixie_InRelease"))
 
+class APackagesOwnSBOMFragmentIsWanted(avocado.Test):
+    def test(self):
+        self.assertTrue(wanted("usr/share/doc/k3s/sbom.spdx.json"))
+        self.assertTrue(wanted("./usr/share/doc/k3s/sbom.spdx.json"))
+
+    def test_only_that_exact_file_matches(self):
+        self.assertFalse(wanted("usr/share/doc/k3s/changelog.gz"))
+        self.assertFalse(wanted("usr/share/doc/k3s/sub/sbom.spdx.json"))
+
 class TheRestOfTheRootFileSystemIsLeftAlone(avocado.Test):
     def test(self):
         # Including the architecture dpkg recorded: it is not in every
