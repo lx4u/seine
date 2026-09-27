@@ -410,5 +410,110 @@ class OneLoadedFilesOwnTextCanBeReadBack(avocado.Test):
             build.dump_file(main)
         self.assertIn("main.yaml", str(raised.exception))
 
+class PlanExplainsWhyTasksRun(avocado.Test):
+    def test_plan_includes_task_explanations(self):
+        build = BuildCmd()
+        build.loads(SPEC)
+        build.parse()
+        said = io.StringIO()
+        sys_stdout = sys.stdout
+        try:
+            sys.stdout = said
+            build.image.plan()
+        finally:
+            sys.stdout = sys_stdout
+        out = said.getvalue()
+        self.assertIn("why:", out)
+        self.assertIn("rootfs", out)
+        self.assertIn("assembles root filesystem", out)
+
+    def test_plan_reports_cached_rootfs(self):
+        build = BuildCmd()
+        build.loads(SPEC)
+        build.parse()
+        # Mock _rootfs_current to return True
+        orig_current = build.image._rootfs_current
+        try:
+            build.image._rootfs_current = lambda digest: True
+            said = io.StringIO()
+            sys_stdout = sys.stdout
+            try:
+                sys.stdout = said
+                build.image.plan()
+            finally:
+                sys.stdout = sys_stdout
+            out = said.getvalue()
+            self.assertIn("already built, and not built again", out)
+            self.assertIn("rootfs", out)
+            steps_section = out.split("steps:")[1] if "steps:" in out else ""
+            self.assertNotIn("rootfs", steps_section)
+        finally:
+            build.image._rootfs_current = orig_current
+
+    def test_plan_reports_cached_bootstraps(self):
+        build = BuildCmd()
+        build.loads(SPEC)
+        build.parse()
+        from seine.bootstrap import HostBootstrap, TargetBootstrap
+        orig_host_current = HostBootstrap.current
+        orig_target_current = TargetBootstrap.current
+        try:
+            HostBootstrap.current = lambda self, df, base=None: True
+            TargetBootstrap.current = lambda self, df, base=None: True
+            said = io.StringIO()
+            sys_stdout = sys.stdout
+            try:
+                sys.stdout = said
+                build.image.plan()
+            finally:
+                sys.stdout = sys_stdout
+            out = said.getvalue()
+            self.assertIn("already built, and not built again", out)
+            self.assertIn("bootstrap-host", out)
+            self.assertIn("bootstrap-target", out)
+            steps_section = out.split("steps:")[1] if "steps:" in out else ""
+            self.assertNotIn("bootstrap-host", steps_section)
+            self.assertNotIn("bootstrap-target", steps_section)
+        finally:
+            HostBootstrap.current = orig_host_current
+            TargetBootstrap.current = orig_target_current
+
+    def test_plan_omits_steps_when_nothing_to_build(self):
+        build = BuildCmd()
+        build.loads(SPEC)
+        build.parse()
+        from seine.bootstrap import HostBootstrap, TargetBootstrap
+        orig_host = HostBootstrap.current
+        orig_target = TargetBootstrap.current
+        orig_rootfs = build.image._rootfs_current
+        try:
+            HostBootstrap.current = lambda self, df, base=None: True
+            TargetBootstrap.current = lambda self, df, base=None: True
+            build.image._rootfs_current = lambda digest: True
+            build.image.own_tasks = lambda **kw: []
+            said = io.StringIO()
+            sys_stdout = sys.stdout
+            try:
+                sys.stdout = said
+                build.image.plan()
+            finally:
+                sys.stdout = sys_stdout
+            out = said.getvalue()
+            self.assertIn("up to date:", out)
+            self.assertIn("already built, and not built again", out)
+            self.assertNotIn("steps:", out)
+        finally:
+            HostBootstrap.current = orig_host
+            TargetBootstrap.current = orig_target
+            build.image._rootfs_current = orig_rootfs
+
+    def test_plan_display_path_relative_when_under_cwd(self):
+        from seine.utils import display_path
+        cwd = os.getcwd()
+        under = os.path.join(cwd, "build", "deploy", "trixie", "pc-image.img")
+        outside = "/tmp/somewhere/other.img"
+        self.assertEqual(display_path(under), os.path.join("build", "deploy", "trixie", "pc-image.img"))
+        self.assertEqual(display_path(outside), outside)
+
 if __name__ == "__main__":
     avocado.main()

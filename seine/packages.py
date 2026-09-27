@@ -1397,10 +1397,72 @@ class Builder:
                     recipe.append((label, digest_hex))
         return recipe
 
+    RECIPE_LABELS = {
+        "kernel_configs": "kernel configuration (kconfig)",
+        "kernel_fragments": "kernel fragments",
+        "kernel_flavour": "kernel flavour",
+        "kernel_featureset": "kernel featureset",
+        "kernel_derived_flavours": "derived kernel flavours",
+        "kernel_upstream": "kernel upstream source",
+        "kernel_upstream_sha256": "kernel upstream sha256 checksum",
+        "kernel_keep_patches": "kernel keep-patches",
+        "kernel_drop_patches": "kernel drop-patches",
+        "kernel_build_files": "kernel build files",
+        "kernel_abi_suffix": "kernel ABI suffix",
+        "kernel_signing_key": "kernel signing key",
+        "kernel_graft_rules": "kernel graft rules",
+        "kernel_graft_version": "kernel graft version",
+        "cross_kernel_release": "cross kernel release",
+        "cross_kernel_headers": "cross kernel headers",
+        "cross_packaging": "cross packaging",
+        "source": "source location or URL",
+        "revision": "debian revision",
+        "profiles": "build profiles",
+        "options": "build options",
+        "preferences": "apt preferences / pinning",
+        "distro_release": "distribution release",
+        "distro_source": "distribution source",
+        "architecture": "target architecture",
+        "apt_sources": "apt sources",
+        "signer": "package signing key",
+        "cross": "cross-compilation setting",
+        "chroot_architecture": "build chroot architecture",
+        "sha256": "source sha256 checksum",
+        "source_date_epoch": "source date epoch",
+        "indep_architecture": "architecture-independent build role",
+        "upstream_version": "upstream version",
+    }
+
+    def _format_recipe_diff(self, label, change):
+        if label.startswith("file:"):
+            path = label[5:]
+            if change == "changed":
+                return "file '%s' changed" % path
+            if change == "new":
+                return "new file '%s'" % path
+            return "file '%s' no longer applies" % path
+
+        if label.startswith("depends:"):
+            dep = label[8:]
+            if change == "changed":
+                return "dependency '%s' was rebuilt" % dep
+            if change == "new":
+                return "new dependency '%s'" % dep
+            return "dependency '%s' no longer applies" % dep
+
+        name = self.RECIPE_LABELS.get(label, label)
+        if change == "changed":
+            return "%s changed" % name
+        if change == "new":
+            return "%s is new" % name
+        return "%s no longer applies" % name
+
     # Why stamps() below just found no stamp for this (name, architecture)
     # -- one line per labelled input that changed since the last recipe
     # recorded for it, read straight off disk (nothing re-derived).
     def _diff_recipe(self, package, architecture):
+        if self.options.get("rebuild"):
+            return ["--rebuild requested on command line"]
         previous = self._previous(package, architecture)
         if not previous:
             return ["no earlier build recorded for this package/architecture"]
@@ -1410,10 +1472,10 @@ class Builder:
                     "(built before this diagnostic existed)"]
         old = dict(old)
         new = dict(self._recipes.get((package.name, architecture), []))
-        lines = ["%s changed" % label for label in new
-                if label in old and old[label] != new[label]]
-        lines += ["%s is new" % label for label in new if label not in old]
-        lines += ["%s no longer applies" % label for label in old if label not in new]
+        lines = [self._format_recipe_diff(label, "changed") for label in new
+                 if label in old and old[label] != new[label]]
+        lines += [self._format_recipe_diff(label, "new") for label in new if label not in old]
+        lines += [self._format_recipe_diff(label, "removed") for label in old if label not in new]
         return lines or ["the digest differs but no tracked input does -- "
                          "likely a change to seine itself, not the spec"]
 

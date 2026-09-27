@@ -136,23 +136,17 @@ class HostBootstrap(Bootstrap):
         return False if self.force_online else \
                self.distro.get("apt-pull-mode") == "offline"
 
-    def create(self):
-        build_options = ["--squash"]
-        emulated = self.host_architecture != HOST_ARCH
-        if emulated:
-            build_options += ["--platform", "linux/%s" % self.host_architecture]
+    def dockerfile(self):
         mount = ""
         digest_comment = ""
         if self._offline():
             from seine import vendor
             release = self.distro["release"]
-            where = vendor.offline_build_context(release)
-            build_options += ["--build-context",
-                              "%s=%s" % (vendor.BUILD_CONTEXT, where)]
             mount = "--mount=type=bind,from=%s,target=%s,ro" % (
                 vendor.BUILD_CONTEXT, vendor_mountpoint(release))
             digest_comment = "# vendor digest: %s" % self.vendor_digest
-        return self.build(HOST_BOOTSTRAP_SCRIPT.format(
+        emulated = self.host_architecture != HOST_ARCH
+        return HOST_BOOTSTRAP_SCRIPT.format(
             self.distro["source"],
             self.distro["release"],
             "apt-{}".format(self.distro["release"]),
@@ -160,7 +154,20 @@ class HostBootstrap(Bootstrap):
             mount,
             digest_comment,
             _qemu_fetch(self.host_architecture, emulated),
-            APT_CLEANUP), options=build_options)
+            APT_CLEANUP)
+
+    def create(self):
+        build_options = ["--squash"]
+        emulated = self.host_architecture != HOST_ARCH
+        if emulated:
+            build_options += ["--platform", "linux/%s" % self.host_architecture]
+        if self._offline():
+            from seine import vendor
+            release = self.distro["release"]
+            where = vendor.offline_build_context(release)
+            build_options += ["--build-context",
+                              "%s=%s" % (vendor.BUILD_CONTEXT, where)]
+        return self.build(self.dockerfile(), options=build_options)
 
     # Nothing installed here ships (see HOST_BOOTSTRAP_SCRIPT), so an
     # online build keeps the base image's own archive. Offline has no

@@ -1099,7 +1099,7 @@ class ADryRunSaysWhatItWouldDo(avocado.Test):
                      "fetch:seine-test-dry", "package:seine-test-dry",
                      "deploy:seine-test-dry", "rootfs", "appliance", "image"]:
             self.assertIn(step, said)
-        self.assertIn("after bootstrap-host", said)
+        self.assertIn("after package:seine-test-dry", said)
         self.assertIn("4 steps at a time", said)
 
     def test_rootfs_only_says_so(self):

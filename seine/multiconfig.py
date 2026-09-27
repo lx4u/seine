@@ -331,7 +331,13 @@ def run(groups_files, options):
                 print(build.changed(files, build.spec))
         if options.get("tasks", True):
             print("\nsteps:")
-            tasks.describe(merged_tasks(builds))
+            all_tasks = merged_tasks(builds)
+            reasons = {}
+            for build in builds:
+                label = _label(build)
+                for k, v in build.image.reasons().items():
+                    reasons["%s:%s" % (label, k)] = v
+            tasks.describe(all_tasks, reasons=reasons)
         return 0
 
     all_tasks = merged_tasks(builds)
