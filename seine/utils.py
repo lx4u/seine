@@ -374,6 +374,10 @@ def locked(path, shared=False, blocking=True):
 
 # Digest of a set of spec file names (not contents, which change with
 # every edit), used to file things per-specification: last plan, logs.
+def file_digest(path):
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
+
 def digest(files, length=None):
     named = "\0".join(_portable_name(f) for f in files)
     return hashlib.sha256(named.encode()).hexdigest()[:length]

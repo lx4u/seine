@@ -346,7 +346,7 @@ class SpecTree(Tree):
             node.set_label(text)
 
 # What each seine Task is doing, in top-level branch labels. Steps
-# left out (tarball/sbom/appliance) package what an earlier step
+# left out (sbom/appliance) package what an earlier step
 # already built, not their own bit of spec, so nothing lights up.
 TASK_BRANCHES = {
     "bootstrap-host": ("distribution",),

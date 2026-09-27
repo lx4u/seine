@@ -188,9 +188,10 @@ class AnImageLessSpecificationWithSomethingToBuild(avocado.Test):
             build.image._output,
             os.path.join(ContainerEngine.deploy_root(), "trixie", "main.tar"))
 
-    def test_own_tasks_deploy_the_tarball_instead_of_writing_a_disk(self):
+    def test_the_rootfs_task_is_the_output_instead_of_a_disk(self):
         names = {t.name for t in self.parsed().image.tasks()}
-        self.assertIn("deploy-rootfs", names)
+        self.assertIn("rootfs", names)
+        self.assertNotIn("deploy-rootfs", names)
         self.assertNotIn("disk", names)
         self.assertNotIn("appliance", names)
 
@@ -212,31 +213,76 @@ class AnImageLessSpecificationWithSomethingToBuild(avocado.Test):
         finally:
             tasks.run = real_run
 
-# 'build_tarball()' leaves the exported root file-system a scratch file
-# under 'ContainerEngine.scratch()' -- '_deploy_tarball()' is what turns
-# that into the build's real, persisted output.
-class DeployTarballMovesTheScratchFileToItsDeployPath(avocado.Test):
-    def test(self):
+# 'rootfs' skips the playbooks when the deployed tarball and its
+# '.digest' are current.
+class TheRootfsTarballIsReusedWhileItsInputsAreUnchanged(avocado.Test):
+    def setUp(self):
         os.environ["SEINE_CACHE_DIR"] = self.workdir
         os.environ["SEINE_BUILD_DIR"] = self.workdir
-        spec = os.path.join(self.workdir, "main.yaml")
-        with open(spec, "w") as f:
+        self.spec = os.path.join(self.workdir, "main.yaml")
+        with open(self.spec, "w") as f:
             f.write(IMAGELESS)
+        self.image = self.parsed().image
+        self.digest = self.image._rootfs_digest(None)
+
+    def parsed(self):
         build = BuildCmd()
-        build.options["files"] = [spec]
-        build.load_all([spec])
+        build.options["files"] = [self.spec]
+        build.load_all([self.spec])
         build.parse()
+        build.image._from = "base"
+        return build
 
-        scratch = os.path.join(self.workdir, "scratch.tar")
-        with open(scratch, "w") as f:
+    def deploy(self, digest):
+        with open(self.image._rootfs, "w") as f:
             f.write("stands in for a real exported root file-system")
-        build.image._tarball = scratch
+        with open(self.image._digest_file(), "w") as f:
+            f.write(digest + "\n")
 
-        build.image._deploy_tarball()
+    def test_a_matching_digest_is_current(self):
+        self.deploy(self.digest)
+        self.assertTrue(self.image._rootfs_current(self.digest))
 
-        self.assertTrue(os.path.isfile(build.image._output))
-        self.assertFalse(os.path.isfile(scratch))
-        self.assertIsNone(build.image._tarball)
+    def test_a_different_digest_is_not(self):
+        self.deploy("something else")
+        self.assertFalse(self.image._rootfs_current(self.digest))
+
+    def test_a_missing_tarball_is_not(self):
+        self.deploy(self.digest)
+        os.unlink(self.image._rootfs)
+        self.assertFalse(self.image._rootfs_current(self.digest))
+
+    def test_a_missing_digest_is_not(self):
+        self.deploy(self.digest)
+        os.unlink(self.image._digest_file())
+        self.assertFalse(self.image._rootfs_current(self.digest))
+
+    def test_the_task_returns_without_a_container_when_current(self):
+        self.deploy(self.digest)
+        self.image.hostBootstrap = None
+        self.image.rootfs()
+        self.assertEqual(self.image._tarball, self.image._rootfs)
+
+    def test_a_playbook_change_changes_the_digest(self):
+        self.image.spec["playbook"].append({"tasks": []})
+        self.assertNotEqual(self.image._rootfs_digest(None), self.digest)
+
+    def test_a_disk_only_change_does_not(self):
+        self.image.spec["image"] = {"filename": "other.img"}
+        self.image.spec["containers"] = [{"image": "x"}]
+        self.assertEqual(self.image._rootfs_digest(None), self.digest)
+
+    def test_a_host_file_a_playbook_copies_changes_the_digest(self):
+        with open(os.path.join(self.workdir, "motd"), "w") as f:
+            f.write("one")
+        self.image.spec["playbook"] = [{"tasks": [{"copy": {"src": "motd"}}]}]
+        before = self.image._rootfs_digest(None)
+        with open(os.path.join(self.workdir, "motd"), "w") as f:
+            f.write("two")
+        self.assertNotEqual(self.image._rootfs_digest(None), before)
+
+    def test_the_vendor_lock_changes_the_digest(self):
+        self.assertNotEqual(self.image._rootfs_digest("lock"), self.digest)
 
 # The other side of the same fix: a specification with neither 'image:'
 # nor anything to build ('packages:'/'playbook:') is still refused --

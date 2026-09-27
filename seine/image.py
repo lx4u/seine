@@ -3,6 +3,7 @@
 
 import contextlib
 import functools
+import hashlib
 import os
 import shutil
 import subprocess
@@ -18,6 +19,7 @@ from seine               import packages
 from seine               import progress
 from seine               import tasks
 from seine               import utils
+from seine.utils          import INPUTS_LABEL
 from seine.utils          import redactions
 from seine.ansible_runner import AnsibleContainerRunner
 from seine.bootstrap      import HostBootstrap
@@ -42,6 +44,15 @@ def print_trust_recap(entries):
             print("repository trust: %s is signed by '%s' (%s), "
                   "checked with signed-by" % (release, fingerprint, origin))
 
+# Bump when the way the root file-system is built changes, so old
+# tarballs are not reused.
+ROOTFS_REVISION = 1
+
+# Sections that do not change the root file-system. Editing them must
+# not rebuild it.
+DISK_ONLY = ("image", "initrd", "containers", "multiconfig", "test", "tests",
+             "keywords", "variables")
+
 class Image:
     def __init__(self, partitionHandler, options=None):
         self.partitionHandler = partitionHandler
@@ -52,8 +63,10 @@ class Image:
         self._from = None
         self._image = None
         self._initrd_output = None
-        self._keep = options["keep"]
         self._output = None
+        # '_rootfs' is where the tarball goes. '_tarball' is set to the
+        # same path once the 'rootfs' task is done.
+        self._rootfs = None
         self._tarball = None
         self._verbose = options["verbose"]
         # Used by _normalize_timestamps() to find files written by this run.
@@ -74,16 +87,6 @@ class Image:
         # build after. Used by tasks() to wire group dependencies.
         self.multiconfig_after = {}
 
-    def __del__(self):
-        if self._tarball:
-            self._unlink(self._tarball, "root file-system as a tarball")
-
-    def _unlink(self, path, descr):
-        if self._keep:
-            print("keeping '%s' (%s) as requested" % (path, descr))
-        else:
-            os.unlink(path)
-
     def parse(self, spec):
         distro = utils.distribution(spec)
 
@@ -102,6 +105,7 @@ class Image:
                 os.makedirs(deploy, exist_ok=True)
                 filename = os.path.join(deploy, filename)
             self._output = filename
+            self._rootfs = self._rootfs_beside(filename)
         elif "initrd" in spec:
             initrd = spec["initrd"]
             if "filename" not in initrd:
@@ -112,10 +116,11 @@ class Image:
                 os.makedirs(deploy, exist_ok=True)
                 filename = os.path.join(deploy, filename)
             self._initrd_output = filename
+            self._rootfs = self._rootfs_beside(filename)
         else:
             # No 'image:' section: the rootfs tarball is this build's
-            # real output instead (own_tasks() below).
-            self._output = self._rootfs_output(distro)
+            # real output instead.
+            self._output = self._rootfs = self._rootfs_output(distro)
 
         # Validated at parse time, not build time. 'defer_uki_check' skips
         # the 'extends: uki: initrd:' check for a multiconfig group whose
@@ -160,6 +165,9 @@ class Image:
         deploy = os.path.join(ContainerEngine.deploy_root(), distro["release"])
         os.makedirs(deploy, exist_ok=True)
         return os.path.join(deploy, "%s.tar" % stem)
+
+    def _rootfs_beside(self, output):
+        return f"{os.path.splitext(output)[0]}.rootfs.tar"
 
     def _require_hashes(self):
         missing = packages.unvouched(self.packages)
@@ -208,18 +216,110 @@ class Image:
         spec["playbook"] = playbooks
         return spec
 
+    # Builds the tarball, unless the deployed one has the same digest.
     def rootfs(self):
         from seine import vendor
         if self._from is None:
             self._from = self.targetBootstrap.name
 
         distro = self.spec["distribution"]
+        vendor_digest = vendor.offline_dockerfile_digest(self.spec, distro)
+        digest = self._rootfs_digest(vendor_digest)
+        if self._rootfs_current(digest):
+            print(f"root file-system up to date ({self._rootfs})")
+            self._tarball = self._rootfs
+            return
+
         runner = AnsibleContainerRunner(
             self._from, distro, self.options, verbose=self._verbose,
-            vendor_digest=vendor.offline_dockerfile_digest(self.spec, distro),
+            vendor_digest=vendor_digest,
             epoch=self._epoch(), host_image=self.hostBootstrap.name,
             locales=self._locales_override())
         self._cid = runner.run(self.spec["playbook"])
+        self._export(digest)
+        self._tarball = self._rootfs
+
+    # Hash of everything the tarball is made from: the spec (minus disk
+    # sections), base image, built packages, vendor lock and host files.
+    def _rootfs_digest(self, vendor_digest):
+        distro = self.spec["distribution"]
+        base = ContainerEngine.imageLabel(self._from, INPUTS_LABEL) \
+               or ContainerEngine.imageId(self._from) or ""
+        index = os.path.join(packages.repository(distro), "Packages")
+        built = utils.file_digest(index) if os.path.isfile(index) else ""
+        spec = {key: value for key, value in self.spec.items()
+                if key not in DISK_ONLY}
+        parts = [ROOTFS_REVISION, analyze.spec_digest(spec), base, built,
+                 vendor_digest, self._epoch()]
+        parts += [utils.file_digest(path) for path in self._host_files()]
+        return hashlib.sha256("\n".join(map(str, parts)).encode()).hexdigest()
+
+    # Host files named by a relative 'src:'. Their content is not in the
+    # spec. Absolute paths are usually target paths, so they are skipped.
+    def _host_files(self):
+        files = self.options.get("files") or []
+        spec_dir = os.path.dirname(files[0]) if len(files) > 0 else "."
+        found = set()
+
+        def walk(node):
+            if isinstance(node, list):
+                for item in node:
+                    walk(item)
+            elif isinstance(node, dict):
+                for key, value in node.items():
+                    if key == "src" and isinstance(value, str) \
+                            and not os.path.isabs(value):
+                        for base in (spec_dir, "."):
+                            path = os.path.join(base, value)
+                            if os.path.isfile(path):
+                                found.add(path)
+                                break
+                    else:
+                        walk(value)
+        walk(self.spec.get("playbook") or [])
+        return sorted(found)
+
+    def _digest_file(self):
+        return f"{self._rootfs}.digest"
+
+    def _rootfs_current(self, digest):
+        try:
+            with open(self._digest_file()) as f:
+                return f.read().strip() == digest and os.path.isfile(self._rootfs)
+        except OSError:
+            return False
+
+    # Written in the deploy directory so the final rename stays on one
+    # filesystem. The digest file is written last: no digest, no reuse.
+    def _export(self, digest):
+        partial = tempfile.NamedTemporaryFile(
+            delete=False, dir=os.path.dirname(self._rootfs),
+            prefix=".rootfs-", suffix=".partial")
+        partial.close()
+        failed = True
+        try:
+            ContainerEngine.run(["container", "export", "-o", partial.name, self._cid], check=True)
+            self._exported(partial.name)
+            self._normalize_timestamps(partial.name)
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(self._digest_file())
+            os.replace(partial.name, self._rootfs)
+            stamp = f"{self._digest_file()}.partial"
+            with open(stamp, "w") as f:
+                f.write(f"{digest}\n")
+            os.replace(stamp, self._digest_file())
+            failed = False
+        finally:
+            if failed:
+                with contextlib.suppress(FileNotFoundError):
+                    os.unlink(partial.name)
+            if self._cid:
+                # Container is still running ('sleep infinity'), so it
+                # needs a forceful removal, not a plain 'rm'.
+                ContainerEngine.discard(self._cid, force=True, failed=failed)
+                self._cid = None
+            # No prune here: it's machine-wide and would catch images the
+            # appliance build beside this one still needs.
 
     # 'check=True' only catches podman failing, not an export that exits
     # zero with an empty tar. That case would otherwise only surface much
@@ -269,49 +369,17 @@ class Image:
                                     if member.isfile() else None)
         os.replace(fixed.name, tarball)
 
-    def build_tarball(self):
-        failed = True
-        try:
-            self._tarball = None
-            # Scratch space, not the working directory: it's large and
-            # unwanted by default, and a failed build leaves it where
-            # 'seine cache clear scratch' will find it.
-            image = tempfile.NamedTemporaryFile(
-                mode="w", delete=False, dir=ContainerEngine.scratch(),
-                prefix="root-", suffix=".tar")
-            ContainerEngine.run(["container", "export", "-o", image.name, self._cid], check=True)
-            self._tarball = self._exported(image.name)
-            self._normalize_timestamps(self._tarball)
-            failed = False
-        except subprocess.CalledProcessError:
-            os.unlink(image.name)
-            raise
-        finally:
-            if self._cid:
-                # Container is still running ('sleep infinity'), so it
-                # needs a forceful removal, not a plain 'rm'.
-                ContainerEngine.discard(self._cid, force=True, failed=failed)
-                self._cid = None
-            # No prune here: it's machine-wide and would catch images the
-            # appliance build beside this one still needs.
-
     # Every 'source:' a partition/volume names, once each -- the extra
     # tarballs (besides this spec's own) that a build needs.
     def _referenced_sources(self):
         return sorted({m["source"] for m in self.partitionHandler.mounts
                        if m.get("source") is not None})
 
-    # The tarball a mount's 'source' points at. 'None' is this spec's
-    # own. A group's is read from '_output' once 'deploy-rootfs' has
-    # moved it there, or from '_tarball' if the group has its own
-    # 'image:' and never runs that step.
+    # The tarball a mount's 'source' points at. 'None' is this spec's own.
     def _tarball_for(self, source):
         if source is None:
             return self._tarball
-        build = self.subbuilds[source]
-        if "image" in build.spec:
-            return build.image._tarball
-        return build.image._output
+        return self.subbuilds[source].image._tarball
 
     def _size_partitions(self):
         main_files = self.options.get("files") or []
@@ -351,13 +419,8 @@ class Image:
     # so 'disk' can wait for it and never read it mid-write.
     def _source_task_names(self):
         from seine import multiconfig
-        names = []
-        for source in self._referenced_sources():
-            build = self.subbuilds[source]
-            label = multiconfig._label(build, name=source)
-            terminal = "tarball" if "image" in build.spec else "deploy-rootfs"
-            names.append("%s:%s" % (label, terminal))
-        return names
+        return ["%s:rootfs" % multiconfig._label(self.subbuilds[source], name=source)
+                for source in self._referenced_sources()]
 
     # Created beside the final output path, not in scratch: the imager
     # finishes by renaming this into place, and rename only works within
@@ -482,7 +545,6 @@ class Image:
             self.targetBootstrap.task(self.hostBootstrap),
             Task("rootfs", self.rootfs,
                 needs=["bootstrap-target", needs_packages], resource="io"),
-            Task("tarball", self.build_tarball, needs=["rootfs"], resource="io"),
             SBOM(distro, self.options).task(self),
         ]
 
@@ -490,34 +552,19 @@ class Image:
         # stop, there's no image to build.
         if "initrd" in self.spec:
             return common + [
-                Task("deploy-initrd", self._deploy_initrd, needs=["tarball"]),
+                Task("deploy-initrd", self._deploy_initrd, needs=["rootfs"]),
             ]
 
-        # No 'image:' section: the tarball is the real output, so move
-        # it to its deploy path. Needs 'sbom' too, since it also reads
-        # '_tarball' before this renames it away.
-        if "image" not in self.spec:
-            return common + [
-                Task("deploy-rootfs", self._deploy_tarball,
-                    needs=["tarball", "sbom"]),
-            ]
-
-        # '--rootfs-only' stops here: no disk or appliance needed just
-        # to look inside the tarball.
-        if self.options.get("rootfs_only"):
+        # No 'image:' section, or '--rootfs-only': the deployed tarball
+        # is the output -- no disk or appliance needed just to look
+        # inside it.
+        if "image" not in self.spec or self.options.get("rootfs_only"):
             return common
 
         return common + [
             Task("disk", self._prepare_disk,
-                needs=["tarball"] + self._source_task_names(), resource="io"),
+                needs=["rootfs"] + self._source_task_names(), resource="io"),
         ] + Imager(self).tasks(needs_packages)
-
-    # The rootfs tarball, made permanent -- build_tarball() leaves it a
-    # scratch file __del__ would otherwise unlink; renamed away instead,
-    # so there is nothing left there for __del__ to find.
-    def _deploy_tarball(self):
-        os.rename(self._tarball, self._output)
-        self._tarball = None
 
     # Pulled out of the built tarball rather than the tarball itself:
     # more than one match is the same build-time error the imager's own
@@ -534,8 +581,6 @@ class Image:
             with tar.extractfile(matches[0]) as src, \
                  open(self._initrd_output, "wb") as dst:
                 shutil.copyfileobj(src, dst)
-        self._unlink(self._tarball, "root file-system as a tarball")
-        self._tarball = None
 
     # The full task graph: shared_tasks(), plus own_tasks() unless
     # '--packages-only' stops here.
