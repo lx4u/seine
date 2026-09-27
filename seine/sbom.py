@@ -214,7 +214,7 @@ class SBOM:
     def task(self, image):
         return Task("sbom",
                     lambda: self.generate(image._tarball, image._output, image_obj=image),
-                    needs=["tarball"])
+                    needs=["rootfs"])
 
     def generate(self, tarball, output, image_obj=None, containers=None):
         if not isinstance(output, str) and hasattr(output, "_output"):

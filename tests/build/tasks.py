@@ -233,7 +233,7 @@ class ABuildRunsInTheOrderItsStepsRequire(avocado.Test):
         # tie-breaking order, not a dependency.
         self.assertEqual(names, ["bootstrap-host", "packages",
                                  "bootstrap-target", "rootfs", "appliance",
-                                 "tarball", "sbom", "disk", "image"])
+                                 "sbom", "disk", "image"])
 
         tasks = {t.name: t for t in build.image.tasks()}
         self.assertEqual(tasks["appliance"].needs,
@@ -823,9 +823,9 @@ class TargetNarrowsToWhatItNeeds(avocado.Test):
                          {"bootstrap-host", "packages", "bootstrap-target",
                           "rootfs"})
         # Nothing 'rootfs' itself needs anything that comes after it --
-        # tarball/sbom/disk/image are what asking for the whole build
-        # would have reached, not one task and its own dependencies.
-        self.assertNotIn("tarball", names)
+        # sbom/disk/image are what asking for the whole build would have
+        # reached, not one task and its own dependencies.
+        self.assertNotIn("sbom", names)
 
 class TargetOnAPackageExcludesItsOwnDeploy(avocado.Test):
     def test(self):
@@ -1012,7 +1012,7 @@ class PackagesOnlyStopsAtThePackages(avocado.Test):
         # Nothing that belongs to the image, the target bootstrap included:
         # packages are built in a chroot of the build architecture and
         # never touch it.
-        for step in ["bootstrap-target", "rootfs", "tarball", "disk",
+        for step in ["bootstrap-target", "rootfs", "disk",
                      "appliance", "image"]:
             self.assertNotIn(step, names)
 
@@ -1044,7 +1044,7 @@ class RootfsOnlyStopsAtTheTarball(avocado.Test):
         self.assertIn("bootstrap-target", names)
         self.assertIn("package:seine-test-library", names)
         self.assertIn("rootfs", names)
-        self.assertIn("tarball", names)
+        self.assertNotIn("tarball", names)
         for step in ["disk", "appliance", "image"]:
             self.assertNotIn(step, names)
 
@@ -1113,8 +1113,7 @@ class ADryRunSaysWhatItWouldDo(avocado.Test):
         said = said.getvalue()
 
         self.assertIn("would build the root file-system for", said)
-        for step in ["rootfs", "tarball"]:
-            self.assertIn(step, said)
+        self.assertIn("rootfs", said)
         for step in ["disk", "appliance", "image"]:
             self.assertNotIn(step, said)
 

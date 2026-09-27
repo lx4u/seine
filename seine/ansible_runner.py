@@ -142,7 +142,7 @@ class AnsibleContainerRunner:
 
     # Creates the target container, runs 'playbooks' against it and leaves
     # it running (stopped callers are expected to 'container export' it
-    # then 'container rm' it) for build_tarball() to pick up. On failure,
+    # then 'container rm' it) for Image._export() to pick up. On failure,
     # the container is torn down here since there's nothing left to export.
     def run(self, playbooks):
         transport = TransportBootstrap(self.baseline, self.distro, self.options,

@@ -277,7 +277,7 @@ class PackagesOnlyStopsBeforeOwnTasks(avocado.Test):
         rpi4.options["packages_only"] = True
         names = [t.name for t in multiconfig.merged_tasks([pc, rpi4])]
         self.assertIn("bootstrap-host", names)
-        for step in ["bootstrap-target", "rootfs", "tarball", "disk", "image"]:
+        for step in ["bootstrap-target", "rootfs", "disk", "image"]:
             self.assertFalse(any(n.endswith(":%s" % step) or n == step
                                  for n in names),
                              "%s should not be in a --packages-only graph" % step)
@@ -652,8 +652,8 @@ image:
         names = {t.name for t in self.outer().image.tasks()}
         for label in ["main", "recovery"]:
             self.assertIn("%s:rootfs" % label, names)
-            self.assertIn("%s:tarball" % label, names)
-            self.assertIn("%s:deploy-rootfs" % label, names)
+            self.assertNotIn("%s:tarball" % label, names)
+            self.assertNotIn("%s:deploy-rootfs" % label, names)
             # A group has no 'image:' of its own once pulled in this way
             # (the field test above), so own_tasks() never adds a disk.
             self.assertNotIn("%s:disk" % label, names)
@@ -803,9 +803,8 @@ image:
             cwd=path_to_sources, env=environment, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("main:rootfs", result.stdout)
-        self.assertIn("main:deploy-rootfs", result.stdout)
         self.assertIn("recovery:rootfs", result.stdout)
-        self.assertIn("recovery:deploy-rootfs", result.stdout)
+        self.assertNotIn("deploy-rootfs", result.stdout)
         self.assertNotIn("main:disk", result.stdout)
 
 # 'source:' on a partition routes it to a declared 'multiconfig:' group's
@@ -850,14 +849,10 @@ image:
         self.assertEqual(
             self.outer().image._referenced_sources(), ["main", "recovery"])
 
-    # Both groups here have no 'image:' of their own, so their tarballs
-    # only become safe to read once 'deploy-rootfs' has moved them to
-    # '_output' -- reading straight after '<label>:tarball' would race
-    # that rename (see Image._tarball_for()'s own comment).
-    def test_the_disk_task_waits_on_each_groups_deploy_rootfs(self):
+    def test_the_disk_task_waits_on_each_groups_rootfs(self):
         by_name = {t.name: t for t in self.outer().image.tasks()}
-        self.assertIn("main:deploy-rootfs", by_name["disk"].needs)
-        self.assertIn("recovery:deploy-rootfs", by_name["disk"].needs)
+        self.assertIn("main:rootfs", by_name["disk"].needs)
+        self.assertIn("recovery:rootfs", by_name["disk"].needs)
 
     def test_a_plain_disk_has_no_source_tasks_to_wait_on(self):
         build = _group("plain.img")
@@ -935,11 +930,11 @@ image:
 
         main_tar = os.path.join(self.workdir, "main.tar")
         self._tar(main_tar, ["etc/hostname"])
-        build.image.subbuilds["main"].image._output = main_tar
+        build.image.subbuilds["main"].image._tarball = main_tar
 
         recovery_tar = os.path.join(self.workdir, "recovery.tar")
         self._tar(recovery_tar, [])
-        build.image.subbuilds["recovery"].image._output = recovery_tar
+        build.image.subbuilds["recovery"].image._tarball = recovery_tar
 
         build.image._size_partitions()
 

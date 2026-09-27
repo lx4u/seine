@@ -31,6 +31,14 @@ Use these options for common variations:
 | `seine build --reproducible spec.yaml` | Normalize disk image partitions so two builds of the same spec give a byte-identical image. Slower; mainly for CI/release builds. |
 | `seine build --sign-key KEY spec.yaml` | Sign rebuilt packages with your GPG key. |
 
+The root file-system is deployed as `<image>.rootfs.tar` beside the image (an
+image-less specification's own output is `<name>.tar`), with a `.digest` file
+recording what it was built from: the specification less its `image:` and
+`containers:` sections, the base image, the packages built for it, the vendor
+lock and the files a playbook's `src:` names relative to the specification. A
+later build finds a match and skips the playbooks. Delete the tarball to force
+it; a file a playbook reads from an absolute host path is not tracked.
+
 `--target TASK` is useful while working on one part of a build. It builds that
 task and what it needs. Find task names with `seine plan --tasks-only spec.yaml`.
 
