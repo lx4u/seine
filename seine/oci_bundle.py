@@ -19,7 +19,9 @@ def import_bundled():
     for release in sorted(os.listdir(BUNDLE_DIR)):
         release_dir = os.path.join(BUNDLE_DIR, release)
         images = os.path.join(release_dir, "images.tar.gz")
-        if os.path.isfile(images):
+        # Skip reload if already loaded (debian:<release> is the bundle's first tag).
+        if os.path.isfile(images) and \
+           not ContainerEngine.hasImage("debian:%s" % release):
             ContainerEngine.run(["load", "-i", images])
         chroots = os.path.join(release_dir, "chroots")
         if os.path.isdir(chroots):
