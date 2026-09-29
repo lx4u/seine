@@ -133,3 +133,21 @@ class ApplianceDockerTest(avocado.Test):
 
         dockerfile = build_dockerfile(overridden)
         self.assertIn("linux-image-cloud-amd64", dockerfile)
+
+    def test_appliance_runtime_stage_includes_uki_and_signing_tools(self):
+        spec = {
+            "distribution": {
+                "source": "debian",
+                "release": "trixie",
+                "architecture": "amd64",
+            },
+        }
+        dockerfile = build_dockerfile(ImagerAppliance(DummySource(spec)))
+        self.assertIn("FROM target-bootstrap:latest AS builder", dockerfile)
+        self.assertIn("FROM target-bootstrap:latest AS base", dockerfile)
+        runtime_stage = dockerfile.split("FROM target-bootstrap:latest AS base")[1]
+        for tool in ["binutils", "sbsigntool", "libfaketime", "systemd-ukify"]:
+            self.assertIn(tool, runtime_stage)
+        self.assertIn("COPY --from=builder /appliance /appliance", runtime_stage)
+        self.assertIn("COPY --from=builder /extra-tools /extra-tools", runtime_stage)
+

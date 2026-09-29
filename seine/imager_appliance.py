@@ -6,6 +6,7 @@ import os
 from seine           import packages
 from seine.bootstrap import Bootstrap
 from seine.container import ContainerEngine
+from seine.utils import APT_CLEANUP
 from seine.utils import IMAGER_KIND
 
 # Fallback kernel per arch when the spec has no 'imager: kernel:'.
@@ -35,6 +36,10 @@ ARCH_INFO = {
 # Run as container commands, not extracted like BINARIES below.
 APT_PACKAGES = ["squashfs-tools", "erofs-utils", "binutils", "sbsigntool",
                 "cryptsetup-bin", "mtools", "e2fsprogs", "findutils"]
+# Minimal runtime tools required in the shipped appliance container image for
+# UKI anchoring and signing (imager.py runs objcopy, ukify, and sbsign as
+# container commands against this image).
+RUNTIME_APT_PACKAGES = ["binutils", "sbsigntool", "libfaketime"]
 # Needed inside the built appliance itself (LVM_WRAPPER_SCRIPT's
 # interpreter and LD_PRELOAD library). Listed both here, so supermin can
 # resolve them, and in its own hint directory, so it bundles them in.
@@ -81,6 +86,24 @@ DOCKER_HOSTFILES = [
     "/usr/bin/bbolt-normalize",
 ] + CONTAINER_KMOD_HOSTFILES
 CONTAINER_MEMSIZE = 2048
+
+# supermin defaults to a 4GB ext2 appliance regardless of actual content;
+# measured usage is ~730MB, so this leaves real headroom without the size.
+APPLIANCE_SIZE = "1G"
+
+# The appliance only ever boots inside libguestfs's own qemu VM, so real-
+# hardware driver categories are dead weight. Filesystem drivers stay.
+# 'scsi' is pruned separately below (KEPT_SCSI_MODULES), not dropped whole.
+PRUNED_DRIVERS = [
+    "net", "gpu", "media", "infiniband", "usb", "iio", "staging",
+    "hwmon", "hid", "comedi", "bluetooth", "mtd", "watchdog", "nfc", "isdn",
+    "atm", "pcmcia", "firewire", "thunderbolt", "w1", "soundwire",
+    "memstick", "gnss",
+]
+
+# drivers/scsi files an appliance boot actually insmods; the rest are
+# real-HBA or other-hypervisor drivers.
+KEPT_SCSI_MODULES = ["scsi_mod.ko", "scsi_common.ko", "sd_mod.ko", "virtio_scsi.ko"]
 
 # One appliance per (source, release, architecture, kernel). Images
 # that share those four values share one cached appliance, instead of
@@ -181,14 +204,24 @@ class ImagerAppliance(Bootstrap):
                         + (UKI_APT_PACKAGES if self.distro["release"] != "bookworm" else []))
         extra_packages = EXTRA_APPLIANCE_PACKAGES + DOCKER_SUPERMIN_PACKAGES
         hostfiles = ["/usr/sbin/.lvm-real/lvm"] + DOCKER_HOSTFILES
+        runtime_packages = (
+            RUNTIME_APT_PACKAGES
+            + (UKI_APT_PACKAGES if self.distro["release"] != "bookworm" else [])
+        )
         return self.build(
             IMAGER_APPLIANCE_SCRIPT.format(
                 base=self.source.targetBootstrap.name,
                 apt_setup=packages.apt_setup_layer(self.distro),
+                apt_cleanup=APT_CLEANUP,
+                pruned_drivers=" ".join(PRUNED_DRIVERS),
+                kept_scsi_modules=" ".join(
+                    "! -name '%s*'" % m for m in KEPT_SCSI_MODULES),
                 kernel=self.package,
                 apt_packages=" ".join(apt_packages),
+                runtime_packages=" ".join(runtime_packages),
                 extra_packages=" ".join(extra_packages),
                 hostfiles=" ".join(hostfiles),
+                appliance_size=APPLIANCE_SIZE,
                 host_cpu=info["host_cpu"],
                 triplet=info["triplet"],
                 binaries=" ".join(BINARIES),
@@ -331,11 +364,24 @@ sys.exit(rc)
 # Split into separate RUN steps: a heredoc can't sit inside a
 # backslash-continued RUN, and the moved-aside real 'lvm' binary must be
 # listed as a supermin hostfile so it isn't dropped from the build.
+#
+# Two stages: the builder stage installs everything needed to build the
+# appliance (kernel, supermin, libguestfs0, container tooling) and the
+# extra host-tool binaries. The final stage keeps only the minimal runtime
+# tools required by UKI anchoring and signing (objcopy, ukify, sbsign,
+# libfaketime) alongside /appliance and /extra-tools, dropping build-time
+# kernels, qemu, and container engines to keep the image footprint slim.
 IMAGER_APPLIANCE_SCRIPT = """
-FROM {base}
+FROM {base} AS builder
 {apt_setup}RUN apt-get update -qqy && \\
     INITRD=No apt-get install -qqy --no-install-recommends \\
         {kernel} supermin libguestfs0 {apt_packages} && \\
+    {apt_cleanup} && \\
+    for d in {pruned_drivers}; do rm -rf /lib/modules/*/kernel/drivers/$d; done && \\
+    find /lib/modules/*/kernel/drivers/scsi -mindepth 1 -type f \\
+        {kept_scsi_modules} -delete && \\
+    find /lib/modules/*/kernel/drivers/scsi -mindepth 1 -type d -empty -delete && \\
+    for kdir in /lib/modules/*; do depmod -a "$(basename "$kdir")"; done && \\
     mkdir -p /appliance /extra-tools /seine-hints /usr/sbin/.lvm-real && \\
     mv /usr/sbin/lvm /usr/sbin/.lvm-real/lvm && \\
     printf '%s\\n' {hostfiles} >/seine-hints/hostfiles && \\
@@ -348,8 +394,8 @@ RUN libfaketime=$(dpkg -L libfaketime | grep -E '/libfaketime\\.so\\.[0-9]+$') &
     sed -i "s#@LIBFAKETIME@#$libfaketime#" /usr/sbin/lvm && \\
     chmod +x /usr/sbin/lvm
 
-{bbolt_step}RUN supermin --build --verbose --copy-kernel -f ext2 --host-cpu {host_cpu} \\
-        /usr/lib/{triplet}/guestfs/supermin.d /seine-hints -o /appliance && \\
+{bbolt_step}RUN supermin --build --verbose --copy-kernel -f ext2 --size {appliance_size} \\
+        --host-cpu {host_cpu} /usr/lib/{triplet}/guestfs/supermin.d /seine-hints -o /appliance && \\
     for bin in {binaries}; do \\
         cp --parents "$bin" /extra-tools; \\
         for lib in $(ldd "$bin" 2>/dev/null | grep -oE '/[^ ]+'); do \\
@@ -362,5 +408,13 @@ RUN libfaketime=$(dpkg -L libfaketime | grep -E '/libfaketime\\.so\\.[0-9]+$') &
         done; \\
     done && \\
     apt-get clean
+
+FROM {base} AS base
+{apt_setup}RUN apt-get update -qqy && \\
+    INITRD=No apt-get install -qqy --no-install-recommends \\
+        {runtime_packages} && \\
+    {apt_cleanup}
+COPY --from=builder /appliance /appliance
+COPY --from=builder /extra-tools /extra-tools
 CMD /bin/true
 """
