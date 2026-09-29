@@ -20,8 +20,14 @@ class ABundleIsImportedBeforeBuilding(avocado.Test):
 
         self.real_run = ContainerEngine.run
         self.loaded = []
-        ContainerEngine.run = lambda cmd, check=False, loaded=self.loaded: \
-            loaded.append(cmd)
+        self.image_exists = False
+        class FakeResult:
+            def __init__(self, returncode):
+                self.returncode = returncode
+        def fake_run(cmd, check=False):
+            self.loaded.append(cmd)
+            return FakeResult(0 if self.image_exists else 1)
+        ContainerEngine.run = fake_run
 
         oci_bundle._attempted = False
         self.bundle_dir = os.path.join(self.workdir, "oci")
@@ -62,16 +68,28 @@ class ABundleIsImportedBeforeBuilding(avocado.Test):
 
         oci_bundle.import_bundled()
 
-        self.assertEqual(self.loaded, [["load", "-i", images]])
+        self.assertEqual(self.loaded,
+            [["image", "exists", "debian:bookworm"], ["load", "-i", images]])
+
+    def test_a_bundled_images_archive_is_skipped_when_already_loaded(self):
+        release = self.release_dir()
+        images = os.path.join(release, "images.tar.gz")
+        open(images, "wb").close()
+        self.image_exists = True
+
+        oci_bundle.import_bundled()
+
+        self.assertEqual(self.loaded, [["image", "exists", "debian:bookworm"]])
 
     def test_importing_is_attempted_only_once(self):
         release = self.release_dir()
         open(os.path.join(release, "images.tar.gz"), "wb").close()
 
         oci_bundle.import_bundled()
+        first_call_count = len(self.loaded)
         oci_bundle.import_bundled()
 
-        self.assertEqual(len(self.loaded), 1)
+        self.assertEqual(len(self.loaded), first_call_count)
 
     def test_a_release_with_neither_file_does_nothing(self):
         self.release_dir("bookworm")
