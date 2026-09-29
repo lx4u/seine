@@ -267,6 +267,84 @@ class MergeVolumeAttributes(avocado.Test):
         if vol["size"] != 500 * 1024 * 1024:
             self.fail("expected size of 500MiB: got %s" % vol["size"])
 
+class MergeNewVmFormatIsAdded(avocado.Test):
+    def test(self):
+        build = BuildCmd()
+        build.loads("""
+            image:
+                filename: simple-test.img
+                partitions:
+                    - label: rootfs
+                      where: /
+            vms:
+                formats:
+                    vmware:
+                        type: vmdk
+        """)
+        build.loads("""
+            vms:
+                formats:
+                    virtualbox:
+                        type: vdi
+        """)
+        spec = build.parse()
+        formats = spec["vms"]["formats"]
+        self.assertEqual(set(formats), {"vmware", "virtualbox"})
+
+class MergeVmFormatSettingIsAmended(avocado.Test):
+    def test(self):
+        build = BuildCmd()
+        build.loads("""
+            image:
+                filename: simple-test.img
+                partitions:
+                    - label: rootfs
+                      where: /
+            vms:
+                formats:
+                    vmware:
+                        type: vmdk
+        """)
+        # Two peer files, so the second amends 'vmware' with a setting
+        # the first never gave it.
+        build.loads("""
+            vms:
+                formats:
+                    vmware:
+                        cpus: 8
+        """)
+        spec = build.parse()
+        formats = spec["vms"]["formats"]
+        self.assertEqual(len(formats), 1)
+        self.assertEqual(formats["vmware"]["type"], "vmdk")
+        self.assertEqual(formats["vmware"]["cpus"], 8)
+
+class MergeVmDefaults(avocado.Test):
+    def test(self):
+        build = BuildCmd()
+        build.loads("""
+            image:
+                filename: simple-test.img
+                partitions:
+                    - label: rootfs
+                      where: /
+            vms:
+                defaults:
+                    cpus: 4
+                formats:
+                    vmware:
+                        type: vmdk
+        """)
+        build.loads("""
+            vms:
+                defaults:
+                    memory: 4096
+        """)
+        spec = build.parse()
+        defaults = spec["vms"]["defaults"]
+        self.assertEqual(defaults["cpus"], 4)
+        self.assertEqual(defaults["memory"], 4096)
+
 if __name__ == "__main__":
     avocado.main()
 
