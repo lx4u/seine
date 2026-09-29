@@ -16,7 +16,8 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.utils import (apt_sources, apt_sources_dockerfile, base_feed,
-                         feeds, feed_keyrings_script, offline_apt_script)
+                         feeds, feed_keyrings_script, offline_apt_script,
+                         release_feeds)
 
 # Nothing under here may write into the machine's own cache. These build
 # Builder objects directly, and asking one for a stamp or an index makes
@@ -233,6 +234,29 @@ class FeedsCarryTheirOwnRelease(avocado.Test):
     def test_unset_defaults_to_its_own_suite(self):
         parsed = feeds(distro([{"suite": "bookworm-backports"}]))
         self.assertEqual(parsed[0]["release"], "bookworm-backports")
+
+# release_feeds() must not pull in a bare suite line for another
+# release (debian-feeds.yaml's shape), even untagged, once a sibling
+# entry names that suite as its own 'release:'.
+class ReleaseFeedsDropsAnUntaggedOtherRelease(avocado.Test):
+    def test_a_bare_suite_naming_another_release_is_dropped(self):
+        kept = release_feeds(distro([
+            {"suite": "bookworm"},
+            {"suite": "bookworm-updates", "release": "bookworm"},
+            {"suite": "trixie"},
+            {"suite": "trixie-updates", "release": "trixie"},
+        ]))
+        self.assertEqual([f["suite"] for f in kept],
+                        ["bookworm", "bookworm-updates"])
+
+    def test_an_untagged_pocket_of_the_only_release_is_kept(self):
+        kept = release_feeds(distro([
+            {"suite": "bookworm"},
+            {"suite": "bookworm-updates"},
+            {"suite": "bookworm-security"},
+        ]))
+        self.assertEqual([f["suite"] for f in kept],
+                        ["bookworm", "bookworm-updates", "bookworm-security"])
 
 class RebuiltWhenAFeedMoves(avocado.Test):
     def stamp(self, feeds):

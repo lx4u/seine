@@ -120,6 +120,22 @@ def base_feed(distro):
             return feed
     raise ValueError("no feed for suite '%s'!" % release)
 
+# Only this distro's own feeds, dropping any other release a shared
+# feeds file also lists. An untagged entry defaults to this distro's own
+# release, unless its suite is itself a release named elsewhere.
+def release_feeds(distro):
+    release = distro["release"]
+    entries = distro.get("feeds") or [{"suite": release}]
+    named_releases = {e["release"] for e in entries if "release" in e}
+    def own_release(entry):
+        if "release" in entry:
+            return entry["release"]
+        if entry["suite"] in named_releases and entry["suite"] != release:
+            return entry["suite"]
+        return release
+    kept = {entry["suite"] for entry in entries if own_release(entry) == release}
+    return [feed for feed in feeds(distro) if feed["suite"] in kept]
+
 # Where a feed's own resolved trust anchor lands, installed by
 # feed_keyrings_script() before anything reads from it. Named by suite,
 # so it never collides with packages.py's own KEYRINGS use of the same

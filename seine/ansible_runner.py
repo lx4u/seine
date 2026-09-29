@@ -11,9 +11,9 @@ from seine.transport_bootstrap import TransportBootstrap
 from seine import tasks
 from seine.container import ContainerEngine, spawn_own_pgroup
 from seine.utils                import base_feed
-from seine.utils                import feeds
 from seine.utils                import locale_purge_script
 from seine.utils                import offline_apt_script
+from seine.utils                import release_feeds
 from seine.utils                import vendor_mountpoint
 
 # Mount point for the shared downloads cache. Not apt's own archives dir:
@@ -104,12 +104,13 @@ class AnsibleContainerRunner:
                     'done; true' % {"from": ARCHIVES, "to": DOWNLOADS}], check=False)
 
     # Adds the feeds beyond base_feed() (already baked in by TargetBootstrap).
-    # Match by value, not feeds()[1:]: base_feed() picks by suite, and it
-    # is not always first (e.g. debian-feeds.yaml lists other releases too).
+    # release_feeds() drops any other release a shared feeds file also
+    # lists (e.g. debian-feeds.yaml), so this only adds this release's own
+    # pockets, not another release's packages at the same priority.
     def _configure_feeds(self):
         if self.distro.get("apt-pull-mode") != "offline":
             base = base_feed(self.distro)
-            extra = [feed for feed in feeds(self.distro) if feed != base]
+            extra = [feed for feed in release_feeds(self.distro) if feed != base]
             if len(extra) == 0:
                 return
             script = offline_apt_script(self.distro, extra, FEEDS_LIST)
@@ -137,7 +138,7 @@ class AnsibleContainerRunner:
         if self.distro.get("apt-pull-mode") != "offline":
             return
         script = "rm -f %s; " % FEEDS_LIST
-        script += offline_apt_script(self.distro, feeds(self.distro), FEEDS_LIST)
+        script += offline_apt_script(self.distro, release_feeds(self.distro), FEEDS_LIST)
         self._exec(["sh", "-c", script])
 
     # Creates the target container, runs 'playbooks' against it and leaves
