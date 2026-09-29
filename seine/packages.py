@@ -17,6 +17,7 @@ from datetime import datetime
 from datetime import timezone
 from email.utils import format_datetime
 
+from seine        import git
 from seine        import kernel
 from seine        import kmod_sign
 from seine.deb    import repack
@@ -616,6 +617,9 @@ class Builder:
             return sourcedir
 
         ssh_volumes, environment = self._ssh(package)
+        if package.scheme == "git":
+            location = package.source.split("://", 1)[1].split(";")[0]
+            ssh_volumes = ssh_volumes + [git.volume(location)]
         args, volumes = self._offline_fetch(
             self._fetch_args(package), package, volumes + ssh_volumes)
         self.builderImage.exec(
@@ -715,14 +719,9 @@ class Builder:
         protocol = package.parameters.get("protocol", "https")
         location = package.source.split("://", 1)[1].split(";")[0]
         url = "%s://%s" % (protocol, location)
-
-        args = ["git", "clone"]
-        if "branch" in package.parameters:
-            args += ["--branch", package.parameters["branch"]]
-        args += [url, package.source_name]
-        # 'rev' is what is actually built; the branch only helps find it.
-        return ["sh", "-c", "%s && cd %s && git checkout --detach %s" % (
-            " ".join(args), package.source_name, package.parameters["rev"])]
+        return git.clone_args(url, package.source_name,
+                              package.parameters["rev"],
+                              package.parameters.get("branch"))
 
     # Under 'apt-pull-mode: offline', the builder image's own
     # sources.list no longer carries this suite, so it is written fresh
