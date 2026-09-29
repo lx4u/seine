@@ -99,6 +99,25 @@ def _write_release_spec(workdir, name, release):
             "    - name: openssl\n" % release)
     return path
 
+# A shared feeds file (debian-feeds.yaml's own shape): two releases'
+# feeds in one list, only one of which is this spec's own.
+def _write_feeds_spec(workdir):
+    path = os.path.join(workdir, "feeds.yaml")
+    with open(path, "w") as f:
+        f.write(
+            "distribution:\n"
+            "    release: bookworm\n"
+            "    architecture: amd64\n"
+            "    uri: http://example.com/debian\n"
+            "    feeds:\n"
+            "        - suite: bookworm\n"
+            "          release: bookworm\n"
+            "        - suite: trixie\n"
+            "          release: trixie\n"
+            "vendor:\n"
+            "    - name: openssl\n")
+    return path
+
 # Descends 'labels' from 'node', asserting each step actually matched --
 # a broken chain fails at the label that went missing, not with an
 # AttributeError three calls later.
@@ -206,6 +225,48 @@ class PathResolution(avocado.Test):
         context.use([spec_b])
         tree.load(context)
         self.assertIsNone(tree.node_for(path))
+
+# A feed for another release (release_feeds() in seine/utils.py) is
+# still shown, but marked as not used by this build -- no running App
+# needed, same style as NestedGroups above.
+class InapplicableFeeds(avocado.Test):
+    """
+    :avocado: tags=tui
+    """
+    def setUp(self):
+        with _tui_required(self):
+            from seine.tui.context import Context
+            from seine.tui.spectree import SpecTree, INAPPLICABLE_STYLE
+        self.Context = Context
+        self.SpecTree = SpecTree
+        self.INAPPLICABLE_STYLE = INAPPLICABLE_STYLE
+        os.environ["SEINE_CACHE_DIR"] = self.workdir
+        os.environ["XDG_CONFIG_HOME"] = self.workdir
+
+    def _tree(self, files):
+        context = self.Context()
+        context.use(files)
+        tree = self.SpecTree()
+        tree.load(context)
+        return tree
+
+    def test_a_feed_of_another_release_is_struck_through(self):
+        spec = _write_feeds_spec(self.workdir)
+        tree = self._tree([spec])
+        root = tree.root.children[0]
+        feeds = _descend(self, root, "distribution", "feeds")
+        trixie = _child(feeds, "trixie")
+        self.assertIsNotNone(trixie)
+        self.assertEqual(trixie.label.style, self.INAPPLICABLE_STYLE)
+
+    def test_this_build_s_own_feed_is_unaffected(self):
+        spec = _write_feeds_spec(self.workdir)
+        tree = self._tree([spec])
+        root = tree.root.children[0]
+        feeds = _descend(self, root, "distribution", "feeds")
+        bookworm = _child(feeds, "bookworm")
+        self.assertIsNotNone(bookworm)
+        self.assertNotEqual(bookworm.label.style, self.INAPPLICABLE_STYLE)
 
 # Full app, real Textual event loop -- highlight_active()/branch_for()
 # only prove they route a namespaced task name to the right subtree when
