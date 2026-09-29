@@ -55,6 +55,14 @@ def _use(app, argv):
     app.say("using %s" % app.context.label())
     app.refresh_screens()
 
+# Switches to overview when the current screen has no spec tree to show
+# the side-load's effect on; otherwise just refreshes it in place.
+def _refresh_or_show_spectree(app):
+    if app.screen.query(".spectree"):
+        app.refresh_screens()
+    else:
+        app.show("overview")
+
 def _side_load(app, argv):
     """load one more fragment on top of the active spec, highlighting what it changed
 
@@ -69,7 +77,7 @@ def _side_load(app, argv):
     except (OSError, ValueError) as e:
         raise CommandError(str(e))
     app.say("side-loaded %s" % argv[0])
-    app.refresh_screens()
+    _refresh_or_show_spectree(app)
 
 def _side_unload(app, argv):
     """drop one side-loaded fragment back out, highlighting what it reverted
@@ -85,7 +93,7 @@ def _side_unload(app, argv):
     except (OSError, ValueError) as e:
         raise CommandError(str(e))
     app.say("side-unloaded %s" % argv[0])
-    app.refresh_screens()
+    _refresh_or_show_spectree(app)
 
 def _validate(app, argv):
     """check a specification loads and parses, without using it
