@@ -1013,6 +1013,28 @@ class BuildCmd(Cmd):
         else:
             self.spec["initrd"] = spec["initrd"]
 
+    # direction: most-specific file wins for 'defaults:' settings, same as
+    # 'image:''s own scalars; 'formats:' entries matched by name like
+    # 'partitions'/'volumes' -- asking file wins within 'requires:', peer
+    # amends instead (docs/merging.md).
+    def _merge_vms(self, spec, peer=False):
+        incoming = spec["vms"]
+        if "vms" not in self.spec:
+            self.spec["vms"] = incoming
+            return
+        current = self.spec["vms"]
+        for setting in incoming.get("defaults", {}):
+            current.setdefault("defaults", {})[setting] = incoming["defaults"][setting]
+        formats = current.setdefault("formats", {})
+        for name, settings in incoming.get("formats", {}).items():
+            if name not in formats:
+                formats[name] = settings
+            else:
+                existing = formats[name]
+                for setting in settings:
+                    if setting not in existing or peer:
+                        existing[setting] = settings[setting]
+
     # Gathered from every file, not just the last: the fragment holding a
     # secret is the one that knows it's a secret. An entry is a pattern
     # or a path rule; both merge the same way (docs/merging.md).
@@ -1042,6 +1064,8 @@ class BuildCmd(Cmd):
             self._merge_image(spec, peer=peer)
         if "initrd" in spec:
             self._merge_initrd(spec)
+        if "vms" in spec:
+            self._merge_vms(spec, peer=peer)
         return self.spec
 
     def _merge_containers(self, spec):

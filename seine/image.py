@@ -30,6 +30,7 @@ from seine.transport_bootstrap import TransportBootstrap
 from seine.sbom           import SBOM
 from seine.sbuild         import BuilderImage
 from seine.tasks          import Task
+from seine.vmimage        import VmImages
 from seine.container import ContainerEngine
 
 # Says what apt checks, as (release, fingerprint, origin) entries --
@@ -53,7 +54,7 @@ IMAGE_REVISION = 1
 
 # Sections that do not change the root file-system. Editing them must
 # not rebuild it.
-DISK_ONLY = ("image", "initrd", "containers", "multiconfig", "test", "tests",
+DISK_ONLY = ("image", "initrd", "vms", "containers", "multiconfig", "test", "tests",
              "keywords", "variables")
 
 class Image:
@@ -71,6 +72,7 @@ class Image:
         # same path once the 'rootfs' task is done.
         self._rootfs = None
         self._tarball = None
+        self.vmImages = VmImages(self)
         self._verbose = options["verbose"]
         # Used by _normalize_timestamps() to find files written by this run.
         self._started = time.time()
@@ -156,6 +158,7 @@ class Image:
             spec["baseline"] = self._from
 
         self.spec = spec
+        self.vmImages.parse(spec)
         return self.spec
 
     # Named from the spec file's basename ('main.yaml' -> 'main.tar') so
@@ -597,7 +600,7 @@ class Image:
         return common + [
             Task("disk", self._prepare_disk,
                 needs=["rootfs"] + self._source_task_names(), resource="io"),
-        ] + Imager(self).tasks(needs_packages)
+        ] + Imager(self).tasks(needs_packages) + self.vmImages.tasks()
 
     # Pulled out of the built tarball rather than the tarball itself:
     # more than one match is the same build-time error the imager's own
