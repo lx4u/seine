@@ -141,7 +141,10 @@ def build_release(release, out, lock):
     os.makedirs(release_out, exist_ok=True)
     with gzip.open(os.path.join(release_out, "images.tar.gz"), "wb",
                    compresslevel=1) as gz:
-        podman = ContainerEngine.Popen(["save"] + tags, stdout=subprocess.PIPE)
+        # Without '-m', 'save' treats every name after the first as
+        # another tag of THAT image, silently dropping the rest's own
+        # content.
+        podman = ContainerEngine.Popen(["save", "-m"] + tags, stdout=subprocess.PIPE)
         shutil.copyfileobj(podman.stdout, gz)
         podman.stdout.close()
         if podman.wait() != 0:
