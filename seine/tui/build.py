@@ -285,7 +285,7 @@ class BuildScreen(BaseScreen):
     # then a second row split the same 2/3 : 1/3 way.
     def compose(self):
         yield Horizontal(
-            SpecTree(id="spectree"),
+            SpecTree(id="spectree", classes="spectree"),
             StaticPane(Static(id="body", markup=False), id="cmd"),
             id="main",
         )
