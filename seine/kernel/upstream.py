@@ -15,6 +15,7 @@ from datetime import datetime
 from datetime import timezone
 from email.utils import format_datetime
 
+from seine import git
 from seine.utils import GIT_EMAIL
 from seine.utils import GIT_NAME
 from seine.utils import WORKDIR
@@ -42,10 +43,13 @@ def fetch_upstream(builder, package, workdir):
         return
     staging = os.path.join(workdir, UPSTREAM)
     os.makedirs(staging, exist_ok=True)
+    volumes = [(staging, WORKDIR)]
+    if upstream.scheme == "git":
+        location = upstream.uri.split("://", 1)[1].split(";")[0]
+        volumes.append(git.volume(location))
     print("fetching '%s'" % upstream)
-    builder.builderImage.exec(
-        _upstream_args(upstream), volumes=[(staging, WORKDIR)],
-        workdir=WORKDIR)
+    builder.builderImage.exec(_upstream_args(upstream), volumes=volumes,
+                              workdir=WORKDIR)
     _verify_upstream(builder, package, staging)
 
 # Puts the distribution's packaging on a kernel tree it wasn't written
@@ -109,12 +113,9 @@ def _upstream_args(upstream):
 
     protocol = upstream.parameters.get("protocol", "https")
     location = upstream.uri.split("://", 1)[1].split(";")[0]
-    args = ["git", "clone"]
-    if "branch" in upstream.parameters:
-        args += ["--branch", upstream.parameters["branch"]]
-    args += ["%s://%s" % (protocol, location), upstream.name]
-    return ["sh", "-c", "%s && cd %s && git checkout --detach %s" % (
-        " ".join(args), upstream.name, upstream.parameters["rev"])]
+    url = "%s://%s" % (protocol, location)
+    return git.clone_args(url, upstream.name, upstream.parameters["rev"],
+                          upstream.parameters.get("branch"))
 
 # The source package name, which the tree's own directory name isn't:
 # Debian's kernel tree unpacks as linux-<version> but the source is
