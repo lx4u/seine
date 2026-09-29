@@ -11,8 +11,10 @@ from textual.widgets import Tree
 
 from seine import multiconfig
 from seine import tasks
+from seine.utils import feeds as list_feeds
 from seine.utils import redact as redact_value
 from seine.utils import redactions
+from seine.utils import release_feeds
 
 # A list item's own name, matched to the same fields BuildCmd.diff()
 # uses (name/label/suite/package), so an entry reads the same here.
@@ -49,7 +51,7 @@ def _item_label(item, index):
 NO_DIFF = object()
 MISSING = object()
 
-def _populate(node, key, value, old, changed, redact, path=()):
+def _populate(node, key, value, old, changed, redact, path=(), distro=None):
     path = path + (key,)
     diffing = old is not NO_DIFF
     if isinstance(value, dict):
@@ -64,7 +66,7 @@ def _populate(node, key, value, old, changed, redact, path=()):
             if isinstance(k, str) and k.startswith("_"):
                 continue
             child_old = old.get(k, MISSING) if diffing else NO_DIFF
-            _populate(branch, k, v, child_old, changed, redact, path)
+            _populate(branch, k, v, child_old, changed, redact, path, distro)
     elif isinstance(value, list):
         branch = node.add(str(key), data=str(key))
         # Matched by the same label as _item_label(), so reordering or
@@ -76,11 +78,23 @@ def _populate(node, key, value, old, changed, redact, path=()):
                 (_item_label(o, i) if isinstance(o, dict) else str(o)): o
                 for i, o in enumerate(old_list)
             }
+        # Feeds of a release other than this build's own (release_feeds()
+        # in seine/utils.py), marked below instead of hidden.
+        inapplicable = None
+        if key == "feeds" and distro is not None:
+            try:
+                inapplicable = ({f["suite"] for f in list_feeds(distro)} -
+                               {f["suite"] for f in release_feeds(distro)})
+            except (KeyError, ValueError):
+                inapplicable = None
         for index, item in enumerate(value):
             if isinstance(item, (dict, list)):
                 label = _item_label(item, index)
                 child_old = old_by_label.get(label, MISSING) if diffing else NO_DIFF
-                _populate(branch, label, item, child_old, changed, redact, path)
+                _populate(branch, label, item, child_old, changed, redact, path, distro)
+                if (inapplicable and isinstance(item, dict)
+                        and item.get("suite") in inapplicable):
+                    branch.children[-1].set_label(Text(label, style=INAPPLICABLE_STYLE))
             else:
                 text = str(redact(item, path))
                 leaf = branch.add_leaf(text, data=text)
@@ -106,11 +120,13 @@ def _populate_multiconfig(node, subbuilds, changed):
         subgroup = branch.add(label, expand=True, data=label)
         rules = redactions(subbuild.spec)
         redact = lambda value, path, rules=rules: redact_value(value, rules, path)
+        distro = subbuild.spec.get("distribution")
         for key, value in subbuild.spec.items():
             if isinstance(key, str) and key.startswith("_"):
                 continue
             section_redact = (lambda v, path: v) if key == "redact" else redact
-            _populate(subgroup, key, value, NO_DIFF, changed, section_redact)
+            _populate(subgroup, key, value, NO_DIFF, changed, section_redact,
+                     distro=distro)
 
 # Prefixed onto a node's label while a running build is touching it, a
 # separate axis from the BUILD OUTPUT tasklist's step marks (one step
@@ -123,6 +139,10 @@ ACTIVE_STYLE = "bold orange1"
 # what changed a moment ago.
 CHANGED_MARK = "+ "
 CHANGED_STYLE = "bold cyan1"
+
+# A 'distribution: feeds:' entry for a release other than this build's
+# own, still shown but marked as not used.
+INAPPLICABLE_STYLE = "strike grey50"
 
 class SpecTree(Tree):
     BINDINGS = Tree.BINDINGS + [
@@ -193,6 +213,7 @@ class SpecTree(Tree):
             rules = redactions(build.spec)
             redact = lambda value, path, rules=rules: redact_value(value, rules, path)
             old = previous_spec if (previous_spec is not None and index == 0) else NO_DIFF
+            distro = build.spec.get("distribution")
             for key, value in build.spec.items():
                 if isinstance(key, str) and key.startswith("_"):
                     continue
@@ -206,7 +227,8 @@ class SpecTree(Tree):
                 # 'redact' itself is shown as written, same exclusion
                 # BuildCmd.dump() makes.
                 section_redact = (lambda v, path: v) if key == "redact" else redact
-                _populate(group, key, value, child_old, changed, section_redact)
+                _populate(group, key, value, child_old, changed, section_redact,
+                         distro=distro)
         for node in changed:
             self._changed.add(node)
             self._render(node)
