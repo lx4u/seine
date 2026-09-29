@@ -61,7 +61,7 @@ class ChatScreen(BaseScreen):
 
     def compose(self):
         yield Horizontal(
-            SpecTree(id="spectree"),
+            SpecTree(id="spectree", classes="spectree"),
             StaticPane(Static(id="body", markup=False), id="cmd"),
             id="main",
         )

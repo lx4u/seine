@@ -242,7 +242,7 @@ class FilesystemScreen(BaseScreen):
     # #previewpane shares the body slot with #fslist while previewing.
     def compose(self):
         yield Horizontal(
-            SpecTree(id="spectree"),
+            SpecTree(id="spectree", classes="spectree"),
             Vertical(
                 Static(id="path", markup=False),
                 FilesystemList(id="fslist"),

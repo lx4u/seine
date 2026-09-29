@@ -325,7 +325,7 @@ class BaseScreen(Screen):
     # overrides compose() for its own layout.
     def compose(self):
         yield Horizontal(
-            SpecTree(id="spectree"),
+            SpecTree(id="spectree", classes="spectree"),
             # markup=False: a YAML list like 'partitions: [a, b]' would
             # else be read as a markup tag.
             StaticPane(Static(id="body", markup=False), id="cmd"),
