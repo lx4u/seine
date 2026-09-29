@@ -11,6 +11,7 @@ sys.path.append(path_to_sources)
 
 import seine.oci_bundle as oci_bundle
 from seine.container import ContainerEngine
+from seine.vault.dev import CUSTOM_IMAGE
 
 class ABundleIsImportedBeforeBuilding(avocado.Test):
     def setUp(self):
@@ -80,6 +81,16 @@ class ABundleIsImportedBeforeBuilding(avocado.Test):
         oci_bundle.import_bundled()
 
         self.assertEqual(self.loaded, [["image", "exists", "debian:bookworm"]])
+
+    def test_a_vault_bundle_is_checked_under_its_own_tag(self):
+        release = self.release_dir("vault")
+        images = os.path.join(release, "images.tar.gz")
+        open(images, "wb").close()
+
+        oci_bundle.import_bundled()
+
+        self.assertEqual(self.loaded,
+            [["image", "exists", CUSTOM_IMAGE], ["load", "-i", images]])
 
     def test_importing_is_attempted_only_once(self):
         release = self.release_dir()
