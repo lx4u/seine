@@ -226,7 +226,7 @@ class VendorScreen(BaseScreen):
     # much as the tree/log.
     def compose(self):
         yield Horizontal(
-            SpecTree(id="vendorspectree"),
+            SpecTree(id="vendorspectree", classes="spectree"),
             StaticPane(Static(id="vendorstats", markup=False), id="vendorstatspane"),
             id="vendormain",
         )

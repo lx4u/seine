@@ -111,7 +111,7 @@ class OverviewScreen(BaseScreen):
     # pane only shows while a replay with a timeline runs.
     def compose(self):
         yield Horizontal(
-            SpecTree(id="spectree"),
+            SpecTree(id="spectree", classes="spectree"),
             LogViewer(id="logviewer"),
             CastPane(Static(id="cast", markup=False), id="castpane"),
             Vertical(
@@ -419,7 +419,7 @@ class DiffScreen(BaseScreen):
 class TestScreen(BaseScreen):
     def compose(self):
         yield Horizontal(
-            SpecTree(id="spectree"),
+            SpecTree(id="spectree", classes="spectree"),
             StaticPane(Static(id="body", markup=False), id="cmd"),
             id="main",
         )
