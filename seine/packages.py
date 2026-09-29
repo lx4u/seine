@@ -38,10 +38,10 @@ from seine.sbuild import REPOSITORY
 from seine.sbuild import SbuildChroot
 from seine.sbuild import TOOLCHAINS
 from seine.utils  import apt_sources
-from seine.utils  import feeds
 from seine.utils  import locked
 from seine.utils  import offline_apt_script
 from seine.utils  import offline_suites
+from seine.utils  import release_feeds
 from seine.utils  import vendor_mountpoint
 from seine.container import ContainerEngine
 from seine.utils  import GIT_EMAIL
@@ -737,7 +737,7 @@ class Builder:
         from seine import vendor
         volumes = volumes + [(vendor.deploy_repository(suite), vendor_mountpoint(suite))
                              for suite in suites]
-        script = offline_apt_script(self.distro, feeds(self.distro),
+        script = offline_apt_script(self.distro, release_feeds(self.distro),
                                     "/etc/apt/sources.list.d/seine.list",
                                     offline=True)
         script += "apt-get update -qqy; "

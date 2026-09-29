@@ -9,12 +9,14 @@
 distribution:
     feeds:
         - suite: bookworm
+          release: bookworm
         - suite: bookworm-updates
           release: bookworm
         - suite: bookworm-security
           release: bookworm
           uri: http://security.debian.org/debian-security
         - suite: trixie
+          release: trixie
         - suite: trixie-updates
           release: trixie
         - suite: trixie-security

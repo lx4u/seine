@@ -12,10 +12,10 @@ from seine.container import ContainerEngine
 from seine.utils     import apt_sources
 from seine.utils     import apt_sources_dockerfile
 from seine.utils     import APT_CLEANUP
-from seine.utils     import feeds
 from seine.utils     import feed_keyrings_script
 from seine.utils     import locked
 from seine.utils     import offline_suites
+from seine.utils     import release_feeds
 from seine.utils     import vendor_mountpoint
 from seine.utils     import BUILDER_KIND
 from seine.utils     import HOST_ARCH
@@ -60,7 +60,7 @@ class BuilderImage(Bootstrap):
     # of baking a path that would go stale.
     def _sources(self):
         offline = set(offline_suites(self.distro))
-        online = [feed for feed in feeds(self.distro)
+        online = [feed for feed in release_feeds(self.distro)
                  if feed["suite"] not in offline]
         return apt_sources_dockerfile(self.distro, online, sources=True)
 
@@ -200,7 +200,7 @@ class SbuildChroot:
             "--customize-hook=sync-out /var/cache/apt/archives /var/cache/mmdebstrap",
             self.distro["release"],
             "/root/.cache/sbuild/%s" % self.filename,
-        ] + apt_sources(self.distro, offline=offline)
+        ] + apt_sources(self.distro, entries=release_feeds(self.distro), offline=offline)
         # Digested before the temp name is swapped in below, so where a
         # chroot is written doesn't affect what it's made from. Offline vs
         # online sources digest differently, so an 'apt-pull-mode' flip
@@ -229,7 +229,7 @@ class SbuildChroot:
         # keyring out first -- only built (and only reaches the vault)
         # once the cache-hit check above has already said this chroot
         # needs making.
-        install = feed_keyrings_script(feeds(self.distro), offline=offline)
+        install = feed_keyrings_script(release_feeds(self.distro), offline=offline)
         if install:
             args = ["sh", "-c", install + '; exec "$@"', "sh"] + args
         try:

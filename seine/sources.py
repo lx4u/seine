@@ -18,7 +18,7 @@ from seine.cmd       import Cmd
 from seine.utils     import apt_sources
 from seine.container import ContainerEngine
 from seine.utils     import feed_keyrings_script
-from seine.utils     import feeds
+from seine.utils     import release_feeds
 from seine.utils     import SOURCE_KIND
 
 INDEX_FILE = "index.json"
@@ -162,10 +162,10 @@ def pull(spec, distro, options=None, directory=None):
     image.create()
 
     package = "%s=%s" % (name, version) if version else name
-    install = feed_keyrings_script(feeds(distro))
+    install = feed_keyrings_script(release_feeds(distro))
     feed_lines = "".join(
         "echo '%s' >> /etc/apt/sources.list.d/seine-source.list; " % line
-        for line in apt_sources(distro, sources=True))
+        for line in apt_sources(distro, entries=release_feeds(distro), sources=True))
     script = (install + "; " if install else "") + feed_lines \
            + "apt-get update -qqy && apt-get source %s" % package
 
