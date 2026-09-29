@@ -1765,6 +1765,79 @@ image:
       size: 64MiB          # must be given -- unknown until the hash tree is built
 ```
 
+## vms
+
+Converts the finished disk image into one or more hypervisor formats
+with `qemu-img convert`, needs an `image` section to convert. `vms` has
+two top-level attributes:
+
+ * `defaults` -- settings every `formats` entry starts from
+ * `formats` -- a dictionary of named artifacts to produce, keyed by
+   whatever name you like (not a fixed set of hypervisors), each naming
+   a `type`
+
+Both `defaults` and each `formats` entry accept the same settings:
+
+| Attribute          | Required | Description                              |
+| ------------------ |:--------:| ----------------------------------------- |
+| type                | yes (per format) | `ova`, `vmdk`, `vhdx`, `vdi`, `qcow2` or `raw` -- see below |
+| firmware            | no       | `uefi` (default) or `bios`               |
+| tpm                 | no       | Give the VM a TPM (default `true`)       |
+| serial              | no       | Give the VM a serial port (default `true`) |
+| cpus                | no       | Virtual CPUs (default `2`)               |
+| memory              | no       | Memory in MiB (default `2048`)           |
+| thin-provisioning   | no       | Sparse rather than fully-allocated (default `true`); no effect on `ova`, whose disk is always stream-optimized |
+| options             | no       | Extra `qemu-img convert -o` key/value pairs, passed straight through; no effect on `ova` |
+
+A format entry's own settings override `defaults`; `type` and `options`
+are per-format only, never in `defaults`. Output lands beside the main
+image, named `<image>-<format-name>.<ext>` (e.g. `pc-image-vmware.ova`)
+-- always suffixed by the format's name, even with only one format
+declared, so two entries sharing the same `type` never collide.
+
+`vmdk`/`vhdx`/`vdi`/`qcow2`/`raw` are a bare disk converted with
+`qemu-img convert`, for attaching to a VM by hand or feeding tooling
+(libvirt, plain qemu) that already takes cpus/memory another way.
+
+`ova` instead builds a full [Open Virtualization
+Appliance](https://en.wikipedia.org/wiki/Virtual_appliance#Open_Virtualization_Format):
+a stream-optimized VMDK plus an OVF XML descriptor (cpus, memory,
+firmware) and a manifest, tarred together -- the one package both
+VMware and VirtualBox import directly (File > Import Appliance),
+without a hypervisor-specific launcher. **Known limitation**: OVF is a
+lowest-common-denominator format -- an importer is free to read only
+part of it, or none, and seine has no way to know which from the
+outside. `tpm`/`serial` have no OVF field at all, so they never reach
+the package regardless of importer; `firmware` does have one (the same
+`vmw:Config` key vCenter/ESXi itself writes), but an importer can
+still ignore it. For example, VirtualBox (7.2) silently
+imports it as BIOS regardless, and since the disk this builds from is
+GPT/UEFI-only (no BIOS boot partition), a VM left at that default does
+not boot at all -- it hangs at the firmware screen with no serial
+output and nothing to say why. `VBoxManage modifyvm <name> --firmware
+efi` after import fixes it; the same disk then reaches a login prompt
+over serial normally. Treat every `defaults`/format setting as a
+best-effort hint once it is inside an `ova`, not a guarantee, and
+check the imported VM's own settings against what you asked for.
+
+`vhdx` also gets a small `New-VM.ps1` PowerShell script alongside the
+converted disk, built from `cpus`/`memory`/`firmware`/`tpm`/`serial` --
+Hyper-V has no OVA import of its own to fall back on.
+
+```yaml
+vms:
+  defaults:
+    cpus: 2
+    memory: 2048
+  formats:
+    ova:                 # imports into both VMware and VirtualBox
+      type: ova
+    hyperv:
+      type: vhdx
+      cpus: 4
+      memory: 4096
+```
+
 ## test
 
 A specification carries its own tests the same way it carries its

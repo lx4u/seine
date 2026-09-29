@@ -28,6 +28,7 @@ Depends: ${misc:Depends},
          python3-cryptography,
          python3-guestfs,
          qemu-kvm,
+         qemu-utils,
          seine-vault-image
 Recommends: gnupg,
             skopeo,

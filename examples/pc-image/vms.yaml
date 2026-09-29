@@ -1,0 +1,17 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier Apache-2.0
+
+# Converts the disk image built by 'pc-image' into an OVA (imports into
+# both VMware and VirtualBox) and a Hyper-V VHDX + launch script -- see
+# 'requires: pc-image/vms' from a spec that also 'requires: pc-image'.
+vms:
+    defaults:
+        cpus: 2
+        memory: 2048
+    formats:
+        ova:
+            type: ova
+        hyperv:
+            type: vhdx
+            cpus: 4
+            memory: 4096
