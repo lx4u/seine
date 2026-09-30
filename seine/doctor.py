@@ -51,6 +51,7 @@ GROUP_ANSIBLE = "Ansible (seine.ansible_runner)"
 GROUP_SIGNING = "Signing (seine.signing)"
 GROUP_SBOM = "SBOM (seine.sbom)"
 GROUP_STORAGE = "Storage (seine.container.ContainerEngine.build_dir)"
+GROUP_S3 = "Remote Cache (seine.storage.s3)"
 GROUP_AI = "Optional AI integration (seine.tui.ai)"
 GROUP_TARGET = "Optional remote target (seine.tui.target)"
 GROUP_TESTING = "Optional test automation (seine.testing)"
@@ -166,6 +167,52 @@ def check_storage():
     free = shutil.disk_usage(build_dir).free
     return Check(GROUP_STORAGE, build_dir, "ok", "%.1f GiB free" % (free / 1024**3))
 
+# Verifies S3 cache reachability and credentials when S3 storage is enabled or configured.
+def check_s3(options=None):
+    options = options or {}
+    spec = options.get("spec") or {}
+    storage_spec = spec.get("storage", {}) if isinstance(spec, dict) else {}
+    endpoint = (
+        options.get("s3_endpoint")
+        or storage_spec.get("endpoint")
+        or os.environ.get("SEINE_S3_ENDPOINT")
+    )
+    bucket = (
+        options.get("s3_bucket")
+        or storage_spec.get("bucket")
+        or os.environ.get("SEINE_S3_BUCKET")
+    )
+    enabled = options.get("s3_cache") or storage_spec.get("provider") == "s3"
+    if not endpoint and not bucket and not enabled:
+        return None
+    endpoint = endpoint or "http://127.0.0.1:9000"
+    bucket = bucket or "seine-cache"
+    region = (
+        options.get("s3_region")
+        or storage_spec.get("region")
+        or os.environ.get("SEINE_S3_REGION")
+        or "garage"
+    )
+
+    from seine.credentials import CredentialNotFound, probe_s3, s3_credential_source
+    auth = storage_spec.get("auth", {})
+    src = s3_credential_source(auth=auth)
+    try:
+        creds = src.get()
+    except CredentialNotFound:
+        return Check(GROUP_S3, f"{bucket} @ {endpoint}", "warn", "credentials missing")
+    except Exception as e:
+        return Check(GROUP_S3, f"{bucket} @ {endpoint}", "warn", f"credentials error: {e}")
+
+    try:
+        ok = probe_s3(endpoint, bucket, creds["access_key"], creds["secret_key"], region=region, timeout=5)
+    except Exception as e:
+        return Check(GROUP_S3, f"{bucket} @ {endpoint}", "warn", f"connection error: {e}")
+
+    if ok:
+        return Check(GROUP_S3, f"{bucket} @ {endpoint}", "ok", "reachable")
+    return Check(GROUP_S3, f"{bucket} @ {endpoint}", "warn", "not reachable or bucket missing")
+
 # A model configured without an API key is a warning. No model at all
 # is not reported: that means the feature is off, not misconfigured.
 def check_llm():
@@ -195,6 +242,9 @@ def run(options=None, pull=False):
     llm = check_llm()
     if llm is not None:
         checks.append(llm)
+    s3 = check_s3(options)
+    if s3 is not None:
+        checks.append(s3)
     if pull:
         checks.append(check_debsbom_image())
     return checks

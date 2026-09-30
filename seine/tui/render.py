@@ -622,15 +622,40 @@ def render_analyze(context):
         sections.append(text)
     return "\n\n".join(sections)
 
-# Not spec-scoped: a cache is shared by every build, so this ignores
-# 'context'. 'matching' narrows the listing like
-# 'seine cache info --entries-matching' does.
-def render_cache(matching=None):
+def render_s3_status(context=None):
+    from seine import doctor
+    options = {}
+    if context and context.active and context.builds:
+        options = getattr(context.builds[0], "options", {}) or {}
+        if "spec" not in options and hasattr(context.builds[0], "spec"):
+            options = dict(options, spec=context.builds[0].spec)
+    check = doctor.check_s3(options)
+    if check is None:
+        return ""
+    status_label = "online (reachable)" if check.status == "ok" else f"offline ({check.detail})"
+    lines = [
+        "",
+        "REMOTE CACHE (S3)",
+        f"  Target:     {check.name}",
+        f"  Status:     {status_label}",
+    ]
+    return "\n".join(lines) + "\n"
+
+# Renders local cache storage usage, followed by remote S3 cache status when configured.
+def render_cache(context=None, matching=None):
     import re
     from seine.cache import CACHES, CacheCmd
     pattern = re.compile(matching) if matching else None
-    return _captured(lambda: CacheCmd().info(list(CACHES.keys()), entries=True,
+    text = _captured(lambda: CacheCmd().info(list(CACHES.keys()), entries=True,
                                              matching=pattern))
+    s3_text = render_s3_status(context)
+    if s3_text:
+        text += s3_text
+    return text
+
+def render_cache_explain(targets, options=None):
+    from seine.cache import CacheCmd
+    return _captured(lambda: CacheCmd().explain(targets, options=options or {}))
 
 # A package can live inside a 'multiconfig:' sub-group's own
 # 'packages:', not just the top-level image's -- walk 'subbuilds' the
@@ -677,13 +702,13 @@ def render_cache_why(context, name, architecture=None):
         return "\n".join(lines) + "\n"
     return "'%s' is not in this specification's 'packages:' section\n" % name
 
-def render_doctor(pull=False):
+def render_doctor(pull=False, options=None):
     import re
 
     from rich.text import Text
 
     from seine import doctor
-    raw = doctor.render(doctor.run(pull=pull))
+    raw = doctor.render(doctor.run(options=options, pull=pull))
     text = Text(raw)
     for m in re.finditer(r"  ! ", raw):
         text.stylize("dark_orange", m.start() + 2, m.start() + 3)

@@ -50,8 +50,8 @@ every argument each one takes):
  * **Overview** -- the active specification, once `/use` has set one.
  * **Doctor** -- whether this machine has what a build needs: podman,
    crun, passt, guestfs, kvm, a hypervisor per architecture,
-   ansible-playbook, gnupg, free space. The opening screen with no spec
-   given.
+   ansible-playbook, gnupg, free space, and S3 remote cache reachability
+   when configured. The opening screen with no spec given.
  * **Plan** -- what a build would do, diffed against the last real build
    of these files, without doing any of it.
  * **Build** -- see [below](#building).
@@ -59,7 +59,10 @@ every argument each one takes):
  * **Filesystem** -- see [below](#browsing-a-built-image).
  * **Artifacts**, **Packages**, **Analyze**, **Cache**, **Diff** -- the
    same information `seine analyze`/`--sbom`/`seine cache`/etc. give on
-   the real command line, read for whatever `/use` last set.
+   the real command line, read for whatever `/use` last set. `/cache`
+   displays local storage alongside remote S3 cache health and status;
+   `/cache explain TARGET...` inspects recipes or compares local vs remote
+   S3 cached derivations.
  * **Issues** -- known CVEs against the active build's own SBOM (`seine
    issues` on the command line, [Vulnerability scanning](building.md#vulnerability-scanning)):
    one row per source package -- CVE counts by urgency, defect counts
@@ -116,6 +119,11 @@ or (once Ansible's own stdout says so) the exact play and task while the
 target's own playbook runs:
 
 ![Build screen: the spec tree live-tracking a running Ansible task, matching the log tail](images/tui-build.gif)
+
+When an active specification or `--s3-cache` enables remote object storage but
+credentials are not yet saved or are rejected, a modal dialog prompts for the
+access key and secret key (masked with a reveal toggle) before building starts.
+Valid credentials are saved to writable backends (keyring or settings).
 
 ## Vendoring
 

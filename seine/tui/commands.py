@@ -304,8 +304,41 @@ def _analyze(app, argv):
     _show_over_active_spec(app, argv, "analyze")
 
 def _cache(app, argv):
-    """what seine has cached, and how much of it"""
-    app.show("cache")
+    """what seine has cached, inspect derivation recipes, and how much of it
+
+    Without arguments, opens the Cache screen showing local and remote S3
+    cache status and entries.
+
+    '/cache explain TARGET...' compares derivation recipes or inspects
+    local vs remote S3 cached artifacts.
+
+    '/cache why PACKAGE [ARCH]' explains why a package was not cached.
+    """
+    if not argv:
+        app.cache_text = None
+        app.show("cache")
+        return
+
+    sub = argv[0]
+    if sub == "explain":
+        from seine.tui.render import render_cache_explain
+        targets = argv[1:]
+        if not targets:
+            raise CommandError("cache explain requires one or two target recipes or artifact names")
+        options = {}
+        if app.context and app.context.active and app.context.builds:
+            options = dict(getattr(app.context.builds[0], "options", {}) or {})
+        app.cache_text = render_cache_explain(targets, options=options)
+        app.show("cache")
+    elif sub == "why":
+        if len(argv) < 2:
+            raise CommandError("cache why requires a package name")
+        from seine.tui.render import render_cache_why
+        arch = argv[2] if len(argv) > 2 else None
+        app.cache_text = render_cache_why(app.context, argv[1], arch)
+        app.show("cache")
+    else:
+        raise CommandError("unknown cache subcommand '%s' -- expected 'explain' or 'why'" % sub)
 
 def _doctor(app, argv):
     """say whether this machine has what a build needs"""
@@ -751,7 +784,7 @@ REGISTRY = {
                 *_doc(_test)),
         Command("replay",    _replay,    "[CAST-PATH]",              *_doc(_replay)),
         Command("analyze",  _analyze,  "[SPEC...]",                *_doc(_analyze)),
-        Command("cache",    _cache,    "",                         *_doc(_cache)),
+        Command("cache",    _cache,    "[explain TARGET...|why PKG [ARCH]]", *_doc(_cache)),
         Command("doctor",   _doctor,   "",                         *_doc(_doctor)),
         Command("chat",     _chat,     "",                         *_doc(_chat)),
         Command("diff",     _diff,     "OLD.spdx.json NEW.spdx.json", *_doc(_diff)),
@@ -770,6 +803,7 @@ REGISTRY["q"] = REGISTRY["quit"]
 OPTIONS = {
     "plan":  BuildCmd.LONG_OPTIONS,
     "build": ["jobs=", "reproducible"],
+    "cache": ["explain", "why"],
     "issues": ["filter=", "min-urgency=", "min-severity=", "rescan"],
 }
 
