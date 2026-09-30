@@ -2280,6 +2280,34 @@ class EnrichForLockSaysMadeOnAQueryAndReusedOnACacheHit(_CleansUpPaths, avocado.
         self.assertEqual(quiet_sess.requested, [])
         self.assertIn("vendor snapshot libssl3:amd64=3.0.11-1 reused", out.getvalue())
 
+# snapshot.debian.org files an Architecture: all binary under 'all', but
+# the lock names it under the arch it was fetched for. Looking it up by
+# that arch alone found nothing, so no snapshot fallback was recorded.
+class EnrichForLockFindsAnArchAllBinaryUnderAll(_CleansUpPaths, avocado.Test):
+    def test(self):
+        import hashlib
+        from seine.vendor import repository
+        from seine import snapshot
+
+        suite = "enrich-arch-all-test-%d" % os.getpid()
+        where = repository(suite)
+        self.track(where)
+        content = b"deb bytes"
+        with open(os.path.join(where, "zvbi-doc_1.0-1_all.deb"), "wb") as f:
+            f.write(content)
+        local_sha1 = hashlib.sha1(content).hexdigest()
+
+        url = (snapshot.BASE_URL +
+              "/mr/package/zvbi/1.0-1/binfiles/zvbi-doc/1.0-1?fileinfo=1")
+        body = {"result": [{"hash": local_sha1, "architecture": "all"}]}
+        sess = _FakeSnapshotSession({url: _FakeSnapshotResponse(json_body=body)})
+        sources = {"zvbi": {"version": "1.0-1", "files": [],
+                            "binaries": {"zvbi-doc": {"amd64": "1.0-1"}}}}
+        with patch("seine.vendor.snapshot.session", lambda: sess):
+            enriched = _vendor_cmd()._enrich_for_lock(suite, sources)
+        self.assertEqual(enriched["zvbi"]["binary_snapshot"],
+                         {"zvbi-doc": {"amd64": local_sha1}})
+
 class EnrichForLockRecordsASnapshotUrlOnHashMatch(_CleansUpPaths, avocado.Test):
     def test(self):
         import hashlib
