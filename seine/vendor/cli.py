@@ -794,7 +794,9 @@ class VendorCmd(Cmd):
                         by_arch = snapshot.binary_files(
                             sess, name, src_version, binpkg, version)
                         for arch, (local, bin_key) in sorted(need.items()):
-                            candidates = by_arch.get(arch, [])
+                            # snapshot files an Architecture: all binary
+                            # under 'all', whichever arch it was fetched for.
+                            candidates = by_arch.get(arch, []) + by_arch.get("all", [])
                             if local in candidates:
                                 binary_snap_results[(name, binpkg, arch)] = local
                                 try:
