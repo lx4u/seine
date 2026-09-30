@@ -87,11 +87,12 @@ def feeds(distro):
             raise ValueError("feed #%d has no 'suite' specified!" % (index + 1))
         for setting in entry:
             if setting not in ["components", "release", "sources", "suite",
-                               "uri", "valid-until", "signed-by", "fingerprint"]:
+                               "uri", "valid-until", "signed-by", "fingerprint",
+                               "auth"]:
                 raise ValueError(
                     "feed #%d ('%s') has no '%s' setting, expected one of "
                     "components, release, sources, suite, uri, valid-until, "
-                    "signed-by, fingerprint"
+                    "signed-by, fingerprint, auth"
                     % (index + 1, entry["suite"], setting))
         if "fingerprint" in entry and "signed-by" not in entry:
             raise ValueError(
@@ -108,8 +109,48 @@ def feeds(distro):
             "valid_until": entry.get("valid-until", True),
             "signed_by":   entry.get("signed-by"),
             "fingerprint": entry.get("fingerprint"),
+            "auth":        _feed_auth(entry, index),
         })
+    _check_auth_uri_collisions(parsed)
     return parsed
+
+# Every field must be a credentials.py chain ('backend:name'), never a
+# literal -- a password typed here would otherwise sit in the spec.
+def _feed_auth(entry, index):
+    auth = entry.get("auth")
+    if auth is None:
+        return None
+    from seine.credentials import CredentialError, _parse
+    if type(auth) != type({}) or not {"login", "password"} <= set(auth) \
+            or set(auth) - {"login", "password", "probe"}:
+        raise ValueError(
+            "feed #%d ('%s') 'auth' needs 'login' and 'password', and "
+            "optionally 'probe'" % (index + 1, entry["suite"]))
+    for field in ("login", "password"):
+        try:
+            _parse(auth[field])
+        except CredentialError as e:
+            raise ValueError(
+                "feed #%d ('%s') auth.%s: %s" % (index + 1, entry["suite"], field, e)) from e
+    return {"login": auth["login"], "password": auth["password"],
+            "probe": auth.get("probe", True)}
+
+# netrc writes one machine/path entry per uri -- fine if two feeds share
+# it with the same chain (they'd write the same entry), ambiguous if the
+# chains differ (which credential would that entry hold?).
+def _check_auth_uri_collisions(parsed):
+    seen = {}
+    for feed in parsed:
+        if feed["auth"] is None:
+            continue
+        uri = feed["uri"].rstrip("/")
+        chain = (feed["auth"]["login"], feed["auth"]["password"])
+        if uri in seen and seen[uri][1] != chain:
+            raise ValueError(
+                "feeds '%s' and '%s' are both authenticated against the same "
+                "uri '%s' with different credentials -- ambiguous, which "
+                "one applies?" % (seen[uri][0], feed["suite"], feed["uri"]))
+        seen[uri] = (feed["suite"], chain)
 
 # The feed for the release itself (not the first one merge order lists),
 # which a root file-system bootstraps from.
