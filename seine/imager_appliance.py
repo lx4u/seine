@@ -7,7 +7,11 @@ from seine           import packages
 from seine.bootstrap import Bootstrap
 from seine.container import ContainerEngine
 from seine.utils import APT_CLEANUP
+from seine.utils import feed_auth_entries
 from seine.utils import IMAGER_KIND
+from seine.utils import NETRC_MOUNT
+from seine.utils import netrc_for
+from seine.utils import release_feeds
 
 # Fallback kernel per arch when the spec has no 'imager: kernel:'.
 DEFAULT_PACKAGES = {
@@ -208,27 +212,38 @@ class ImagerAppliance(Bootstrap):
             RUNTIME_APT_PACKAGES
             + (UKI_APT_PACKAGES if self.distro["release"] != "bookworm" else [])
         )
-        return self.build(
-            IMAGER_APPLIANCE_SCRIPT.format(
+
+        entries = feed_auth_entries(self.distro, entries=release_feeds(self.distro))
+        with netrc_for(entries) as netrc_path:
+            netrc_mount, netrc_aptopt = "", ""
+            if netrc_path:
+                options = options + ["--secret", "id=seine-netrc,src=%s" % netrc_path]
+                netrc_mount = (" --mount=type=secret,id=seine-netrc,target=%s"
+                               % NETRC_MOUNT)
+                netrc_aptopt = ' -o Dir::Etc::netrc="%s"' % NETRC_MOUNT
+            return self.build(
+                IMAGER_APPLIANCE_SCRIPT.format(
+                    base=self.source.targetBootstrap.name,
+                    apt_setup=packages.apt_setup_layer(self.distro),
+                    apt_cleanup=APT_CLEANUP,
+                    pruned_drivers=" ".join(PRUNED_DRIVERS),
+                    kept_scsi_modules=" ".join(
+                        "! -name '%s*'" % m for m in KEPT_SCSI_MODULES),
+                    kernel=self.package,
+                    apt_packages=" ".join(apt_packages),
+                    runtime_packages=" ".join(runtime_packages),
+                    extra_packages=" ".join(extra_packages),
+                    hostfiles=" ".join(hostfiles),
+                    appliance_size=APPLIANCE_SIZE,
+                    host_cpu=info["host_cpu"],
+                    triplet=info["triplet"],
+                    binaries=" ".join(BINARIES),
+                    lvm_wrapper=LVM_WRAPPER_SCRIPT,
+                    bbolt_step=bbolt_step,
+                    netrc_mount=netrc_mount,
+                    netrc_aptopt=netrc_aptopt),
                 base=self.source.targetBootstrap.name,
-                apt_setup=packages.apt_setup_layer(self.distro),
-                apt_cleanup=APT_CLEANUP,
-                pruned_drivers=" ".join(PRUNED_DRIVERS),
-                kept_scsi_modules=" ".join(
-                    "! -name '%s*'" % m for m in KEPT_SCSI_MODULES),
-                kernel=self.package,
-                apt_packages=" ".join(apt_packages),
-                runtime_packages=" ".join(runtime_packages),
-                extra_packages=" ".join(extra_packages),
-                hostfiles=" ".join(hostfiles),
-                appliance_size=APPLIANCE_SIZE,
-                host_cpu=info["host_cpu"],
-                triplet=info["triplet"],
-                binaries=" ".join(BINARIES),
-                lvm_wrapper=LVM_WRAPPER_SCRIPT,
-                bbolt_step=bbolt_step),
-            base=self.source.targetBootstrap.name,
-            options=options)
+                options=options)
 
     # Flat, not real paths like /usr/bin: /usr may be the mount being
     # packed away on a usrmerged system.
@@ -373,8 +388,8 @@ sys.exit(rc)
 # kernels, qemu, and container engines to keep the image footprint slim.
 IMAGER_APPLIANCE_SCRIPT = """
 FROM {base} AS builder
-{apt_setup}RUN apt-get update -qqy && \\
-    INITRD=No apt-get install -qqy --no-install-recommends \\
+{apt_setup}RUN{netrc_mount} apt-get update -qqy{netrc_aptopt} && \\
+    INITRD=No apt-get install -qqy{netrc_aptopt} --no-install-recommends \\
         {kernel} supermin libguestfs0 {apt_packages} && \\
     {apt_cleanup} && \\
     for d in {pruned_drivers}; do rm -rf /lib/modules/*/kernel/drivers/$d; done && \\
@@ -410,8 +425,8 @@ RUN libfaketime=$(dpkg -L libfaketime | grep -E '/libfaketime\\.so\\.[0-9]+$') &
     apt-get clean
 
 FROM {base} AS base
-{apt_setup}RUN apt-get update -qqy && \\
-    INITRD=No apt-get install -qqy --no-install-recommends \\
+{apt_setup}RUN{netrc_mount} apt-get update -qqy{netrc_aptopt} && \\
+    INITRD=No apt-get install -qqy{netrc_aptopt} --no-install-recommends \\
         {runtime_packages} && \\
     {apt_cleanup}
 COPY --from=builder /appliance /appliance

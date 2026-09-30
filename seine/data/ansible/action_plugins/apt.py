@@ -17,12 +17,19 @@ ENV_RUNROOT = "SEINE_CONTAINER_RUNROOT"
 ENV_ARCH = "SEINE_APT_ARCH"
 ENV_HOST_IMAGE = "SEINE_APT_HOST_IMAGE"
 ENV_PACKAGES_DIR = "SEINE_APT_PACKAGES_DIR"
+# Set by ansible_runner.py only when a feed is authenticated -- the host
+# path of the netrc seine.utils.netrc_for() wrote for this build.
+ENV_NETRC = "SEINE_APT_NETRC"
 
 MERGED = "/rootfs"
 # Where a spec's rebuilt packages live, if any -- must match
 # seine.packages.REPOSITORY, the path the target's own sources.list
 # points 'file:' at.
 PACKAGES = "/packages"
+# Matches seine.utils.NETRC_MOUNT -- duplicated as a plain string rather
+# than importing seine here, since this plugin runs as a standalone
+# ansible process.
+NETRC_MOUNT = "/run/seine/netrc"
 
 def _env(name):
     value = os.environ.get(name)
@@ -60,6 +67,8 @@ CHANGED_MARKER = "SEINE_APT_CHANGED"
 # nothing a second apt-get invocation doesn't already tell us.
 def _apt_get(merged_dir, action, names, simulate):
     arch = _env(ENV_ARCH)
+    netrc = os.environ.get(ENV_NETRC)
+    netrc_opt = f'-o Dir::Etc::netrc="{NETRC_MOUNT}" ' if netrc else ""
     apt_get = (f"apt-get "
               f"-o Dir::State={MERGED}/var/lib/apt "
               f"-o Dir::State::status={MERGED}/var/lib/dpkg/status "
@@ -71,6 +80,7 @@ def _apt_get(merged_dir, action, names, simulate):
               f"-o DPkg::Options::=--force-unsafe-io "
               f"-o APT::Architecture={arch} "
               f"-o APT::Architectures::={arch} "
+              f"{netrc_opt}"
               f"-qqy {action} {' '.join(names)}")
     script = (
         f"if {apt_get} -s | grep -Eq '^(Inst|Remv) '; then "
@@ -87,6 +97,8 @@ def _apt_get(merged_dir, action, names, simulate):
         # path to still resolve from there -- so both, not just one.
         volumes += ["-v", f"{packages_dir}:{PACKAGES}",
                    "-v", f"{packages_dir}:{MERGED}{PACKAGES}"]
+    if netrc:
+        volumes += ["-v", f"{os.path.dirname(netrc)}:{os.path.dirname(NETRC_MOUNT)}:ro"]
     return _podman(["run", "--rm"] + caps + volumes +
                    [_env(ENV_HOST_IMAGE), "sh", "-c", script])
 

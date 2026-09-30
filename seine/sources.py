@@ -17,7 +17,11 @@ from seine.bootstrap import Bootstrap, HostBootstrap
 from seine.cmd       import Cmd
 from seine.utils     import apt_sources
 from seine.container import ContainerEngine
+from seine.utils     import feed_auth_entries
 from seine.utils     import feed_keyrings_script
+from seine.utils     import NETRC_MOUNT
+from seine.utils     import netrc_for
+from seine.utils     import netrc_volume
 from seine.utils     import release_feeds
 from seine.utils     import SOURCE_KIND
 
@@ -166,13 +170,19 @@ def pull(spec, distro, options=None, directory=None):
     feed_lines = "".join(
         "echo '%s' >> /etc/apt/sources.list.d/seine-source.list; " % line
         for line in apt_sources(distro, entries=release_feeds(distro), sources=True))
+    entries = feed_auth_entries(distro, entries=release_feeds(distro))
+    netrc_opt = ' -o Dir::Etc::netrc="%s"' % NETRC_MOUNT if entries else ""
     script = (install + "; " if install else "") + feed_lines \
-           + "apt-get update -qqy && apt-get source %s" % package
+           + "apt-get update -qqy%s && apt-get source%s %s" \
+           % (netrc_opt, netrc_opt, package)
 
     before = set(os.listdir(directory))
-    returncode, output = image.exec(["sh", "-c", script],
-                                    volumes=[(directory, directory)],
-                                    workdir=directory)
+    with netrc_for(entries) as netrc_path:
+        volumes = [(directory, directory)]
+        if netrc_path:
+            volumes.append(netrc_volume(netrc_path))
+        returncode, output = image.exec(["sh", "-c", script],
+                                        volumes=volumes, workdir=directory)
     if returncode != 0:
         raise ValueError("'apt-get source %s' failed:\n%s"
                          % (package, output.strip()))
@@ -327,7 +337,9 @@ class SourceCmd(Cmd):
             sys.stderr.write("error: specification is invalid: %s\n" % e)
             sys.exit(3)
 
+        from seine.build import collect_credentials
         try:
+            collect_credentials([build])
             dirname = pull(package, spec["distribution"])
         except ValueError as e:
             sys.stderr.write("error: %s\n" % e)

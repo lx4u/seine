@@ -55,6 +55,21 @@ class VolumesMountTheDeliveredVendorRepository(avocado.Test):
         volumes = cmd._volumes()
         self.assertNotIn("/vendor-repo/bookworm", " ".join(volumes))
 
+# _volumes()/_netrc_opt() only add anything once run() has set
+# '_netrc_path' -- exercised directly, the same way run() would set it.
+class NetrcOnlyAppearsOnceSet(avocado.Test):
+    def test_unset_adds_nothing(self):
+        cmd = runner(online_distro())
+        self.assertEqual(cmd._netrc_opt(), [])
+        self.assertNotIn("/run/seine", " ".join(cmd._volumes()))
+
+    def test_set_bind_mounts_and_adds_the_option(self):
+        cmd = runner(online_distro())
+        cmd._netrc_path = "/run/user/1000/seine/x/netrc"
+        self.assertEqual(cmd._netrc_opt(),
+                         ["-o", "Dir::Etc::netrc=/run/seine/netrc"])
+        self.assertIn("/run/user/1000/seine/x:/run/seine:ro", cmd._volumes())
+
 # _configure_feeds() -- offline mode replaces every apt source with a
 # single vendor entry for the build's own release: one deb line and one
 # deb-src line, both naming 'main extra' together, never one pair per

@@ -50,6 +50,44 @@ class Failing(Builder):
         super().exec(args, architecture, volumes)
         raise subprocess.CalledProcessError(1, "mmdebstrap")
 
+class RecordingBuilder(Builder):
+    def exec(self, args, architecture=None, volumes=None):
+        self.args = args
+        self.volumes = volumes
+        super().exec(args, architecture, volumes)
+
+class NetrcOnlyAppearsForAnAuthenticatedFeed(avocado.Test):
+    def setUp(self):
+        from seine import credentials
+        credentials.clear_resolved()
+
+    def tearDown(self):
+        from seine import credentials
+        credentials.clear_resolved()
+
+    def test_no_auth_no_customize_hook_no_volume(self):
+        chroot = SbuildChroot(DISTRO, {}, "amd64")
+        builder = RecordingBuilder(os.path.dirname(chroot.path))
+        chroot.create(builder)
+        self.assertNotIn("Dir::Etc::netrc", " ".join(builder.args))
+        self.assertEqual(len(builder.volumes), 2)  # downloads + sbuild cache
+
+    def test_resolved_auth_adds_hook_aptopt_and_volume(self):
+        from seine import credentials
+        distro = dict(DISTRO, feeds=[
+            {"suite": "bookworm",
+             "auth": {"login": "env:A", "password": "env:B"}}])
+        credentials.remember_resolved(distro["uri"], "alice", "s3cr3t")
+        chroot = SbuildChroot(distro, {}, "amd64")
+        builder = RecordingBuilder(os.path.dirname(chroot.path))
+        chroot.create(builder)
+        script = " ".join(builder.args)
+        self.assertIn('mkdir -p "$1"/seine-auth', script)
+        self.assertIn('Dir::Etc::netrc "/seine-auth/netrc"', script)
+        self.assertIn('--aptopt=Dir::Etc::netrc "/run/seine/netrc"', script)
+        self.assertEqual(len(builder.volumes), 3)  # + the netrc bind mount
+        self.assertEqual(builder.volumes[2][1], "/run/seine")
+
 class TheChrootIsPublishedWhole(avocado.Test):
     def setUp(self):
         self.chroot = SbuildChroot(DISTRO, {}, "amd64")

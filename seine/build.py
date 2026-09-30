@@ -81,31 +81,41 @@ def _default_prompt():
 # CredentialSource, so the value is only asked for once.
 def collect_credentials(builds, prompt=None):
     from seine import credentials
-    from seine import vault as _vault
-    from seine.utils import feeds, redactions
+    from seine.utils import feeds
 
     if prompt is None:
         prompt = _default_prompt()
 
-    # 'probes' only ever gets the first feed seen for a given chain --
-    # once that one server is checked, a sibling feed sharing the exact
-    # same credential needs no fresh network round trip.
+    # 'probes' only gets the first feed seen for a given chain -- once
+    # that server is checked, a sibling feed with the same credential
+    # needs no fresh network round trip.
     sources = {}
+    all_feeds = []
     probes = []
+    # A remote build's worker is handed its credentials: no chain, no prompt.
+    delegated = os.environ.get(credentials.FEED_AUTH_ENV)
+    if delegated:
+        delegated = credentials.load_feed_auth(delegated)
+    else:
+        delegated = None
     for build in builds:
         for feed in feeds(build.spec["distribution"]):
             auth = feed["auth"]
             if auth is None:
                 continue
-            key = (auth["login"], auth["password"])
+            key = feed["uri"] if delegated is not None else (auth["login"], auth["password"])
             source = sources.get(key)
             first_time = source is None
-            if first_time:
+            if first_time and delegated is not None:
+                source = credentials.DelegatedSource(delegated.get(feed["uri"].rstrip("/")))
+                sources[key] = source
+            elif first_time:
                 source = credentials.CredentialSource(
                     {"login": auth["login"], "password": auth["password"]},
                     context=feed["uri"], prompt=prompt,
                     vault_reader=build._vault_lookup)
                 sources[key] = source
+            all_feeds.append((build, feed, source))
             if auth["probe"] and first_time:
                 probes.append((build, feed, source))
 
@@ -124,6 +134,14 @@ def collect_credentials(builds, prompt=None):
                 break
             values = source.failed()
             _record_credential_secrets(build.spec, values)
+
+    # A 'probe: false' feed still needs its credential resolved for
+    # apt's netrc, even though it skipped the network check above.
+    for build, feed, source in all_feeds:
+        values = source.get()
+        _record_credential_secrets(build.spec, values)
+        credentials.remember_resolved(
+            feed["uri"], values["login"], values["password"])
     return sources
 
 # Password always redacts; login only if the spec's 'redact:' asks for it.
