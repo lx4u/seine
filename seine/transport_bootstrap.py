@@ -22,10 +22,11 @@ class TransportBootstrap(Bootstrap):
 
     # vendor_digest comes from offline_dockerfile_digest(); see HostBootstrap
     # for why it must be baked into the Dockerfile text, not left to digest().
-    def __init__(self, baseline, distro, options, vendor_digest=None):
+    def __init__(self, baseline, distro, options, vendor_digest=None,
+                 storage_provider=None):
         self.baseline = baseline
         self.vendor_digest = vendor_digest
-        super().__init__(distro, options)
+        super().__init__(distro, options, storage_provider=storage_provider)
 
     # Bakes feed_digest() into the tag so specs sharing a baseline but
     # different mirrors don't collide on one image.
