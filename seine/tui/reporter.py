@@ -36,3 +36,10 @@ class TextualReporter:
         sink_wave_logs = getattr(self.sink, "wave_logs", None)
         if sink_wave_logs is not None:
             self.app.call_from_thread(sink_wave_logs, path)
+
+    # A phase's "done of total", from seine.vendor's _Progress. Guarded
+    # like 'output': BuildState never defines this.
+    def progress(self, label, done, total):
+        sink_progress = getattr(self.sink, "progress", None)
+        if sink_progress is not None:
+            self.app.call_from_thread(sink_progress, label, done, total)

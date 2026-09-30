@@ -18,6 +18,7 @@ from seine.cache_index import VENDOR, Index, say
 from seine.cmd import Cmd
 from seine.tasks import Task
 from seine.container import ContainerEngine
+from seine.progress import elapsed
 from seine.utils import lock_sibling
 from seine import settings
 from seine import signing
@@ -157,6 +158,62 @@ def index_tasks(distro, suites_wanted, options, hostBootstrap, signer,
                      suite, signer, sources, direct)))
     return tasks
 
+# Reports "done of total" for one phase: a line every few seconds, or
+# display.progress() if the display has it (the TUI draws a bar from that).
+class _Progress:
+    def __init__(self, display, label, total, clock=time.monotonic):
+        self.display = display
+        self.label = label
+        self.total = total
+        self.done = 0
+        self.clock = clock
+        self.begun = clock()
+        self.last = None
+        self.lock = threading.Lock()
+        self.sink = getattr(display, "progress", None)
+        self.interval = 0.5 if self.sink else 5.0
+
+    def step(self):
+        with self.lock:
+            self.done += 1
+            now = self.clock()
+            final = self.done >= self.total
+            if not final and self.last is not None and now - self.last < self.interval:
+                return
+            self.last = now
+            if self.sink:
+                self.sink(self.label, self.done, self.total)
+            elif self.display is None:
+                spent = now - self.begun
+                left = spent / self.done * (self.total - self.done)
+                print("%s: %d/%d (%d%%), %s elapsed, %s left"
+                      % (self.label, self.done, self.total,
+                         100 * self.done // self.total, elapsed(spent),
+                         elapsed(left)), flush=True)
+
+# Wraps a wave's display (or None) to count finished tasks.
+class _Counted:
+    def __init__(self, inner, progress):
+        self.inner = inner
+        self.progress = progress
+
+    def started(self, name):
+        if self.inner is not None:
+            self.inner.started(name)
+
+    def finished(self, name, failed=False):
+        self.progress.step()
+        if self.inner is not None:
+            self.inner.finished(name, failed=failed)
+
+    def say(self, text):
+        if self.inner is not None:
+            self.inner.say(text)
+        else:
+            print(text)
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
 # ---------------------------------------------------------------------
 # 'seine vendor': the CLI surface.
 # ---------------------------------------------------------------------
@@ -713,7 +770,9 @@ class VendorCmd(Cmd):
         seen_bins = set()
         tasks = []
 
+        hashing = _Progress(display, "hashing %s" % suite, len(sources))
         for name, entry in sources.items():
+            hashing.step()
             entry = dict(entry)
             enriched[name] = entry
             if entry.get("files"):
@@ -893,6 +952,8 @@ class VendorCmd(Cmd):
             follower = display
         else:
             follower = _LiveFollower(logs) if (verbose and jobs <= 1) else None
+        label = wave_tasks[0].name.split(":")[0].split("#")[0]
+        follower = _Counted(follower, _Progress(follower, label, len(wave_tasks)))
 
         # Not retried: same stop-or-report behavior as 'seine build's
         # other steps.
