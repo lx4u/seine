@@ -303,7 +303,17 @@ class Image:
         return utils.recipe_file_for(self._digest_file())
 
     def _rootfs_current(self, digest):
-        return utils.digest_file_current(self._digest_file(), digest, self._rootfs)
+        current = utils.digest_file_current(self._digest_file(), digest, self._rootfs)
+        if not current and self.options.get("cache_rootfs") and not self.options.get("rebuild"):
+            from seine import storage
+            provider = getattr(self, "storage_provider", None) or storage.for_build(self.options, spec=self.spec)
+            distro = self.spec["distribution"]
+            key = f"{distro['release']}-{distro['architecture']}/{digest}"
+            with contextlib.suppress(Exception):
+                if provider.pull("rootfs", key, self._rootfs):
+                    utils.write_digest_file(self._digest_file(), digest)
+                    return True
+        return current
 
     def _image_digest_file(self):
         return f"{self._output}.digest" if self._output else None
@@ -369,6 +379,15 @@ class Image:
             utils.invalidate_digest_file(self._digest_file())
             os.replace(partial.name, self._rootfs)
             utils.write_digest_file(self._digest_file(), digest, recipe=recipe)
+            if self.options.get("cache_rootfs"):
+                from seine import storage
+                provider = getattr(self, "storage_provider", None) or storage.for_build(self.options, spec=self.spec)
+                distro = self.spec["distribution"]
+                with contextlib.suppress(Exception):
+                    if provider.push("rootfs", f"{distro['release']}-{distro['architecture']}/{digest}",
+                                     self._rootfs, spec=self.spec, recipe=recipe):
+                        provider.push("rootfs", f"{distro['release']}-{distro['architecture']}",
+                                      self._rootfs, spec=self.spec, recipe=recipe)
             failed = False
         finally:
             if failed:

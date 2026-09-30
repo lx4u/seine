@@ -9,7 +9,7 @@ from seine import utils
 class LocalStorageProvider(StorageProvider):
     """Local storage provider for standalone builds without remote cache."""
 
-    def pull(self, wanted=None):
+    def pull(self, kind, key, dest=None):
         return None
 
     def push(self, kind, key, path, spec=None, recipe=None):

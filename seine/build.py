@@ -168,6 +168,7 @@ class BuildCmd(Cmd):
     NAME = "build"
     SHORT_OPTIONS = "dDhj:kv"
     LONG_OPTIONS = [
+        "cache-rootfs",
         "debug",
         "dry-run",
         "dump",
@@ -183,6 +184,11 @@ class BuildCmd(Cmd):
         "require-hashes",
         "resource=",
         "rootfs-only",
+        "s3-bucket=",
+        "s3-cache",
+        "s3-endpoint=",
+        "s3-offline-mode=",
+        "s3-region=",
         "sbom",
         "sign-key=",
         "spec-only",
@@ -196,6 +202,7 @@ class BuildCmd(Cmd):
         # 'jobs' falls back to the persisted setting (see settings.py / '/set
         # jobs N') before the hardcoded '1'; '-j'/'--jobs' below overrides both.
         self.options = { "ansible_library": [], "build": True, "color": None,
+                         "cache_rootfs": False,
                          "debug": False, "dry_run": False,
                          "jobs": settings.load().get("jobs") or 1, "keep": False,
                          "offline": False,
@@ -204,6 +211,9 @@ class BuildCmd(Cmd):
                          "require_hashes": False,
                          "resources": settings.load().get("resources"),
                          "rootfs_only": False,
+                         "s3_bucket": None, "s3_cache": False,
+                         "s3_endpoint": None, "s3_offline_mode": "fallback",
+                         "s3_region": None,
                          "sbom": False, "sign_key": None, "spec": True,
                          "target": None,
                          "tasks": True, "verbose": False }
@@ -1433,6 +1443,21 @@ class BuildCmd(Cmd):
                 self.options["reproducible"] = True
             elif o in ("--offline",):
                 self.options["offline"] = True
+            elif o in ("--cache-rootfs",):
+                self.options["cache_rootfs"] = True
+            elif o in ("--s3-cache",):
+                self.options["s3_cache"] = True
+            elif o in ("--s3-endpoint",):
+                self.options["s3_endpoint"] = a
+            elif o in ("--s3-bucket",):
+                self.options["s3_bucket"] = a
+            elif o in ("--s3-region",):
+                self.options["s3_region"] = a
+            elif o in ("--s3-offline-mode",):
+                if a not in ("fallback", "strict"):
+                    sys.stderr.write("error: --s3-offline-mode must be 'fallback' or 'strict'\n")
+                    sys.exit(1)
+                self.options["s3_offline_mode"] = a
             elif o in ("--sign-key"):
                 self.options["sign_key"] = a
             elif o in ("--sbom"):
@@ -1591,6 +1616,14 @@ Flags:
   --rootfs-only         build the root file-system as a tarball and stop,
                         without writing a disk image. What looking inside a
                         build rather than booting it wants
+      --cache-rootfs    push and pull rootfs tarballs to and from network cache
+      --s3-cache        enable remote network caching backed by S3 or Garage
+      --s3-endpoint URL endpoint URL for S3/Garage network cache storage
+      --s3-bucket NAME  bucket name for S3 cache (default: 'seine-cache')
+      --s3-region NAME  region name for S3 signature (default: 'garage')
+      --s3-offline-mode MODE
+                        network cache failure behavior: 'fallback' (build
+                        locally on failure, default) or 'strict' (abort)
   --sbom                produce a Software Bill of Materials (SBOM) using
                         debsbom
   --spec-only           with '--dry-run', print the specification and not the
