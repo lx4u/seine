@@ -1103,7 +1103,8 @@ class Imager:
         utils.invalidate_digest_file(self.source._image_digest_file())
         os.rename(self.source._image, self.source._output)
         self.source._image = None
-        utils.write_digest_file(self.source._image_digest_file(), digest)
+        recipe = getattr(self.source, "_image_recipe", lambda: None)()
+        utils.write_digest_file(self.source._image_digest_file(), digest, recipe=recipe)
 
     def create(self):
         ph = self.source.partitionHandler
