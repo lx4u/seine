@@ -34,11 +34,41 @@ class Bootstrap(ABC):
     # leak the base's kind instead.
     kind = TOOLING_KIND
 
-    def __init__(self, distro, options):
+    def __init__(self, distro, options, storage_provider=None):
         self._name = None
         self.distro = distro
         self.options = options
+        self._storage_provider = storage_provider
         super().__init__()
+
+    @property
+    def storage_provider(self):
+        if self._storage_provider is None:
+            from seine import storage
+            self._storage_provider = storage.for_build(self.options)
+        return self._storage_provider
+
+    def is_remote(self):
+        from seine.storage.local import LocalStorageProvider
+        if not self.options.get("cache_bootstraps", True):
+            return False
+        return not isinstance(self.storage_provider, LocalStorageProvider)
+
+    def storage_key(self, dockerfile, base=None):
+        tag = self.name.replace(":", "-")
+        return os.path.join(tag, self.digest(dockerfile, base))
+
+    def recipe(self, dockerfile, base=None):
+        r = [
+            ("dockerfile", hashlib.sha256(dockerfile.encode()).hexdigest()[:16]),
+            ("kind", self.kind),
+        ]
+        if base is not None:
+            r.append(("base", base))
+            inputs = ContainerEngine.imageLabel(base, INPUTS_LABEL) \
+                     or ContainerEngine.imageId(base) or ""
+            r.append(("base-inputs", inputs))
+        return r
 
     @abstractmethod
     def create(self):
@@ -77,16 +107,38 @@ class Bootstrap(ABC):
                               % (self.name, since(entry.get("made"))))
             return self
 
-        written = tempfile.NamedTemporaryFile(mode="w", delete=False)
-        written.write(dockerfile)
-        written.close()
         # Storage lock (shared) keeps a concurrent prune/cache-clear from
         # sweeping this build's intermediates; the per-name lock only
         # serializes builds of the same image, not all images.
-        try:
-            with locked(ContainerEngine.storage_lock(), shared=True), \
-                 locked(os.path.join(ContainerEngine.root(), "images.d",
-                                     self.name)):
+        with locked(ContainerEngine.storage_lock(), shared=True), \
+             locked(os.path.join(ContainerEngine.root(), "images.d",
+                                 self.name)):
+            if self.current(dockerfile, base):
+                entry = Index().hit(IMAGE, self.name)
+                say(self.options, "image %s reused, made %s"
+                                  % (self.name, since(entry.get("made"))))
+                return self
+
+            if self.is_remote():
+                key = self.storage_key(dockerfile, base)
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tar_path = os.path.join(tmpdir, "image.tar")
+                    try:
+                        if self.storage_provider.pull("bootstraps", key, dest=tar_path):
+                            ContainerEngine.loadImage(tar_path)
+                    except Exception:
+                        if getattr(self.storage_provider, "offline_mode", None) == "strict":
+                            raise
+                if self.current(dockerfile, base):
+                    entry = Index().hit(IMAGE, self.name)
+                    say(self.options, "image %s reused, made %s"
+                                      % (self.name, since(entry.get("made"))))
+                    return self
+
+            written = tempfile.NamedTemporaryFile(mode="w", delete=False)
+            written.write(dockerfile)
+            written.close()
+            try:
                 ContainerEngine.run(
                     # '--no-hostname': without it, podman writes a new
                     # random '/etc/hostname' for every RUN step, which
@@ -96,15 +148,26 @@ class Bootstrap(ABC):
                                            self.digest(dockerfile, base)),
                      "--label", "%s=%s" % (KIND_LABEL, self.kind),
                      "-t", self.name, "-f", written.name], check=True)
-        finally:
-            if self.options.get("keep"):
-                print("keeping '%s' (dockerfile for %s) as requested"
-                      % (written.name, self.name))
-            else:
-                os.unlink(written.name)
-        Index().made(IMAGE, self.name)
-        say(self.options, "image %s made" % self.name)
-        return self
+            finally:
+                if self.options.get("keep"):
+                    print("keeping '%s' (dockerfile for %s) as requested"
+                          % (written.name, self.name))
+                else:
+                    os.unlink(written.name)
+            Index().made(IMAGE, self.name)
+            say(self.options, "image %s made" % self.name)
+            if self.is_remote():
+                key = self.storage_key(dockerfile, base)
+                recipe = self.recipe(dockerfile, base)
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tar_path = os.path.join(tmpdir, "image.tar")
+                    try:
+                        ContainerEngine.saveImage(self.name, tar_path)
+                        self.storage_provider.push("bootstraps", key, tar_path, recipe=recipe)
+                    except Exception:
+                        if getattr(self.storage_provider, "offline_mode", None) == "strict":
+                            raise
+            return self
 
     def getName(self):
         if self._name is None:
@@ -124,11 +187,11 @@ class HostBootstrap(Bootstrap):
     # exists to fill. Gets its own "vendor" cache tag (see defaultName())
     # so it never collides with a plain online or offline HostBootstrap.
     def __init__(self, distro, options, vendor_digest=None, host_architecture=None,
-                force_online=False):
+                force_online=False, storage_provider=None):
         self.vendor_digest = vendor_digest
         self.host_architecture = host_architecture or HOST_ARCH
         self.force_online = force_online
-        super().__init__(distro, options)
+        super().__init__(distro, options, storage_provider=storage_provider)
 
     # The base image every seine container is built from. 'needs' lets a
     # caller order this after 'vendor' when going offline.
@@ -213,6 +276,9 @@ class HostBootstrap(Bootstrap):
 class TargetBootstrap(Bootstrap):
     # The root file-system itself, which is what an export leaves behind.
     kind = ROOTFS_KIND
+
+    def __init__(self, distro, options, storage_provider=None):
+        super().__init__(distro, options, storage_provider=storage_provider)
 
     # The root file-system is assembled in this one, and the imager's own
     # kernel is fetched through it -- so it is needed even when the

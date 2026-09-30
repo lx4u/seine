@@ -96,6 +96,16 @@ class ContainerEngine:
             failed = False
         finally:
             ContainerEngine.discard(cid, failed=failed)
+
+    # Saves an image to an archive file with quiet progress.
+    @staticmethod
+    def saveImage(image, path):
+        ContainerEngine.run(["save", "--quiet", "-o", path, image], check=True)
+
+    # Loads an image archive into local container storage.
+    @staticmethod
+    def loadImage(path):
+        ContainerEngine.run(["load", "-i", path], check=True)
     # Root of everything seine creates while building (not a spec's own
     # deliverable). Each SEINE_*_DIR below can override its own piece.
     # Absolute, so a step that chdirs (podman, ansible) still finds it.
