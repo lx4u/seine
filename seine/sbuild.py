@@ -1,6 +1,7 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import contextlib
 import hashlib
 import os
 import subprocess
@@ -129,6 +130,8 @@ class SbuildChroot:
         self.architecture = architecture
         self.distro = distro
         self.options = options
+        from seine import storage
+        self.storage_provider = storage.for_build(self.options)
 
     @property
     def filename(self):
@@ -241,6 +244,11 @@ class SbuildChroot:
         digest = hashlib.sha256(" ".join(args).encode()).hexdigest()[:16]
         if self.current(digest) == False:
             import_bundled()
+            with contextlib.suppress(Exception):
+                self.storage_provider.pull("chroots", self.key, self.path)
+                if os.path.isfile(self.path):
+                    with open(self.inputs, "w") as f:
+                        f.write("%s\n" % digest)
         if self.current(digest):
             entry = Index().hit(CHROOT, self.key)
             say(self.options, "chroot %s reused, made %s"
@@ -285,6 +293,9 @@ class SbuildChroot:
             f.write("%s\n" % digest)
         Index().made(CHROOT, self.key)
         say(self.options, "chroot %s made" % self.key)
+        with contextlib.suppress(Exception):
+            recipe = [("digest", digest), ("args", " ".join(args))]
+            self.storage_provider.push("chroots", self.key, self.path, recipe=recipe)
         return self
 
 BUILDER_IMAGE_SCRIPT = """

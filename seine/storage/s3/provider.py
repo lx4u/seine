@@ -12,7 +12,7 @@ import tempfile
 
 from ..base import StorageProvider, StorageError, StorageOfflineError
 from .client import S3Client, S3NotFoundError, S3ConditionFailedError
-from seine.cache import check_clean_chroot
+from seine.cache import check_clean_chroot, CleanChrootViolation
 
 
 # Compresses payload using zstandard level 3.
@@ -47,12 +47,13 @@ class S3StorageProvider(StorageProvider):
     """Storage provider backed by S3/Garage network object storage."""
 
     def __init__(self, client, bucket, prefix="cache",
-                 offline_mode="fallback", cache_rootfs=False):
+                 offline_mode="fallback", cache_rootfs=False, options=None):
         self.client = client
         self.bucket = bucket
         self.prefix = prefix.strip("/")
         self.offline_mode = offline_mode
         self.cache_rootfs = cache_rootfs
+        self.options = options or {}
 
     def _object_key(self, kind, key, ext=".tar.zst"):
         return f"{self.prefix}/{kind}/{key}{ext}"
@@ -65,10 +66,17 @@ class S3StorageProvider(StorageProvider):
 
     def push(self, kind, key, path, spec=None, recipe=None):
         """Compress, verify clean-chroot, and push object to S3."""
-        if kind in ("chroot", "rootfs"):
-            check_clean_chroot(path, spec=spec)
+        if kind in ("chroot", "rootfs") and isinstance(path, str):
+            try:
+                check_clean_chroot(path, spec=spec)
+            except CleanChrootViolation as e:
+                from seine.cache_index import say
+                say(self.options, f"push {kind} {key} refused: {e}")
+                raise
 
-        if os.path.isfile(path) and path.endswith(".zst"):
+        if isinstance(path, (bytes, bytearray)):
+            payload = _compress_zstd(path)
+        elif os.path.isfile(path) and path.endswith(".zst"):
             with open(path, "rb") as f:
                 payload = f.read()
         elif os.path.isfile(path):
@@ -94,6 +102,8 @@ class S3StorageProvider(StorageProvider):
         except Exception as e:
             if self.offline_mode == "strict":
                 raise StorageOfflineError(f"s3 push failed for {obj_key}: {e}") from e
+            from seine.cache_index import say
+            say(self.options, f"push {kind} {key} failed: {e}")
             return False
 
         if recipe:
@@ -104,9 +114,51 @@ class S3StorageProvider(StorageProvider):
         self.touch(kind, key)
         return True
 
-    def pull(self, wanted=None):
-        """Pull needed cache objects into local cache."""
-        pass
+    def pull(self, kind, key, dest=None):
+        """Pull cached object from S3 into local storage."""
+        obj_key = self._object_key(kind, key)
+        try:
+            if not self.client.head_object(self.bucket, obj_key):
+                return None
+            data = self.client.get_object(self.bucket, obj_key)
+        except S3NotFoundError:
+            return None
+        except Exception as e:
+            if self.offline_mode == "strict":
+                raise StorageOfflineError(f"s3 pull failed for {obj_key}: {e}") from e
+            return None
+
+        if dest is None:
+            return _decompress_zstd(data)
+
+        if dest.endswith(".zst"):
+            decompressed = data
+        else:
+            decompressed = _decompress_zstd(data)
+
+        if os.path.isdir(dest):
+            with tarfile.open(fileobj=io.BytesIO(decompressed), mode="r|*") as tar:
+                tar.extractall(dest)
+            for derived in ["Packages", "Packages.gz", "Sources", "Sources.gz"]:
+                p = os.path.join(dest, derived)
+                if not os.path.exists(p):
+                    open(p, "wb").close()
+        else:
+            os.makedirs(os.path.dirname(os.path.abspath(dest)), exist_ok=True)
+            temp_dest = f"{dest}.partial"
+            with open(temp_dest, "wb") as f:
+                f.write(decompressed)
+            os.replace(temp_dest, dest)
+
+        with contextlib.suppress(Exception):
+            recipe_data = self.client.get_object(self.bucket, self._recipe_key(kind, key))
+            if recipe_data and not os.path.isdir(dest):
+                recipe_dest = f"{dest[:-7]}.recipe" if dest.endswith(".digest") else f"{dest}.recipe"
+                with open(recipe_dest, "wb") as f:
+                    f.write(recipe_data)
+
+        self.touch(kind, key)
+        return dest
 
     def touch(self, kind, key):
         """Update heartbeat timestamp file on S3."""

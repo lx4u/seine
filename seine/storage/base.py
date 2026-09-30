@@ -21,8 +21,8 @@ class StorageOfflineError(StorageError):
 class StorageProvider:
     """Abstract interface for caching and artifact storage providers."""
 
-    def pull(self, wanted=None):
-        """Pull needed cache objects into local storage."""
+    def pull(self, kind, key, dest=None):
+        """Pull needed cache object into local storage."""
         raise NotImplementedError
 
     def push(self, kind, key, path, spec=None, recipe=None):
@@ -81,4 +81,4 @@ def for_build(options=None, spec=None):
     client = S3Client(endpoint, creds["access_key"], creds["secret_key"], region=region)
 
     return S3StorageProvider(
-        client, bucket, offline_mode=offline_mode, cache_rootfs=cache_rootfs)
+        client, bucket, offline_mode=offline_mode, cache_rootfs=cache_rootfs, options=options)

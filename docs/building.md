@@ -29,6 +29,8 @@ Use these options for common variations:
 | `seine build --rebuild spec.yaml` | Rebuild packages even when cached results exist. |
 | `seine build --sbom spec.yaml` | Write an SPDX software bill of materials beside the image. |
 | `seine build --reproducible spec.yaml` | Normalize disk image partitions so two builds of the same spec give a byte-identical image. Slower; mainly for CI/release builds. |
+| `seine build --s3-cache spec.yaml` | Cache packages, chroots, and build artifacts to network S3/Garage storage. |
+| `seine build --cache-rootfs spec.yaml` | Cache and share root file-system tarballs across machines. |
 | `seine build --sign-key KEY spec.yaml` | Sign rebuilt packages with your GPG key. |
 
 The root file-system is deployed as `<image>.rootfs.tar` beside the image (an
@@ -44,6 +46,15 @@ is not tracked.
 
 `--target TASK` is useful while working on one part of a build. It builds that
 task and what it needs. Find task names with `seine plan --tasks-only spec.yaml`.
+
+## Network caching (S3 / Garage)
+
+When `--s3-cache` is specified or configured in `storage.s3`:
+* Built packages and buildd chroots are pulled from and pushed to shared object storage.
+* Payloads are compressed with `zstd` (level 3) and verified against clean-chroot leakage gates.
+* Derivation `.recipe` sidecars are stored alongside objects for cross-machine explainability.
+* `--s3-offline-mode=strict` enforces network cache connectivity, while `--s3-offline-mode=fallback` (default) falls back to local compilation if storage is unreachable.
+* `--cache-rootfs` additionally shares root file-system archives across machines.
 
 ## Preloading container images
 

@@ -129,3 +129,38 @@ class S3ProviderOperations(avocado.Test):
 
         with self.assertRaises(StorageOfflineError):
             strict_provider.push("packages", "item", source_file)
+
+    def test_push_clean_chroot_violation_logs_refused_under_verbose(self):
+        provider = S3StorageProvider(
+            self.mock_client, "test-bucket", options={"verbose": True})
+        dirty_tar = os.path.join(self.workdir, "dirty_verbose.tar")
+        with tarfile.open(dirty_tar, "w") as tar:
+            ti = tarfile.TarInfo("etc/ssl/private/cakey.pem")
+            ti.size = 0
+            tar.addfile(ti)
+
+        with mock.patch("seine.cache_index.say") as mock_say:
+            with self.assertRaises(CleanChrootViolation):
+                provider.push("chroot", "trixie-amd64", dirty_tar)
+            mock_say.assert_called_once()
+            args, _ = mock_say.call_args
+            self.assertEqual(args[0], {"verbose": True})
+            self.assertIn("push chroot trixie-amd64 refused:", args[1])
+            self.assertIn("clean-chroot gate rejected archive:", args[1])
+
+    def test_push_failure_logs_failed_under_verbose(self):
+        provider = S3StorageProvider(
+            self.mock_client, "test-bucket", options={"verbose": True})
+        self.mock_client.put_object.side_effect = Exception("network timeout")
+
+        source_file = os.path.join(self.workdir, "data_verbose.txt")
+        with open(source_file, "wb") as f:
+            f.write(b"data")
+
+        with mock.patch("seine.cache_index.say") as mock_say:
+            res = provider.push("packages", "mypkg", source_file)
+            self.assertFalse(res)
+            mock_say.assert_called_once()
+            args, _ = mock_say.call_args
+            self.assertEqual(args[0], {"verbose": True})
+            self.assertEqual(args[1], "push packages mypkg failed: network timeout")
