@@ -159,6 +159,7 @@ class BuildCmd(Cmd):
     NAME = "build"
     SHORT_OPTIONS = "dDhj:kv"
     LONG_OPTIONS = [
+        "cache-bootstraps",
         "cache-rootfs",
         "debug",
         "dry-run",
@@ -166,6 +167,7 @@ class BuildCmd(Cmd):
         "help",
         "jobs=",
         "keep",
+        "no-cache-bootstraps",
         "no-color",
         "offline",
         "packages-only",
@@ -193,6 +195,7 @@ class BuildCmd(Cmd):
         # 'jobs' falls back to the persisted setting (see settings.py / '/set
         # jobs N') before the hardcoded '1'; '-j'/'--jobs' below overrides both.
         self.options = { "ansible_library": [], "build": True, "color": None,
+                         "cache_bootstraps": True,
                          "cache_rootfs": False,
                          "debug": False, "dry_run": False,
                          "jobs": settings.load().get("jobs") or 1, "keep": False,
@@ -1434,6 +1437,10 @@ class BuildCmd(Cmd):
                 self.options["reproducible"] = True
             elif o in ("--offline",):
                 self.options["offline"] = True
+            elif o in ("--cache-bootstraps",):
+                self.options["cache_bootstraps"] = True
+            elif o in ("--no-cache-bootstraps",):
+                self.options["cache_bootstraps"] = False
             elif o in ("--cache-rootfs",):
                 self.options["cache_rootfs"] = True
             elif o in ("--s3-cache",):
@@ -1608,6 +1615,8 @@ Flags:
                         without writing a disk image. What looking inside a
                         build rather than booting it wants
       --cache-rootfs    push and pull rootfs tarballs to and from network cache
+      --no-cache-bootstraps
+                        disable remote caching of bootstrap container images
       --s3-cache        enable remote network caching backed by S3 or Garage
       --s3-endpoint URL endpoint URL for S3/Garage network cache storage
       --s3-bucket NAME  bucket name for S3 cache (default: 'seine-cache')
