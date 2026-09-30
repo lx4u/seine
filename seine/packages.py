@@ -2,12 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
+import contextlib
 import functools
 import hashlib
+import io
 import os
 import re
 import shlex
 import shutil
+import tarfile
 import tempfile
 import threading
 import time
@@ -451,11 +454,16 @@ class Builder:
     # 'redact_patterns' is optional: most callers have no 'redact:'
     # section, and passing '[]' everywhere would be pure noise.
     def __init__(self, distro, options, builderImage, redact_patterns=None,
-                 vault_defaults=None, sign_key_default=None):
+                 vault_defaults=None, sign_key_default=None, storage_provider=None):
         self.builderImage = builderImage
         self.distro = distro
         self.options = options
         self._redact_patterns = redact_patterns or ([], [])
+        if storage_provider is not None:
+            self.storage_provider = storage_provider
+        else:
+            from seine import storage
+            self.storage_provider = storage.for_build(self.options)
         # The ABI each rebuilt kernel gave itself, by package name --
         # what a module built against it must be named for.
         self.abinames = {}
@@ -1506,8 +1514,11 @@ class Builder:
                 stamp = self.stamp(package, architecture, depends)
                 digests[(package.name, architecture)] = \
                     os.path.basename(stamp).rsplit("_", 1)[1]
-                # Diagnosed here, not lazily: _forget() deletes the old
-                # recipe this compares against once a rebuild lands it.
+                if not os.path.isfile(stamp) and not self.options.get("rebuild"):
+                    digest_hex = digests[(package.name, architecture)]
+                    pkg_key = f"{self.key(package, architecture)}/{digest_hex}"
+                    with contextlib.suppress(Exception):
+                        self.storage_provider.pull("packages", pkg_key, dest=self.repository())
                 if not os.path.isfile(stamp):
                     self._miss_reasons[(package.name, architecture)] = \
                         self._diff_recipe(package, architecture)
@@ -2097,7 +2108,27 @@ class Builder:
                 self._forget(package, architecture, everything)
                 self._record(stamp, sorted(set(produced) | set(sources)))
                 self._record_excerpt(stamp, package)
-                self._record_recipe(stamp, self._recipes.get((package.name, architecture)))
+                recipe = self._recipes.get((package.name, architecture))
+                self._record_recipe(stamp, recipe)
+                digest_hex = os.path.basename(stamp).rsplit("_", 1)[1]
+                pkg_key = f"{self.key(package, architecture)}/{digest_hex}"
+                buf = io.BytesIO()
+                with tarfile.open(fileobj=buf, mode="w") as tar:
+                    tar.add(stamp, arcname=os.path.relpath(stamp, self.repository()))
+                    spec_p = self._excerpt_path(stamp)
+                    if os.path.isfile(spec_p):
+                        tar.add(spec_p, arcname=os.path.relpath(spec_p, self.repository()))
+                    rec_p = self._recipe_path(stamp)
+                    if os.path.isfile(rec_p):
+                        tar.add(rec_p, arcname=os.path.relpath(rec_p, self.repository()))
+                    for name in sorted(set(produced) | set(sources)):
+                        p = os.path.join(self.repository(), name)
+                        if os.path.isfile(p):
+                            tar.add(p, arcname=name)
+                with contextlib.suppress(Exception):
+                    payload = buf.getvalue()
+                    self.storage_provider.push("packages", pkg_key, payload, recipe=recipe)
+                    self.storage_provider.push("packages", self.key(package, architecture), payload, recipe=recipe)
             # Once, at the end: an index made while a build is half
             # moved in describes neither what was there nor what is.
             self.index(cached=replaced == False)
