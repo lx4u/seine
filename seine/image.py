@@ -242,12 +242,12 @@ class Image:
             epoch=self._epoch(), host_image=self.hostBootstrap.name,
             locales=self._locales_override())
         self._cid = runner.run(self.spec["playbook"])
-        self._export(digest)
+        self._export(digest, recipe=self._rootfs_recipe(vendor_digest))
         self._tarball = self._rootfs
 
     # Hash of everything the tarball is made from: the spec (minus disk
     # sections), base image, built packages, vendor lock and host files.
-    def _rootfs_digest(self, vendor_digest):
+    def _rootfs_recipe(self, vendor_digest):
         distro = self.spec["distribution"]
         base = ContainerEngine.imageLabel(self._from, INPUTS_LABEL) \
                or ContainerEngine.imageId(self._from) or ""
@@ -255,9 +255,20 @@ class Image:
         built = utils.file_digest(index) if os.path.isfile(index) else ""
         spec = {key: value for key, value in self.spec.items()
                 if key not in DISK_ONLY}
-        parts = [ROOTFS_REVISION, analyze.spec_digest(spec), base, built,
-                 vendor_digest, self._epoch()]
-        parts += [utils.file_digest(path) for path in self._host_files()]
+        recipe = [
+            ("revision", str(ROOTFS_REVISION)),
+            ("spec", analyze.spec_digest(spec)),
+            ("base_image", base),
+            ("packages", built),
+            ("vendor", vendor_digest),
+            ("source_date_epoch", str(self._epoch())),
+        ]
+        for path in self._host_files():
+            recipe.append((f"file:{path}", utils.file_digest(path)))
+        return recipe
+
+    def _rootfs_digest(self, vendor_digest):
+        parts = [val for _, val in self._rootfs_recipe(vendor_digest)]
         return hashlib.sha256("\n".join(map(str, parts)).encode()).hexdigest()
 
     # Host files named by a relative 'src:'. Their content is not in the
@@ -288,30 +299,44 @@ class Image:
     def _digest_file(self):
         return f"{self._rootfs}.digest"
 
+    def _recipe_file(self):
+        return utils.recipe_file_for(self._digest_file())
+
     def _rootfs_current(self, digest):
         return utils.digest_file_current(self._digest_file(), digest, self._rootfs)
 
     def _image_digest_file(self):
         return f"{self._output}.digest" if self._output else None
 
-    def _image_digest(self, vendor_digest=None):
+    def _image_recipe_file(self):
+        digest_file = self._image_digest_file()
+        return utils.recipe_file_for(digest_file) if digest_file else None
+
+    def _image_recipe(self, vendor_digest=None):
         if not self._output or self.spec is None:
-            return ""
+            return []
         if vendor_digest is None:
             from seine import vendor
             distro = self.spec["distribution"]
             vendor_digest = vendor.offline_dockerfile_digest(self.spec, distro)
-        parts = [
-            IMAGE_REVISION,
-            analyze.spec_digest(self.spec),
-            self._rootfs_digest(vendor_digest),
+        recipe = [
+            ("revision", str(IMAGE_REVISION)),
+            ("spec", analyze.spec_digest(self.spec)),
+            ("rootfs", self._rootfs_digest(vendor_digest)),
         ]
         if len(self.subbuilds) > 0:
             for source, build in sorted(self.subbuilds.items()):
                 s_distro = build.spec["distribution"]
                 from seine import vendor
                 s_vdigest = vendor.offline_dockerfile_digest(build.spec, s_distro)
-                parts.append(f"{source}:{build.image._rootfs_digest(s_vdigest)}")
+                recipe.append((f"subbuild:{source}", build.image._rootfs_digest(s_vdigest)))
+        return recipe
+
+    def _image_digest(self, vendor_digest=None):
+        recipe = self._image_recipe(vendor_digest)
+        if not recipe:
+            return ""
+        parts = [val for _, val in recipe]
         return hashlib.sha256("\n".join(map(str, parts)).encode()).hexdigest()
 
     def _image_current(self, digest=None):
@@ -331,7 +356,7 @@ class Image:
 
     # Written in the deploy directory so the final rename stays on one
     # filesystem. The digest file is written last: no digest, no reuse.
-    def _export(self, digest):
+    def _export(self, digest, recipe=None):
         partial = tempfile.NamedTemporaryFile(
             delete=False, dir=os.path.dirname(self._rootfs),
             prefix=".rootfs-", suffix=".partial")
@@ -343,7 +368,7 @@ class Image:
             self._normalize_timestamps(partial.name)
             utils.invalidate_digest_file(self._digest_file())
             os.replace(partial.name, self._rootfs)
-            utils.write_digest_file(self._digest_file(), digest)
+            utils.write_digest_file(self._digest_file(), digest, recipe=recipe)
             failed = False
         finally:
             if failed:

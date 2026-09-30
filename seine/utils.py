@@ -516,18 +516,47 @@ def digest_file_current(digest_file, digest, artifact):
     except OSError:
         return False
 
-# Drops a stale digest so a crash between this and the artifact write can
-# never leave a digest matching bytes that aren't actually there.
+def recipe_file_for(digest_file):
+    if digest_file.endswith(".digest"):
+        return f"{digest_file[:-7]}.recipe"
+    return f"{digest_file}.recipe"
+
+def write_recipe_file(recipe_file, recipe):
+    stamp = f"{recipe_file}.partial"
+    with open(stamp, "w") as f:
+        for label, val in recipe:
+            f.write(f"{label}\t{val}\n")
+    os.replace(stamp, recipe_file)
+
+def read_recipe_file(recipe_file):
+    try:
+        with open(recipe_file, "r") as f:
+            recipe = []
+            for line in f:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                label, _, val = line.partition("\t")
+                recipe.append((label, val))
+            return recipe
+    except OSError:
+        return None
+
+# Drops stale digest and recipe files so incomplete writes are never reused.
 def invalidate_digest_file(digest_file):
     with contextlib.suppress(FileNotFoundError):
         os.unlink(digest_file)
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(recipe_file_for(digest_file))
 
 # Written last, atomically: no digest, no reuse.
-def write_digest_file(digest_file, digest):
+def write_digest_file(digest_file, digest, recipe=None):
     stamp = f"{digest_file}.partial"
     with open(stamp, "w") as f:
         f.write(f"{digest}\n")
     os.replace(stamp, digest_file)
+    if recipe is not None:
+        write_recipe_file(recipe_file_for(digest_file), recipe)
 
 # A file's name independent of where it was checked out (a raw abspath()
 # would give the same spec a different digest per clone). Named relative
