@@ -298,7 +298,7 @@ class VendorCmd(Cmd):
     NAME = "vendor"
     SHORT_OPTIONS = "dhj:v"
     LONG_OPTIONS = ["check", "debug", "help", "jobs=", "vendor-sign-key=",
-                    "architecture=", "suite=", "verbose"]
+                    "architecture=", "suite=", "verbose", "restart"]
 
     def __init__(self):
         # 'jobs' falls back to the persisted setting (seine/settings.py,
@@ -345,6 +345,8 @@ class VendorCmd(Cmd):
                 self.options["verbose"] = True
             elif o in ("--check"):
                 check = True
+            elif o in ("--restart"):
+                self.options["restart"] = True
             elif o in ("-h", "--help"):
                 print(self.usage())
                 return
@@ -375,6 +377,9 @@ class VendorCmd(Cmd):
         # Writing a lock needs exactly one physical file to know which
         # '<file>.lock.yaml' it belongs to -- refused rather than guessed
         # at when several are given.
+        if self.options.get("restart") and refresh is not True:
+            sys.stderr.write("error: --restart needs --refresh\n")
+            sys.exit(1)
         if (refresh is not False or check) and len(args) != 1:
             sys.stderr.write(
                 "error: %s needs exactly one specification file, to know "
@@ -501,6 +506,11 @@ class VendorCmd(Cmd):
             # written, in which case this refuses rather than silently
             # drifting. '--refresh'/'--check' bypass this and resolve
             # for real.
+            document = load_manifest(suite)
+            if document.get("refreshing") and refresh is False and not check:
+                raise ValueError(
+                    "the last 'seine vendor --refresh' of '%s' did not "
+                    "finish -- run it again to resume" % suite)
             locked = vendor_lock.get(suite)
             if locked is not None and refresh is False and not check:
                 if locked.get("digest") != digests[suite]:
@@ -510,9 +520,14 @@ class VendorCmd(Cmd):
                         "vendor --refresh' to update it" % suite)
                 manifests[suite] = locked.get("sources", {})
                 continue
-            document = load_manifest(suite)
             manifest = document.get("sources", {})
-            if (refresh is not False or check or len(manifest) == 0 or
+            resume = (refresh is True and document.get("refreshing") and
+                      document.get("digest") == digests[suite] and
+                      len(manifest) > 0 and not self.options.get("restart"))
+            if resume:
+                print("resuming the unfinished --refresh of %s" % suite)
+                manifests[suite] = manifest
+            elif (refresh is not False or check or len(manifest) == 0 or
                     document.get("digest") != digests[suite]):
                 stale.append(suite)
             else:
@@ -543,7 +558,8 @@ class VendorCmd(Cmd):
                 # it only compares against the committed lock.
                 if not check:
                     save_manifest(suite, {"sources": fresh, "digest": digests[suite],
-                                          "graph": graph, "graph_version": GRAPH_VERSION})
+                                          "graph": graph, "graph_version": GRAPH_VERSION,
+                                          "refreshing": refresh is not False})
         elif len(wanted) > 0:
             # Needed even when every suite is already frozen: the resolve
             # wave above is what builds the image fetch/index stand on,
@@ -610,6 +626,7 @@ class VendorCmd(Cmd):
                 # untouched, only 'sources' gains the enrichment.
                 document = load_manifest(suite)
                 document["sources"] = enriched
+                document.pop("refreshing", None)
                 save_manifest(suite, document)
                 updated[suite] = {"digest": digests[suite],
                                   "sources": _lock_sources(enriched)}
@@ -1050,7 +1067,7 @@ Description:
   writing nothing either way -- what a CI job would run on a schedule.
 
 Usage:
-  seine vendor [-j N] [--refresh[=NAME] | --check] [--vendor-sign-key KEY]
+  seine vendor [-j N] [--refresh [--restart] | --refresh=NAME | --check] [--vendor-sign-key KEY]
                [--suite NAME]... [--architecture NAME]... SPEC...
 
 Flags:
@@ -1069,6 +1086,8 @@ Flags:
                         given a name, every one of them otherwise.
                         Needs exactly one SPEC, whose lock file this
                         then (re)writes
+      --restart         with --refresh: resolve again even if an earlier
+                        --refresh was interrupted and could be resumed
       --suite NAME      vendor only this suite; may be given more than
                         once. Every suite the specification's 'vendor:'
                         section asks for otherwise

@@ -1287,6 +1287,11 @@ the live feed. Nothing changes for a source still served by the live
 suite: the recorded sha1 only matters once apt itself can no longer
 produce the pinned version.
 
+`--refresh` can take a long time. If it is interrupted, run it again: it
+resumes with the versions it had already resolved instead of resolving
+again, and writes the lock once it finishes. A plain `seine vendor` refuses
+to run until then. `--refresh --restart` resolves again from scratch.
+
 An entry with no recorded sha1 is fetched with apt instead. If the suite's
 apt lists are empty, as they are when nothing resolved it first, they are
 updated before the fetch.
