@@ -269,6 +269,8 @@ unless `stripped()` is extended.
 Seine supports network object caching via S3-compatible object stores (such as
 [Garage](https://garagehq.deuxfleurs.fr/) or MinIO) to share cached packages,
 chroots, vendor assets, and recipes across multiple developers and build workers.
+See [Running a Garage S3 cache](storage-garage.md) for a guide on setting up a
+server with Podman.
 
 The client layer (`seine/storage/s3/client.py`) is a thin wrapper over `boto3`.
 It signs requests with AWS Signature Version 4 using path-style addressing and

@@ -22,6 +22,7 @@ testing
 tui
 ai
 vault-openbao
+storage-garage
 release-as-debs
 ```
 
