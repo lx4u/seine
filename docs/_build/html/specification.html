@@ -1,0 +1,2067 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Specification files &#8212; seine documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=4418a689" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="_static/documentation_options.js?v=4d2f5802"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'specification';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Merging specification fragments" href="merging.html" />
+    <link rel="prev" title="Getting started" href="getting-started.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">seine documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting started</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Specification files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="merging.html">Merging specification fragments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernels.html">Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="environment.html">Environment variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tui.html">TUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ai.html">The AI chat</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vault-openbao.html">Running a vault for seine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="release-as-debs.html">Releasing seine as .deb packages</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="caching.html">Caching</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine/issues/new?title=Issue%20on%20page%20%2Fspecification.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/specification.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Specification files</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#variables">Variables</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#redacting-what-should-not-be-printed">Redacting what should not be printed</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#distribution">distribution</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#feeds">feeds</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-from-a-snapshot">Building from a snapshot</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#apt-pull-mode-offline">apt-pull-mode: offline</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#defaults">defaults</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#packages">packages</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fetching-over-ssh">Fetching over ssh</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-the-repository-holds">What the repository holds</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#local-versions">Local versions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#signing">Signing</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pinning-a-build">Pinning a build</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#host-packages">Host packages</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vendor">vendor</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#imager">imager</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#playbook">playbook</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ansible-galaxy-collections">Ansible Galaxy collections</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#writing-your-own-module">Writing your own module</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#image">image</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#secure-boot">secure-boot</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bootlets">bootlets</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#partitions">partitions</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#protecting-a-read-only-partition-with-dm-verity">Protecting a read-only partition with dm-verity</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#volumes">volumes</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-a-read-only-usr">Example: a read-only <code class="docutils literal notranslate"><span class="pre">/usr</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-a-dm-verity-protected-usr">Example: a dm-verity-protected <code class="docutils literal notranslate"><span class="pre">/usr</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#test">test</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="specification-files">
+<h1>Specification files<a class="headerlink" href="#specification-files" title="Link to this heading">#</a></h1>
+<p>A system specification may be written in one or several YAML files comprised
+of the following sections:</p>
+<ul class="simple">
+<li><p>distribution</p></li>
+<li><p>packages</p></li>
+<li><p>playbook</p></li>
+<li><p>image</p></li>
+<li><p>test</p></li>
+</ul>
+<p>The specification may be broken down into smaller files to ease maintenance and
+readability. This can be done using <code class="docutils literal notranslate"><span class="pre">requires</span></code> as shown below:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">requires</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">bookworm</span>
+    <span class="o">-</span> <span class="n">amd64</span>
+
+<span class="n">distribution</span><span class="p">:</span>
+    <span class="o">-</span> <span class="o">...</span>
+
+<span class="n">playbook</span><span class="p">:</span>
+    <span class="o">-</span> <span class="o">...</span>
+
+<span class="n">image</span><span class="p">:</span>
+    <span class="o">-</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p>For each module listed in the <code class="docutils literal notranslate"><span class="pre">requires</span></code> section, a corresponding file with
+either the <code class="docutils literal notranslate"><span class="pre">.yml</span></code> or <code class="docutils literal notranslate"><span class="pre">.yaml</span></code> suffix shall be found in the folder of the yaml
+file requiring them. See <a class="reference internal" href="merging.html"><span class="std std-doc">docs/merging.md</span></a> for how two files
+touching the same section combine.</p>
+<section id="variables">
+<h2>Variables<a class="headerlink" href="#variables" title="Link to this heading">#</a></h2>
+<p>A file may read what the specification sets, written <code class="docutils literal notranslate"><span class="pre">[[</span> <span class="pre">...</span> <span class="pre">]]</span></code>, so that
+what is true of any architecture or any release is written once instead of
+being copied once per each. <code class="docutils literal notranslate"><span class="pre">examples/common/debian.yaml</span></code> is the whole of
+what a Debian release’s feeds look like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">distribution</span><span class="p">:</span>
+    <span class="n">feeds</span><span class="p">:</span>
+        <span class="o">-</span> <span class="n">suite</span><span class="p">:</span> <span class="p">[[</span> <span class="n">distribution</span><span class="o">.</span><span class="n">release</span> <span class="p">]]</span>
+        <span class="o">-</span> <span class="n">suite</span><span class="p">:</span> <span class="p">[[</span> <span class="n">distribution</span><span class="o">.</span><span class="n">release</span> <span class="p">]]</span><span class="o">-</span><span class="n">updates</span>
+        <span class="o">-</span> <span class="n">suite</span><span class="p">:</span> <span class="p">[[</span> <span class="n">distribution</span><span class="o">.</span><span class="n">release</span> <span class="p">]]</span><span class="o">-</span><span class="n">security</span>
+          <span class="n">uri</span><span class="p">:</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">security</span><span class="o">.</span><span class="n">debian</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">debian</span><span class="o">-</span><span class="n">security</span>
+</pre></div>
+</div>
+<p>and <code class="docutils literal notranslate"><span class="pre">trixie.yaml</span></code> beside it is the name and nothing else:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">requires</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">debian</span>
+
+<span class="n">distribution</span><span class="p">:</span>
+    <span class="n">release</span><span class="p">:</span> <span class="n">trixie</span>
+</pre></div>
+</div>
+<p>What can be read is the specification itself, by the path to the setting:
+<code class="docutils literal notranslate"><span class="pre">distribution.architecture</span></code>, <code class="docutils literal notranslate"><span class="pre">distribution.release</span></code>, <code class="docutils literal notranslate"><span class="pre">imager.kernel</span></code>. Where a
+setting is written makes no difference – the files are all read before any
+of them is loaded, so a fragment sees what a fragment listed after it says,
+and the file doing the asking sees its own settings. A name the specification
+never sets is an error rather than an empty value, and every one of them is
+reported at once, with the file that asked for it.</p>
+<p>Two things are deliberately not supported:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">[%</span> <span class="pre">if</span> <span class="pre">%]</span></code> and the rest of jinja’s blocks. Which fragments apply is what
+<code class="docutils literal notranslate"><span class="pre">requires</span></code> already says, in a file that can be read without being run.</p></li>
+<li><p>a <code class="docutils literal notranslate"><span class="pre">requires</span></code> entry that names a file through a variable, which would make
+the files a specification is built from depend on what those files say.</p></li>
+</ul>
+<p>The delimiters are <code class="docutils literal notranslate"><span class="pre">[[</span> <span class="pre">]]</span></code> rather than jinja’s own <code class="docutils literal notranslate"><span class="pre">{{</span> <span class="pre">}}</span></code> because a
+specification carries ansible tasks, and ansible templates those itself, on
+the target, when the playbook runs. <code class="docutils literal notranslate"><span class="pre">{{</span> <span class="pre">ansible_facts.hostname</span> <span class="pre">}}</span></code> in a task
+is passed through untouched.</p>
+</section>
+<section id="redacting-what-should-not-be-printed">
+<h2>Redacting what should not be printed<a class="headerlink" href="#redacting-what-should-not-be-printed" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">plan</span></code> and <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span> <span class="pre">--dump</span></code> print the specification these files
+merge into, and a specification holds passwords, tokens and keys. A file
+that carries one says so, in a <code class="docutils literal notranslate"><span class="pre">redact</span></code> section of its own:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>redact:
+    - \$6\$\S+
+
+playbook:
+    - name: configure user accounts
+      tasks:
+        - name: set root password
+          user: name=root password=$6$X1SbKPWJ2tkpDFZb$khtcnptnTxWEYA4...
+</pre></div>
+</div>
+<p>which is printed as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>    <span class="n">user</span><span class="p">:</span> <span class="n">name</span><span class="o">=</span><span class="n">root</span> <span class="n">password</span><span class="o">=&lt;</span><span class="n">redacted</span><span class="p">:</span><span class="mi">45</span><span class="n">db4289</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>Each entry is either a regular expression (a plain string, as above) or a
+path (a mapping with one <code class="docutils literal notranslate"><span class="pre">path</span></code> key), naming a location instead of a
+pattern:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">redact</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">path</span><span class="p">:</span> <span class="n">mail</span><span class="o">.</span><span class="n">smtp_password</span>
+
+<span class="n">mail</span><span class="p">:</span>
+    <span class="n">smtp_password</span><span class="p">:</span> <span class="n">hunter2</span>
+    <span class="n">smtp_host</span><span class="p">:</span> <span class="n">mail</span><span class="o">.</span><span class="n">example</span><span class="o">.</span><span class="n">com</span>
+</pre></div>
+</div>
+<p>A pattern is matched against every string in the specification, and what
+matches is replaced, not the value holding it, so it can name the secret
+inside a larger string – the password of an ansible task whose other
+arguments are worth reading. A path instead names a dotted location
+(<code class="docutils literal notranslate"><span class="pre">a.b.c</span></code> reaching <code class="docutils literal notranslate"><span class="pre">spec[&quot;a&quot;][&quot;b&quot;][&quot;c&quot;]</span></code>) and takes out everything under it
+whole – every value below that point, whatever the shape, keys left alone.
+Reach for a path when the secret is a whole field rather than a fragment of
+one – <code class="docutils literal notranslate"><span class="pre">mail.smtp_password</span></code> above hides the password but leaves
+<code class="docutils literal notranslate"><span class="pre">smtp_host</span></code> next to it readable. Either way it prints the same way, as
+above.</p>
+<p>The digest is of the value that was taken out. A plan compares one
+specification against another, and both are printed this way, so a constant
+would have a changed password read as no change at all. It says nothing
+about the secret beyond whether it is the one that was there before.</p>
+<p>The section is merged from every file the way the rest of a specification
+is, so the fragment holding a secret is the fragment that declares it, and
+declaring it there covers every image built from that fragment. It only
+governs what is printed: the build itself still sees the value, and so does
+the target.</p>
+<p><code class="docutils literal notranslate"><span class="pre">defaults:</span> <span class="pre">vault:</span></code> (fixed dev-only key/secret material, see below) is
+redacted under its own path whether or not a spec’s <code class="docutils literal notranslate"><span class="pre">redact:</span></code> section asks
+for it – a spec need not remember to protect what it already marked as a
+secret by putting it there.</p>
+</section>
+<section id="distribution">
+<h2>distribution<a class="headerlink" href="#distribution" title="Link to this heading">#</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">distribution</span></code> section will be used to specify the primary source of the
+packages that will make the end system. The following attributes are supported:</p>
+<ul class="simple">
+<li><p>source: either <code class="docutils literal notranslate"><span class="pre">debian</span></code> or <code class="docutils literal notranslate"><span class="pre">ubuntu</span></code></p></li>
+<li><p>release: codename of the version to be used (e.g. <code class="docutils literal notranslate"><span class="pre">bookworm</span></code>)</p></li>
+<li><p>architecture: one of <code class="docutils literal notranslate"><span class="pre">amd64</span></code>, <code class="docutils literal notranslate"><span class="pre">arm64</span></code> or <code class="docutils literal notranslate"><span class="pre">armhf</span></code> – the one this
+particular <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span></code>/<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> run targets</p></li>
+<li><p>architectures: every architecture a <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> section may vendor for,
+beside <code class="docutils literal notranslate"><span class="pre">architecture</span></code> itself (see <a class="reference internal" href="#vendor">vendor</a>); optional, and
+nothing else about a run – <code class="docutils literal notranslate"><span class="pre">architecture</span></code> alone still decides what a
+real build produces. Unlike every other setting here, additive across
+composed files rather than last-loaded-wins (docs/merging.md): a
+per-architecture fragment (<code class="docutils literal notranslate"><span class="pre">examples/common/amd64.yaml</span></code>,
+<code class="docutils literal notranslate"><span class="pre">.../arm64.yaml</span></code>) names its own one, and a specification composing
+both ends up with both</p></li>
+<li><p>uri: base location of the distribution packages</p></li>
+<li><p>components: archive components every feed carries (<code class="docutils literal notranslate"><span class="pre">main</span></code> by default)</p></li>
+<li><p>feeds: apt feeds to build from (see below)</p></li>
+</ul>
+<section id="feeds">
+<h3>feeds<a class="headerlink" href="#feeds" title="Link to this heading">#</a></h3>
+<p>Without <code class="docutils literal notranslate"><span class="pre">feeds</span></code>, a system is built from the <code class="docutils literal notranslate"><span class="pre">release</span></code> alone. That is
+rarely what is wanted: it leaves out the updates accumulated since the
+release and the security suite, so the image is built from packages known
+to be superseded and cannot be brought up to date on the target either.
+List them:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">distribution</span><span class="p">:</span>
+    <span class="n">release</span><span class="p">:</span> <span class="n">bookworm</span>
+    <span class="n">feeds</span><span class="p">:</span>
+        <span class="o">-</span> <span class="n">suite</span><span class="p">:</span> <span class="n">bookworm</span>
+        <span class="o">-</span> <span class="n">suite</span><span class="p">:</span> <span class="n">bookworm</span><span class="o">-</span><span class="n">updates</span>
+        <span class="o">-</span> <span class="n">suite</span><span class="p">:</span> <span class="n">bookworm</span><span class="o">-</span><span class="n">security</span>
+          <span class="n">uri</span><span class="p">:</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">security</span><span class="o">.</span><span class="n">debian</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">debian</span><span class="o">-</span><span class="n">security</span>
+</pre></div>
+</div>
+<p>Each feed takes <code class="docutils literal notranslate"><span class="pre">suite</span></code>, and optionally <code class="docutils literal notranslate"><span class="pre">uri</span></code> (the distribution’s <code class="docutils literal notranslate"><span class="pre">uri</span></code>
+by default), <code class="docutils literal notranslate"><span class="pre">components</span></code> (the distribution’s <code class="docutils literal notranslate"><span class="pre">components</span></code>, itself <code class="docutils literal notranslate"><span class="pre">main</span></code>
+by default) and <code class="docutils literal notranslate"><span class="pre">sources</span></code>. They are
+listed rather than assumed because which suites a release has, and where
+they are served from, differs between distributions and between a release
+and its development version – and a suite that does not exist fails
+every build that follows.</p>
+<p>The same feeds are used to build the image, to make the chroot packages
+are rebuilt in, and to fetch their sources. Rebuilding a package against
+different feeds than the image installs from means rebuilding a different
+version than the one it would have had, and for the security suite that
+means rebuilding a source without the fixes apt would otherwise deliver.</p>
+<p>A component that every feed carries is said once, on the distribution,
+rather than per feed:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">distribution</span><span class="p">:</span>
+    <span class="n">components</span><span class="p">:</span> <span class="n">main</span> <span class="n">non</span><span class="o">-</span><span class="n">free</span><span class="o">-</span><span class="n">firmware</span>
+</pre></div>
+</div>
+<p>That is what a file describing a board says when it needs firmware from
+<code class="docutils literal notranslate"><span class="pre">non-free-firmware</span></code>: it reaches the release, the updates and the security
+suite alike, so the file names no suite and works on whichever release
+the specification is built for. A feed that says <code class="docutils literal notranslate"><span class="pre">components</span></code> itself
+still decides for itself, which is what a vendor archive carrying one
+component needs.</p>
+<p>Asking here rather than writing a <code class="docutils literal notranslate"><span class="pre">sources.list</span></code> into the image is what
+keeps the component under the same rules as everything else: the same
+URIs, the same pinning, and a build from a snapshot takes those packages
+from the snapshot too.</p>
+<p>Each feed is assumed to carry sources as well as binaries, which is what
+<code class="docutils literal notranslate"><span class="pre">apt://</span></code> sources are fetched from. <code class="docutils literal notranslate"><span class="pre">sources:</span> <span class="pre">false</span></code> says a feed carries
+none, for vendor archives that ship binaries alone:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>        <span class="o">-</span> <span class="n">suite</span><span class="p">:</span> <span class="n">vendor</span>
+          <span class="n">uri</span><span class="p">:</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">packages</span><span class="o">.</span><span class="n">example</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">apt</span>
+          <span class="n">components</span><span class="p">:</span> <span class="n">non</span><span class="o">-</span><span class="n">free</span>
+          <span class="n">sources</span><span class="p">:</span> <span class="n">false</span>
+</pre></div>
+</div>
+</section>
+<section id="building-from-a-snapshot">
+<h3>Building from a snapshot<a class="headerlink" href="#building-from-a-snapshot" title="Link to this heading">#</a></h3>
+<p>A suite moves: the same specification built a week apart is built from
+different packages. To pin what a build sees, point the feeds at an
+archive frozen in time, such as
+<a class="reference external" href="https://snapshot.debian.org/">snapshot.debian.org</a>. There is no separate
+setting for it – a snapshot is a <code class="docutils literal notranslate"><span class="pre">uri</span></code> like any other, and Debian serves
+its security archive from a path of its own:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">distribution</span><span class="p">:</span>
+    <span class="n">release</span><span class="p">:</span> <span class="n">bookworm</span>
+    <span class="n">uri</span><span class="p">:</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">snapshot</span><span class="o">.</span><span class="n">debian</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">archive</span><span class="o">/</span><span class="n">debian</span><span class="o">/</span><span class="mi">20260801</span><span class="n">T000000Z</span>
+    <span class="n">feeds</span><span class="p">:</span>
+        <span class="o">-</span> <span class="n">suite</span><span class="p">:</span> <span class="n">bookworm</span>
+          <span class="n">valid</span><span class="o">-</span><span class="n">until</span><span class="p">:</span> <span class="n">false</span>
+        <span class="o">-</span> <span class="n">suite</span><span class="p">:</span> <span class="n">bookworm</span><span class="o">-</span><span class="n">updates</span>
+          <span class="n">valid</span><span class="o">-</span><span class="n">until</span><span class="p">:</span> <span class="n">false</span>
+        <span class="o">-</span> <span class="n">suite</span><span class="p">:</span> <span class="n">bookworm</span><span class="o">-</span><span class="n">security</span>
+          <span class="n">uri</span><span class="p">:</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">snapshot</span><span class="o">.</span><span class="n">debian</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">archive</span><span class="o">/</span><span class="n">debian</span><span class="o">-</span><span class="n">security</span><span class="o">/</span><span class="mi">20260801</span><span class="n">T000000Z</span>
+          <span class="n">valid</span><span class="o">-</span><span class="n">until</span><span class="p">:</span> <span class="n">false</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">valid-until:</span> <span class="pre">false</span></code> is what makes it work. A snapshot serves the Release
+file as it stood at that timestamp, <code class="docutils literal notranslate"><span class="pre">Valid-Until</span></code> included, so apt sees an
+archive that expired long ago and refuses it. That refusal is right for an
+archive that is meant to be current and wrong for one deliberately held in
+the past, and the setting says which of the two this is. It is not
+specific to snapshots: any frozen or archived mirror needs it.</p>
+<p>The feeds pin the image and the rebuilds alike – the bootstrap, the buildd
+chroot the packages are built in, and the sources fetched by <code class="docutils literal notranslate"><span class="pre">apt://</span></code> all
+come from them. Moving the timestamp changes the digest every rebuild is
+stamped with, so the packages are rebuilt against the new snapshot rather
+than kept from the old one.</p>
+<p>A second build of the same snapshot fetches nothing: what the first one
+downloaded is in the cache under <code class="docutils literal notranslate"><span class="pre">./build/downloads</span></code> (see
+<a class="reference internal" href="environment.html"><span class="std std-doc">Environment variables</span></a>), and a snapshot serves the same
+bytes for a timestamp for ever, so nothing there can go stale.</p>
+<p>When multiple YAML files are parsed, the last parsed value will be used.</p>
+</section>
+<section id="apt-pull-mode-offline">
+<h3>apt-pull-mode: offline<a class="headerlink" href="#apt-pull-mode-offline" title="Link to this heading">#</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">apt</span><span class="o">-</span><span class="n">pull</span><span class="o">-</span><span class="n">mode</span><span class="p">:</span> <span class="n">offline</span>
+</pre></div>
+</div>
+<p>Switches every feed from its network <code class="docutils literal notranslate"><span class="pre">uri</span></code> to the local repository
+<a class="reference internal" href="#vendor"><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code></a> built for its suite, so that reaching for a
+package touches no network at all: the target’s own <code class="docutils literal notranslate"><span class="pre">apt</span></code> tasks in its
+running container, <code class="docutils literal notranslate"><span class="pre">apt://</span></code> fetching a package’s own source, a buildd
+chroot resolving what it build-depends on, and the small apt-get every
+build’s own host bootstrap – and, for a <code class="docutils literal notranslate"><span class="pre">baseline:</span></code> playbook, its
+transport bootstrap – runs to install its own tooling (<code class="docutils literal notranslate"><span class="pre">arch-test</span></code>,
+<code class="docutils literal notranslate"><span class="pre">mmdebstrap</span></code>, <code class="docutils literal notranslate"><span class="pre">qemu-user-static</span></code>, <code class="docutils literal notranslate"><span class="pre">python3-apt</span></code>…) are covered alike.
+<code class="docutils literal notranslate"><span class="pre">packages:</span> <span class="pre">false</span></code> is not a thing to say here: <code class="docutils literal notranslate"><span class="pre">apt-pull-mode</span></code> is a
+distribution-wide toggle, the same scope <code class="docutils literal notranslate"><span class="pre">distribution</span></code>’s other
+settings have, not a per-feed one.</p>
+<p>The host and transport bootstraps read the repository at <code class="docutils literal notranslate"><span class="pre">podman</span> <span class="pre">build</span></code>
+time rather than mounting it into an already-running container the way
+everything else above does, so unlike those, an image built from it is
+cached by its own Dockerfile text alone – reading whatever the
+repository held the moment it was built, not whatever it holds now. The
+repository’s own resolved manifest digest is folded into that text for
+exactly this reason, so a vendor refresh that changes what apt would
+install rebuilds the cached image rather than leaving it stale. Neither
+image ever ships or is thrown away the way a buildd chroot is: once
+built this way it stays offline-configured on the machine that built
+it, which is fine – it is a build tool, never the device’s own root
+file-system, and is rebuilt in place the next time its own digest moves.
+Asking for this before any <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> has ever built a repository
+for the release fails outright, in plain language, rather than partway
+through an <code class="docutils literal notranslate"><span class="pre">apt-get</span> <span class="pre">update</span></code> with nothing to read.</p>
+<p>It does not reach the target bootstrap’s own minimal package set: what
+mirrors that is a full-suite snapshot (see
+<a class="reference internal" href="#building-from-a-snapshot">Building from a snapshot</a> above), not
+<code class="docutils literal notranslate"><span class="pre">vendor:</span></code>, which deliberately excludes anything a buildd chroot already
+provides by itself – exactly what <code class="docutils literal notranslate"><span class="pre">vendor:</span></code>’s own build-dependency
+closure covers. Nor does it reach <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code>’s own resolve and fetch
+containers: those are what fills this repository in the first place, and
+going offline there would have them read one with nothing in it yet –
+they bootstrap from their own, permanently-online image instead (kept
+distinct from the host bootstrap above precisely so that populating a
+repository for the first time never has to wait on one already
+existing).</p>
+<p>Offline for the length of that alone: what ships in the image is
+rewritten back to the real feeds before it is exported, the same
+<code class="docutils literal notranslate"><span class="pre">sources.list.d</span></code> entry an online build would have left, so the device it
+ends up on can still reach the network on its own – a path that only
+ever existed on the machine that built it would otherwise break the
+first <code class="docutils literal notranslate"><span class="pre">apt-get</span> <span class="pre">update</span></code> the device itself runs. The sbuild builder image
+and buildd chroot get no such rewrite: they are thrown away at the end of
+every build, never exported.</p>
+<p>A build resolves this itself when a <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> section feeds a suite
+covered here – see <a class="reference internal" href="#vendor"><code class="docutils literal notranslate"><span class="pre">vendor</span></code></a> above – so a plain <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span></code>
+is enough. It is only a bare, <code class="docutils literal notranslate"><span class="pre">vendor:</span></code>-less feed reaching for this
+mode, or <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code>’s own resolve and fetch containers (never
+themselves offline, whatever the specification says – see above), that
+still depend on a repository having been built some other way first.</p>
+</section>
+</section>
+<section id="defaults">
+<h2>defaults<a class="headerlink" href="#defaults" title="Link to this heading">#</a></h2>
+<p>An entry under <code class="docutils literal notranslate"><span class="pre">packages</span></code> means <em>build this</em>. <code class="docutils literal notranslate"><span class="pre">defaults</span></code> holds package
+entries that only describe a package, and are used if something else asks
+for it to be built:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># examples/common/amd64.yaml</span>
+<span class="n">defaults</span><span class="p">:</span>
+    <span class="n">packages</span><span class="p">:</span>
+        <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">linux</span>
+          <span class="n">extends</span><span class="p">:</span>
+              <span class="n">kernel</span><span class="p">:</span>
+                  <span class="n">flavour</span><span class="p">:</span> <span class="n">amd64</span>
+</pre></div>
+</div>
+<p>That file now says which kernel <code class="docutils literal notranslate"><span class="pre">amd64</span></code> means without every amd64 image
+rebuilding a kernel it never asked for. Two rules:</p>
+<ul class="simple">
+<li><p><strong>A default never creates a package.</strong> If nothing under <code class="docutils literal notranslate"><span class="pre">packages</span></code>
+names it, it describes nothing and is dropped.</p></li>
+<li><p><strong>The last default loaded wins</strong>, and anything under <code class="docutils literal notranslate"><span class="pre">packages</span></code> beats
+all of them. Files are listed from the general to the particular –
+an architecture, then a board, then what is being built – so the
+particular file gets the last word, while the file actually asking
+for the build outranks every description of it.</p></li>
+</ul>
+<p>Settings are merged one at a time, so a board naming a <code class="docutils literal notranslate"><span class="pre">featureset</span></code> keeps
+the <code class="docutils literal notranslate"><span class="pre">flavour</span></code> its architecture gave it. Entries are matched by source
+package, as under <code class="docutils literal notranslate"><span class="pre">packages</span></code>, so a default written <code class="docutils literal notranslate"><span class="pre">apt://linux</span></code> applies
+to a specification that pinned <code class="docutils literal notranslate"><span class="pre">apt://linux=6.12.101-1</span></code>.</p>
+<p>A default is parsed whether or not anything uses it: a misspelt setting
+in an architecture file is reported by the file that holds it rather than
+waiting for the one image that rebuilds a kernel.</p>
+<p><code class="docutils literal notranslate"><span class="pre">defaults</span></code> holds package entries, <code class="docutils literal notranslate"><span class="pre">vault</span></code> seeds for the dev vault, and
+a <code class="docutils literal notranslate"><span class="pre">sign-key</span></code> fallback for repository signing. Playbooks and tests already
+merge by name (see <a class="reference internal" href="#playbook"><code class="docutils literal notranslate"><span class="pre">playbook</span></code></a>/<a class="reference internal" href="#test"><code class="docutils literal notranslate"><span class="pre">test</span></code></a>), and the other
+sections are merged by key.</p>
+</section>
+<section id="packages">
+<h2>packages<a class="headerlink" href="#packages" title="Link to this heading">#</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">packages</span></code> section lists Debian source packages to rebuild before the
+image is composed, for instance to carry a patch the distribution does not
+have. Each entry says where its source comes from:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">packages</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">busybox</span>
+      <span class="n">profiles</span><span class="p">:</span>
+          <span class="o">-</span> <span class="n">nocheck</span>
+      <span class="n">patches</span><span class="p">:</span>
+          <span class="o">-</span> <span class="n">patches</span><span class="o">/</span><span class="mi">0001</span><span class="o">-</span><span class="n">mark</span><span class="o">-</span><span class="n">the</span><span class="o">-</span><span class="n">banner</span><span class="o">-</span><span class="k">as</span><span class="o">-</span><span class="n">rebuilt</span><span class="o">.</span><span class="n">patch</span>
+</pre></div>
+</div>
+<p>The following attributes are supported:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Attribute</p></th>
+<th class="head text-center"><p>Required</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>source</p></td>
+<td class="text-center"><p>yes</p></td>
+<td><p>URI the source is fetched from (see below)</p></td>
+</tr>
+<tr class="row-odd"><td><p>after</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Packages that shall be built before this one</p></td>
+</tr>
+<tr class="row-even"><td><p>apt-preferences</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>What this build may install (see <a class="reference internal" href="#pinning-a-build">Pinning a build</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>before</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Packages that shall be built after this one</p></td>
+</tr>
+<tr class="row-even"><td><p>cross</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Cross-compile (see <a class="reference internal" href="building.html#cross-compiling"><span class="std std-ref">Cross-compiling</span></a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>extends</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Settings for a kind of package (see <a class="reference internal" href="kernels.html#bring-your-own-modules"><span class="std std-ref">Bring your own modules</span></a>)</p></td>
+</tr>
+<tr class="row-even"><td><p>name</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>The source package this builds, when the URI does not say</p></td>
+</tr>
+<tr class="row-odd"><td><p>options</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Debian build options (<code class="docutils literal notranslate"><span class="pre">DEB_BUILD_OPTIONS</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p>patches</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Patches to apply, relative to this YAML file</p></td>
+</tr>
+<tr class="row-odd"><td><p>priority</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Build order, <code class="docutils literal notranslate"><span class="pre">0</span></code>-<code class="docutils literal notranslate"><span class="pre">999</span></code>, <code class="docutils literal notranslate"><span class="pre">500</span></code> by default</p></td>
+</tr>
+<tr class="row-even"><td><p>profiles</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Debian build profiles (<code class="docutils literal notranslate"><span class="pre">--profiles</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>revision</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Local version suffix, <code class="docutils literal notranslate"><span class="pre">mod1</span></code> by default</p></td>
+</tr>
+<tr class="row-even"><td><p>scope</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Who the rebuild is for (see <a class="reference internal" href="#host-packages">Host packages</a>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>source_date_epoch</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Date to build at, seconds since the epoch</p></td>
+</tr>
+<tr class="row-even"><td><p>version</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Upstream version, for a tree seine packages itself</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Anything fetched over http is checked against a hash the specification
+declares, since nothing else vouches for it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>packages:
+    - source: https://example.com/busybox_1.37.0-6.dsc
+      sha256: 3f5e…
+</pre></div>
+</div>
+<p>The file is hashed where it lands, on the machine running seine rather
+than in the container that fetched it – a container asked to verify
+itself proves nothing. A mismatch stops the build and prints both hashes.
+The hash is part of what decides whether a package needs rebuilding, so a
+file that changes under the same URL is a different package rather than a
+cached one.</p>
+<p>A download with no hash to check against is not an error, but it says so,
+with the hash it just computed and the file to put it in:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>warning: nothing vouches for &#39;linux-6.18.43.tar.xz&#39;
+  it hashes to 9a1c…
+  add &#39;upstream-sha256: 9a1c…&#39; to examples/linux-6.18/kernel.yml
+</pre></div>
+</div>
+<p>The file it names is the one that carries the URI, which for a
+specification assembled from several is not necessarily the one that
+named the package.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--require-hashes</span></code> turns that warning into a refusal, for a build that
+should not fetch anything nobody vouched for:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">build</span> <span class="o">--</span><span class="n">require</span><span class="o">-</span><span class="n">hashes</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>It is answered when the specification is parsed rather than after a
+download, since whether a source has anything vouching for it is knowable
+without fetching it, and it names every source at fault in one go rather
+than one per attempt. seine’s own image tests build this way, so an
+example that loses its hash fails them.</p>
+<p><code class="docutils literal notranslate"><span class="pre">apt://</span></code>, <code class="docutils literal notranslate"><span class="pre">git://</span></code> and <code class="docutils literal notranslate"><span class="pre">file://</span></code> need no hash and take none: an apt source
+is checked against the archive’s signed index, a git revision is the hash
+of what it names, and a <code class="docutils literal notranslate"><span class="pre">file://</span></code> tree is already checked into this repo,
+reviewed the way any other change to it is. Each answers for itself, more
+strongly than a hash written down beside the URL would.</p>
+<p>Four kinds of <code class="docutils literal notranslate"><span class="pre">source</span></code> are understood:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">apt://&lt;package&gt;[=&lt;version&gt;]</span></code> takes the distribution’s own source
+package, at the version specified or the current one.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">https://.../&lt;package&gt;_&lt;version&gt;.dsc</span></code> takes a source package published
+elsewhere. It has to be a <code class="docutils literal notranslate"><span class="pre">.dsc</span></code>: an upstream tarball on its own has no
+<code class="docutils literal notranslate"><span class="pre">debian/</span></code> directory to build from.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">git://&lt;host&gt;/&lt;path&gt;[;branch=&lt;branch&gt;][;rev=&lt;commit&gt;][;protocol=&lt;proto&gt;]</span></code>
+takes a packaging tree that carries its own <code class="docutils literal notranslate"><span class="pre">debian/</span></code> directory. The
+remote is reached over https unless
+<code class="docutils literal notranslate"><span class="pre">protocol</span></code> says otherwise, and <code class="docutils literal notranslate"><span class="pre">rev</span></code> is required: a branch name moves,
+and a build that cannot be repeated is not worth calling reproducible.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">file://&lt;path&gt;</span></code> takes an already-unpacked tree with its own <code class="docutils literal notranslate"><span class="pre">debian/</span></code>
+directory, <code class="docutils literal notranslate"><span class="pre">path</span></code> given relative to the YAML file listing it – for a
+package with no upstream at all, authored and committed alongside the
+specification that builds it (e.g. <code class="docutils literal notranslate"><span class="pre">examples/common/kernel-signing/</span></code>).</p></li>
+</ul>
+<section id="fetching-over-ssh">
+<h3>Fetching over ssh<a class="headerlink" href="#fetching-over-ssh" title="Link to this heading">#</a></h3>
+<p>A <code class="docutils literal notranslate"><span class="pre">git://</span></code> source whose remote wants an ssh key says so with
+<code class="docutils literal notranslate"><span class="pre">;protocol=ssh</span></code>, and names the user to log in as – the clone happens in a
+container, where nothing else says who you are:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">packages</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">git</span><span class="nd">@example</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">team</span><span class="o">/</span><span class="n">busybox</span><span class="o">.</span><span class="n">git</span><span class="p">;</span><span class="n">protocol</span><span class="o">=</span><span class="n">ssh</span><span class="p">;</span><span class="n">rev</span><span class="o">=</span><span class="mf">1e4</span><span class="n">a0c9</span>
+</pre></div>
+</div>
+<p>seine needs no option for this. It forwards the ssh agent of the user it
+runs as into the container that clones, along with <code class="docutils literal notranslate"><span class="pre">~/.ssh/known_hosts</span></code> so
+the remote can be recognised, and does so only for the packages that asked
+for ssh. Your private keys stay on the host: the container asks the agent
+to sign and never sees a key itself, which matters because that container
+runs build scripts fetched from elsewhere with more namespace privileges
+than the others seine builds.</p>
+<p>The consequence is that a key the agent does not hold is a key seine cannot
+use, whatever <code class="docutils literal notranslate"><span class="pre">~/.ssh/config</span></code> says about it. Load it first:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>ssh-add<span class="w"> </span>~/.ssh/id_example
+ssh-add<span class="w"> </span>-l<span class="w">          </span><span class="c1"># what the build will be able to authenticate with</span>
+</pre></div>
+</div>
+<p>Building with no agent running at all fails with <code class="docutils literal notranslate"><span class="pre">SSH_AUTH_SOCK</span> <span class="pre">is</span> <span class="pre">unset</span></code>
+rather than hanging on a password prompt no one can answer.</p>
+<p>A package that build-depends on another has to be built after it. Say so
+with <code class="docutils literal notranslate"><span class="pre">after</span></code> (or <code class="docutils literal notranslate"><span class="pre">before</span></code>), naming the other package:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">packages</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">application</span>
+      <span class="n">after</span><span class="p">:</span>
+          <span class="o">-</span> <span class="n">library</span>
+    <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">library</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">before</span></code>/<code class="docutils literal notranslate"><span class="pre">after</span></code> only order seine’s own build graph and chain the cache
+digest so a rebuild upstream forces one downstream; they install nothing
+into the build chroot. The package’s real Build-Depends (in its
+debian/control) is what apt/sbuild still resolve there, unchanged.</p>
+<p>Naming a package that the specification does not build is an error rather
+than a constraint that is quietly ignored, as is a set of packages whose
+constraints depend on each other in a circle.</p>
+<p><code class="docutils literal notranslate"><span class="pre">priority</span></code> decides the order of packages that no <code class="docutils literal notranslate"><span class="pre">before</span></code>/<code class="docutils literal notranslate"><span class="pre">after</span></code> separates,
+between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">999</span></code>, <code class="docutils literal notranslate"><span class="pre">500</span></code> by default, lowest first – as it does for
+playbooks. Constraints win over it, so adding one does not rearrange the
+packages around it.</p>
+<p>Two files naming the same source package are describing one package
+rather than asking for two builds of it: the entries are merged, setting
+by setting, as partitions with the same label are. A <code class="docutils literal notranslate"><span class="pre">requires</span></code> is
+loaded after the file that asked for it, and a setting that file already
+gave wins, so a fragment can carry the parts that do not change while
+the specification including it settles the rest. A file given directly
+on the command line, or side-loaded in the TUI, is not reached for by
+another and so is not a fragment: the next one amends the settings
+already loaded, field by field, instead of losing to them (see
+<a class="reference internal" href="merging.html"><span class="std std-doc">docs/merging.md</span></a>).</p>
+<p>A file that wants to describe a package <em>without</em> asking for it to be
+built – an architecture file naming a kernel flavour, say – puts the
+entry under <a class="reference internal" href="#defaults"><code class="docutils literal notranslate"><span class="pre">defaults</span></code></a> instead. Such an entry may name the
+package by <code class="docutils literal notranslate"><span class="pre">name</span></code> alone, since where the source comes from is the job of
+whichever file asks for the build.</p>
+<p>Patches are applied in the way the source format calls for. A
+<code class="docutils literal notranslate"><span class="pre">3.0</span> <span class="pre">(quilt)</span></code> package gets them added to <code class="docutils literal notranslate"><span class="pre">debian/patches/series</span></code>; anything
+else has them applied to the tree, and committed if that tree came from
+git, so that packaging which records its own revision keeps working.</p>
+<p>Rebuilt packages are made available to the rest of the build through a
+local apt repository under <code class="docutils literal notranslate"><span class="pre">./build/cache/packages/</span></code> (see <a class="reference internal" href="environment.html"><span class="std std-doc">Environment variables</span></a>): the playbooks
+install them with an ordinary <code class="docutils literal notranslate"><span class="pre">apt</span></code> task, later packages build against
+them, and the imager can boot a kernel from them. They are preferred over
+the distribution’s own copies, and carry a local revision that sorts above
+its versions, so a rebuild is what gets installed. The repository exists
+only on the machine that builds the image and is removed from the image’s
+apt configuration before it is packed up.</p>
+<p>A package is not rebuilt again while nothing about it has changed –
+including the content of its patches, and including anything it is built
+after. A package compiled and linked against another has to be rebuilt
+when that one changes, so a change to a library rebuilds what <code class="docutils literal notranslate"><span class="pre">before</span></code>
+and <code class="docutils literal notranslate"><span class="pre">after</span></code> say is built on it, however many packages down the chain.
+Use <code class="docutils literal notranslate"><span class="pre">--rebuild</span></code> to force one.</p>
+</section>
+<section id="what-the-repository-holds">
+<h3>What the repository holds<a class="headerlink" href="#what-the-repository-holds" title="Link to this heading">#</a></h3>
+<p>Everything a rebuild produced: the binary packages, the <code class="docutils literal notranslate"><span class="pre">.changes</span></code> and
+<code class="docutils literal notranslate"><span class="pre">.buildinfo</span></code> that say how they were made, sbuild’s build log, and the
+source package they were built from – the <code class="docutils literal notranslate"><span class="pre">.dsc</span></code> and the tarballs it
+names. <code class="docutils literal notranslate"><span class="pre">apt-ftparchive</span></code> writes a <code class="docutils literal notranslate"><span class="pre">Packages</span></code> index over the binaries and a
+<code class="docutils literal notranslate"><span class="pre">Sources</span></code> index over the sources.</p>
+<p>The source package is published once per package, however many
+architectures were built from it: it is one set of files named by one
+<code class="docutils literal notranslate"><span class="pre">.dsc</span></code>, and a Debian source package is not built for an architecture.
+Every build’s stamp names it all the same, so it is retired when the last
+of those builds is, rather than when the first one is superseded.</p>
+<p>Nothing seine runs reads the <code class="docutils literal notranslate"><span class="pre">Sources</span></code> index – a rebuild fetches its
+source from the distribution, not from here. It is written for the
+machine handed a cache, and for anything asking what a modified binary
+was built from, which for a package under a copyleft licence is a
+question with an answer someone is entitled to.</p>
+<p>It is not free: the orig tarball is carried with them, which for busybox
+is a couple of megabytes and for a kernel is a couple of hundred.
+<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">clear</span> <span class="pre">packages</span></code> is what takes it back.</p>
+</section>
+<section id="local-versions">
+<h3>Local versions<a class="headerlink" href="#local-versions" title="Link to this heading">#</a></h3>
+<p>Every rebuilt package is given a version of its own: a changelog entry is
+added marking the source <code class="docutils literal notranslate"><span class="pre">UNRELEASED</span></code> and appending <code class="docutils literal notranslate"><span class="pre">revision</span></code> to the
+version, <code class="docutils literal notranslate"><span class="pre">mod1</span></code> unless the specification says otherwise. So a rebuilt
+<code class="docutils literal notranslate"><span class="pre">busybox</span> <span class="pre">1:1.37.0-6</span></code> is installed as <code class="docutils literal notranslate"><span class="pre">1:1.37.0-6+mod1</span></code>. A kernel using
+<a class="reference internal" href="kernels.html#rebuilding-the-kernel"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">derived-flavours</span></code></span></a> is the one exception: its
+default is the name(s) actually derived instead, since two files naming
+<code class="docutils literal notranslate"><span class="pre">derived-flavours</span></code> are usually two architectures rebuilding the same
+<code class="docutils literal notranslate"><span class="pre">linux</span></code> under names of their own.</p>
+<p>It is there so that what a machine is running can be read off <code class="docutils literal notranslate"><span class="pre">dpkg</span> <span class="pre">-l</span></code>
+rather than guessed at, and so that apt prefers the rebuild on version
+rather than only because of the pin. The entry is dated at
+<code class="docutils literal notranslate"><span class="pre">SOURCE_DATE_EPOCH</span></code>, so it does not change between rebuilds of the same
+source.</p>
+<p>For a kernel it is not optional. Debian’s packaging refuses to disable
+signed code in a build that claims to be a release, and without disabling
+it the rebuild is named <code class="docutils literal notranslate"><span class="pre">linux-image-&lt;abi&gt;-&lt;flavour&gt;-unsigned</span></code> – while
+the metapackage everything installs depends on
+<code class="docutils literal notranslate"><span class="pre">linux-image-&lt;abi&gt;-&lt;flavour&gt;</span></code>, which is built by a <em>different</em> source
+package that signs it with a key nobody else has. A kernel rebuilt
+without this is a kernel nothing installs, and the image comes out with
+the distribution’s own, looking exactly as it should.</p>
+<p>Marking the source unreleased also earns the kernel an ABI name of its
+own – Debian derives it from the changelog, so <code class="docutils literal notranslate"><span class="pre">6.1.0-50</span></code> becomes
+<code class="docutils literal notranslate"><span class="pre">6.1.0-51</span></code> – which is what keeps a reconfigured kernel from being
+mistaken for the distribution’s.</p>
+</section>
+<section id="signing">
+<h3>Signing<a class="headerlink" href="#signing" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">--sign-key</span></code> signs what a build produced, with a key seine never sees:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">build</span> <span class="o">--</span><span class="n">sign</span><span class="o">-</span><span class="n">key</span> <span class="n">FA5C9FECC03529BF</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>The key is named however gpg will take it – a short id, a long one, a
+fingerprint, an email address – and <code class="docutils literal notranslate"><span class="pre">SEINE_SIGN_KEY</span></code> says the same
+thing. It is not a specification setting on purpose: which key a machine
+signs with belongs to that machine and the person at it, so a
+specification naming one would not build for anybody else. A spec may
+still suggest one under <code class="docutils literal notranslate"><span class="pre">defaults:</span> <span class="pre">sign-key</span></code> – weakest after
+<code class="docutils literal notranslate"><span class="pre">--sign-key</span></code> and <code class="docutils literal notranslate"><span class="pre">SEINE_SIGN_KEY</span></code>, so the machine always wins.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">vault:</span></code> key signs inside the vault instead, through the <code class="docutils literal notranslate"><span class="pre">seine-pgp</span></code>
+plugin – the private half never leaves it. A spec can seed a fixed
+dev-only key under <code class="docutils literal notranslate"><span class="pre">defaults:</span> <span class="pre">vault:</span></code>, so local builds sign alike; a
+remote vault fails closed on a missing key instead.</p>
+<p>Three things are signed. The <code class="docutils literal notranslate"><span class="pre">.dsc</span></code> and the <code class="docutils literal notranslate"><span class="pre">.changes</span></code> carry their
+signature inside them, so it travels with them into the repository and on
+to whoever is handed the cache. The repository itself gets a <code class="docutils literal notranslate"><span class="pre">Release</span></code>
+file signed both ways – <code class="docutils literal notranslate"><span class="pre">InRelease</span></code> and <code class="docutils literal notranslate"><span class="pre">Release.gpg</span></code> – which is what
+apt verifies.</p>
+<p>Every <code class="docutils literal notranslate"><span class="pre">gpg</span></code> runs on the machine seine was started on and talks to the
+agent already running there. Nothing gnupg-related goes into a container:
+not the key, not the agent’s socket. That matters most for the builder,
+which is the most privileged container seine makes and runs build scripts
+fetched from an archive – handing it an agent socket would let anything
+it runs ask for a signature over anything at all. Whether the agent
+prompts for a passphrase, caches it, or keeps the key on a smartcard
+stays between you and your agent.</p>
+<p>The public half is exported into the repository, named for the key
+(<code class="docutils literal notranslate"><span class="pre">5B89F388.gpg</span></code>), and installed as <code class="docutils literal notranslate"><span class="pre">/etc/apt/keyrings/</span></code> in everything
+that reads from it. A repository that is signed is then read with
+<code class="docutils literal notranslate"><span class="pre">signed-by</span></code> rather than <code class="docutils literal notranslate"><span class="pre">trusted=yes</span></code>, so apt verifies it wherever it is
+used – the sbuild chroots, the container composing the root file-system,
+and the imager. Unsigned, it stays trusted for having been made here a
+moment ago.</p>
+<p>The keyring stays in the image. The sources.list entry and the pin do
+not: the repository they name is on the machine that did the building.
+What is left is a trust anchor, so an image later pointed at an update
+server signed by the same key can verify it. What apt checks is said
+once at the end of a successful build – a signed repository names its
+key, an unsigned one says <code class="docutils literal notranslate"><span class="pre">trusted=yes</span></code>.</p>
+<p>Who signed a package is part of what says whether it needs building
+again. The <code class="docutils literal notranslate"><span class="pre">.dsc</span></code> and the <code class="docutils literal notranslate"><span class="pre">.changes</span></code> are different files when they are
+signed by a different key, or by none, however identical the <code class="docutils literal notranslate"><span class="pre">.debs</span></code>
+beside them – so changing the key, or adding one to a specification
+already built, rebuilds. It follows that a cache built by somebody else
+is rebuilt here rather than adopted, which is the honest answer: their
+signature is not ours to publish.</p>
+<p>Signing needs <code class="docutils literal notranslate"><span class="pre">gnupg</span></code> on the host, alongside the other host
+prerequisites.</p>
+</section>
+<section id="pinning-a-build">
+<h3>Pinning a build<a class="headerlink" href="#pinning-a-build" title="Link to this heading">#</a></h3>
+<p>A rebuild is compiled against whatever apt hands its chroot, which is not
+always what it should be. The clearest case is a specification that
+rebuilds a kernel: that puts a <code class="docutils literal notranslate"><span class="pre">linux-libc-dev</span></code> in the repository which
+sorts above the release’s own, and every package built afterwards is then
+compiled against kernel headers its source never expected. busybox stops
+outright, on the CBQ definitions the newer headers no longer have.</p>
+<p><code class="docutils literal notranslate"><span class="pre">apt-preferences</span></code> says what a package’s own build may install, in apt’s
+language, copied verbatim into a fragment under
+<code class="docutils literal notranslate"><span class="pre">/etc/apt/preferences.d/</span></code> in the chroot that builds it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">packages</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">busybox</span>
+      <span class="n">apt</span><span class="o">-</span><span class="n">preferences</span><span class="p">:</span> <span class="o">|</span>
+          <span class="n">Package</span><span class="p">:</span> <span class="n">linux</span><span class="o">-</span><span class="n">libc</span><span class="o">-</span><span class="n">dev</span>
+          <span class="n">Pin</span><span class="p">:</span> <span class="n">origin</span> <span class="s2">&quot;&quot;</span>
+          <span class="n">Pin</span><span class="o">-</span><span class="n">Priority</span><span class="p">:</span> <span class="o">-</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>That refuses the rebuilt copy for this build alone – a <code class="docutils literal notranslate"><span class="pre">file://</span></code>
+repository is the one with an empty origin – and leaves apt to take
+whatever the archive offers, security updates included.</p>
+<p>Prefer it to pinning a suite. <code class="docutils literal notranslate"><span class="pre">Pin:</span> <span class="pre">release</span> <span class="pre">n=bookworm</span></code> at a priority
+above 1000 forces the <em>base</em> suite’s version over the newer one in
+<code class="docutils literal notranslate"><span class="pre">bookworm-security</span></code>, which is a downgrade, and apt stops rather than
+perform one:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">E</span><span class="p">:</span> <span class="n">Packages</span> <span class="n">were</span> <span class="n">downgraded</span> <span class="ow">and</span> <span class="o">-</span><span class="n">y</span> <span class="n">was</span> <span class="n">used</span> <span class="n">without</span> <span class="o">--</span><span class="n">allow</span><span class="o">-</span><span class="n">downgrades</span>
+</pre></div>
+</div>
+<p>What a pin names is often particular to a release – a version, or a
+suite by name – so it may be keyed by release instead:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">packages</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">busybox</span>
+      <span class="n">apt</span><span class="o">-</span><span class="n">preferences</span><span class="p">:</span>
+          <span class="n">bookworm</span><span class="p">:</span> <span class="o">|</span>
+              <span class="n">Package</span><span class="p">:</span> <span class="n">linux</span><span class="o">-</span><span class="n">libc</span><span class="o">-</span><span class="n">dev</span>
+              <span class="n">Pin</span><span class="p">:</span> <span class="n">version</span> <span class="mf">6.1</span><span class="o">.*</span>
+              <span class="n">Pin</span><span class="o">-</span><span class="n">Priority</span><span class="p">:</span> <span class="mi">1001</span>
+          <span class="n">trixie</span><span class="p">:</span> <span class="o">|</span>
+              <span class="n">Package</span><span class="p">:</span> <span class="n">linux</span><span class="o">-</span><span class="n">libc</span><span class="o">-</span><span class="n">dev</span>
+              <span class="n">Pin</span><span class="p">:</span> <span class="n">version</span> <span class="mf">6.12</span><span class="o">.*</span>
+              <span class="n">Pin</span><span class="o">-</span><span class="n">Priority</span><span class="p">:</span> <span class="mi">1001</span>
+</pre></div>
+</div>
+<p>A release the mapping does not name gets none, so a package needing a
+pin for one release alone names only that one. A plain string is for
+every release.</p>
+<p>It is taken as written rather than parsed: what can be said in that file
+is <a class="reference external" href="https://manpages.debian.org/stable/apt/apt_preferences.5.en.html">apt_preferences(5)</a>’s to define, and a setting that understood it
+would be a second, smaller language to keep up to date.</p>
+<p>It reaches that package’s build and no other. A buildd chroot is
+unpacked for one build and thrown away, so naming a version here decides
+nothing for the package beside it – which is what makes it usable at
+all, since the pin that a kernel rebuild needs is the opposite of the
+one busybox needs.</p>
+<p>What a build is allowed to install decides what comes out of it, so the
+setting is part of what says whether a package needs rebuilding: change
+the pin and the package is built again. What counts is the pin for the
+release being built – changing another release’s does not rebuild
+anything here.</p>
+</section>
+<section id="host-packages">
+<h3>Host packages<a class="headerlink" href="#host-packages" title="Link to this heading">#</a></h3>
+<p>A rebuild is for the image by default. <code class="docutils literal notranslate"><span class="pre">scope</span></code> says otherwise:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">scope</span></code></p></th>
+<th class="head"><p>Built for</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">target</span></code></p></td>
+<td><p>The image’s architecture. The default.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">host</span></code></p></td>
+<td><p>The machine running seine.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">both</span></code></p></td>
+<td><p>Both, from one source.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">host</span></code> is for what is used while the image is being made rather than
+inside it: a code generator a later package build-depends on, a tool the
+imager runs. Those have to run on the machine doing the building, which
+for a cross build is not the image’s architecture.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">packages</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">busybox</span>
+      <span class="n">scope</span><span class="p">:</span> <span class="p">[</span><span class="n">host</span><span class="p">,</span> <span class="n">target</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>A single role may be written on its own; <code class="docutils literal notranslate"><span class="pre">scope:</span> <span class="pre">host</span></code> is <code class="docutils literal notranslate"><span class="pre">scope:</span> <span class="pre">[host]</span></code>.</p>
+<p>There is one repository per release, holding every architecture built
+for, the way a distribution’s archive does. It is offered to the sbuild
+chroots, to the container composing the root file-system and to the
+imager, and apt takes from its index what the architecture it was asked
+about can use – so a package can build-depend on a host rebuild in the
+ordinary way, while what is installed into the image stays the image’s
+own architecture.</p>
+<p>A dependency inherits the roles of what is built on it: a package built
+for the host is linked against what its dependencies installed, so those
+are built for the host too, however far down the chain. A dependency that
+names its own <code class="docutils literal notranslate"><span class="pre">scope</span></code> is not widened – it is an error naming both
+entries, since an explicit scope is an answer rather than a default.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Architecture:</span> <span class="pre">all</span></code> binaries are built by exactly one of a package’s
+builds, the way Debian builds them on one buildd. Two builds producing
+them would write one filename twice, and which of them landed last would
+decide what the image installs.</p>
+<p>The job goes to a native build for preference – sbuild hands a cross
+build <code class="docutils literal notranslate"><span class="pre">-B</span></code> of its own accord, since an architecture-independent binary is
+sometimes made by running something that was just built – and between
+two native builds the machine’s own architecture takes it.</p>
+<p>A preference is all it is. When every build of a package is a cross
+build, which is the ordinary shape of building for one board on a laptop,
+the cross build is asked for them anyway: the alternative is not getting
+them, and an image installing one would take the distribution’s copy of a
+package it asked to have rebuilt, looking exactly as it should. Most
+packaging manages it, since an arch-indep binary is usually documentation
+or configuration. Packaging that does not now fails rather than quietly
+producing less, and <code class="docutils literal notranslate"><span class="pre">cross:</span> <span class="pre">false</span></code> is how to say so – it builds under
+emulation, natively, where the question does not arise.</p>
+<p>The source is fetched, patched and packed into a <code class="docutils literal notranslate"><span class="pre">.dsc</span></code> once, and that
+one source package is built twice. A Debian source package is not built
+for an architecture – it describes every one its packaging supports –
+so both builds are demonstrably of the same source rather than of two
+trees prepared the same way.</p>
+<p>With two roles, the build steps carry the architecture they are for:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">fetch</span><span class="p">:</span><span class="n">busybox</span>
+<span class="n">package</span><span class="p">:</span><span class="n">busybox</span><span class="p">:</span><span class="n">amd64</span>
+<span class="n">package</span><span class="p">:</span><span class="n">busybox</span><span class="p">:</span><span class="n">arm64</span>
+<span class="n">deploy</span><span class="p">:</span><span class="n">busybox</span>
+</pre></div>
+</div>
+<p>A package built for one architecture keeps the plain <code class="docutils literal notranslate"><span class="pre">package:busybox</span></code>,
+so <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> on a specification that says nothing about <code class="docutils literal notranslate"><span class="pre">scope</span></code> reads
+as it always has. <code class="docutils literal notranslate"><span class="pre">before</span></code> and <code class="docutils literal notranslate"><span class="pre">after</span></code> go on naming a package rather than
+a build of one.</p>
+<p>Publishing is one step for every architecture rather than one each. What
+comes out of the builds is not a repository per architecture: an arch-all
+binary belongs to all of them and is built by one of them, so the step
+that decides which of an earlier build’s files are superseded has to hold
+the whole picture.</p>
+<p>On a machine of the image’s own architecture, <code class="docutils literal notranslate"><span class="pre">[host,</span> <span class="pre">target]</span></code> is one
+build – same source, same chroot, same repository – rather than the
+same work done twice.</p>
+<p>A kernel takes one role. It is configured per architecture, down to the
+name of its flavour, so one entry cannot describe two; list the
+architectures as separate packages, each with the flavour that
+architecture has.</p>
+</section>
+</section>
+<section id="vendor">
+<h2>vendor<a class="headerlink" href="#vendor" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">packages:</span></code> rebuilds what a specification changes; <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> is for
+everything else it depends on – directly or by way of a build
+dependency – that seine never touches but a rebuild years from now
+still needs, once the feed it came from may no longer be there.
+<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> resolves each entry’s full build-dependency closure and
+fetches it, binaries and sources both, into a signed apt repository of
+its own:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">vendor</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">openssl</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">busybox</span>
+      <span class="n">suite</span><span class="p">:</span> <span class="p">[</span><span class="n">bookworm</span><span class="p">,</span> <span class="n">trixie</span><span class="p">]</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">libfoo</span>
+      <span class="n">suite</span><span class="p">:</span> <span class="n">bookworm</span>
+      <span class="n">arch</span><span class="p">:</span> <span class="p">[</span><span class="n">armhf</span><span class="p">]</span>
+      <span class="n">version</span><span class="p">:</span> <span class="s2">&quot;&gt;=1.2&quot;</span>
+</pre></div>
+</div>
+<p>A flat list, like <code class="docutils literal notranslate"><span class="pre">packages:</span></code>, mergeable across the files a
+specification is composed of and merged by name the same way: a file
+naming <code class="docutils literal notranslate"><span class="pre">libfoo</span></code> again adds to what an earlier one already said about it
+rather than describing a second <code class="docutils literal notranslate"><span class="pre">libfoo</span></code>.</p>
+<p>Entries are keyed by the <strong>source</strong> package name; <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> works
+out which binaries that source produces (and what those in turn
+build-depend on) itself – keying this by a binary package name instead
+would leave that resolution to be spelled out by hand for every source.</p>
+<p><code class="docutils literal notranslate"><span class="pre">suite:</span></code>/<code class="docutils literal notranslate"><span class="pre">arch:</span></code> each take one name or a list of them; missing, an entry
+applies to every suite the specification’s <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> section asks for (or
+its own release, when nothing asks for another) and every architecture
+asked of it – the specification’s own <code class="docutils literal notranslate"><span class="pre">distribution:</span> <span class="pre">architecture:</span></code>,
+plus <code class="docutils literal notranslate"><span class="pre">distribution:</span> <span class="pre">architectures:</span></code> (see <a class="reference internal" href="#distribution">distribution</a>),
+plus whatever any other entry’s own <code class="docutils literal notranslate"><span class="pre">arch:</span></code> names. A named suite has to
+be one of <code class="docutils literal notranslate"><span class="pre">distribution:</span> <span class="pre">feeds:</span></code>’s own – <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> reads a suite’s
+packages from the same feed a build would.</p>
+<p><code class="docutils literal notranslate"><span class="pre">version:</span></code> pins what is vendored, either exactly (<code class="docutils literal notranslate"><span class="pre">&quot;1.2-3&quot;</span></code>) or with a
+comparison (<code class="docutils literal notranslate"><span class="pre">&quot;&gt;=1.2&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;&lt;=1.2&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;=1.2&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;&gt;&gt;1.2&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;&lt;&lt;1.2&quot;</span></code>), the
+same operators <code class="docutils literal notranslate"><span class="pre">apt_preferences(5)</span></code> uses. Unset, whatever the suite’s own
+feed currently resolves to is taken.</p>
+<p>A build dependency already provided by the buildd chroot a real rebuild
+would use is left out on its own – vendoring it would only repeat what
+that chroot’s own reproducibility already covers. <code class="docutils literal notranslate"><span class="pre">vendor-exclude:</span></code>, a
+flat list of source package names beside <code class="docutils literal notranslate"><span class="pre">vendor:</span></code>, is the escape hatch
+for what the automatic dedup cannot know about: a build-profile-only
+dependency (documentation, tests) nobody wants vendored.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">vendor</span><span class="o">-</span><span class="n">exclude</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">texlive</span><span class="o">-</span><span class="n">latex</span><span class="o">-</span><span class="n">base</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">distribution:</span> <span class="pre">architectures:</span></code> vendors for these architectures too, on
+top of <code class="docutils literal notranslate"><span class="pre">distribution:</span> <span class="pre">architecture:</span></code> – what an unqualified entry (no
+<code class="docutils literal notranslate"><span class="pre">arch:</span></code> of its own) then covers. The only other way to reach a second
+architecture would be tagging some unrelated entry’s own <code class="docutils literal notranslate"><span class="pre">arch:</span></code> with
+it, a side effect of a per-package field standing in for what this says
+directly:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">distribution</span><span class="p">:</span>
+    <span class="n">architecture</span><span class="p">:</span> <span class="n">amd64</span>
+    <span class="n">architectures</span><span class="p">:</span>
+        <span class="o">-</span> <span class="n">amd64</span>
+        <span class="o">-</span> <span class="n">arm64</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span> <span class="pre">--architecture</span> <span class="pre">NAME</span></code> narrows a run to fetching one (or a
+few) of the architectures a <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> section – <code class="docutils literal notranslate"><span class="pre">arch:</span></code>, entry by
+entry, <code class="docutils literal notranslate"><span class="pre">distribution:</span> <span class="pre">architectures:</span></code>, or <code class="docutils literal notranslate"><span class="pre">distribution:</span> <span class="pre">architecture:</span></code>
+itself – together ask for; unlike <code class="docutils literal notranslate"><span class="pre">--suite</span></code>, this only narrows what
+gets <em>fetched</em>, not resolved, so a suite’s frozen manifest stays
+complete for every one of them regardless of which <code class="docutils literal notranslate"><span class="pre">--architecture</span></code> any
+one run named.</p>
+<p>Resolving is frozen: once <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> has decided a source’s version,
+an ordinary run keeps it rather than asking the suite’s feed again –
+what apt would resolve today is not necessarily what it resolved when
+the version was first pinned, and a specification’s vendor should not
+drift underneath it between two runs that changed nothing. <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span> <span class="pre">--refresh</span></code> asks for a new resolve; <code class="docutils literal notranslate"><span class="pre">--refresh=NAME</span></code> scopes that to one
+source package, keeping every other one exactly as it was.</p>
+<p>A specification file, <code class="docutils literal notranslate"><span class="pre">foo.yaml</span></code>, pairs with a committed lock file,
+<code class="docutils literal notranslate"><span class="pre">foo.lock.yaml</span></code>, if one sits beside it – loaded automatically, no field
+asks for it. A suite the lock names is trusted outright and never
+resolved at all, unless the specification’s own <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> section has
+changed since the lock was last written, in which case <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code>
+refuses rather than silently drifting back to whatever the suite’s feed
+resolves to today – the entire point of a committed lock is that two
+checkouts of the same specification vendor the exact same thing,
+regardless of what has changed in the archive between them. A lock
+file’s own <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> is a resolved manifest – suite by suite, source by
+source, with the sha256 of every file fetched for it – rather than a
+list of entries, and is never written by hand. It carries only what
+must be true of the outside world (versions, binaries, files and their
+hashes), never seine’s own bookkeeping about what it decided to do with
+them (which source counts as directly asked for, which build
+dependency pulled another source in) – that stays in the machine-local
+cache manifest instead, which <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> keeps in full:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">vendor</span> <span class="o">--</span><span class="n">refresh</span> <span class="n">foo</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>(re)writes <code class="docutils literal notranslate"><span class="pre">foo.lock.yaml</span></code>, whether or not one existed before –
+bootstrapping a new lock is just the first <code class="docutils literal notranslate"><span class="pre">--refresh</span></code>, same command as
+updating an existing one; <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">add</span> <span class="pre">foo.lock.yaml</span></code> if it should be
+tracked. Both <code class="docutils literal notranslate"><span class="pre">--refresh</span></code> and <code class="docutils literal notranslate"><span class="pre">--check</span></code> below need exactly one
+specification file, to know which lock they are about.</p>
+<p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span> <span class="pre">--check</span> <span class="pre">foo.yaml</span></code> resolves fresh and reports whether it
+still matches <code class="docutils literal notranslate"><span class="pre">foo.lock.yaml</span></code>’s own <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> entries, without writing
+anything either way – non-zero on drift. This is what a scheduled CI
+job would run to catch the archive moving under an unchanged version,
+which the lock’s own digest (everything <code class="docutils literal notranslate"><span class="pre">manifest_digest()</span></code> covers:
+entries, excludes, feeds, build-profiles/options) cannot see by itself.</p>
+<p>Debian’s own archive keeps only the current version of a package, not
+its history, so a lock pinning an older one can outlive the live feed’s
+own copy of it. <code class="docutils literal notranslate"><span class="pre">--refresh</span></code> checks every file it fetches against
+<a class="reference external" href="https://snapshot.debian.org/">snapshot.debian.org</a>’s own machine
+API, and, on a match, records its own sha1 for the file (<code class="docutils literal notranslate"><span class="pre">vendor:</span></code>’s
+own <code class="docutils literal notranslate"><span class="pre">snapshot</span></code>/<code class="docutils literal notranslate"><span class="pre">binary_snapshot</span></code>, beside <code class="docutils literal notranslate"><span class="pre">file_hashes</span></code>/<code class="docutils literal notranslate"><span class="pre">binary_hashes</span></code>
+– the sha1 alone, not the download URL built from it, since the
+filename is already known and the constant
+<code class="docutils literal notranslate"><span class="pre">https://snapshot.debian.org/file/</span></code> prefix repeated per file would
+otherwise be a fifth of a real generated lock’s own size) – nothing
+is recorded, and <code class="docutils literal notranslate"><span class="pre">--refresh</span></code> still succeeds, when snapshot.debian.org
+has never indexed that exact name/version/checksum at all. An
+ordinary <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> (no <code class="docutils literal notranslate"><span class="pre">--refresh</span></code>) never queries
+snapshot.debian.org itself: it only reads the sha1 already on the
+lock, and, when one is there, rebuilds the download URL and fetches
+straight from it – no apt, no container, since it is a plain,
+permanent HTTPS download – verifying the bytes against the lock’s own
+hash and refusing them outright on any mismatch, never falling back to
+the live feed. Nothing changes for a source still served by the live
+suite: the recorded sha1 only matters once apt itself can no longer
+produce the pinned version.</p>
+<p>Signed the same way <code class="docutils literal notranslate"><span class="pre">packages:</span></code>’s own repository is (see
+<a class="reference internal" href="#signing">Signing</a> above), with its own, independent key –
+<code class="docutils literal notranslate"><span class="pre">--vendor-sign-key</span></code>/<code class="docutils literal notranslate"><span class="pre">SEINE_VENDOR_SIGN_KEY</span></code> – since a package <code class="docutils literal notranslate"><span class="pre">vendor:</span></code>
+pulled in was never built or audited by seine, unlike a <code class="docutils literal notranslate"><span class="pre">packages:</span></code>
+rebuild.</p>
+<p>Kept under its own <code class="docutils literal notranslate"><span class="pre">vendor</span></code> cache, one repository per suite; <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">clear</span> <span class="pre">vendor</span></code>/<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">clear</span> <span class="pre">--older-than</span> <span class="pre">...</span> <span class="pre">vendor</span></code> apply to
+it exactly as they do to any other cache. See <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span> <span class="pre">--help</span></code> for
+the rest of its options.</p>
+<p>Building a repository is one thing; reading from it instead of the
+network is another – see <a class="reference internal" href="#apt-pull-mode-offline"><code class="docutils literal notranslate"><span class="pre">apt-pull-mode:</span> <span class="pre">offline</span></code></a>
+below. <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span></code> resolves/fetches/indexes a <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> section itself,
+ahead of <code class="docutils literal notranslate"><span class="pre">packages:</span></code>, exactly when that section feeds a suite
+<code class="docutils literal notranslate"><span class="pre">apt-pull-mode:</span> <span class="pre">offline</span></code> needs – a <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> that feeds none is still
+left for a plain <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> to build whenever someone wants it,
+since nothing in the build would read it either way. Already-frozen
+entries cost nothing extra: the same resolve-is-frozen rule above
+applies, so a rerun that changed nothing just re-signs what an earlier
+resolve found.</p>
+</section>
+<section id="imager">
+<h2>imager<a class="headerlink" href="#imager" title="Link to this heading">#</a></h2>
+<p>Producing the disk image (partitioning, formatting, installing the boot
+loader) is done by booting a throwaway <a class="reference external" href="https://libguestfs.org/">libguestfs</a>
+appliance, which needs a kernel of its own. This is unrelated to the kernel
+package installed into the produced image by the <code class="docutils literal notranslate"><span class="pre">playbook</span></code> section – a
+board needing a custom/vendor kernel still installs it via its own playbook
+as usual, while the imager itself is happy with a stock Debian kernel.</p>
+<ul class="simple">
+<li><p>kernel: Debian kernel package to boot the imager appliance with (e.g.
+<code class="docutils literal notranslate"><span class="pre">linux-image-amd64</span></code>). Defaults to a sensible package for the target
+<code class="docutils literal notranslate"><span class="pre">architecture</span></code> if not specified.</p></li>
+<li><p>hypervisor: path to the qemu system emulator to boot the appliance
+with (e.g. <code class="docutils literal notranslate"><span class="pre">/usr/bin/qemu-system-aarch64</span></code>). Only needed when
+cross-building for an <code class="docutils literal notranslate"><span class="pre">architecture</span></code> other than the host’s; defaults
+to a sensible binary for the target <code class="docutils literal notranslate"><span class="pre">architecture</span></code> if not specified.</p></li>
+</ul>
+<p>When cross-building (target <code class="docutils literal notranslate"><span class="pre">architecture</span></code> different from the host’s),
+seine automatically builds a libguestfs “fixed appliance” for the target
+architecture instead of relying on the host’s own kernel (which supermin,
+libguestfs’s appliance builder, cannot cross-build). This runs the target
+architecture under emulation to build the appliance once, then caches it –
+the first cross-arch build is noticeably slower than same-arch builds, but
+that cost isn’t paid again on subsequent builds.</p>
+</section>
+<section id="playbook">
+<h2>playbook<a class="headerlink" href="#playbook" title="Link to this heading">#</a></h2>
+<p>Ansible playbooks will be used to add packages to the system or configure them.
+The <code class="docutils literal notranslate"><span class="pre">playbook</span></code> section is a list of <code class="docutils literal notranslate"><span class="pre">name</span></code> / <code class="docutils literal notranslate"><span class="pre">tasks</span></code> pairs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">playbook</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">first</span> <span class="n">playbook</span>
+      <span class="n">tasks</span><span class="p">:</span>
+          <span class="o">...</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">second</span> <span class="n">playbook</span>
+      <span class="n">tasks</span><span class="p">:</span>
+          <span class="o">...</span>
+</pre></div>
+</div>
+<p>Playbooks may be given a priority between <code class="docutils literal notranslate"><span class="pre">0</span></code> and <code class="docutils literal notranslate"><span class="pre">999</span></code> with <code class="docutils literal notranslate"><span class="pre">0</span></code> being the
+highest priority and <code class="docutils literal notranslate"><span class="pre">500</span></code> the default:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">playbook</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">first</span> <span class="n">playbook</span> <span class="n">but</span> <span class="n">apply</span> <span class="n">towards</span> <span class="n">the</span> <span class="n">end</span>
+      <span class="n">priority</span><span class="p">:</span> <span class="mi">900</span>
+      <span class="n">tasks</span><span class="p">:</span>
+          <span class="o">...</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">second</span> <span class="n">playbook</span> <span class="n">but</span> <span class="n">apply</span> <span class="n">early</span>
+      <span class="n">priority</span><span class="p">:</span> <span class="mi">100</span>
+      <span class="n">tasks</span><span class="p">:</span>
+          <span class="o">...</span>
+</pre></div>
+</div>
+<p>Composed across <code class="docutils literal notranslate"><span class="pre">requires</span></code> the same way <code class="docutils literal notranslate"><span class="pre">test</span></code> entries are: an entry
+named the same as one already loaded is merged into it – <code class="docutils literal notranslate"><span class="pre">tasks</span></code> add
+up (an exact repeat, from a fragment reached twice via two <code class="docutils literal notranslate"><span class="pre">requires</span></code>
+paths, is dropped; new tasks append in order) – rather than a second
+entry with the same name running alongside the first.</p>
+<p>Frequently used tasks include:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">apt</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">debconf</span></code></p></li>
+</ul>
+<section id="ansible-galaxy-collections">
+<h3>Ansible Galaxy collections<a class="headerlink" href="#ansible-galaxy-collections" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">ansible-core</span></code> alone covers <code class="docutils literal notranslate"><span class="pre">apt</span></code>, <code class="docutils literal notranslate"><span class="pre">debconf</span></code>, <code class="docutils literal notranslate"><span class="pre">user</span></code> and the rest of the
+tasks above. Two Galaxy collections are worth installing alongside
+<code class="docutils literal notranslate"><span class="pre">containers.podman</span></code> (the one seine itself needs, to connect into the
+container – see <a class="reference internal" href="getting-started.html#installation"><span class="std std-ref">Installation</span></a>) because
+they cover ground <code class="docutils literal notranslate"><span class="pre">ansible-core</span></code> does not and fit how an image is
+assembled:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://galaxy.ansible.com/ui/repo/published/ansible/posix/"><code class="docutils literal notranslate"><span class="pre">ansible.posix</span></code></a>
+– <code class="docutils literal notranslate"><span class="pre">sysctl</span></code> for a kernel parameter an appliance wants tuned,
+<code class="docutils literal notranslate"><span class="pre">seboolean</span></code> alongside the SELinux policy example above, <code class="docutils literal notranslate"><span class="pre">mount</span></code> for
+an <code class="docutils literal notranslate"><span class="pre">fstab</span></code> entry a playbook needs to add.</p></li>
+<li><p><a class="reference external" href="https://galaxy.ansible.com/ui/repo/published/community/general/"><code class="docutils literal notranslate"><span class="pre">community.general</span></code></a>
+– the long tail of system-configuration modules <code class="docutils literal notranslate"><span class="pre">ansible-core</span></code> no
+longer carries, <code class="docutils literal notranslate"><span class="pre">timezone</span></code> among them.</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ansible</span><span class="o">-</span><span class="n">galaxy</span> <span class="n">collection</span> <span class="n">install</span> <span class="n">ansible</span><span class="o">.</span><span class="n">posix</span> <span class="n">community</span><span class="o">.</span><span class="n">general</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">sysctl</span></code> writing into the image is not the same as it taking effect on
+the machine assembling the image – the build container has no write
+access to the host’s <code class="docutils literal notranslate"><span class="pre">/proc/sys</span></code>, so <code class="docutils literal notranslate"><span class="pre">sysctl_set:</span> <span class="pre">false</span></code> and
+<code class="docutils literal notranslate"><span class="pre">reload:</span> <span class="pre">false</span></code> keep the task to writing the config file the booted
+target will apply:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">playbook</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">tune</span> <span class="n">kernel</span> <span class="n">parameters</span>
+      <span class="n">tasks</span><span class="p">:</span>
+        <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">lower</span> <span class="n">swappiness</span> <span class="k">for</span> <span class="n">an</span> <span class="n">appliance</span> <span class="n">workload</span>
+          <span class="n">ansible</span><span class="o">.</span><span class="n">posix</span><span class="o">.</span><span class="n">sysctl</span><span class="p">:</span>
+              <span class="n">name</span><span class="p">:</span> <span class="n">vm</span><span class="o">.</span><span class="n">swappiness</span>
+              <span class="n">value</span><span class="p">:</span> <span class="s2">&quot;10&quot;</span>
+              <span class="n">sysctl_set</span><span class="p">:</span> <span class="n">false</span>
+              <span class="n">reload</span><span class="p">:</span> <span class="n">false</span>
+</pre></div>
+</div>
+<p>Both collections are exercised for real, not just documented: see
+<code class="docutils literal notranslate"><span class="pre">examples/common/conf-sysctl.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">examples/common/conf-timezone.yaml</span></code>,
+built by every image in
+<a class="reference internal" href="getting-started.html#the-full-plan"><span class="std std-ref">the full plan</span></a>.</p>
+<p>Additional packages may be installed as follows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">playbook</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">install</span> <span class="n">essential</span> <span class="n">packages</span>
+      <span class="n">tasks</span><span class="p">:</span>
+          <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">base</span> <span class="nb">set</span>
+            <span class="n">apt</span><span class="p">:</span>
+                <span class="n">state</span><span class="p">:</span> <span class="n">present</span>
+                <span class="n">name</span><span class="p">:</span>
+                    <span class="o">-</span> <span class="n">ssh</span>
+                    <span class="o">-</span> <span class="n">vim</span>
+</pre></div>
+</div>
+</section>
+<section id="writing-your-own-module">
+<h3>Writing your own module<a class="headerlink" href="#writing-your-own-module" title="Link to this heading">#</a></h3>
+<p>A <code class="docutils literal notranslate"><span class="pre">library/</span></code> directory beside a specification file is found automatically
+and handed to <code class="docutils literal notranslate"><span class="pre">ansible-playbook</span></code>, the same way a kconfig fragment is found
+relative to the file that lists it – no setting names it. A task that
+needs no third-party collection, no explicit format knowledge, just a
+clean interface, can be a module of its own instead of a handful of
+<code class="docutils literal notranslate"><span class="pre">lineinfile</span></code> tasks a reader has to reverse-engineer the intent of:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">playbook</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">harden</span> <span class="n">ssh</span>
+      <span class="n">tasks</span><span class="p">:</span>
+          <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">disable</span> <span class="n">root</span> <span class="n">login</span> <span class="n">over</span> <span class="n">ssh</span>
+            <span class="n">sshd_config</span><span class="p">:</span>
+                <span class="n">name</span><span class="p">:</span> <span class="n">PermitRootLogin</span>
+                <span class="n">value</span><span class="p">:</span> <span class="s2">&quot;no&quot;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">examples/common/library/sshd_config.py</span></code> is a complete, working example: a
+module that sets, updates or removes a single <code class="docutils literal notranslate"><span class="pre">sshd_config</span></code> directive,
+first-active-line-wins the same way <code class="docutils literal notranslate"><span class="pre">sshd</span></code> itself resolves a duplicate. It
+writes to a drop-in under <code class="docutils literal notranslate"><span class="pre">sshd_config.d</span></code> rather than the file Debian’s own
+package shipped, refusing to run if the shipped file was ever rewritten to
+drop the <code class="docutils literal notranslate"><span class="pre">Include</span></code> that reads drop-ins in the first place – silently doing
+nothing is worse than failing loudly for a setting like this one.</p>
+<p>A comma-list directive – <code class="docutils literal notranslate"><span class="pre">Ciphers</span></code>, <code class="docutils literal notranslate"><span class="pre">MACs</span></code>, <code class="docutils literal notranslate"><span class="pre">KexAlgorithms</span></code> and the rest
+sshd itself negotiates a default for – takes <code class="docutils literal notranslate"><span class="pre">algorithm</span></code> instead of
+<code class="docutils literal notranslate"><span class="pre">value</span></code>, to turn one entry on or off without a task having to spell out
+everything else sshd would otherwise have picked:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">playbook</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">only</span> <span class="n">turn</span> <span class="n">off</span> <span class="n">one</span> <span class="n">cipher</span>
+      <span class="n">tasks</span><span class="p">:</span>
+          <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="n">drop</span> <span class="n">a</span> <span class="n">weak</span> <span class="n">cipher</span>
+            <span class="n">sshd_config</span><span class="p">:</span>
+                <span class="n">name</span><span class="p">:</span> <span class="n">Ciphers</span>
+                <span class="n">algorithm</span><span class="p">:</span> <span class="mi">3</span><span class="n">des</span><span class="o">-</span><span class="n">cbc</span>
+                <span class="n">state</span><span class="p">:</span> <span class="n">absent</span>
+</pre></div>
+</div>
+<p>Several such tasks, from several playbook fragments, can each turn one
+algorithm on or off without overwriting each other’s change – each starts
+from <code class="docutils literal notranslate"><span class="pre">sshd</span> <span class="pre">-T</span></code>’s own resolved default rather than from the previous task’s
+raw <code class="docutils literal notranslate"><span class="pre">value</span></code>.</p>
+<p>Ansible ships a custom module’s code to wherever it runs, same as any
+other module – nothing beyond the module file itself is needed. It is
+exercised the same way as the collections above: see
+<code class="docutils literal notranslate"><span class="pre">examples/common/sshd.yaml</span></code>, and the module’s own
+<code class="docutils literal notranslate"><span class="pre">examples/common/library/test_sshd_config.py</span></code> self-check.</p>
+<p>and here is how the <code class="docutils literal notranslate"><span class="pre">locales</span></code> package may be configured:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">playbook</span><span class="p">:</span>
+    <span class="o">-</span>  <span class="n">name</span><span class="p">:</span> <span class="n">configure</span> <span class="n">locales</span> <span class="n">to</span> <span class="n">French</span>
+       <span class="n">tasks</span><span class="p">:</span>
+        <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="nb">set</span> <span class="n">default</span> <span class="n">locale</span> <span class="n">to</span> <span class="n">fr_FR</span><span class="o">.</span><span class="n">UTF</span><span class="o">-</span><span class="mi">8</span>
+          <span class="n">debconf</span><span class="p">:</span>
+              <span class="n">name</span><span class="p">:</span> <span class="n">locales</span>
+              <span class="n">question</span><span class="p">:</span> <span class="n">locales</span><span class="o">/</span><span class="n">default_environment_locale</span>
+              <span class="n">value</span><span class="p">:</span> <span class="n">fr_FR</span><span class="o">.</span><span class="n">UTF</span><span class="o">-</span><span class="mi">8</span>
+              <span class="n">vtype</span><span class="p">:</span> <span class="n">select</span>
+</pre></div>
+</div>
+<p>A minimal image that includes <code class="docutils literal notranslate"><span class="pre">apt</span></code> is used as starting point; <code class="docutils literal notranslate"><span class="pre">seine</span></code> adds
+just <code class="docutils literal notranslate"><span class="pre">python3</span></code>/<code class="docutils literal notranslate"><span class="pre">python3-apt</span></code>/<code class="docutils literal notranslate"><span class="pre">attr</span></code> to it (removed again once the build is
+done) and runs <code class="docutils literal notranslate"><span class="pre">ansible-playbook</span></code> from the host, connecting into the
+container instead of installing <code class="docutils literal notranslate"><span class="pre">ansible</span></code> there – this keeps ansible
+itself off the (possibly foreign-architecture, emulated) target entirely.
+Playbooks execute according to their <code class="docutils literal notranslate"><span class="pre">priority</span></code>. A different starting point
+may be specified with the <code class="docutils literal notranslate"><span class="pre">baseline</span></code> keyword in the <code class="docutils literal notranslate"><span class="pre">playbook</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">playbook</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">baseline</span><span class="p">:</span> <span class="n">debian</span><span class="p">:</span><span class="n">bookworm</span>
+      <span class="n">tasks</span><span class="p">:</span>
+          <span class="o">-</span> <span class="n">name</span><span class="p">:</span> <span class="o">...</span>
+            <span class="n">apt</span><span class="p">:</span>
+                <span class="o">...</span>
+</pre></div>
+</div>
+<p>As <code class="docutils literal notranslate"><span class="pre">seine</span></code> uses <code class="docutils literal notranslate"><span class="pre">podman</span></code> behind the scene to create the root file-system in
+a container, the <code class="docutils literal notranslate"><span class="pre">image</span></code> specified as <code class="docutils literal notranslate"><span class="pre">baseline</span></code> may be anything that can be
+fetched from the <code class="docutils literal notranslate"><span class="pre">podman</span></code> or <code class="docutils literal notranslate"><span class="pre">docker</span></code> registries. The <code class="docutils literal notranslate"><span class="pre">image</span></code> shall however
+have <code class="docutils literal notranslate"><span class="pre">apt</span></code> pre-installed (and <code class="docutils literal notranslate"><span class="pre">qemu-user-static</span></code> binaries for the host
+architecture when building images for a foreign architecture).</p>
+</section>
+</section>
+<section id="image">
+<h2>image<a class="headerlink" href="#image" title="Link to this heading">#</a></h2>
+<p>Last but not least, the ‘image’ section defines the partition and volumes to be
+created in the disk image. The following top-level attributes are supported:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">filename</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bootlets</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">partitions</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">secure-boot</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">size</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">table</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">volumes</span></code></p></li>
+</ul>
+<p>An <code class="docutils literal notranslate"><span class="pre">image</span></code> shall have at least one partition defined and an output <code class="docutils literal notranslate"><span class="pre">filename</span></code>
+specified. The <code class="docutils literal notranslate"><span class="pre">size</span></code> of the disk <code class="docutils literal notranslate"><span class="pre">image</span></code> may be omitted and it will then be
+estimated (as the sum of the various partition sizes plus some overhead). The
+partition <code class="docutils literal notranslate"><span class="pre">table</span></code> may either be <code class="docutils literal notranslate"><span class="pre">gpt</span></code> or <code class="docutils literal notranslate"><span class="pre">msdos</span></code>.</p>
+<section id="secure-boot">
+<h3>secure-boot<a class="headerlink" href="#secure-boot" title="Link to this heading">#</a></h3>
+<p>A disk’s signing identity, used to sign a UKI the imager finds and
+anchors for dm-verity (see <a class="reference internal" href="#protecting-a-read-only-partition-with-dm-verity">Protecting a read-only partition with
+dm-verity</a> below) –
+a property of the image as a whole, not of any one partition, since one
+key signs whichever UKI(s) are on the disk regardless of which mount(s)
+they anchor.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Attribute</p></th>
+<th class="head text-center"><p>Required</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>private-key</p></td>
+<td class="text-center"><p>yes</p></td>
+<td><p>Key to sign the anchored UKI with</p></td>
+</tr>
+<tr class="row-odd"><td><p>public-cert</p></td>
+<td class="text-center"><p>yes</p></td>
+<td><p>Certificate to sign the anchored UKI with</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Both are paths, resolved relative to the current working directory a
+build is run from (like <code class="docutils literal notranslate"><span class="pre">multiconfig:</span> <span class="pre">&lt;group&gt;:</span> <span class="pre">files:</span></code>, not like
+<code class="docutils literal notranslate"><span class="pre">patches:</span></code>). Omit <code class="docutils literal notranslate"><span class="pre">secure-boot</span></code> entirely to leave an anchored UKI
+unsigned – correct for a board that has Secure Boot turned off, which
+any board using this today has to (nothing here enrolls a certificate
+into real firmware).</p>
+</section>
+<section id="bootlets">
+<h3>bootlets<a class="headerlink" href="#bootlets" title="Link to this heading">#</a></h3>
+<p>Bootlets are binary firmware files placed at specific locations on the boot
+media so they can be found by the hardware boot ROM. Examples include: u-boot,
+Arm Trusted Firmware (ATF), etc.</p>
+<p>The following attributes are supported:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Attribute</p></th>
+<th class="head text-center"><p>Required</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>align</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Expected alignment in Kilobytes (KiB)</p></td>
+</tr>
+<tr class="row-odd"><td><p>file</p></td>
+<td class="text-center"><p>yes</p></td>
+<td><p>Path to the binary to be copied (*)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>(*) The specified file will be copied from the image created by the <code class="docutils literal notranslate"><span class="pre">playbook</span></code>,
+a package should therefore install it.</p>
+</section>
+<section id="partitions">
+<h3>partitions<a class="headerlink" href="#partitions" title="Link to this heading">#</a></h3>
+<p>Disk partitions are defined with the following attributes:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Attribute</p></th>
+<th class="head text-center"><p>Required</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>label</p></td>
+<td class="text-center"><p>yes</p></td>
+<td><p>Name of the partition</p></td>
+</tr>
+<tr class="row-odd"><td><p>flags</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Partition flags (see below)</p></td>
+</tr>
+<tr class="row-even"><td><p>group</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Name of the LVM group to join</p></td>
+</tr>
+<tr class="row-odd"><td><p>size</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Size of the partition</p></td>
+</tr>
+<tr class="row-even"><td><p>type</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>File-system type (e.g. <code class="docutils literal notranslate"><span class="pre">ext4</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>compression</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Compression, for a read-only <code class="docutils literal notranslate"><span class="pre">type</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>identify</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>How a read-only <code class="docutils literal notranslate"><span class="pre">type</span></code> is found at boot</p></td>
+</tr>
+<tr class="row-odd"><td><p>verity</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Protect a read-only <code class="docutils literal notranslate"><span class="pre">type</span></code> with dm-verity</p></td>
+</tr>
+<tr class="row-even"><td><p>verity-for</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Label of the partition a <code class="docutils literal notranslate"><span class="pre">verity-hash</span></code> protects</p></td>
+</tr>
+<tr class="row-odd"><td><p>where</p></td>
+<td class="text-center"><p>yes*</p></td>
+<td><p>Where to mount the partition file-system</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>(*) Required unless the partition is a LVM physical volume or has
+<code class="docutils literal notranslate"><span class="pre">type:</span> <span class="pre">verity-hash</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">type</span></code> may also be <code class="docutils literal notranslate"><span class="pre">squashfs</span></code> or <code class="docutils literal notranslate"><span class="pre">erofs</span></code>, in which case the partition is built
+read-only and needs a <code class="docutils literal notranslate"><span class="pre">gpt</span></code> partition <code class="docutils literal notranslate"><span class="pre">table</span></code> (see <a class="reference internal" href="#image">image</a> above): the
+imager identifies it in <code class="docutils literal notranslate"><span class="pre">/etc/fstab</span></code> by <code class="docutils literal notranslate"><span class="pre">PARTLABEL=&lt;label&gt;</span></code>, which does not
+exist on a <code class="docutils literal notranslate"><span class="pre">msdos</span></code> table. <code class="docutils literal notranslate"><span class="pre">identify:</span> <span class="pre">partuuid</span></code> uses <code class="docutils literal notranslate"><span class="pre">PARTUUID=</span></code> instead.
+<code class="docutils literal notranslate"><span class="pre">compression</span></code> is passed straight through to the underlying tool (<code class="docutils literal notranslate"><span class="pre">-comp</span></code> for
+<code class="docutils literal notranslate"><span class="pre">mksquashfs</span></code>, <code class="docutils literal notranslate"><span class="pre">-z</span></code> for <code class="docutils literal notranslate"><span class="pre">mkfs.erofs</span></code>) with no validation or default of its own
+– when unset, each tool’s own default applies. The imager builds these with
+its own copy of <code class="docutils literal notranslate"><span class="pre">mksquashfs</span></code>/<code class="docutils literal notranslate"><span class="pre">mkfs.erofs</span></code>, transiently – the specification
+does not need <code class="docutils literal notranslate"><span class="pre">squashfs-tools</span></code>/<code class="docutils literal notranslate"><span class="pre">erofs-utils</span></code> installed, and nothing from
+building them is left in the produced image.</p>
+<section id="protecting-a-read-only-partition-with-dm-verity">
+<h4>Protecting a read-only partition with dm-verity<a class="headerlink" href="#protecting-a-read-only-partition-with-dm-verity" title="Link to this heading">#</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">verity:</span> <span class="pre">true</span></code> on a <code class="docutils literal notranslate"><span class="pre">/</span></code> or <code class="docutils literal notranslate"><span class="pre">/usr</span></code> partition (the only mountpoints the
+<a class="reference external" href="https://uapi-group.org/specifications/specs/discoverable_partitions_specification/">Discoverable Partitions Specification</a>
+defines an auto-discovered Verity partition type for) needs a second
+partition of <code class="docutils literal notranslate"><span class="pre">type:</span> <span class="pre">verity-hash</span></code>, naming the protected partition back with
+<code class="docutils literal notranslate"><span class="pre">verity-for:</span> <span class="pre">&lt;label&gt;</span></code>. A <code class="docutils literal notranslate"><span class="pre">verity-hash</span></code> partition is never mounted (no
+<code class="docutils literal notranslate"><span class="pre">where</span></code>) and has no filesystem of its own – it holds a raw dm-verity hash
+tree, built by the imager with its own transient copy of <code class="docutils literal notranslate"><span class="pre">veritysetup</span></code>
+after the protected partition’s read-only image is built. Its <code class="docutils literal notranslate"><span class="pre">size</span></code> must
+be given explicitly (there’s no way to estimate a hash tree’s size before
+building it); the build fails if it turns out too small.</p>
+<p>The imager sets both partitions’ own GPT GUIDs to the built root hash’s two
+halves (the same self-describing scheme <code class="docutils literal notranslate"><span class="pre">systemd-repart</span></code> uses, see
+<code class="docutils literal notranslate"><span class="pre">repart.d(5)</span></code>), so <code class="docutils literal notranslate"><span class="pre">systemd-gpt-auto-generator</span></code>/<code class="docutils literal notranslate"><span class="pre">systemd-veritysetup-generator</span></code>
+find and activate the pair with no kernel command line change. A protected
+partition gets no <code class="docutils literal notranslate"><span class="pre">/etc/fstab</span></code> entry: the generators mount it, not fstab
+(an fstab entry would mount the raw partition straight past dm-verity).</p>
+<p>Pairing the two partitions by GUID is not enough on its own: without an
+externally-supplied root hash, <code class="docutils literal notranslate"><span class="pre">systemd-gpt-auto-generator</span></code> refuses to
+activate a Verity pair at all – it does not fall back to plain-mounting
+the data partition, so a <code class="docutils literal notranslate"><span class="pre">where:</span> <span class="pre">/usr</span></code> partition with <code class="docutils literal notranslate"><span class="pre">verity:</span> <span class="pre">true</span></code> and
+no anchor <strong>does not boot</strong>. The imager closes this by finding any UKI
+already installed under <code class="docutils literal notranslate"><span class="pre">EFI/Linux/</span></code> on the same disk (built by an
+<code class="docutils literal notranslate"><span class="pre">extends:</span> <span class="pre">uki:</span></code> package elsewhere in the specification – see
+<a class="reference internal" href="kernels.html#bring-your-own-modules"><span class="std std-ref">Bring your own modules</span></a>) and
+rebuilding it with <code class="docutils literal notranslate"><span class="pre">usrhash=</span></code>/<code class="docutils literal notranslate"><span class="pre">roothash=</span></code> appended to its cmdline, once
+the real root hash is known. This happens unconditionally for any
+<code class="docutils literal notranslate"><span class="pre">verity:</span> <span class="pre">true</span></code> mount – <code class="docutils literal notranslate"><span class="pre">usrhash=</span></code> is what makes <code class="docutils literal notranslate"><span class="pre">/usr</span></code> mountable at
+all, signed or not.</p>
+<p>An <code class="docutils literal notranslate"><span class="pre">image:</span> <span class="pre">secure-boot:</span></code> (see <a class="reference internal" href="#secure-boot">secure-boot</a> above)
+additionally signs the rebuilt UKI (<code class="docutils literal notranslate"><span class="pre">sbsign</span></code>), so Secure Boot’s own
+signature verification transitively authenticates the anchored cmdline:
+a forged <code class="docutils literal notranslate"><span class="pre">/usr</span></code> (with its own re-derived GUIDs) no longer matches the
+pinned hash, and the generator refuses it instead of silently
+activating it. Currently only <code class="docutils literal notranslate"><span class="pre">where:</span> <span class="pre">/usr</span></code> is supported (<code class="docutils literal notranslate"><span class="pre">/</span></code> verity
+roots have no anchor mechanism yet), and only a UKI built with <code class="docutils literal notranslate"><span class="pre">extends:</span> <span class="pre">uki:</span> <span class="pre">tool:</span> <span class="pre">ukify</span></code> (not <code class="docutils literal notranslate"><span class="pre">efibootguard</span></code>, which has no equivalent
+PE-section layout to rebuild from).</p>
+<p>A partition may have the following flags:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Flag</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>boot</p></td>
+<td><p>system may boot from this partition</p></td>
+</tr>
+<tr class="row-odd"><td><p>lvm</p></td>
+<td><p>partition will be used as a physical volume for LVM</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>When using a <code class="docutils literal notranslate"><span class="pre">msdos</span></code> partition table, the following flags are also available
+(but are mutually exclusive):</p>
+<ul class="simple">
+<li><p>primary</p></li>
+<li><p>extended</p></li>
+<li><p>logical</p></li>
+</ul>
+<p>A <code class="docutils literal notranslate"><span class="pre">group</span></code> shall be defined for every single partition using the <code class="docutils literal notranslate"><span class="pre">lvm</span></code> flag and
+may have one or several partitions attached to it. Groups implicitly defined
+in the <code class="docutils literal notranslate"><span class="pre">partitions</span></code> section may be referenced by <code class="docutils literal notranslate"><span class="pre">volumes</span></code> (see below).</p>
+</section>
+</section>
+<section id="volumes">
+<h3>volumes<a class="headerlink" href="#volumes" title="Link to this heading">#</a></h3>
+<p>Logical volumes share many of the attributes defined above for <code class="docutils literal notranslate"><span class="pre">partitions</span></code> but
+more specifically:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Attribute</p></th>
+<th class="head text-center"><p>Required</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>label</p></td>
+<td class="text-center"><p>yes</p></td>
+<td><p>Name of the volume</p></td>
+</tr>
+<tr class="row-odd"><td><p>group</p></td>
+<td class="text-center"><p>yes</p></td>
+<td><p>Name of the LVM group to join</p></td>
+</tr>
+<tr class="row-even"><td><p>size</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Size of the partition</p></td>
+</tr>
+<tr class="row-odd"><td><p>type</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>File-system type (e.g. <code class="docutils literal notranslate"><span class="pre">ext4</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p>compression</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Compression, for a read-only <code class="docutils literal notranslate"><span class="pre">type</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>where</p></td>
+<td class="text-center"><p>yes</p></td>
+<td><p>Where to mount the volume file-system</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">type:</span> <span class="pre">squashfs</span></code>/<code class="docutils literal notranslate"><span class="pre">erofs</span></code> volumes are not restricted to a <code class="docutils literal notranslate"><span class="pre">gpt</span></code> table: the
+imager identifies an LVM logical volume by its <code class="docutils literal notranslate"><span class="pre">/dev/&lt;group&gt;/&lt;label&gt;</span></code> device
+path regardless of file-system type, so <code class="docutils literal notranslate"><span class="pre">identify</span></code>/<code class="docutils literal notranslate"><span class="pre">PARTLABEL</span></code>/<code class="docutils literal notranslate"><span class="pre">PARTUUID</span></code>
+don’t apply here. Unlike a plain partition, an LVM volume’s <code class="docutils literal notranslate"><span class="pre">size</span></code> is not
+grown to fit a built <code class="docutils literal notranslate"><span class="pre">squashfs</span></code>/<code class="docutils literal notranslate"><span class="pre">erofs</span></code> image – it must already be large
+enough, or the build fails.</p>
+</section>
+<section id="example-a-read-only-usr">
+<h3>Example: a read-only <code class="docutils literal notranslate"><span class="pre">/usr</span></code><a class="headerlink" href="#example-a-read-only-usr" title="Link to this heading">#</a></h3>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">image</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">filename</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">example.img</span>
+<span class="w">  </span><span class="nt">table</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpt</span>
+<span class="w">  </span><span class="nt">partitions</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">boot</span>
+<span class="w">      </span><span class="nt">where</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/boot</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ext4</span>
+<span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">256MiB</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">root</span>
+<span class="w">      </span><span class="nt">where</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ext4</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">usr</span>
+<span class="w">      </span><span class="nt">where</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/usr</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">squashfs</span><span class="w">        </span><span class="c1"># or: erofs</span>
+<span class="w">      </span><span class="nt">compression</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zstd</span><span class="w">     </span><span class="c1"># optional, passed straight through</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">usrlocal</span>
+<span class="w">      </span><span class="nt">where</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/usr/local</span><span class="w">      </span><span class="c1"># nested under /usr, its own writable partition</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ext4</span>
+<span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128MiB</span>
+</pre></div>
+</div>
+</section>
+<section id="example-a-dm-verity-protected-usr">
+<h3>Example: a dm-verity-protected <code class="docutils literal notranslate"><span class="pre">/usr</span></code><a class="headerlink" href="#example-a-dm-verity-protected-usr" title="Link to this heading">#</a></h3>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">image</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">filename</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">example.img</span>
+<span class="w">  </span><span class="nt">table</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpt</span>
+<span class="w">  </span><span class="nt">secure-boot</span><span class="p">:</span><span class="w">            </span><span class="c1"># optional -- signs the anchored UKI; omit to stay unsigned</span>
+<span class="w">    </span><span class="nt">private-key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keys/db.key</span>
+<span class="w">    </span><span class="nt">public-cert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keys/db.crt</span>
+<span class="w">  </span><span class="nt">partitions</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">root</span>
+<span class="w">      </span><span class="nt">where</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ext4</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">usr</span>
+<span class="w">      </span><span class="nt">where</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/usr</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">erofs</span>
+<span class="w">      </span><span class="nt">verity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">usr-verity</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">verity-hash</span>
+<span class="w">      </span><span class="nt">verity-for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">usr</span>
+<span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64MiB</span><span class="w">          </span><span class="c1"># must be given -- unknown until the hash tree is built</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="test">
+<h2>test<a class="headerlink" href="#test" title="Link to this heading">#</a></h2>
+<p>A specification carries its own tests the same way it carries its
+<code class="docutils literal notranslate"><span class="pre">packages</span></code>/<code class="docutils literal notranslate"><span class="pre">playbook</span></code>/<code class="docutils literal notranslate"><span class="pre">image</span></code>: <code class="docutils literal notranslate"><span class="pre">test</span></code> is a list of entries, composed
+across <code class="docutils literal notranslate"><span class="pre">requires</span></code> – two files each naming their own suite is the
+ordinary case, not a conflict. An entry named the same as one already
+loaded is merged into it instead of duplicated, the same way <code class="docutils literal notranslate"><span class="pre">packages</span></code>
+are merged by name (see <a class="reference internal" href="#packages"><code class="docutils literal notranslate"><span class="pre">packages</span></code></a>): cases inside its own
+<code class="docutils literal notranslate"><span class="pre">tests</span></code> are merged the same way, by their own <code class="docutils literal notranslate"><span class="pre">name</span></code>. Each entry runs
+against a real target over <a class="reference external" href="https://github.com/siemens/mtda">mtda</a>,
+with <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">for</span></code>/<code class="docutils literal notranslate"><span class="pre">while</span></code>/<code class="docutils literal notranslate"><span class="pre">try</span></code>, reusable named keywords and assertions
+built on <a class="reference external" href="https://robotframework.org/">Robot Framework</a>. See
+<a class="reference internal" href="testing.html"><span class="std std-doc">docs/testing.md</span></a> for the full step grammar, the keywords
+available, and <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">test</span></code>/<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">tui</span></code>’s own <code class="docutils literal notranslate"><span class="pre">/test</span></code>.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="getting-started.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Getting started</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="merging.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Merging specification fragments</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#variables">Variables</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#redacting-what-should-not-be-printed">Redacting what should not be printed</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#distribution">distribution</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#feeds">feeds</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-from-a-snapshot">Building from a snapshot</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#apt-pull-mode-offline">apt-pull-mode: offline</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#defaults">defaults</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#packages">packages</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fetching-over-ssh">Fetching over ssh</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-the-repository-holds">What the repository holds</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#local-versions">Local versions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#signing">Signing</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pinning-a-build">Pinning a build</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#host-packages">Host packages</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vendor">vendor</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#imager">imager</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#playbook">playbook</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ansible-galaxy-collections">Ansible Galaxy collections</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#writing-your-own-module">Writing your own module</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#image">image</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#secure-boot">secure-boot</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bootlets">bootlets</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#partitions">partitions</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#protecting-a-read-only-partition-with-dm-verity">Protecting a read-only partition with dm-verity</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#volumes">volumes</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-a-read-only-usr">Example: a read-only <code class="docutils literal notranslate"><span class="pre">/usr</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-a-dm-verity-protected-usr">Example: a dm-verity-protected <code class="docutils literal notranslate"><span class="pre">/usr</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#test">test</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Cedric Hombourger
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Cedric Hombourger.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

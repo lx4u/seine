@@ -97,6 +97,12 @@ def _index_has_gocode(bin_key):
 def _lists_volume(suite):
     return (ContainerEngine.downloads_lists(suite), "/var/lib/apt/lists")
 
+# A locked run never resolves, so nothing else fills the apt lists.
+def update_lists(builder, suite, archs):
+    setup = "".join("dpkg --add-architecture %s && " % a for a in archs)
+    builder.exec(["sh", "-c", setup + "apt-get update -qq"],
+                 volumes=[_lists_volume(suite)])
+
 # A file fetched from a recorded snapshot sha1 must match the lock's own
 # hash exactly, or this refuses it and removes what was written -- a
 # mismatch means either the mirror served something else or the lock

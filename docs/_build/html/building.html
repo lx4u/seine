@@ -1,0 +1,917 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Building &#8212; seine documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=4418a689" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="_static/documentation_options.js?v=4d2f5802"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'building';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Environment variables" href="environment.html" />
+    <link rel="prev" title="Kernels" href="kernels.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">seine documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="specification.html">Specification files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="merging.html">Merging specification fragments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernels.html">Kernels</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="environment.html">Environment variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tui.html">TUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ai.html">The AI chat</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vault-openbao.html">Running a vault for seine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="release-as-debs.html">Releasing seine as .deb packages</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="caching.html">Caching</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine/issues/new?title=Issue%20on%20page%20%2Fbuilding.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/building.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Building</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-an-image">Build an image</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#check-the-plan">Check the plan</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#follow-a-running-build">Follow a running build</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#keep-a-failed-container-for-inspection">Keep a failed container for inspection</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-faster-with-parallel-jobs">Build faster with parallel jobs</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-several-images-together">Build several images together</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#put-several-root-file-systems-on-one-disk">Put several root file systems on one disk</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#review-build-time">Review build time</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cross-compile-packages">Cross-compile packages</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reproducible-builds">Reproducible builds</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#privileges">Privileges</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#manage-cache-space">Manage cache space</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#share-caches-with-ci-or-another-machine">Share caches with CI or another machine</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#create-and-scan-an-sbom">Create and scan an SBOM</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related-documentation">Related documentation</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="building">
+<h1>Building<a class="headerlink" href="#building" title="Link to this heading">#</a></h1>
+<p>This guide is for people who use seine to build an image. It explains the
+commands you are likely to run, how to inspect a build, and how to recover
+disk space. See <a class="reference internal" href="specification.html"><span class="std std-doc">the specification reference</span></a> for YAML
+settings.</p>
+<section id="build-an-image">
+<h2>Build an image<a class="headerlink" href="#build-an-image" title="Link to this heading">#</a></h2>
+<p>Run <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span></code> with one or more specification files. Seine merges the
+files before it builds the image.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">build</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+<span class="n">seine</span> <span class="n">build</span> <span class="n">common</span><span class="o">.</span><span class="n">yaml</span> <span class="n">board</span><span class="o">.</span><span class="n">yaml</span> <span class="n">image</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>The first build can take a while. Later builds reuse downloads, package
+builds, chroots, and container images when their inputs have not changed.</p>
+<p>Use these options for common variations:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Command</p></th>
+<th class="head"><p>Use it when you want to</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span> <span class="pre">--dry-run</span> <span class="pre">spec.yaml</span></code></p></td>
+<td><p>Check what would run without changing anything.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span> <span class="pre">--packages-only</span> <span class="pre">spec.yaml</span></code></p></td>
+<td><p>Build packages only; do not create a root file system or image.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span> <span class="pre">--rootfs-only</span> <span class="pre">spec.yaml</span></code></p></td>
+<td><p>Create a root file-system tarball, but not a disk image.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span> <span class="pre">--rebuild</span> <span class="pre">spec.yaml</span></code></p></td>
+<td><p>Rebuild packages even when cached results exist.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span> <span class="pre">--sbom</span> <span class="pre">spec.yaml</span></code></p></td>
+<td><p>Write an SPDX software bill of materials beside the image.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span> <span class="pre">--sign-key</span> <span class="pre">KEY</span> <span class="pre">spec.yaml</span></code></p></td>
+<td><p>Sign rebuilt packages with your GPG key.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">--target</span> <span class="pre">TASK</span></code> is useful while working on one part of a build. It builds that
+task and what it needs. Find task names with <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">plan</span> <span class="pre">--tasks-only</span> <span class="pre">spec.yaml</span></code>.</p>
+</section>
+<section id="check-the-plan">
+<h2>Check the plan<a class="headerlink" href="#check-the-plan" title="Link to this heading">#</a></h2>
+<p>Before a slow or important build, inspect its plan:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">plan</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+<span class="n">seine</span> <span class="n">build</span> <span class="o">--</span><span class="n">dry</span><span class="o">-</span><span class="n">run</span> <span class="o">--</span><span class="n">jobs</span> <span class="mi">4</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>The plan shows:</p>
+<ul class="simple">
+<li><p>The merged specification.</p></li>
+<li><p>Settings changed since the last successful build of these files.</p></li>
+<li><p>Packages already built and therefore reused.</p></li>
+<li><p>Remaining build steps and their dependencies.</p></li>
+</ul>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--spec-only</span></code> or <code class="docutils literal notranslate"><span class="pre">--tasks-only</span></code> to show one part. Use <code class="docutils literal notranslate"><span class="pre">--no-color</span></code>, or set
+<code class="docutils literal notranslate"><span class="pre">NO_COLOR</span></code>, for plain output.</p>
+<p><code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> accepts the normal build options. It never fetches, builds, or
+writes files.</p>
+</section>
+<section id="follow-a-running-build">
+<h2>Follow a running build<a class="headerlink" href="#follow-a-running-build" title="Link to this heading">#</a></h2>
+<p>The standard display shows completed steps, active steps, and progress. Seine
+writes each step’s full output to a separate log file and prints that file when
+a step fails.</p>
+<p>For full command output, use:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">build</span> <span class="o">--</span><span class="n">verbose</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>This is the best first step when diagnosing a failure. In CI or when output is
+redirected, seine writes regular log lines instead of an interactive display.</p>
+<section id="keep-a-failed-container-for-inspection">
+<h3>Keep a failed container for inspection<a class="headerlink" href="#keep-a-failed-container-for-inspection" title="Link to this heading">#</a></h3>
+<p>Normally seine removes a failed step’s container. To inspect it with podman,
+keep it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">SEINE_KEEP_DEAD_CONTAINERS</span><span class="o">=</span><span class="mi">1</span> <span class="n">seine</span> <span class="n">build</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>At the end, seine prints the container IDs and the exact <code class="docutils literal notranslate"><span class="pre">podman</span> <span class="pre">...</span> <span class="pre">rm</span></code>
+command to remove them. Unset the variable after debugging: kept containers
+consume disk space.</p>
+</section>
+</section>
+<section id="build-faster-with-parallel-jobs">
+<h2>Build faster with parallel jobs<a class="headerlink" href="#build-faster-with-parallel-jobs" title="Link to this heading">#</a></h2>
+<p>By default, seine runs one build step at a time. Run independent steps in
+parallel with <code class="docutils literal notranslate"><span class="pre">--jobs</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">build</span> <span class="o">--</span><span class="n">jobs</span> <span class="mi">4</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Option</p></th>
+<th class="head"><p>Meaning</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--jobs</span> <span class="pre">N</span></code></p></td>
+<td><p>Up to <code class="docutils literal notranslate"><span class="pre">N</span></code> build steps run at once.</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--parallel</span> <span class="pre">N</span></code></p></td>
+<td><p>Up to <code class="docutils literal notranslate"><span class="pre">N</span></code> CPU cores per package build.</p></td>
+<td><p>Automatically divided across jobs.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--resource</span> <span class="pre">CLASS=N</span></code></p></td>
+<td><p>Limit a resource class such as <code class="docutils literal notranslate"><span class="pre">net=2</span></code> or <code class="docutils literal notranslate"><span class="pre">io=4</span></code>.</p></td>
+<td><p>Same limit as <code class="docutils literal notranslate"><span class="pre">--jobs</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Start with <code class="docutils literal notranslate"><span class="pre">--jobs</span></code> equal to the number of CPU cores you want the build to
+use. Seine adjusts package parallelism so that adding jobs does not normally
+overload the machine. Set <code class="docutils literal notranslate"><span class="pre">--parallel</span></code> only when you need a specific per-package
+limit, for example for a package that cannot build in parallel.</p>
+<p>Some steps wait for the network or disk rather than CPU. If a busy build is
+limited by one of those resources, tune it explicitly:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">build</span> <span class="o">--</span><span class="n">jobs</span> <span class="mi">4</span> <span class="o">--</span><span class="n">resource</span> <span class="n">net</span><span class="o">=</span><span class="mi">2</span> <span class="o">--</span><span class="n">resource</span> <span class="n">io</span><span class="o">=</span><span class="mi">4</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>Dependencies still apply. A package that needs another package waits until the
+required package is available.</p>
+</section>
+<section id="build-several-images-together">
+<h2>Build several images together<a class="headerlink" href="#build-several-images-together" title="Link to this heading">#</a></h2>
+<p>Separate image configurations with <code class="docutils literal notranslate"><span class="pre">--</span></code> to build them under one scheduler:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">build</span> <span class="o">--</span><span class="n">jobs</span> <span class="mi">4</span> \
+  <span class="n">common</span><span class="o">/</span><span class="n">trixie</span><span class="o">.</span><span class="n">yaml</span> <span class="n">common</span><span class="o">/</span><span class="n">amd64</span><span class="o">.</span><span class="n">yaml</span> <span class="n">pc</span><span class="o">-</span><span class="n">image</span><span class="o">/</span><span class="n">main</span><span class="o">.</span><span class="n">yaml</span> \
+  <span class="o">--</span> \
+  <span class="n">common</span><span class="o">/</span><span class="n">trixie</span><span class="o">.</span><span class="n">yaml</span> <span class="n">common</span><span class="o">/</span><span class="n">arm64</span><span class="o">.</span><span class="n">yaml</span> <span class="n">rpi4</span><span class="o">-</span><span class="n">image</span><span class="o">/</span><span class="n">main</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>Seine shares compatible work automatically, such as a host bootstrap or a
+package build. Each group still produces its own image. <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">plan</span> <span class="pre">--tasks-only</span></code> shows which tasks are shared.</p>
+<p>Use this for separate images. Use <code class="docutils literal notranslate"><span class="pre">multiconfig:</span></code> when several root file systems
+must be placed on one disk image.</p>
+</section>
+<section id="put-several-root-file-systems-on-one-disk">
+<h2>Put several root file systems on one disk<a class="headerlink" href="#put-several-root-file-systems-on-one-disk" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">multiconfig:</span></code> names sub-builds that become separate root file systems in the
+outer specification’s image. This is useful for a main system and recovery
+system on the same disk.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">multiconfig</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">main</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">examples/main-recovery-image/main.yaml</span>
+<span class="w">  </span><span class="nt">recovery</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">examples/main-recovery-image/recovery.yaml</span>
+
+<span class="nt">image</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">partitions</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">esp</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vfat</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main</span>
+<span class="w">      </span><span class="nt">where</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/efi</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main-root</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main</span>
+<span class="w">      </span><span class="nt">where</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">recovery-root</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">recovery</span>
+<span class="w">      </span><span class="nt">where</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/</span>
+</pre></div>
+</div>
+<p>Each group needs exactly one partition or volume with <code class="docutils literal notranslate"><span class="pre">where:</span> <span class="pre">/</span></code>. The outer
+<code class="docutils literal notranslate"><span class="pre">image:</span></code> section defines the disk; an <code class="docutils literal notranslate"><span class="pre">image:</span></code> section inside a group is
+ignored. Build the disk normally:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">build</span> <span class="n">examples</span><span class="o">/</span><span class="n">main</span><span class="o">-</span><span class="n">recovery</span><span class="o">-</span><span class="n">image</span><span class="o">/</span><span class="n">disk</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>For a build pipeline rather than side-by-side systems, make a group wait for
+another group:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">multiconfig</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">initrd</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">examples/minimal-initrd/main.yaml</span>
+<span class="w">  </span><span class="nt">uki</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">files</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">examples/minimal-uki/main.yaml</span>
+<span class="w">    </span><span class="nt">after</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">initrd</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">after:</span></code> and <code class="docutils literal notranslate"><span class="pre">before:</span></code> take group names. They order whole groups, not
+individual files or package steps.</p>
+</section>
+<section id="review-build-time">
+<h2>Review build time<a class="headerlink" href="#review-build-time" title="Link to this heading">#</a></h2>
+<p>After a build, use <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">analyze</span></code> to find slow work. These commands only read
+the build record.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Command</p></th>
+<th class="head"><p>Shows</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">analyze</span> <span class="pre">blame</span> <span class="pre">[SPEC...]</span></code></p></td>
+<td><p>Steps, longest first.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">analyze</span> <span class="pre">critical-chain</span> <span class="pre">[SPEC...]</span></code></p></td>
+<td><p>The path that limited total build time.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">analyze</span> <span class="pre">plot</span> <span class="pre">[SPEC...]</span> <span class="pre">&gt;</span> <span class="pre">build.svg</span></code></p></td>
+<td><p>A timeline chart as SVG.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Without <code class="docutils literal notranslate"><span class="pre">SPEC</span></code>, the command reports the latest build. With <code class="docutils literal notranslate"><span class="pre">SPEC</span></code>, it reports
+the latest build of that exact specification set.</p>
+<p>The critical chain is usually the most useful report. Improving a step outside
+that chain may not make the full build faster because it already ran alongside
+the slowest work.</p>
+</section>
+<section id="cross-compile-packages">
+<h2>Cross-compile packages<a class="headerlink" href="#cross-compile-packages" title="Link to this heading">#</a></h2>
+<p>When the target architecture differs from the host architecture, seine
+cross-compiles packages by default.</p>
+<p>If a package cannot cross-compile, set <code class="docutils literal notranslate"><span class="pre">cross:</span> <span class="pre">false</span></code> in that package’s
+specification. Seine then builds it for the target architecture through QEMU.
+This is slower, and requires <code class="docutils literal notranslate"><span class="pre">qemu-user-static</span></code> with binfmt support on the
+host.</p>
+</section>
+<section id="reproducible-builds">
+<h2>Reproducible builds<a class="headerlink" href="#reproducible-builds" title="Link to this heading">#</a></h2>
+<p>Seine supplies stable build dates and paths where package tooling supports
+them. To make the input archive stable too, pin package versions or build from
+a Debian snapshot. See <a class="reference internal" href="specification.html#building-from-a-snapshot"><span class="std std-ref">Building from a snapshot</span></a>.</p>
+</section>
+<section id="privileges">
+<h2>Privileges<a class="headerlink" href="#privileges" title="Link to this heading">#</a></h2>
+<p>Seine does not require <code class="docutils literal notranslate"><span class="pre">sudo</span></code> to build an image. Package builds run inside a
+rootless container. The container has the permissions needed for nested build
+namespaces, but root inside it is still your unprivileged host user.</p>
+</section>
+<section id="manage-cache-space">
+<h2>Manage cache space<a class="headerlink" href="#manage-cache-space" title="Link to this heading">#</a></h2>
+<p>Seine keeps reusable data below <code class="docutils literal notranslate"><span class="pre">./build</span></code> by default. Check how much space it
+uses:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">cache</span> <span class="n">info</span>
+<span class="n">seine</span> <span class="n">cache</span> <span class="n">info</span> <span class="o">--</span><span class="n">entries</span>
+</pre></div>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Command</p></th>
+<th class="head"><p>Effect</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">clear</span></code></p></td>
+<td><p>Remove all caches.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">clear</span> <span class="pre">chroots</span></code></p></td>
+<td><p>Remove only build chroots.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">clear</span> <span class="pre">--older-than</span> <span class="pre">30d</span></code></p></td>
+<td><p>Remove entries unused for at least 30 days.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">info</span> <span class="pre">--entries-matching</span> <span class="pre">linux</span></code></p></td>
+<td><p>Find cached entries matching a regular expression.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Clearing a cache is safe, but the next build must recreate its contents. Do
+not clear caches while a build is running. Use <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">clear</span> <span class="pre">images</span></code> to
+remove container images; do not remove the container-storage directory by
+hand.</p>
+<p>To keep build data on another drive, set <code class="docutils literal notranslate"><span class="pre">SEINE_BUILD_DIR</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">SEINE_BUILD_DIR</span><span class="o">=/</span><span class="n">mnt</span><span class="o">/</span><span class="n">build</span><span class="o">-</span><span class="n">disk</span><span class="o">/</span><span class="n">seine</span>
+<span class="n">seine</span> <span class="n">build</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="environment.html"><span class="std std-doc">Environment variables</span></a> for separate cache and download
+locations.</p>
+</section>
+<section id="share-caches-with-ci-or-another-machine">
+<h2>Share caches with CI or another machine<a class="headerlink" href="#share-caches-with-ci-or-another-machine" title="Link to this heading">#</a></h2>
+<p>Export reusable caches to a tar file, then import it on the other machine:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">cache</span> <span class="n">export</span> <span class="n">caches</span><span class="o">.</span><span class="n">tar</span>
+<span class="n">seine</span> <span class="n">cache</span> <span class="kn">import</span><span class="w"> </span><span class="nn">caches.tar</span>
+</pre></div>
+</div>
+<p>Useful variants:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Command</p></th>
+<th class="head"><p>Use it when you want to</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">export</span> <span class="pre">--spec</span> <span class="pre">common.yaml,board.yaml</span> <span class="pre">caches.tar</span></code></p></td>
+<td><p>Export only caches needed by one image configuration.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">export</span> <span class="pre">caches.tar</span> <span class="pre">all</span></code></p></td>
+<td><p>Include downloads as well.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">export</span> <span class="pre">--with-image-rootfs</span> <span class="pre">caches.tar</span></code></p></td>
+<td><p>Copy the bootstrapped image root file system too.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">import</span> <span class="pre">--replace</span> <span class="pre">caches.tar</span></code></p></td>
+<td><p>Start a disposable runner from the imported cache.</p></td>
+</tr>
+<tr class="row-even"><td><p><code>seine cache export - | ssh builder seine cache import -</code></p></td>
+<td><p>Stream the cache directly to another machine.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The normal export includes built packages, chroots, and container images.
+It leaves out distribution downloads because the receiving machine still needs
+access to its package archive. An import adds to existing caches unless you use
+<code class="docutils literal notranslate"><span class="pre">--replace</span></code>.</p>
+</section>
+<section id="create-and-scan-an-sbom">
+<h2>Create and scan an SBOM<a class="headerlink" href="#create-and-scan-an-sbom" title="Link to this heading">#</a></h2>
+<p>Build with <code class="docutils literal notranslate"><span class="pre">--sbom</span></code> to write an SPDX SBOM beside the image:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">build</span> <span class="o">--</span><span class="n">sbom</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>Scan it for Debian security-tracker findings:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">issues</span> <span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+<span class="n">seine</span> <span class="n">issues</span> <span class="o">--</span><span class="n">sbom</span><span class="o">=</span><span class="n">image</span><span class="o">-</span><span class="n">sbom</span><span class="o">.</span><span class="n">spdx</span><span class="o">.</span><span class="n">json</span> <span class="o">--</span><span class="nb">min</span><span class="o">-</span><span class="n">urgency</span><span class="o">=</span><span class="n">high</span>
+</pre></div>
+</div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--rescan</span></code> to ignore a cached scan. <code class="docutils literal notranslate"><span class="pre">--filter=PKG</span></code> narrows results to
+matching package names.</p>
+</section>
+<section id="related-documentation">
+<h2>Related documentation<a class="headerlink" href="#related-documentation" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Topic</p></th>
+<th class="head"><p>Documentation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Write or change a specification</p></td>
+<td><p><a class="reference internal" href="specification.html"><span class="std std-doc">Specification reference</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>Install prerequisites</p></td>
+<td><p><a class="reference internal" href="getting-started.html"><span class="std std-doc">Getting started</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p>Configure build paths and debugging variables</p></td>
+<td><p><a class="reference internal" href="environment.html"><span class="std std-doc">Environment variables</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>Understand cache behavior in detail</p></td>
+<td><p><a class="reference internal" href="caching.html"><span class="std std-doc">Caching</span></a></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="kernels.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Kernels</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="environment.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Environment variables</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-an-image">Build an image</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#check-the-plan">Check the plan</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#follow-a-running-build">Follow a running build</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#keep-a-failed-container-for-inspection">Keep a failed container for inspection</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-faster-with-parallel-jobs">Build faster with parallel jobs</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-several-images-together">Build several images together</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#put-several-root-file-systems-on-one-disk">Put several root file systems on one disk</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#review-build-time">Review build time</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cross-compile-packages">Cross-compile packages</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reproducible-builds">Reproducible builds</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#privileges">Privileges</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#manage-cache-space">Manage cache space</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#share-caches-with-ci-or-another-machine">Share caches with CI or another machine</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#create-and-scan-an-sbom">Create and scan an SBOM</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related-documentation">Related documentation</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Cedric Hombourger
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Cedric Hombourger.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

@@ -1287,6 +1287,10 @@ the live feed. Nothing changes for a source still served by the live
 suite: the recorded sha1 only matters once apt itself can no longer
 produce the pinned version.
 
+An entry with no recorded sha1 is fetched with apt instead. If the suite's
+apt lists are empty, as they are when nothing resolved it first, they are
+updated before the fetch.
+
 Signed the same way `packages:`'s own repository is (see
 [Signing](#signing) above), with its own, independent key --
 `--vendor-sign-key`/`SEINE_VENDOR_SIGN_KEY` -- since a package `vendor:`

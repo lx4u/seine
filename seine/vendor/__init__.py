@@ -33,6 +33,6 @@ from .fetch import (_APT_SANDBOX_OPTS, _artifact_key, _binary_already_fetched,
                     _binary_has_gocode, _deb_has_gocode, _dedup_binaries,
                     _hardlink, _index_has_gocode, _link_fetched,
                     _lists_volume, _snapshot_fetch, fetch_binary,
-                    fetch_source, index, keyring)
+                    fetch_source, index, keyring, update_lists)
 from .cli import (MAX_ATTEMPTS, USAGE, VendorCmd, _LiveFollower, _builder_for,
                   fetch_tasks, index_tasks, resolve_tasks)

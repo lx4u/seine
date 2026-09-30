@@ -1,0 +1,775 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>TUI &#8212; seine documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=4418a689" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="_static/documentation_options.js?v=4d2f5802"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'tui';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="The AI chat" href="ai.html" />
+    <link rel="prev" title="Testing" href="testing.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">seine documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="specification.html">Specification files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="merging.html">Merging specification fragments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernels.html">Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="environment.html">Environment variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">TUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ai.html">The AI chat</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vault-openbao.html">Running a vault for seine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="release-as-debs.html">Releasing seine as .deb packages</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="caching.html">Caching</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine/issues/new?title=Issue%20on%20page%20%2Ftui.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/tui.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>TUI</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-prompt">The prompt</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#focus-and-keyboard-navigation">Focus and keyboard navigation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#screens">Screens</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#composing-with-side-load">Composing with <code class="docutils literal notranslate"><span class="pre">/side-load</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#talking-to-a-model">Talking to a model</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building">Building</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vendoring">Vendoring</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#driving-a-real-target">Driving a real target</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#testing-on-a-real-target">Testing on a real target</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#browsing-a-built-image">Browsing a built image</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#help">Help</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#external-control">External control</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#other-screenshots">Other screenshots</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="tui">
+<h1>TUI<a class="headerlink" href="#tui" title="Link to this heading">#</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">tui</span></code> is an interactive alternative to typing <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span></code>/<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">plan</span></code>/
+etc. one at a time – the same engine, driven from a <code class="docutils literal notranslate"><span class="pre">/command</span></code> prompt instead
+of the shell, with a screen for each thing seine can already do:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">tui</span> <span class="p">[</span><span class="n">SPEC</span><span class="o">...</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span> <span class="n">SPEC</span><span class="o">...</span><span class="p">]</span><span class="o">...</span>
+</pre></div>
+</div>
+<p>Needs the <code class="docutils literal notranslate"><span class="pre">tui</span></code> extra (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">seine[tui]</span></code>, or the <code class="docutils literal notranslate"><span class="pre">seine-tui</span></code> package) –
+everything else about seine works without it. Given no <code class="docutils literal notranslate"><span class="pre">SPEC</span></code>, it opens on
+the Doctor screen: nothing to build without one yet, so what the machine
+itself can build at all is the more useful first thing to see.</p>
+<p><img alt="seine tui: Doctor, Overview, /side-load, Plan, browsing a built image, and Help" src="_images/tui-demo.gif" /></p>
+<section id="the-prompt">
+<h2>The prompt<a class="headerlink" href="#the-prompt" title="Link to this heading">#</a></h2>
+<p>Every screen keeps the same prompt at the bottom. A line starting with <code class="docutils literal notranslate"><span class="pre">/</span></code> is
+a command (<code class="docutils literal notranslate"><span class="pre">/build</span></code>, <code class="docutils literal notranslate"><span class="pre">/plan</span></code>, …); <code class="docutils literal notranslate"><span class="pre">/help</span></code> lists them, with a full page per
+command (see <a class="reference internal" href="#help">Help</a> below). A few other things work from any screen:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">/</span></code> focuses the prompt from wherever focus currently is.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">!command</span></code> runs a real shell command, handing it the real terminal
+and printing its exit status once it returns; a bare <code class="docutils literal notranslate"><span class="pre">!</span></code> opens an
+interactive shell the same way.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">→</span></code> accepts a ghost-text suggestion – a command name as it is typed, or
+a path once <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> starts one (tab-completed against the real filesystem).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Ctrl+P</span></code> opens a command palette listing every command; picking one
+fills the prompt rather than running it.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">↑</span></code>/<code class="docutils literal notranslate"><span class="pre">↓</span></code> recall previous lines, the same as a shell’s own history.</p></li>
+</ul>
+</section>
+<section id="focus-and-keyboard-navigation">
+<h2>Focus and keyboard navigation<a class="headerlink" href="#focus-and-keyboard-navigation" title="Link to this heading">#</a></h2>
+<p>Every screen has (at least) two focusable panes – the prompt, and the spec
+tree beside it – cycled with <code class="docutils literal notranslate"><span class="pre">Tab</span></code>, each getting the same highlighted
+border while focused. A screen with something worth navigating gets a third:
+the Build cockpit’s own log tail, the Filesystem browser’s own listing,
+or the Issues matrix (arrows move, <code class="docutils literal notranslate"><span class="pre">Enter</span></code> opens a count’s details).
+<code class="docutils literal notranslate"><span class="pre">Esc</span></code> backs out one level at a time: a file preview to the listing it came
+from, a command’s own detail page to the list, Help itself to whatever
+screen was open before it.</p>
+</section>
+<section id="screens">
+<h2>Screens<a class="headerlink" href="#screens" title="Link to this heading">#</a></h2>
+<p>Reached with the matching <code class="docutils literal notranslate"><span class="pre">/command</span></code> (<code class="docutils literal notranslate"><span class="pre">/help</span></code> gives the full list, with
+every argument each one takes):</p>
+<ul class="simple">
+<li><p><strong>Overview</strong> – the active specification, once <code class="docutils literal notranslate"><span class="pre">/use</span></code> has set one.</p></li>
+<li><p><strong>Doctor</strong> – whether this machine has what a build needs: podman,
+crun, passt, guestfs, kvm, a hypervisor per architecture,
+ansible-playbook, gnupg, free space. The opening screen with no spec
+given.</p></li>
+<li><p><strong>Plan</strong> – what a build would do, diffed against the last real build
+of these files, without doing any of it.</p></li>
+<li><p><strong>Build</strong> – see <a class="reference internal" href="#building">below</a>.</p></li>
+<li><p><strong>Vendor</strong> – see <a class="reference internal" href="#vendoring">below</a>.</p></li>
+<li><p><strong>Filesystem</strong> – see <a class="reference internal" href="#browsing-a-built-image">below</a>.</p></li>
+<li><p><strong>Artifacts</strong>, <strong>Packages</strong>, <strong>Analyze</strong>, <strong>Cache</strong>, <strong>Diff</strong> – the
+same information <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">analyze</span></code>/<code class="docutils literal notranslate"><span class="pre">--sbom</span></code>/<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span></code>/etc. give on
+the real command line, read for whatever <code class="docutils literal notranslate"><span class="pre">/use</span></code> last set.</p></li>
+<li><p><strong>Issues</strong> – known CVEs against the active build’s own SBOM (<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">issues</span></code> on the command line, <a class="reference internal" href="building.html#vulnerability-scanning"><span class="std std-ref">Vulnerability scanning</span></a>):
+one row per source package – CVE counts by urgency, defect counts
+(from UDD’s bug search) by severity – beside summary stats. Clicking
+a count swaps the matrix for that cell’s own entries; <code class="docutils literal notranslate"><span class="pre">Esc</span></code> goes back
+to the matrix. <code class="docutils literal notranslate"><span class="pre">/issues</span> <span class="pre">--rescan</span></code> refetches both caches in the
+background under a progress popup that closes itself; <code class="docutils literal notranslate"><span class="pre">Esc</span></code> dismisses
+the popup early without cancelling the scan.</p></li>
+<li><p><strong>Remote Target</strong> – power, console, storage and USB control for a
+real device over mtda (github.com/siemens/mtda).</p></li>
+<li><p><strong>Test</strong> – runs the active specification’s own <code class="docutils literal notranslate"><span class="pre">test:</span></code> section
+(Robot Framework) against a real target reached the same way.</p></li>
+</ul>
+</section>
+<section id="composing-with-side-load">
+<h2>Composing with <code class="docutils literal notranslate"><span class="pre">/side-load</span></code><a class="headerlink" href="#composing-with-side-load" title="Link to this heading">#</a></h2>
+<p>A specification is layered rather than monolithic – <code class="docutils literal notranslate"><span class="pre">requires</span></code> pulls in
+what a release or board already sets, and <code class="docutils literal notranslate"><span class="pre">/side-load</span> <span class="pre">FRAGMENT.yaml</span></code> adds
+one more file on top of the <em>active</em> one, live, without starting over.
+Nothing reaches for a side-loaded fragment the way <code class="docutils literal notranslate"><span class="pre">requires</span></code> reaches
+for its own, so it amends the active spec field by field rather than
+losing to it – a <code class="docutils literal notranslate"><span class="pre">packages</span></code>/<code class="docutils literal notranslate"><span class="pre">test</span></code>/etc. entry the fragment names again
+takes over the fields it sets (see <a class="reference internal" href="merging.html"><span class="std std-doc">docs/merging.md</span></a>).
+<code class="docutils literal notranslate"><span class="pre">/side-unload</span> <span class="pre">FRAGMENT.yaml</span></code> reverses it, dropping the file back out and
+reparsing without it – neither touches <code class="docutils literal notranslate"><span class="pre">requires:</span></code> or anything on disk.
+What makes this worth showing rather than just telling: the spec tree
+diffs the reload against what was there a moment ago and marks exactly
+what changed, auto-expanded down to the leaf that moved – not “here is
+the new merged file, go find the difference yourself”:</p>
+<p><img alt="Overview screen: '/side-load' highlighting what a fragment changed, auto-expanded down to the leaf" src="_images/tui-side-load.svg" /></p>
+</section>
+<section id="talking-to-a-model">
+<h2>Talking to a model<a class="headerlink" href="#talking-to-a-model" title="Link to this heading">#</a></h2>
+<p>With <code class="docutils literal notranslate"><span class="pre">llm_model</span></code>/<code class="docutils literal notranslate"><span class="pre">llm_api_base</span></code> set (<code class="docutils literal notranslate"><span class="pre">/settings</span></code>, or <code class="docutils literal notranslate"><span class="pre">SEINE_LLM_MODEL</span></code>/
+<code class="docutils literal notranslate"><span class="pre">SEINE_LLM_API_BASE</span></code> as environment overrides), any prompt that doesn’t
+start with <code class="docutils literal notranslate"><span class="pre">/</span></code> goes to a real model instead of <code class="docutils literal notranslate"><span class="pre">commands.dispatch()</span></code>’s own
+<code class="docutils literal notranslate"><span class="pre">CommandError</span></code>. It reads the same things every screen already renders –
+and, with explicit approval each time, can act: changing a node, writing
+a new file, loading a fragment onto the active spec:</p>
+<p><img alt="Chat screen: reviewing a real spec-update -- a colour-coded diff, the file it touches named, before anything is written" src="_images/tui-ai-diff.svg" /></p>
+<p><img alt="seine tui: a real conversation -- reading the active spec, proposing a change, the diff reviewed and approved" src="_images/tui-ai-demo.gif" /></p>
+<p>See <a class="reference internal" href="ai.html"><span class="std std-doc">ai.md</span></a> for the full tool list and the trust model behind
+what it’s allowed to read.</p>
+</section>
+<section id="building">
+<h2>Building<a class="headerlink" href="#building" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">/build</span></code> opens a live cockpit: a scrolling log tail beside a per-step
+task list, the spec tree auto-expanding and highlighting whatever it is
+touching right now – a specific package while one rebuilds from source,
+or (once Ansible’s own stdout says so) the exact play and task while the
+target’s own playbook runs:</p>
+<p><img alt="Build screen: the spec tree live-tracking a running Ansible task, matching the log tail" src="_images/tui-build.gif" /></p>
+</section>
+<section id="vendoring">
+<h2>Vendoring<a class="headerlink" href="#vendoring" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">/vendor</span></code> runs a specification’s own <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> section the same way
+<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> does on the command line: every source package it names,
+and its full build-dependency closure, resolved and fetched into a
+signed apt repository of its own – one per suite. The screen is the
+same live cockpit <code class="docutils literal notranslate"><span class="pre">/build</span></code> opens, sized for what a vendor run is
+instead: a stats panel (suites, task counts, retries, and how much has
+been downloaded this session versus the repository’s own total size)
+beside a live task list. Works on a specification with no <code class="docutils literal notranslate"><span class="pre">image:</span></code>
+section at all – vendoring pins a package set, it does not build one.
+<code class="docutils literal notranslate"><span class="pre">/build</span></code> and <code class="docutils literal notranslate"><span class="pre">/vendor</span></code> never run at once; starting one while the other
+is running is refused, and <code class="docutils literal notranslate"><span class="pre">/cancel</span></code> stops whichever is.</p>
+</section>
+<section id="driving-a-real-target">
+<h2>Driving a real target<a class="headerlink" href="#driving-a-real-target" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">/target</span></code> opens a live console + status pane for a device reached through
+mtda – the same connection <code class="docutils literal notranslate"><span class="pre">/test</span></code> (below) uses under the hood. No spec
+tree here, unlike every other screen: this one has nothing to do with a
+specification. <code class="docutils literal notranslate"><span class="pre">/target</span> <span class="pre">connect</span> <span class="pre">[AGENT]</span></code> reaches one (a bare <code class="docutils literal notranslate"><span class="pre">/target</span></code>
+just switches to the screen); <code class="docutils literal notranslate"><span class="pre">/target</span> <span class="pre">write</span> <span class="pre">IMAGE</span></code> flashes a built image
+onto its shared storage; <code class="docutils literal notranslate"><span class="pre">on</span></code>/<code class="docutils literal notranslate"><span class="pre">off</span></code>/<code class="docutils literal notranslate"><span class="pre">toggle</span></code>, <code class="docutils literal notranslate"><span class="pre">usb</span> <span class="pre">PORT</span> <span class="pre">on|off|toggle</span></code>,
+<code class="docutils literal notranslate"><span class="pre">snapshot</span></code>/<code class="docutils literal notranslate"><span class="pre">rollback</span></code> drive the rest. Two ways to type at the target: the
+same prompt every other screen has (a non-‘/’ line goes straight to the
+console instead of AI chat), or <code class="docutils literal notranslate"><span class="pre">Tab</span></code> onto the console pane itself for
+raw keystrokes – arrows, Ctrl combos, Esc – the only way to catch
+something like a PC’s own “press Esc for setup” window in time:</p>
+<p><img alt="Remote Target screen: console pane and live power/storage status, connected over mtda" src="_images/tui-target.svg" /></p>
+<p>Nothing here works without mtda installed (<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">doctor</span></code> reports it);
+see <a class="reference internal" href="testing.html"><span class="std std-doc">docs/testing.md</span></a> for how <code class="docutils literal notranslate"><span class="pre">/test</span></code> drives the same
+connection automatically.</p>
+</section>
+<section id="testing-on-a-real-target">
+<h2>Testing on a real target<a class="headerlink" href="#testing-on-a-real-target" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">/test</span> <span class="pre">[--tags=TAG,...]</span></code> runs the active specification’s own <code class="docutils literal notranslate"><span class="pre">test:</span></code>
+section (see <a class="reference internal" href="testing.html"><span class="std std-doc">docs/testing.md</span></a>) – Robot Framework driven
+through the same seine/mtda keywords <code class="docutils literal notranslate"><span class="pre">/target</span></code> exposes by hand:
+power-cycling, logging in, running a console command, polling for a
+prompt. The cockpit mirrors <code class="docutils literal notranslate"><span class="pre">/build</span></code>’s own: a per-test task list beside a
+growing output tail, the spec tree auto-expanding to highlight exactly
+which test is running right now:</p>
+<p><img alt="Test screen: the spec tree tracking a running Robot Framework test, matching the output tail" src="_images/tui-test.gif" /></p>
+<p>A failed test’s own message surfaces right under its row, not only in
+the final summary – the same reason a failure needs to be visible
+without scrolling back. <code class="docutils literal notranslate"><span class="pre">/cancel</span></code> doesn’t reach a running test yet.</p>
+</section>
+<section id="browsing-a-built-image">
+<h2>Browsing a built image<a class="headerlink" href="#browsing-a-built-image" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">/filesystem</span></code> opens a read-only browser of the <em>last built</em> image for the
+active specification (not the specification itself – it needs an image
+that has actually been built). <code class="docutils literal notranslate"><span class="pre">/cd</span> <span class="pre">PATH</span></code> changes directory from the
+prompt, same as a shell; the listing is also a real focusable list once
+<code class="docutils literal notranslate"><span class="pre">Tab</span></code> reaches it – <code class="docutils literal notranslate"><span class="pre">↑</span></code>/<code class="docutils literal notranslate"><span class="pre">↓</span></code> move, <code class="docutils literal notranslate"><span class="pre">Enter</span></code> opens whatever is highlighted:</p>
+<p><img alt="Filesystem screen: browsing a built image's directory listing" src="_images/tui-filesystem.svg" /></p>
+<p>A directory descends into it. A file that looks like text is shown in
+place, line numbers dimmed in the gutter, <code class="docutils literal notranslate"><span class="pre">Esc</span></code> returning to the listing
+it came from. A binary or oversized file, or any other read error, says so
+on the status line without disturbing the listing already on screen:</p>
+<p><img alt="Filesystem screen: a text file shown with line numbers" src="_images/tui-preview.svg" /></p>
+</section>
+<section id="help">
+<h2>Help<a class="headerlink" href="#help" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">/help</span></code> opens as a modal overlay – a dimmed backdrop over whatever screen
+was open, not a screen navigated to, so <code class="docutils literal notranslate"><span class="pre">Esc</span></code> leaves it exactly where it
+was underneath. <code class="docutils literal notranslate"><span class="pre">←</span></code>/<code class="docutils literal notranslate"><span class="pre">→</span></code> switch between two tabs:</p>
+<p><img alt="Help screen: General tab, with a one-line summary and every shortcut" src="_images/tui-help.svg" /></p>
+<ul class="simple">
+<li><p><strong>General</strong> – what seine is, and the shortcuts above.</p></li>
+<li><p><strong>Commands</strong> – a focusable list of every command; <code class="docutils literal notranslate"><span class="pre">Enter</span></code> on one opens
+its own page, laid out the way a real <code class="docutils literal notranslate"><span class="pre">man</span></code> page is (<code class="docutils literal notranslate"><span class="pre">NAME</span></code>,
+<code class="docutils literal notranslate"><span class="pre">SYNOPSIS</span></code>, <code class="docutils literal notranslate"><span class="pre">DESCRIPTION</span></code>, and an <code class="docutils literal notranslate"><span class="pre">OPTIONS</span></code> section for a command with
+real flags, e.g. <code class="docutils literal notranslate"><span class="pre">/build</span></code>’s own <code class="docutils literal notranslate"><span class="pre">--jobs=N</span></code>). <code class="docutils literal notranslate"><span class="pre">Enter</span></code> again fills the
+prompt with that command, ready to type on; <code class="docutils literal notranslate"><span class="pre">Esc</span></code> goes back to the
+list rather than closing Help outright.</p></li>
+</ul>
+</section>
+<section id="external-control">
+<h2>External control<a class="headerlink" href="#external-control" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">tui</span> <span class="pre">--interaction-socket</span> <span class="pre">PATH</span> <span class="pre">[SPEC...]</span></code> opens a UNIX domain socket
+alongside the normal terminal UI – for driving and observing the TUI from
+another process (a test driver, a scripted demo) instead of screen-scraping
+a pty. Newline-delimited JSON, one object per line, in both directions.</p>
+<p>Sent to the socket:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;input&quot;,</span> <span class="pre">&quot;text&quot;:</span> <span class="pre">&quot;...&quot;}</span></code> – types <code class="docutils literal notranslate"><span class="pre">text</span></code> into the real prompt,
+character by character, then submits it (same as a person typing and
+hitting Enter).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;ai_input&quot;,</span> <span class="pre">&quot;prompt&quot;:</span> <span class="pre">&quot;...&quot;}</span></code> – forwards <code class="docutils literal notranslate"><span class="pre">prompt</span></code> straight to
+the AI chat, without going through the prompt widget at all.</p></li>
+</ul>
+<p>Received from the socket, as things happen – a driver watches for these
+instead of polling rendered text:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;ai_message&quot;,</span> <span class="pre">&quot;content&quot;:</span> <span class="pre">&quot;...&quot;}</span></code> – a finished assistant reply.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;ai_turn_finished&quot;}</span></code> – the AI chat’s own turn is fully done
+(every message and gated tool call in it), the real end of “Working…”.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;confirm_shown&quot;,</span> <span class="pre">&quot;tool&quot;,</span> <span class="pre">&quot;description&quot;,</span> <span class="pre">&quot;arguments&quot;,</span> <span class="pre">&quot;preview&quot;}</span></code>
+– a gated tool’s approval dialog opened (<code class="docutils literal notranslate"><span class="pre">preview</span></code> is the diff text for
+<code class="docutils literal notranslate"><span class="pre">spec-update</span></code>/<code class="docutils literal notranslate"><span class="pre">spec-create</span></code>, <code class="docutils literal notranslate"><span class="pre">null</span></code> otherwise).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;confirm_resolved&quot;,</span> <span class="pre">&quot;tool&quot;,</span> <span class="pre">&quot;approved&quot;}</span></code> – that dialog closed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;spec_written&quot;,</span> <span class="pre">&quot;path&quot;}</span></code> – <code class="docutils literal notranslate"><span class="pre">spec-update</span></code>/<code class="docutils literal notranslate"><span class="pre">spec-create</span></code>
+actually wrote <code class="docutils literal notranslate"><span class="pre">path</span></code> to disk.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;build_finished&quot;,</span> <span class="pre">&quot;error&quot;,</span> <span class="pre">&quot;message&quot;}</span></code> / <code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;vendor_finished&quot;,</span> <span class="pre">&quot;error&quot;,</span> <span class="pre">&quot;message&quot;}</span></code> / <code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;test_finished&quot;,</span> <span class="pre">&quot;error&quot;,</span> <span class="pre">&quot;message&quot;}</span></code> – <code class="docutils literal notranslate"><span class="pre">/build</span></code> / <code class="docutils literal notranslate"><span class="pre">/vendor</span></code> / <code class="docutils literal notranslate"><span class="pre">/test</span></code> finished.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;screen_changed&quot;,</span> <span class="pre">&quot;screen&quot;}</span></code> – <code class="docutils literal notranslate"><span class="pre">/command</span></code> switched screens.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;target_connected&quot;,</span> <span class="pre">&quot;agent&quot;}</span></code> / <code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;target_storage_on_host&quot;}</span></code> / <code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;target_storage_write_completed&quot;,</span> <span class="pre">&quot;path&quot;}</span></code> – <code class="docutils literal notranslate"><span class="pre">/target</span></code> actions completing.</p></li>
+</ul>
+</section>
+<section id="other-screenshots">
+<h2>Other screenshots<a class="headerlink" href="#other-screenshots" title="Link to this heading">#</a></h2>
+<table>
+<tr><td><img src="images/tui-overview.svg" alt="Overview screen"></td>
+<td><img src="images/tui-doctor.svg" alt="Doctor screen"></td></tr>
+<tr><td><img src="images/tui-plan.svg" alt="Plan screen"></td>
+<td></td></tr>
+</table>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="testing.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Testing</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="ai.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">The AI chat</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-prompt">The prompt</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#focus-and-keyboard-navigation">Focus and keyboard navigation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#screens">Screens</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#composing-with-side-load">Composing with <code class="docutils literal notranslate"><span class="pre">/side-load</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#talking-to-a-model">Talking to a model</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building">Building</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vendoring">Vendoring</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#driving-a-real-target">Driving a real target</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#testing-on-a-real-target">Testing on a real target</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#browsing-a-built-image">Browsing a built image</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#help">Help</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#external-control">External control</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#other-screenshots">Other screenshots</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Cedric Hombourger
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Cedric Hombourger.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

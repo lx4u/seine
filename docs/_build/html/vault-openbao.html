@@ -1,0 +1,723 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Running a vault for seine &#8212; seine documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=4418a689" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="_static/documentation_options.js?v=4d2f5802"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'vault-openbao';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Releasing seine as .deb packages" href="release-as-debs.html" />
+    <link rel="prev" title="The AI chat" href="ai.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">seine documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="specification.html">Specification files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="merging.html">Merging specification fragments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernels.html">Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="environment.html">Environment variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tui.html">TUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ai.html">The AI chat</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Running a vault for seine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="release-as-debs.html">Releasing seine as .deb packages</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="caching.html">Caching</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine/issues/new?title=Issue%20on%20page%20%2Fvault-openbao.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/vault-openbao.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Running a vault for seine</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#get-the-vault-image">1. Get the vault image</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#configure-and-start-the-server">2. Configure and start the server</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#initialize-and-unseal">3. Initialize and unseal</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#enable-the-secrets-engines-seine-expects">4. Enable the secrets engines seine expects</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#create-the-secrets-and-keys-your-specs-need">5. Create the secrets and keys your specs need</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#worked-example-examples-pc-uki-image">Worked example: <code class="docutils literal notranslate"><span class="pre">examples/pc-uki-image</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#point-a-build-at-it">6. Point a build at it</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#where-to-go-from-here">Where to go from here</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="running-a-vault-for-seine">
+<h1>Running a vault for seine<a class="headerlink" href="#running-a-vault-for-seine" title="Link to this heading">#</a></h1>
+<p>seine can sign build output (root/account passwords, kernel modules, Secure
+Boot UKIs, apt repositories) through a vault instead of a key on the build
+machine, via <code class="docutils literal notranslate"><span class="pre">vault:&lt;name&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">vault('&lt;path&gt;#&lt;field&gt;')</span></code> in a spec. This
+page shows how to stand up that vault: <a class="reference external" href="https://openbao.org/">OpenBao</a> plus
+seine’s own signing plugins (<code class="docutils literal notranslate"><span class="pre">seine-pgp</span></code>, <code class="docutils literal notranslate"><span class="pre">seine-sbsign</span></code>, <code class="docutils literal notranslate"><span class="pre">seine-kmod</span></code>),
+running as a container on a server of your choice.</p>
+<p><strong>Security disclaimer.</strong> This page gets a vault running and reachable –
+nothing more. It makes no claim about how secure that instance is. Network
+exposure, authentication beyond a root token, TLS certificates, storage
+encryption, backups, and key rotation are for you to review and harden
+before trusting this with anything real. Treat what follows as a starting
+point for an admin who already knows how to run OpenBao/Vault in
+production, not as a hardening guide.</p>
+<section id="get-the-vault-image">
+<h2>1. Get the vault image<a class="headerlink" href="#get-the-vault-image" title="Link to this heading">#</a></h2>
+<p>Either install the prebuilt package:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="n">seine</span><span class="o">-</span><span class="n">vault</span><span class="o">-</span><span class="n">openbao</span>
+<span class="n">podman</span> <span class="n">load</span> <span class="o">-</span><span class="n">i</span> <span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">share</span><span class="o">/</span><span class="n">seine</span><span class="o">/</span><span class="n">oci</span><span class="o">/</span><span class="n">vault</span><span class="o">/</span><span class="n">images</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">gz</span>
+</pre></div>
+</div>
+<p>or build it yourself from a seine checkout (needs network access, to pull
+the golang and openbao base images):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">HOSTARCH</span><span class="o">=&lt;</span><span class="n">amd64</span><span class="o">|</span><span class="n">arm64</span><span class="o">&gt;</span> <span class="o">./</span><span class="n">debian</span><span class="o">/</span><span class="n">build</span><span class="o">-</span><span class="n">vault</span><span class="o">-</span><span class="n">image</span><span class="o">.</span><span class="n">py</span> <span class="o">/</span><span class="n">tmp</span><span class="o">/</span><span class="n">out</span>
+<span class="n">podman</span> <span class="n">load</span> <span class="o">-</span><span class="n">i</span> <span class="o">/</span><span class="n">tmp</span><span class="o">/</span><span class="n">out</span><span class="o">/</span><span class="n">vault</span><span class="o">/</span><span class="n">images</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">gz</span>
+</pre></div>
+</div>
+<p>Either way this gives you <code class="docutils literal notranslate"><span class="pre">localhost/seine-vault:latest</span></code>: upstream OpenBao
+plus the three signing plugins, under <code class="docutils literal notranslate"><span class="pre">/vault/plugins</span></code>.</p>
+</section>
+<section id="configure-and-start-the-server">
+<h2>2. Configure and start the server<a class="headerlink" href="#configure-and-start-the-server" title="Link to this heading">#</a></h2>
+<p>Pick a TLS certificate for the listener – one from your own CA, or a
+self-signed one for a first try:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">openssl</span> <span class="n">req</span> <span class="o">-</span><span class="n">x509</span> <span class="o">-</span><span class="n">newkey</span> <span class="n">rsa</span><span class="p">:</span><span class="mi">4096</span> <span class="o">-</span><span class="n">sha256</span> <span class="o">-</span><span class="n">days</span> <span class="mi">3650</span> <span class="o">-</span><span class="n">noenc</span> \
+    <span class="o">-</span><span class="n">keyout</span> <span class="n">vault</span><span class="o">.</span><span class="n">key</span> <span class="o">-</span><span class="n">out</span> <span class="n">vault</span><span class="o">.</span><span class="n">crt</span> \
+    <span class="o">-</span><span class="n">subj</span> <span class="s2">&quot;/CN=&lt;your-host&gt;&quot;</span> \
+    <span class="o">-</span><span class="n">addext</span> <span class="s2">&quot;subjectAltName=IP:&lt;your-host-ip&gt;,DNS:&lt;your-host-name&gt;&quot;</span>
+</pre></div>
+</div>
+<p>Write a config file:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">storage</span> <span class="s2">&quot;file&quot;</span> <span class="p">{</span>
+  <span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;/vault/data&quot;</span>
+<span class="p">}</span>
+<span class="n">listener</span> <span class="s2">&quot;tcp&quot;</span> <span class="p">{</span>
+  <span class="n">address</span>              <span class="o">=</span> <span class="s2">&quot;0.0.0.0:8200&quot;</span>
+  <span class="n">tls_cert_file</span>        <span class="o">=</span> <span class="s2">&quot;/vault/tls/vault.crt&quot;</span>
+  <span class="n">tls_key_file</span>         <span class="o">=</span> <span class="s2">&quot;/vault/tls/vault.key&quot;</span>
+  <span class="n">max_request_size</span>     <span class="o">=</span> <span class="mi">268435456</span>
+  <span class="n">max_request_json_memory</span> <span class="o">=</span> <span class="mi">268435456</span>
+<span class="p">}</span>
+<span class="n">plugin_directory</span> <span class="o">=</span> <span class="s2">&quot;/vault/plugins&quot;</span>
+<span class="n">disable_mlock</span> <span class="o">=</span> <span class="n">true</span>
+<span class="n">api_addr</span> <span class="o">=</span> <span class="s2">&quot;https://&lt;your-host&gt;:8200&quot;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">max_request_size</span></code>/<code class="docutils literal notranslate"><span class="pre">max_request_json_memory</span></code> are raised well past OpenBao’s
+32MiB default: a signed UKI can be tens of MB, and the whole request body
+(base64) must fit under this limit or the connection is dropped mid-upload.</p>
+<p>Then start the container, with the config, TLS files and a data directory
+bind-mounted in (<code class="docutils literal notranslate"><span class="pre">:U</span></code> chowns the data directory to the container’s own
+user, needed for rootless podman):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">podman</span> <span class="n">run</span> <span class="o">-</span><span class="n">d</span> <span class="o">--</span><span class="n">name</span> <span class="n">seine</span><span class="o">-</span><span class="n">vault</span> \
+  <span class="o">-</span><span class="n">p</span> <span class="mi">8200</span><span class="p">:</span><span class="mi">8200</span> \
+  <span class="o">-</span><span class="n">v</span> <span class="o">./</span><span class="n">config</span><span class="p">:</span><span class="o">/</span><span class="n">vault</span><span class="o">/</span><span class="n">config</span><span class="p">:</span><span class="n">ro</span> \
+  <span class="o">-</span><span class="n">v</span> <span class="o">./</span><span class="n">tls</span><span class="p">:</span><span class="o">/</span><span class="n">vault</span><span class="o">/</span><span class="n">tls</span><span class="p">:</span><span class="n">ro</span> \
+  <span class="o">-</span><span class="n">v</span> <span class="o">./</span><span class="n">data</span><span class="p">:</span><span class="o">/</span><span class="n">vault</span><span class="o">/</span><span class="n">data</span><span class="p">:</span><span class="n">U</span> \
+  <span class="n">localhost</span><span class="o">/</span><span class="n">seine</span><span class="o">-</span><span class="n">vault</span> \
+  <span class="n">server</span> <span class="o">-</span><span class="n">config</span><span class="o">=/</span><span class="n">vault</span><span class="o">/</span><span class="n">config</span><span class="o">/</span><span class="n">config</span><span class="o">.</span><span class="n">hcl</span>
+</pre></div>
+</div>
+</section>
+<section id="initialize-and-unseal">
+<h2>3. Initialize and unseal<a class="headerlink" href="#initialize-and-unseal" title="Link to this heading">#</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">podman</span> <span class="n">exec</span> <span class="o">-</span><span class="n">e</span> <span class="n">BAO_ADDR</span><span class="o">=</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="mf">127.0.0.1</span><span class="p">:</span><span class="mi">8200</span> <span class="o">-</span><span class="n">e</span> <span class="n">BAO_SKIP_VERIFY</span><span class="o">=</span><span class="mi">1</span> <span class="n">seine</span><span class="o">-</span><span class="n">vault</span> \
+  <span class="n">bao</span> <span class="n">operator</span> <span class="n">init</span> <span class="o">-</span><span class="n">key</span><span class="o">-</span><span class="n">shares</span><span class="o">=</span><span class="mi">5</span> <span class="o">-</span><span class="n">key</span><span class="o">-</span><span class="n">threshold</span><span class="o">=</span><span class="mi">3</span>
+</pre></div>
+</div>
+<p>This prints 5 unseal keys and a root token, once – store them somewhere
+safe, off this host. The vault starts sealed after every restart; unseal it
+again with any 3 of the 5 keys:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">podman</span> <span class="n">exec</span> <span class="o">-</span><span class="n">e</span> <span class="n">BAO_ADDR</span><span class="o">=</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="mf">127.0.0.1</span><span class="p">:</span><span class="mi">8200</span> <span class="o">-</span><span class="n">e</span> <span class="n">BAO_SKIP_VERIFY</span><span class="o">=</span><span class="mi">1</span> <span class="n">seine</span><span class="o">-</span><span class="n">vault</span> \
+  <span class="n">bao</span> <span class="n">operator</span> <span class="n">unseal</span> <span class="o">&lt;</span><span class="n">key</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>(repeat with two more distinct keys)</p>
+</section>
+<section id="enable-the-secrets-engines-seine-expects">
+<h2>4. Enable the secrets engines seine expects<a class="headerlink" href="#enable-the-secrets-engines-seine-expects" title="Link to this heading">#</a></h2>
+<p>The commands below run <code class="docutils literal notranslate"><span class="pre">bao</span></code> directly rather than through <code class="docutils literal notranslate"><span class="pre">podman</span> <span class="pre">exec</span></code>.
+Get it onto the admin machine without a separate apt repo by copying it out
+of the image you already have:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>cid=$(podman create localhost/seine-vault)
+podman cp &quot;$cid&quot;:/usr/bin/bao /usr/local/bin/bao
+podman rm &quot;$cid&quot;
+</pre></div>
+</div>
+<p>A <code class="docutils literal notranslate"><span class="pre">kv:</span></code> version-2 mount, for <code class="docutils literal notranslate"><span class="pre">vault('&lt;path&gt;#&lt;field&gt;')</span></code> reads:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">bao</span> <span class="n">secrets</span> <span class="n">enable</span> <span class="o">-</span><span class="n">path</span><span class="o">=</span><span class="n">kv</span> <span class="o">-</span><span class="n">version</span><span class="o">=</span><span class="mi">2</span> <span class="n">kv</span>
+</pre></div>
+</div>
+<p>Each signing plugin needs registering in the catalog (its <code class="docutils literal notranslate"><span class="pre">.so</span></code>’s digest,
+from inside the image) before it can be mounted:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>for p in seine-pgp seine-sbsign seine-kmod; do
+  digest=$(podman exec seine-vault sha256sum /vault/plugins/$p.so | cut -d&#39; &#39; -f1)
+  bao plugin register -sha256=$digest secret $p
+  bao secrets enable -path=$p $p
+done
+</pre></div>
+</div>
+<p>(<code class="docutils literal notranslate"><span class="pre">bao</span></code> here needs <code class="docutils literal notranslate"><span class="pre">BAO_ADDR</span></code>/<code class="docutils literal notranslate"><span class="pre">BAO_TOKEN</span></code> pointing at your vault – export
+them, or pass <code class="docutils literal notranslate"><span class="pre">-address</span></code>/<code class="docutils literal notranslate"><span class="pre">-token</span></code> on each command.)</p>
+</section>
+<section id="create-the-secrets-and-keys-your-specs-need">
+<h2>5. Create the secrets and keys your specs need<a class="headerlink" href="#create-the-secrets-and-keys-your-specs-need" title="Link to this heading">#</a></h2>
+<p>Which names to create depends on what your specs reference. Check each
+spec’s own <code class="docutils literal notranslate"><span class="pre">defaults:</span> <span class="pre">vault:</span></code> block (the dev-only fallback names) and any
+<code class="docutils literal notranslate"><span class="pre">vault:&lt;name&gt;</span></code> or <code class="docutils literal notranslate"><span class="pre">vault('...')</span></code> in it. Typically:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># a plain secret, e.g. an account password hash</span>
+<span class="n">bao</span> <span class="n">kv</span> <span class="n">put</span> <span class="n">kv</span><span class="o">/</span><span class="n">accounts</span><span class="o">/</span><span class="n">root</span> <span class="nb">hash</span><span class="o">=</span><span class="s1">&#39;&lt;crypt hash&gt;&#39;</span> <span class="n">password</span><span class="o">=</span><span class="s1">&#39;&lt;plaintext&gt;&#39;</span>
+
+<span class="c1"># a signing key -- generate fresh, or import an existing key/cert pair</span>
+<span class="n">bao</span> <span class="n">write</span> <span class="n">seine</span><span class="o">-</span><span class="n">sbsign</span><span class="o">/</span><span class="n">keys</span><span class="o">/&lt;</span><span class="n">name</span><span class="o">&gt;</span> <span class="n">generate</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">&#39;</span>
+<span class="n">bao</span> <span class="n">write</span> <span class="n">seine</span><span class="o">-</span><span class="n">kmod</span><span class="o">/</span><span class="n">keys</span><span class="o">/&lt;</span><span class="n">name</span><span class="o">&gt;</span> <span class="n">generate</span><span class="o">=</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">&#39;</span>
+<span class="n">bao</span> <span class="n">write</span> <span class="n">seine</span><span class="o">-</span><span class="n">pgp</span><span class="o">/</span><span class="n">keys</span><span class="o">/&lt;</span><span class="n">name</span><span class="o">&gt;</span> <span class="n">generate</span><span class="o">=</span><span class="s1">&#39;{&quot;name&quot;: &quot;...&quot;, &quot;email&quot;: &quot;...&quot;}&#39;</span>
+</pre></div>
+</div>
+<p>A key’s creation time matters: the plugins refuse to sign at a timestamp
+before the key existed, and seine signs at the build’s own epoch (the
+newest spec file’s mtime). Create keys before you build with them.</p>
+<section id="worked-example-examples-pc-uki-image">
+<h3>Worked example: <code class="docutils literal notranslate"><span class="pre">examples/pc-uki-image</span></code><a class="headerlink" href="#worked-example-examples-pc-uki-image" title="Link to this heading">#</a></h3>
+<p>The exact commands used to provision that spec’s four vault-backed
+secrets, <code class="docutils literal notranslate"><span class="pre">bao</span> <span class="pre">write</span> <span class="pre">PATH</span> <span class="pre">-</span></code> reading the JSON body from stdin:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># root/login password (examples/common/conf-accounts.yaml)</span>
+<span class="n">bao</span> <span class="n">kv</span> <span class="n">put</span> <span class="n">kv</span><span class="o">/</span><span class="n">accounts</span><span class="o">/</span><span class="n">root</span> <span class="nb">hash</span><span class="o">=</span><span class="s1">&#39;&lt;crypt sha512 hash&gt;&#39;</span> <span class="n">password</span><span class="o">=</span><span class="s1">&#39;&lt;plaintext&gt;&#39;</span>
+
+<span class="c1"># kernel module signing (kernel.yaml: signing-key: vault:pc-uki-kernel-modules)</span>
+<span class="n">echo</span> <span class="s1">&#39;{&quot;generate&quot;: </span><span class="si">{}</span><span class="s1">}&#39;</span> <span class="o">|</span> <span class="n">bao</span> <span class="n">write</span> <span class="n">seine</span><span class="o">-</span><span class="n">kmod</span><span class="o">/</span><span class="n">keys</span><span class="o">/</span><span class="n">pc</span><span class="o">-</span><span class="n">uki</span><span class="o">-</span><span class="n">kernel</span><span class="o">-</span><span class="n">modules</span> <span class="o">-</span>
+
+<span class="c1"># UKI secure-boot signing (main.yaml: secure-boot.private-key: vault:pc-uki-secureboot)</span>
+<span class="n">echo</span> <span class="s1">&#39;{&quot;generate&quot;: </span><span class="si">{}</span><span class="s1">}&#39;</span> <span class="o">|</span> <span class="n">bao</span> <span class="n">write</span> <span class="n">seine</span><span class="o">-</span><span class="n">sbsign</span><span class="o">/</span><span class="n">keys</span><span class="o">/</span><span class="n">pc</span><span class="o">-</span><span class="n">uki</span><span class="o">-</span><span class="n">secureboot</span> <span class="o">-</span>
+
+<span class="c1"># apt repository signing (SEINE_SIGN_KEY=vault:pc-uki-repo)</span>
+<span class="n">echo</span> <span class="s1">&#39;{&quot;generate&quot;: {&quot;name&quot;: &quot;seine pc-uki-image repo&quot;, &quot;email&quot;: &quot;seine-demo@example.invalid&quot;, &quot;key_type&quot;: &quot;rsa3072&quot;}}&#39;</span> \
+  <span class="o">|</span> <span class="n">bao</span> <span class="n">write</span> <span class="n">seine</span><span class="o">-</span><span class="n">pgp</span><span class="o">/</span><span class="n">keys</span><span class="o">/</span><span class="n">pc</span><span class="o">-</span><span class="n">uki</span><span class="o">-</span><span class="n">repo</span> <span class="o">-</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">generate</span></code> mints a fresh key/cert inside the vault; use <code class="docutils literal notranslate"><span class="pre">import</span></code> instead
+(same shape, <code class="docutils literal notranslate"><span class="pre">{&quot;import&quot;:</span> <span class="pre">{&quot;key_pem&quot;:</span> <span class="pre">...,</span> <span class="pre">&quot;cert_pem&quot;:</span> <span class="pre">...}}</span></code> or
+<code class="docutils literal notranslate"><span class="pre">{&quot;import&quot;:</span> <span class="pre">{&quot;private_key&quot;:</span> <span class="pre">...}}</span></code> for pgp) to bring in a key you already
+hold rather than trusting the vault to mint one.</p>
+</section>
+</section>
+<section id="point-a-build-at-it">
+<h2>6. Point a build at it<a class="headerlink" href="#point-a-build-at-it" title="Link to this heading">#</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">SEINE_VAULT_ADDR</span><span class="o">=</span><span class="n">https</span><span class="p">:</span><span class="o">//&lt;</span><span class="n">your</span><span class="o">-</span><span class="n">host</span><span class="o">&gt;</span><span class="p">:</span><span class="mi">8200</span>
+<span class="n">export</span> <span class="n">SEINE_VAULT_TOKEN</span><span class="o">=&lt;</span><span class="n">a</span> <span class="n">token</span><span class="p">,</span> <span class="n">root</span> <span class="ow">or</span> <span class="n">scoped</span> <span class="o">--</span> <span class="n">see</span> <span class="n">below</span><span class="o">&gt;</span>
+<span class="n">export</span> <span class="n">SEINE_VAULT_CERT</span><span class="o">=/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">vault</span><span class="o">.</span><span class="n">crt</span>   <span class="c1"># only for a private/self-signed cert</span>
+<span class="n">export</span> <span class="n">SEINE_SIGN_KEY</span><span class="o">=</span><span class="n">vault</span><span class="p">:</span><span class="o">&lt;</span><span class="n">pgp</span> <span class="n">key</span> <span class="n">name</span><span class="o">&gt;</span>   <span class="c1"># to sign the apt repository too</span>
+<span class="n">seine</span> <span class="n">build</span> <span class="n">your</span><span class="o">-</span><span class="n">spec</span><span class="o">.</span><span class="n">yaml</span>
+</pre></div>
+</div>
+<p>See <code class="docutils literal notranslate"><span class="pre">docs/environment.md</span></code> for the full list of <code class="docutils literal notranslate"><span class="pre">SEINE_VAULT_*</span></code> variables.</p>
+</section>
+<section id="where-to-go-from-here">
+<h2>Where to go from here<a class="headerlink" href="#where-to-go-from-here" title="Link to this heading">#</a></h2>
+<p>None of the above is a finished production setup:</p>
+<ul class="simple">
+<li><p>The root token used above can do anything to this vault. Create a
+narrower policy and token (or another auth method) for day-to-day builds.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">disable_mlock</span></code> and a self-signed certificate are conveniences, not
+hardening. Review both for your environment.</p></li>
+<li><p>The file storage backend keeps everything on this one host’s disk –
+back it up, and consider a different backend if that single point of
+failure matters to you.</p></li>
+<li><p>Firewalling: only the build machines that need it should be able to
+reach port 8200.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="ai.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">The AI chat</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="release-as-debs.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Releasing seine as .deb packages</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#get-the-vault-image">1. Get the vault image</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#configure-and-start-the-server">2. Configure and start the server</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#initialize-and-unseal">3. Initialize and unseal</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#enable-the-secrets-engines-seine-expects">4. Enable the secrets engines seine expects</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#create-the-secrets-and-keys-your-specs-need">5. Create the secrets and keys your specs need</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#worked-example-examples-pc-uki-image">Worked example: <code class="docutils literal notranslate"><span class="pre">examples/pc-uki-image</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#point-a-build-at-it">6. Point a build at it</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#where-to-go-from-here">Where to go from here</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Cedric Hombourger
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Cedric Hombourger.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
