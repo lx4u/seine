@@ -368,7 +368,7 @@ def _verify_fingerprint(value, data, expected):
 # stamp/digest, which must stay offline and deterministic. Offline feeds
 # trust the vendor's own key instead (_offline_feed()), so this is a
 # no-op for them.
-def feed_keyrings_script(entries, offline=False):
+def feed_keyrings_script(entries, offline=False, prefix=""):
     if offline:
         return ""
     commands = []
@@ -382,8 +382,9 @@ def feed_keyrings_script(entries, offline=False):
             _verify_fingerprint(signed_by, data, fingerprint)
         encoded = base64.b64encode(data).decode()
         commands.append(
-            "mkdir -p %s && printf '%%s' %s | base64 -d > %s/%s.gpg"
-            % (FEED_KEYRINGS, shlex.quote(encoded), FEED_KEYRINGS, feed["suite"]))
+            "mkdir -p %s%s && printf '%%s' %s | base64 -d > %s%s/%s.gpg"
+            % (prefix, FEED_KEYRINGS, shlex.quote(encoded),
+               prefix, FEED_KEYRINGS, feed["suite"]))
     return " && ".join(commands)
 
 # Shell fragment a Dockerfile RUN chains before 'apt-get update': writes

@@ -216,6 +216,14 @@ class SbuildChroot:
                 "> \"$1\"/etc/apt/apt.conf.d/99seine-netrc" % SBUILD_NETRC_MOUNT]
             netrc_aptopt = ["--aptopt=Dir::Etc::netrc \"%s\"" % NETRC_MOUNT]
 
+        # A feed's keyring is installed on the outer image below (for
+        # mmdebstrap's own fetch) but never copied into the chroot itself
+        # -- sbuild's later apt-get update inside it needs its own copy.
+        target_keyring_install = feed_keyrings_script(
+            release_feeds(self.distro), offline=offline, prefix='"$1"')
+        keyring_hook = (["--customize-hook=%s" % target_keyring_install]
+                       if target_keyring_install else [])
+
         # --mode=root: already root in the container, no need for
         # mmdebstrap to unshare its own namespace. sync-in/sync-out seed
         # apt's archives from the shared download cache and put new
@@ -233,7 +241,7 @@ class SbuildChroot:
             # holds unfinished downloads anyway.
             "--customize-hook=rm -rf \"$1\"/var/cache/apt/archives/partial",
             "--customize-hook=sync-out /var/cache/apt/archives /var/cache/mmdebstrap",
-        ] + netrc_hook + netrc_aptopt + [
+        ] + netrc_hook + netrc_aptopt + keyring_hook + [
             self.distro["release"],
             "/root/.cache/sbuild/%s" % self.filename,
         ] + apt_sources(self.distro, entries=release_feeds(self.distro), offline=offline)
