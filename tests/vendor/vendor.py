@@ -1995,6 +1995,85 @@ class RefreshAlwaysWritesTheLockFile(_CleansUpPaths, avocado.Test):
         self.assertEqual(cached_entry["direct"], True)
         self.assertEqual(cached_entry["build_dep_bins"], ["libssl-dev"])
 
+class AnInterruptedRefreshCanBeResumed(_CleansUpPaths, avocado.Test):
+    def setUp(self):
+        self.suite = "resume-test-%d" % os.getpid()
+        self.track(vendor.repository(self.suite))
+        self.lock_path = os.path.join(tempfile.mkdtemp(prefix="seine-tests-lock-"),
+                                      "spec.lock.yaml")
+        self.track(os.path.dirname(self.lock_path))
+        self.resolved = []
+
+    def distro(self):
+        return {"source": "debian", "release": "bookworm", "architecture": "amd64",
+                "uri": "http://example.com/debian",
+                "feeds": [{"suite": self.suite, "release": "bookworm"}]}
+
+    def run_cmd(self, refresh, restart=False, index=lambda *a, **k: []):
+        from seine.vendor import VendorCmd
+        fresh = {"openssl": {"version": "3.0.11-1", "direct": True,
+                             "binaries": {}, "files": []}}
+        def fake_resolve_tasks(distro, entries, suites_wanted, options,
+                               hostBootstrap, exclude, results, extra_archs=()):
+            self.resolved.append(list(suites_wanted))
+            for suite in suites_wanted:
+                results[suite] = (fresh, {"edges": [], "reverse": {},
+                                          "pruned": {"base_chroot": [], "excluded": []}})
+            return []
+        class FakeHostBootstrap:
+            def __init__(self, distro, options, force_online=False):
+                pass
+            def task(self):
+                return None
+        cmd = VendorCmd()
+        cmd.options["jobs"] = 1
+        cmd.options["restart"] = restart
+        cmd._run_wave = lambda wave_tasks, retryable, display=None: None
+        with patch("seine.vendor.HostBootstrap", FakeHostBootstrap), \
+             patch("seine.vendor.resolve_tasks", fake_resolve_tasks), \
+             patch("seine.vendor.fetch_tasks", lambda *a, **k: []), \
+             patch("seine.vendor.index_tasks", index), \
+             patch("sys.stdout", new=io.StringIO()):
+            return cmd._run(self.distro(), [], [], [self.suite], refresh,
+                            vendor_lock={}, lock_path=self.lock_path)
+
+    def interrupt(self):
+        def boom(*a, **k):
+            raise KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_cmd(True, index=boom)
+
+    def test_an_interrupted_refresh_leaves_the_manifest_marked(self):
+        self.interrupt()
+        self.assertTrue(vendor.load_manifest(self.suite)["refreshing"])
+        self.assertFalse(os.path.exists(self.lock_path))
+
+    def test_a_plain_run_refuses_until_the_refresh_finishes(self):
+        self.interrupt()
+        with self.assertRaisesRegex(ValueError, "did not finish"):
+            self.run_cmd(False)
+
+    def test_refresh_resumes_without_resolving_again(self):
+        self.interrupt()
+        self.resolved.clear()
+        self.assertEqual(self.run_cmd(True), 0)
+        self.assertEqual(self.resolved, [])
+        self.assertTrue(os.path.isfile(self.lock_path))
+        self.assertNotIn("refreshing", vendor.load_manifest(self.suite))
+        self.assertEqual(self.run_cmd(False), 0)
+
+    def test_restart_needs_refresh(self):
+        from seine.vendor import VendorCmd
+        with patch("sys.stderr", new=io.StringIO()), self.assertRaises(SystemExit) as e:
+            VendorCmd().main(["--restart", "spec.yaml"])
+        self.assertEqual(e.exception.code, 1)
+
+    def test_restart_resolves_again(self):
+        self.interrupt()
+        self.resolved.clear()
+        self.run_cmd(True, restart=True)
+        self.assertEqual(self.resolved, [[self.suite]])
+
 class CheckReportsDriftWithoutWritingAnything(avocado.Test):
     def distro(self):
         return {"source": "debian", "release": "bookworm", "architecture": "amd64",
