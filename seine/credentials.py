@@ -51,14 +51,19 @@ it would just return the same wrong value -- up to ``MAX_ATTEMPTS`` total
 prompts.
 """
 
+import base64
 import json
 import os
+import ssl
 import stat
 import sys
+import urllib.error
+import urllib.request
+from urllib.parse import urlsplit
 
 __all__ = [
     "CredentialError", "CredentialNotFound",
-    "resolve", "CredentialSource",
+    "resolve", "CredentialSource", "probe",
 ]
 
 _KNOWN_BACKENDS    = frozenset(["env", "keyring", "settings", "vault"])
@@ -408,3 +413,90 @@ class CredentialSource:
     def _retry_context(self):
         tail = "wrong credentials, attempt %d of %d" % (self._attempts, self.MAX_ATTEMPTS)
         return "%s -- %s" % (self._context, tail) if self._context else tail
+
+
+# ---------------------------------------------------------------------------
+# Public: probe()
+# ---------------------------------------------------------------------------
+
+# apt has no machine-readable signal for a bad credential, so seine
+# checks it itself against the feed's Release file first.
+class _NoCrossHostAuthRedirect(urllib.request.HTTPRedirectHandler):
+    """Drops 'Authorization' on a redirect to a different host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new_req = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new_req is not None:
+            if urlsplit(newurl).hostname != urlsplit(req.full_url).hostname:
+                new_req.headers.pop("Authorization", None)
+        return new_req
+
+
+def _basic_auth_header(login, password):
+    token = base64.b64encode(("%s:%s" % (login, password)).encode()).decode()
+    return "Basic %s" % token
+
+
+def _status(url, login, password, proxies, cafile, timeout):
+    """GET *url* with preemptive Basic auth; return the HTTP status.
+
+    :raises CredentialError: the request never got a response at all
+        (DNS, TLS, connection refused, timeout).
+    """
+    req = urllib.request.Request(url, method="GET")
+    req.add_header("Authorization", _basic_auth_header(login, password))
+    handlers = [_NoCrossHostAuthRedirect()]
+    if proxies is not None:
+        handlers.append(urllib.request.ProxyHandler(proxies))
+    if cafile is not None:
+        handlers.append(urllib.request.HTTPSHandler(
+            context=ssl.create_default_context(cafile=cafile)))
+    opener = urllib.request.build_opener(*handlers)
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            return resp.status
+    except urllib.error.HTTPError as e:
+        return e.code
+    except urllib.error.URLError as e:
+        raise CredentialError("could not reach %r: %s" % (url, e.reason)) from e
+
+
+def probe(url, suite, login, password, proxies=None, cafile=None, timeout=15):
+    """Check *login*/*password* against the feed's own server.
+
+    Tries ``<url>/dists/<suite>/InRelease``, then ``.../Release`` for a
+    suite-shaped feed, falling back to ``<url>/InRelease`` and
+    ``<url>/Release`` for a flat repository -- only on a 404, since that
+    is the only status that means "wrong path form", not "wrong
+    credential" or "server trouble".
+
+    :param proxies: ``{'http': ..., 'https': ...}``, matching whatever
+        ``Acquire::http[s]::Proxy`` apt itself would use; ``None`` falls
+        back to the ``http_proxy``/``https_proxy``/``no_proxy``
+        environment, the same as apt.
+    :param cafile: a custom CA bundle, if the feed needs one.
+    :returns: ``True`` on a 200 (the credential is good), ``False`` on a
+        401/403 (wrong credential -- re-prompt).
+    :raises CredentialError: anything else (DNS, TLS, 5xx, or a 404 at
+        every path form) -- a real fault, surfaced as-is, never retried.
+    """
+    base = url.rstrip("/")
+    candidates = [
+        "%s/dists/%s/InRelease" % (base, suite),
+        "%s/dists/%s/Release" % (base, suite),
+        "%s/InRelease" % base,
+        "%s/Release" % base,
+    ]
+    for i, candidate in enumerate(candidates):
+        status = _status(candidate, login, password, proxies, cafile, timeout)
+        if status == 200:
+            return True
+        if status in (401, 403):
+            return False
+        if status == 404:
+            if i == len(candidates) - 1:
+                raise CredentialError(
+                    "%s: no Release file found at dists/%s/ or the "
+                    "repository root (404)" % (base, suite))
+            continue
+        raise CredentialError("%s: unexpected HTTP %d" % (candidate, status))
