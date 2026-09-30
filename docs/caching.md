@@ -297,3 +297,17 @@ any archive to network storage:
 * **Specification redaction scan**: Any path or configuration file matching
   `redact:` patterns or registered Vault secrets is scanned; any match aborts
   the upload with a `CleanChrootViolation`.
+
+### Storage providers and sidecars
+
+The `seine.storage` module provides the storage provider abstraction:
+* `LocalStorageProvider`: standard local filesystem cache used for standalone builds.
+* `S3StorageProvider`: network caching backed by S3 or Garage.
+
+When an object is pushed to S3:
+1. Payloads are compressed using `zstd` (level 3) to `.tar.zst`.
+2. Content SHA-256 is attached as metadata (`x-amz-meta-sha256`).
+3. An accompanying `<key>.recipe` sidecar is uploaded containing the labeled
+   input derivation components, allowing cross-machine cache hit/miss explanation.
+4. A `<key>.touch` heartbeat sidecar is updated with the current timestamp to
+   enable LRU space eviction.
