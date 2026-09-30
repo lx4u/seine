@@ -542,6 +542,104 @@ def read_recipe_file(recipe_file):
     except OSError:
         return None
 
+
+RECIPE_LABELS = {
+    "kernel_configs": "kernel configuration (kconfig)",
+    "kernel_fragments": "kernel fragments",
+    "kernel_flavour": "kernel flavour",
+    "kernel_featureset": "kernel featureset",
+    "kernel_derived_flavours": "derived kernel flavours",
+    "kernel_upstream": "kernel upstream source",
+    "kernel_upstream_sha256": "kernel upstream sha256 checksum",
+    "kernel_keep_patches": "kernel keep-patches",
+    "kernel_drop_patches": "kernel drop-patches",
+    "kernel_build_files": "kernel build files",
+    "kernel_abi_suffix": "kernel ABI suffix",
+    "kernel_signing_key": "kernel signing key",
+    "kernel_graft_rules": "kernel graft rules",
+    "kernel_graft_version": "kernel graft version",
+    "cross_kernel_release": "cross kernel release",
+    "cross_kernel_headers": "cross kernel headers",
+    "cross_packaging": "cross packaging",
+    "source": "source location or URL",
+    "revision": "debian revision",
+    "profiles": "build profiles",
+    "options": "build options",
+    "preferences": "apt preferences / pinning",
+    "distro_release": "distribution release",
+    "distro_source": "distribution source",
+    "distro_architecture": "distribution architecture",
+    "architecture": "target architecture",
+    "apt_sources": "apt sources",
+    "signer": "package signing key",
+    "cross": "cross-compilation setting",
+    "chroot_architecture": "build chroot architecture",
+    "sha256": "source sha256 checksum",
+    "source_date_epoch": "source date epoch",
+    "indep_architecture": "architecture-independent build role",
+    "upstream_version": "upstream version",
+    "bootstrap_packages": "bootstrap packages",
+    "packages": "package list",
+    "spec": "specification content",
+    "vendor": "vendor repository digest",
+    "base_image": "base image",
+    "disk_partitions": "disk partitions",
+    "disk_size": "disk size",
+}
+
+
+def format_recipe_label(label):
+    if label.startswith("file:"):
+        return f"file '{label[5:]}'"
+    if label.startswith("depends:"):
+        return f"dependency '{label[8:]}'"
+    if label.startswith("subbuild:"):
+        return f"subbuild '{label[9:]}'"
+    return RECIPE_LABELS.get(label, label)
+
+
+def format_recipe_diff(label, change):
+    if label.startswith("file:"):
+        path = label[5:]
+        if change == "changed":
+            return f"file '{path}' changed"
+        if change == "new":
+            return f"new file '{path}'"
+        return f"file '{path}' no longer applies"
+
+    if label.startswith("depends:"):
+        dep = label[8:]
+        if change == "changed":
+            return f"dependency '{dep}' was rebuilt"
+        if change == "new":
+            return f"new dependency '{dep}'"
+        return f"dependency '{dep}' no longer applies"
+
+    if label.startswith("subbuild:"):
+        sub = label[9:]
+        if change == "changed":
+            return f"subbuild '{sub}' changed"
+        if change == "new":
+            return f"new subbuild '{sub}'"
+        return f"subbuild '{sub}' no longer applies"
+
+    name = RECIPE_LABELS.get(label, label)
+    if change == "changed":
+        return f"{name} changed"
+    if change == "new":
+        return f"{name} is new"
+    return f"{name} no longer applies"
+
+
+def diff_recipes(old_recipe, new_recipe):
+    old = dict(old_recipe or [])
+    new = dict(new_recipe or [])
+    lines = [format_recipe_diff(label, "changed") for label in new
+             if label in old and old[label] != new[label]]
+    lines += [format_recipe_diff(label, "new") for label in new if label not in old]
+    lines += [format_recipe_diff(label, "removed") for label in old if label not in new]
+    return lines
+
 # Drops stale digest and recipe files so incomplete writes are never reused.
 def invalidate_digest_file(digest_file):
     with contextlib.suppress(FileNotFoundError):

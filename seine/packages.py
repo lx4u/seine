@@ -38,6 +38,7 @@ from seine.sbuild import OUTPUT
 from seine.sbuild import REPOSITORY
 from seine.sbuild import SbuildChroot
 from seine.sbuild import TOOLCHAINS
+from seine        import utils
 from seine.utils  import apt_sources
 from seine.utils  import feed_auth_entries
 from seine.utils  import locked
@@ -1463,28 +1464,7 @@ class Builder:
     }
 
     def _format_recipe_diff(self, label, change):
-        if label.startswith("file:"):
-            path = label[5:]
-            if change == "changed":
-                return "file '%s' changed" % path
-            if change == "new":
-                return "new file '%s'" % path
-            return "file '%s' no longer applies" % path
-
-        if label.startswith("depends:"):
-            dep = label[8:]
-            if change == "changed":
-                return "dependency '%s' was rebuilt" % dep
-            if change == "new":
-                return "new dependency '%s'" % dep
-            return "dependency '%s' no longer applies" % dep
-
-        name = self.RECIPE_LABELS.get(label, label)
-        if change == "changed":
-            return "%s changed" % name
-        if change == "new":
-            return "%s is new" % name
-        return "%s no longer applies" % name
+        return utils.format_recipe_diff(label, change)
 
     # Why stamps() below just found no stamp for this (name, architecture)
     # -- one line per labelled input that changed since the last recipe
@@ -1499,12 +1479,8 @@ class Builder:
         if old is None:
             return ["the earlier build has no recorded recipe "
                     "(built before this diagnostic existed)"]
-        old = dict(old)
-        new = dict(self._recipes.get((package.name, architecture), []))
-        lines = [self._format_recipe_diff(label, "changed") for label in new
-                 if label in old and old[label] != new[label]]
-        lines += [self._format_recipe_diff(label, "new") for label in new if label not in old]
-        lines += [self._format_recipe_diff(label, "removed") for label in old if label not in new]
+        new = self._recipes.get((package.name, architecture), [])
+        lines = utils.diff_recipes(old, new)
         return lines or ["the digest differs but no tracked input does -- "
                          "likely a change to seine itself, not the spec"]
 
