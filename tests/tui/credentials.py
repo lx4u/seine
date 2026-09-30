@@ -162,3 +162,72 @@ class CredentialModalDrivesABuildPrompt(avocado.Test):
 
 if __name__ == "__main__":
     avocado.main()
+
+
+class CredentialModalSaveChoice(avocado.Test):
+    """
+    :avocado: tags=tui
+    """
+    def setUp(self):
+        with _tui_required(self):
+            from textual.app import App
+            from textual.widgets import Checkbox, Input
+            from seine.tui.credentials import CredentialModal, tui_prompt
+        self.App = App
+        self.Checkbox = Checkbox
+        self.Input = Input
+        self.CredentialModal = CredentialModal
+        self.tui_prompt = tui_prompt
+
+    def _submit(self, offer_save, untick=False):
+        import threading
+        event, result = threading.Event(), {}
+        modal = self.CredentialModal(
+            "seine-server @ https://srv", {"token": ("", True)}, event, result,
+            offer_save=offer_save)
+        class Host(self.App):
+            def on_mount(self):
+                self.push_screen(modal)
+        host = Host()
+
+        async def scenario():
+            async with host.run_test() as pilot:
+                await pilot.pause()
+                self.assertEqual(len(modal.query(self.Checkbox)), 1 if offer_save else 0)
+                self.assertTrue(modal.query_one("#token", self.Input).password)
+                modal.query_one("#token", self.Input).value = "snt_abc"
+                if untick:
+                    modal.query_one("#save", self.Checkbox).value = False
+                await pilot.press("enter")
+                await pilot.pause()
+
+        asyncio.run(scenario())
+        self.assertTrue(event.is_set())
+        return result["values"]
+
+    def test_no_save_choice_unless_offered(self):
+        self.assertEqual(self._submit(offer_save=False), {"token": "snt_abc"})
+
+    def test_save_is_ticked_by_default(self):
+        self.assertEqual(self._submit(offer_save=True),
+                         {"token": "snt_abc", "_save": True})
+
+    def test_unticking_declines_the_save(self):
+        self.assertEqual(self._submit(offer_save=True, untick=True),
+                         {"token": "snt_abc", "_save": False})
+
+    def test_tui_prompt_forwards_offer_save_to_the_modal(self):
+        app = mock.Mock()
+        shown = []
+
+        def call_from_thread(fn, modal):
+            shown.append(modal)
+            modal._result["values"] = {"token": "t", "_save": False}
+            modal._event.set()
+        app.call_from_thread = call_from_thread
+        prompt = self.tui_prompt(app)
+        values = prompt("ctx", {"token": ("", True)}, offer_save=True)
+        self.assertEqual(values, {"token": "t", "_save": False})
+        self.assertTrue(shown[0]._offer_save)
+        prompt("ctx", {"token": ("", True)})
+        self.assertFalse(shown[1]._offer_save)
