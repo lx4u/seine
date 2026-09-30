@@ -316,6 +316,20 @@ The login is printed in a plan/dump unless the specification's own
 `auth` block); the password is always hidden, the same way a `vault:`
 value is.
 
+The credential itself never reaches the target or an image layer: it is
+written to a temporary netrc file outside the root file-system for the
+one apt call that needs it, then removed. `probe: false` skips the
+up-front check against the server (useful when it can't be reached
+independently of the build, e.g. a proxy-only mirror) without turning
+off authentication itself:
+
+```
+          auth:
+              login: "env:CORP_LOGIN"
+              password: "env:CORP_PASS"
+              probe: false
+```
+
 ### Building from a snapshot
 
 A suite moves: the same specification built a week apart is built from

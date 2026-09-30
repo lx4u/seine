@@ -64,6 +64,7 @@ from urllib.parse import urlsplit
 __all__ = [
     "CredentialError", "CredentialNotFound",
     "resolve", "CredentialSource", "probe",
+    "remember_resolved", "resolved_for", "clear_resolved",
 ]
 
 _KNOWN_BACKENDS    = frozenset(["env", "keyring", "settings", "vault"])
@@ -77,6 +78,23 @@ _KEYRING_SERVICE = "seine"
 # edit away from being dumped alongside theme/jobs settings.
 _SETTINGS_FILE_ENV     = "SEINE_CREDENTIALS_FILE"
 _SETTINGS_FILE_DEFAULT = os.path.expanduser("~/.config/seine/credentials.json")
+
+# Resolved values, by feed uri, for the netrc writer (seine/utils.py) --
+# the only way a resolved secret reaches those call sites, since it is
+# never written back into the spec itself.
+_RESOLVED = {}
+
+
+def remember_resolved(uri, login, password):
+    _RESOLVED[uri.rstrip("/")] = (login, password)
+
+
+def resolved_for(uri):
+    return _RESOLVED.get(uri.rstrip("/"))
+
+
+def clear_resolved():
+    _RESOLVED.clear()
 
 
 # ---------------------------------------------------------------------------

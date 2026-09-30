@@ -1516,6 +1516,57 @@ class PercentSurvivesSbuild(avocado.Test):
         self.assertEqual(re.sub("%%", "", command).count("%"), 0,
                          "an unescaped percent would be eaten by sbuild")
 
+class NetrcOnlyReachesSbuildForAnAuthenticatedFeed(avocado.Test):
+    def _build(self, distro):
+        from seine.packages import Builder
+
+        class Image:
+            def __init__(self):
+                self.calls = []
+
+            def exec(self, args, architecture=None, volumes=None, workdir=None,
+                     environment=None, check=True, tty=False):
+                self.calls.append({"args": args, "volumes": volumes})
+                return 0
+
+        image = Image()
+        builder = Builder(distro, {}, image)
+        builder.repository = lambda: self.workdir
+        package = parse("""
+                packages:
+                    - source: apt://busybox
+        """).image.packages[0]
+        builder.build(package, self.workdir, "busybox_1.dsc", "0", "amd64",
+                      self.workdir)
+        return image.calls[-1]
+
+    def test_no_auth_no_config_pl_no_extra_volume(self):
+        distro = {"source": "debian", "release": "bookworm",
+                  "architecture": "amd64", "uri": "http://example.com/debian",
+                  "feeds": [{"suite": "bookworm"}]}
+        call = self._build(distro)
+        script = call["args"][-1]
+        self.assertNotIn("config.pl", script)
+        self.assertEqual(len(call["volumes"]), 3)  # workdir, repo, output
+
+    def test_resolved_auth_writes_a_per_run_config_pl(self):
+        from seine import credentials
+        credentials.clear_resolved()
+        try:
+            distro = {"source": "debian", "release": "bookworm",
+                     "architecture": "amd64", "uri": "http://example.com/debian",
+                     "feeds": [{"suite": "bookworm",
+                               "auth": {"login": "env:A", "password": "env:B"}}]}
+            credentials.remember_resolved(distro["uri"], "alice", "s3cr3t")
+            call = self._build(distro)
+            script = call["args"][-1]
+            self.assertIn("push @{$unshare_bind_mounts}", script)
+            self.assertIn('directory => "/run/seine"', script)
+            self.assertIn('mountpoint => "/seine-auth"', script)
+            self.assertEqual(len(call["volumes"]), 4)  # + the netrc bind mount
+        finally:
+            credentials.clear_resolved()
+
 # A build that fails leaves what it wrote where someone can read it: the
 # build log sbuild writes beside its output is the only account of why it
 # failed, and it is written into that directory rather than the

@@ -7,7 +7,10 @@ from seine.bootstrap import Bootstrap
 from seine.utils import apt_sources_dockerfile
 from seine.utils import APT_LISTS_CLEANUP
 from seine.utils import base_feed
+from seine.utils import feed_auth_entries
 from seine.utils import feed_digest
+from seine.utils import NETRC_MOUNT
+from seine.utils import netrc_for
 from seine.utils import TRANSPORT_KIND
 from seine.utils import vendor_mountpoint
 
@@ -47,9 +50,22 @@ class TransportBootstrap(Bootstrap):
             mount = "--mount=type=bind,from=%s,target=%s,ro" % (
                 vendor.BUILD_CONTEXT, vendor_mountpoint(release))
             digest_comment = "# vendor digest: %s" % self.vendor_digest
-        return self.build(TRANSPORT_BOOTSTRAP_SCRIPT.format(
+        entries = feed_auth_entries(self.distro, entries=[base_feed(self.distro)])
+        with netrc_for(entries) as netrc_path:
+            if netrc_path:
+                build_options = build_options + [
+                    "--secret", "id=seine-netrc,src=%s" % netrc_path]
+            return self.build(self.dockerfile(mount, digest_comment),
+                              base=self.baseline, options=build_options)
+
+    def dockerfile(self, mount, digest_comment):
+        netrc_mount, netrc_aptopt = "", ""
+        if feed_auth_entries(self.distro, entries=[base_feed(self.distro)]):
+            netrc_mount = " --mount=type=secret,id=seine-netrc,target=%s" % NETRC_MOUNT
+            netrc_aptopt = ' -o Dir::Etc::netrc="%s"' % NETRC_MOUNT
+        return TRANSPORT_BOOTSTRAP_SCRIPT.format(
             self.baseline, self._sources(), mount, digest_comment,
-            APT_LISTS_CLEANUP), base=self.baseline, options=build_options)
+            APT_LISTS_CLEANUP, netrc_mount, netrc_aptopt)
 
     def _sources(self):
         return apt_sources_dockerfile(self.distro, [base_feed(self.distro)],
@@ -58,11 +74,11 @@ class TransportBootstrap(Bootstrap):
 TRANSPORT_BOOTSTRAP_SCRIPT = """
 FROM {0}
 {3}
-RUN {2} rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.sources \\
+RUN{5} rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.sources \\
            /etc/apt/sources.list.d/*.list && \\
     {1} && \\
-    apt-get update -qqy && \\
-    apt-get install -qqy --no-install-recommends python3 python3-apt attr && \\
+    apt-get update -qqy{6} && \\
+    apt-get install -qqy{6} --no-install-recommends python3 python3-apt attr && \\
     apt-mark auto python3 python3-apt attr && \\
     {4}
 CMD /bin/true

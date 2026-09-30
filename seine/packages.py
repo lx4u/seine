@@ -39,10 +39,15 @@ from seine.sbuild import REPOSITORY
 from seine.sbuild import SbuildChroot
 from seine.sbuild import TOOLCHAINS
 from seine.utils  import apt_sources
+from seine.utils  import feed_auth_entries
 from seine.utils  import locked
+from seine.utils  import NETRC_MOUNT
+from seine.utils  import netrc_for
+from seine.utils  import netrc_volume
 from seine.utils  import offline_apt_script
 from seine.utils  import offline_suites
 from seine.utils  import release_feeds
+from seine.utils  import SBUILD_NETRC_MOUNT
 from seine.utils  import vendor_mountpoint
 from seine.container import ContainerEngine
 from seine.utils  import GIT_EMAIL
@@ -622,8 +627,15 @@ class Builder:
             ssh_volumes = ssh_volumes + [git.volume(location)]
         args, volumes = self._offline_fetch(
             self._fetch_args(package), package, volumes + ssh_volumes)
-        self.builderImage.exec(
-            args, volumes=volumes, workdir=WORKDIR, environment=environment)
+
+        # apt-get source needs its own netrc too -- the image keeps no
+        # credentials once packages-prepare finishes.
+        entries = feed_auth_entries(self.distro, entries=release_feeds(self.distro))
+        with netrc_for(entries) as netrc_path:
+            if netrc_path:
+                volumes = volumes + [netrc_volume(netrc_path)]
+            self.builderImage.exec(
+                args, volumes=volumes, workdir=WORKDIR, environment=environment)
         if package.scheme == "https":
             self._verify(package, workdir, os.path.basename(package.source),
                          package.sha256, "sha256")
@@ -705,8 +717,11 @@ class Builder:
             # '_offline_fetch' is about to rewrite sources.list and
             # already runs its own update.
             if len(offline_suites(self.distro)) == 0:
-                return ["sh", "-c", "apt-get update -qqy && %s"
-                        % shlex.join(args)]
+                entries = feed_auth_entries(self.distro,
+                                            entries=release_feeds(self.distro))
+                netrc_opt = ' -o Dir::Etc::netrc="%s"' % NETRC_MOUNT if entries else ""
+                return ["sh", "-c", "apt-get update -qqy%s && apt-get source%s %s"
+                        % (netrc_opt, netrc_opt, source)]
             return args
 
         if package.scheme == "https":
@@ -1105,14 +1120,29 @@ class Builder:
         # the log lags -- 'exec.tty' below asks for a real terminal
         # instead, since sbuild strips LD_PRELOAD from what reaches the
         # chroot so an env-based workaround would not survive there.
-        script = "ln -sf /dev/null /dev/console; exec %s" % shlex.join(args)
+        preamble = "ln -sf /dev/null /dev/console"
 
-        # Run from the output directory, so sbuild's own output lands
-        # where it belongs to this build alone.
-        self.builderImage.exec(
-            ["sh", "-c", script],
-            architecture=self.chroot_architecture(package, architecture),
-            volumes=volumes, workdir=OUTPUT, environment=environment, tty=True)
+        # sbuild's own apt-get update (inside its nested unshare chroot)
+        # needs the netrc too. 'push', not '=', so this doesn't wipe out
+        # the repository/toolchain mounts /etc/sbuild/sbuild.conf set.
+        entries = feed_auth_entries(self.distro, entries=release_feeds(self.distro))
+        with netrc_for(entries) as netrc_path:
+            if netrc_path:
+                volumes = volumes + [netrc_volume(netrc_path)]
+                preamble += (
+                    "; mkdir -p ~/.config/sbuild && printf "
+                    "'push @{$unshare_bind_mounts}, "
+                    "{ directory => \"%s\", mountpoint => \"%s\" };\\n1;\\n' "
+                    "> ~/.config/sbuild/config.pl"
+                    % (os.path.dirname(NETRC_MOUNT), os.path.dirname(SBUILD_NETRC_MOUNT)))
+            script = "%s; exec %s" % (preamble, shlex.join(args))
+
+            # Run from the output directory, so sbuild's own output lands
+            # where it belongs to this build alone.
+            self.builderImage.exec(
+                ["sh", "-c", script],
+                architecture=self.chroot_architecture(package, architecture),
+                volumes=volumes, workdir=OUTPUT, environment=environment, tty=True)
 
     def repository(self):
         return repository(self.distro)
