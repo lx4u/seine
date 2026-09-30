@@ -311,3 +311,25 @@ When an object is pushed to S3:
    input derivation components, allowing cross-machine cache hit/miss explanation.
 4. A `<key>.touch` heartbeat sidecar is updated with the current timestamp to
    enable LRU space eviction.
+
+### Cache explainability (`seine cache explain`)
+
+To inspect why a build missed the cache or what changed between cached revisions:
+
+```console
+# Diff local build against remote S3 cached recipe
+seine cache explain packages/trixie/amd64/mypkg
+
+# Diff live spec against remote S3 cached recipe before building
+seine cache explain packages trixie/amd64/mypkg --spec images/app.yaml
+
+# Compare two recipe files directly
+seine cache explain old.recipe new.recipe
+
+# Inspect derivation inputs of a single recipe file or remote cache key
+seine cache explain local.recipe
+seine cache explain chroots trixie-amd64
+```
+
+When comparing recipes, differences in kernel configurations, files, dependencies,
+or specification contents are highlighted field by field.

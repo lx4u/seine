@@ -19,9 +19,25 @@ class LocalStorageProvider(StorageProvider):
         pass
 
     def explain(self, kind, key):
-        recipe_path = f"{key}.recipe"
-        if os.path.isfile(recipe_path):
-            return utils.read_recipe_file(recipe_path)
+        if os.path.isfile(f"{key}.recipe"):
+            return utils.read_recipe_file(f"{key}.recipe")
+        if os.path.isfile(key):
+            return utils.read_recipe_file(key)
+        if kind == "packages":
+            from seine.cache import CACHES
+            from seine.packages import STAMPS_SPEC
+            parts = key.split("/")
+            if len(parts) == 3:
+                release, arch, pkg = parts
+                stamps_spec = os.path.join(CACHES["packages"](), release, STAMPS_SPEC)
+                if os.path.isdir(stamps_spec):
+                    matches = [
+                        os.path.join(stamps_spec, f)
+                        for f in os.listdir(stamps_spec)
+                        if f.startswith(f"{pkg}_{arch}_") and f.endswith(".recipe")
+                    ]
+                    if matches:
+                        return utils.read_recipe_file(max(matches, key=os.path.getmtime))
         return None
 
     def ensure_bucket(self):
