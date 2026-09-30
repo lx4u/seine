@@ -554,6 +554,114 @@ class TargetBootstrapNameFoldsInTheBaseFeed(avocado.Test):
             self.tag([{"suite": "bookworm"}, {"suite": "bookworm-security"}]),
             self.tag([{"suite": "bookworm"}, {"suite": "bookworm-backports"}]))
 
+class AuthIsAcceptedAndStored(avocado.Test):
+    def test(self):
+        parsed = feeds(distro([
+            {"suite": "bookworm",
+             "auth": {"login": "keyring:corp-login | env:CORP_LOGIN",
+                      "password": "keyring:corp-pass | env:CORP_PASS"}}]))
+        self.assertEqual(parsed[0]["auth"], {
+            "login": "keyring:corp-login | env:CORP_LOGIN",
+            "password": "keyring:corp-pass | env:CORP_PASS",
+            "probe": True})
+
+    def test_probe_false_is_kept(self):
+        parsed = feeds(distro([
+            {"suite": "bookworm",
+             "auth": {"login": "env:A_USER", "password": "env:A_PASS",
+                      "probe": False}}]))
+        self.assertFalse(parsed[0]["auth"]["probe"])
+
+class FeedWithoutAuthIsUntouched(avocado.Test):
+    def test(self):
+        parsed = feeds(distro([{"suite": "bookworm"}]))
+        self.assertIsNone(parsed[0]["auth"])
+
+class AuthNeedsBothLoginAndPassword(avocado.Test):
+    def test_login_alone_is_rejected(self):
+        try:
+            feeds(distro([{"suite": "bookworm",
+                           "auth": {"login": "env:USER"}}]))
+            self.fail("parsing succeeded for an 'auth' with no password!")
+        except ValueError as e:
+            self.assertIn("auth", str(e))
+
+    def test_an_unknown_auth_field_is_rejected(self):
+        try:
+            feeds(distro([{"suite": "bookworm",
+                           "auth": {"login": "env:USER", "password": "env:PASS",
+                                    "token": "env:TOKEN"}}]))
+            self.fail("parsing succeeded for an unknown 'auth' field!")
+        except ValueError as e:
+            self.assertIn("auth", str(e))
+
+class AuthLiteralsAreRejected(avocado.Test):
+    def test(self):
+        try:
+            feeds(distro([{"suite": "bookworm",
+                           "auth": {"login": "admin", "password": "hunter2"}}]))
+            self.fail("parsing succeeded for a literal password in 'auth'!")
+        except ValueError as e:
+            self.assertIn("login", str(e))
+
+class AuthRejectsAnUnknownBackendPrefix(avocado.Test):
+    def test(self):
+        try:
+            feeds(distro([{"suite": "bookworm",
+                           "auth": {"login": "netrc:~/.netrc",
+                                    "password": "env:PASS"}}]))
+            self.fail("parsing succeeded for an unknown backend prefix!")
+        except ValueError as e:
+            self.assertIn("login", str(e))
+
+# netrc matches by URL, so two different credentials at the very same
+# URL could never both be honoured.
+class TwoFeedsAuthenticatedAgainstTheSameUriAreAmbiguous(avocado.Test):
+    def test(self):
+        try:
+            feeds(distro([
+                {"suite": "bookworm",
+                 "auth": {"login": "env:A_USER", "password": "env:A_PASS"}},
+                {"suite": "bookworm-updates",
+                 "auth": {"login": "env:B_USER", "password": "env:B_PASS"}},
+            ]))
+            self.fail("parsing succeeded for two feeds sharing an authenticated uri!")
+        except ValueError as e:
+            self.assertIn("ambiguous", str(e))
+
+    def test_a_trailing_slash_still_collides(self):
+        try:
+            feeds(distro([
+                {"suite": "bookworm",
+                 "auth": {"login": "env:A_USER", "password": "env:A_PASS"}},
+                {"suite": "bookworm-updates",
+                 "uri": "http://example.com/debian/",
+                 "auth": {"login": "env:B_USER", "password": "env:B_PASS"}},
+            ]))
+            self.fail("parsing succeeded for uris differing only by a trailing slash!")
+        except ValueError:
+            pass
+
+    def test_the_same_chain_at_the_same_uri_is_fine(self):
+        # Two suites of the same mirror, same login -- the common case,
+        # not ambiguous: both would write the same netrc entry.
+        parsed = feeds(distro([
+            {"suite": "bookworm",
+             "auth": {"login": "env:USER", "password": "env:PASS"}},
+            {"suite": "bookworm-updates",
+             "auth": {"login": "env:USER", "password": "env:PASS"}},
+        ]))
+        self.assertEqual(len(parsed), 2)
+
+    def test_different_uris_are_fine(self):
+        parsed = feeds(distro([
+            {"suite": "bookworm",
+             "auth": {"login": "env:A_USER", "password": "env:A_PASS"}},
+            {"suite": "vendor", "uri": "http://vendor.example.com/debian",
+             "auth": {"login": "env:B_USER", "password": "env:B_PASS"}},
+        ]))
+        self.assertEqual(len(parsed), 2)
+
 class FingerprintNeedsASignedBy(avocado.Test):
     def test(self):
         try:
