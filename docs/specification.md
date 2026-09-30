@@ -277,6 +277,45 @@ runs something -- never while a rebuild stamp or a cache digest is just
 being computed, which stay offline and do not need a vault to be
 reachable.
 
+### Authenticating to a feed
+
+Some feeds need a login and password rather than (or as well as) a
+signing key -- a corporate mirror behind Basic auth, say. `auth` takes
+one chain per field, each a `|`-separated list of places to look, tried
+left-to-right:
+
+```
+        - suite: vendor
+          uri: https://repo.example.com/debian
+          auth:
+              login: "keyring:corp-login | settings:corp-login | env:CORP_LOGIN"
+              password: "keyring:corp-pass | env:CORP_PASS"
+```
+
+Each segment names a backend: `keyring:` (the desktop/OS keyring, via
+the optional `keyring` extra), `settings:` (a plaintext file at
+`~/.config/seine/credentials.json`), `env:` (a process environment
+variable) or `vault:name` (a read-only vault KV entry). A literal value
+-- `login: admin` -- is refused outright: every field must resolve
+through one of these, so a password can never sit in a specification.
+Naming `keyring:` or `settings:` is also the opt-in to writing there: if
+every place in a chain misses and seine has to ask interactively, the
+answer is saved back to whichever of those two backends the chain
+names, so the next build does not ask again.
+
+Credentials are resolved and checked against the feed itself before any
+step that touches it runs -- a wrong login fails with a clear error up
+front, not partway through an `apt-get update`. Two feeds authenticated
+against the very same uri are rejected at load time: seine matches a
+credential to apt by uri, and two different ones for the same uri could
+never both be honoured.
+
+The login is printed in a plan/dump unless the specification's own
+[`redact`](#redacting-what-should-not-be-printed) covers its path (e.g.
+`- path: distribution.feeds.auth.login`, which reaches every feed's
+`auth` block); the password is always hidden, the same way a `vault:`
+value is.
+
 ### Building from a snapshot
 
 A suite moves: the same specification built a week apart is built from
