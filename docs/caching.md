@@ -282,3 +282,18 @@ Supported operations include:
 * `put_object(bucket, key, data, metadata, if_none_match)`: uploads object payloads with custom `x-amz-meta-*` headers and optional conditional write-once (`If-None-Match: *`).
 * `delete_object(bucket, key)`: removes objects.
 * `list_objects_v2(bucket, prefix)`: paginates bucket listings.
+
+### The clean-chroot gate
+
+Shared cache tiers (`chroots/`, `packages/`) are accessible across builds and
+workers. To guarantee that private secrets, credentials, or keys are never
+accidentally published to shared storage, seine enforces a strict
+**clean-chroot gate** (`check_clean_chroot()` in `seine/cache.py`) before pushing
+any archive to network storage:
+
+* **Forbidden sensitive paths**: SSH private keys (`id_*`, `ssh_host_*_key`),
+  TLS private keys (`etc/ssl/private/`), credential files (`.netrc`,
+  `.dockercfg`, `.docker/config.json`, `.aws/credentials`) are blocked.
+* **Specification redaction scan**: Any path or configuration file matching
+  `redact:` patterns or registered Vault secrets is scanned; any match aborts
+  the upload with a `CleanChrootViolation`.
