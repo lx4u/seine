@@ -263,3 +263,22 @@ unless `stripped()` is extended.
   prunes superseded stamps and unreachable
   `.deb`s (`--force` for orphans), removes stale indices, merges the index.
   `Wanted` scopes both sides without fetching or building.
+
+## Network storage (S3 / Garage)
+
+Seine supports network object caching via S3-compatible object stores (such as
+[Garage](https://garagehq.deuxfleurs.fr/) or MinIO) to share cached packages,
+chroots, vendor assets, and recipes across multiple developers and build workers.
+
+The client layer (`seine/storage/s3/client.py`) is a lightweight REST client
+built on `requests` and Python standard library `hashlib`/`hmac` (avoiding heavy
+dependencies like `boto3`). It signs all requests using AWS Signature Version 4
+(SigV4) with credentials resolved via `seine.credentials`.
+
+Supported operations include:
+* `head_bucket(bucket)`: verifies bucket accessibility and permissions.
+* `head_object(bucket, key)`: queries object headers and metadata without downloading.
+* `get_object(bucket, key)` / `download_file(...)`: streams objects to local storage via atomic `.partial` rename.
+* `put_object(bucket, key, data, metadata, if_none_match)`: uploads object payloads with custom `x-amz-meta-*` headers and optional conditional write-once (`If-None-Match: *`).
+* `delete_object(bucket, key)`: removes objects.
+* `list_objects_v2(bucket, prefix)`: paginates bucket listings.
