@@ -7,10 +7,12 @@ from .client import (
     S3NotFoundError,
     S3ConditionFailedError,
 )
+from .provider import S3StorageProvider
 
 __all__ = [
     "S3Client",
     "S3ClientError",
     "S3NotFoundError",
     "S3ConditionFailedError",
+    "S3StorageProvider",
 ]
