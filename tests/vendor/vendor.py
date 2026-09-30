@@ -2682,6 +2682,52 @@ class FetchTasksNeverBuildsAContainerForASnapshotPinnedSource(avocado.Test):
             tasks[0].run()
         self.assertEqual(len(downloaded), 1)
 
+class UpdateListsTasks(_CleansUpPaths, avocado.Test):
+    def _run(self, manifest, fill=False, archs=None):
+        import tempfile
+        from seine.bootstrap import HostBootstrap
+        from seine.vendor.cli import fetch_tasks, update_lists_tasks
+        distro = {"source": "debian", "release": "bookworm", "architecture": "amd64",
+                  "uri": "http://example.com/debian",
+                  "feeds": [{"suite": "bookworm"}]}
+        tmp = tempfile.mkdtemp()
+        self.track(tmp)
+        with patch.dict(os.environ, {"SEINE_DL_DIR": tmp}):
+            lists = os.path.join(tmp, "bookworm", "lists")
+            os.makedirs(lists)
+            if fill:
+                open(os.path.join(lists, "deb.debian.org_dists_bookworm_main_binary-amd64_Packages"), "w").close()
+            tasks = fetch_tasks(distro, "bookworm", manifest, {}, HostBootstrap(distro, {}))
+            return update_lists_tasks(distro, "bookworm", manifest, tasks, {},
+                                      HostBootstrap(distro, {}), archs)
+
+    def test_a_fetch_that_needs_apt_updates_empty_lists_first(self):
+        manifest = {"foo": {"version": "1-1", "files": ["foo_1-1.dsc"],
+                            "binaries": {"foo": {"amd64": "1-1", "arm64": "1-1"}}}}
+        self.assertEqual([t.name for t in self._run(manifest)], ["update-lists:bookworm"])
+
+    def test_filled_lists_are_left_alone(self):
+        manifest = {"foo": {"version": "1-1", "files": ["foo_1-1.dsc"], "binaries": {}}}
+        self.assertEqual(self._run(manifest, fill=True), [])
+
+    def test_a_snapshot_pinned_fetch_needs_no_lists(self):
+        manifest = {"foo": {"version": "1-1", "files": ["foo_1-1.dsc"],
+                            "snapshot": {"foo_1-1.dsc": "abc"}, "binaries": {}}}
+        self.assertEqual(self._run(manifest), [])
+
+    def test_the_update_adds_the_architectures_and_mounts_the_lists(self):
+        from seine.vendor import update_lists
+        calls = []
+        class Builder:
+            def exec(self, args, **kwargs):
+                calls.append((args, kwargs))
+        with patch.dict(os.environ, {"SEINE_DL_DIR": self.workdir}):
+            update_lists(Builder(), "bookworm", ["amd64", "arm64"])
+        args, kwargs = calls[0]
+        self.assertEqual(args[:2], ["sh", "-c"])
+        self.assertIn("dpkg --add-architecture arm64 && apt-get update", args[2])
+        self.assertEqual(kwargs["volumes"][0][1], "/var/lib/apt/lists")
+
 # The lock is meant to be reviewed as a diff, so a change in Python
 # dict insertion order (which nothing here controls -- resolve() builds
 # its own dicts off a BFS walk, not alphabetically) must never show up

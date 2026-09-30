@@ -1,0 +1,1226 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Kernels &#8212; seine documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=4418a689" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="_static/documentation_options.js?v=4d2f5802"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'kernels';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Building" href="building.html" />
+    <link rel="prev" title="Merging specification fragments" href="merging.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">seine documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="specification.html">Specification files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="merging.html">Merging specification fragments</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="environment.html">Environment variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tui.html">TUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ai.html">The AI chat</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vault-openbao.html">Running a vault for seine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="release-as-debs.html">Releasing seine as .deb packages</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="caching.html">Caching</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine/issues/new?title=Issue%20on%20page%20%2Fkernels.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/kernels.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Kernels</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#rebuilding-the-kernel">Rebuilding the kernel</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bring-your-own-kernel">Bring your own kernel</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-is-kept-of-debian-s-patches">What is kept of Debian’s patches</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bringing-your-own-patches">Bringing your own patches</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-you-do-not-get">What you do not get</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bring-your-own-modules">Bring your own modules</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#naming-the-kernels">Naming the kernels</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-comes-out">What comes out</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-the-build-is-told">What the build is told</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cross-compiling-modules">Cross-compiling modules</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="kernels">
+<h1>Kernels<a class="headerlink" href="#kernels" title="Link to this heading">#</a></h1>
+<p>Debian’s kernel is built to boot anything, which makes it large for an
+appliance that knows what it runs on – and the kernel it is built from
+is the one Debian happens to package. Both are things a specification
+can change: the first by reconfiguring the distribution’s own kernel,
+the second by building a tree Debian does not package at all, under the
+distribution’s packaging.</p>
+<section id="rebuilding-the-kernel">
+<h2>Rebuilding the kernel<a class="headerlink" href="#rebuilding-the-kernel" title="Link to this heading">#</a></h2>
+<p>Settings that only mean something for one kind of package go under
+<code class="docutils literal notranslate"><span class="pre">extends</span></code>, named after that kind:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">packages</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">linux</span>
+      <span class="n">extends</span><span class="p">:</span>
+          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">fragments</span><span class="p">:</span>
+                  <span class="o">-</span> <span class="n">configs</span><span class="o">/</span><span class="n">slim</span><span class="o">-</span><span class="n">common</span><span class="o">.</span><span class="n">fragment</span>
+                  <span class="o">-</span> <span class="n">configs</span><span class="o">/</span><span class="n">slim</span><span class="o">-</span><span class="n">amd64</span><span class="o">.</span><span class="n">fragment</span>
+      <span class="n">profiles</span><span class="p">:</span>
+          <span class="o">-</span> <span class="n">pkg</span><span class="o">.</span><span class="n">linux</span><span class="o">.</span><span class="n">nokerneldbginfo</span>
+          <span class="o">-</span> <span class="n">pkg</span><span class="o">.</span><span class="n">linux</span><span class="o">.</span><span class="n">notools</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">upstream-sha256</span></code> is what the tarball is checked against, exactly as
+<code class="docutils literal notranslate"><span class="pre">sha256</span></code> is for a package’s own source:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          kernel:
+              upstream: https://cdn.kernel.org/…/linux-6.18.43.tar.xz
+              upstream-sha256: 9a1c…
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">fragments</span></code> lists kconfig fragments, given relative to the YAML file listing
+them, in the ordinary kernel syntax:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># CONFIG_MEDIA_SUPPORT is not set</span>
+<span class="c1"># CONFIG_SOUND is not set</span>
+</pre></div>
+</div>
+<p>The fragments are appended to Debian’s own configuration stack for the
+target architecture, where they have the last word, and the kernel’s
+<code class="docutils literal notranslate"><span class="pre">oldconfig</span></code> then turns off whatever the disabled options were holding up
+– so a fragment says what it means instead of listing every symbol
+underneath it. This needs no patch: a kernel’s configuration lives in
+<code class="docutils literal notranslate"><span class="pre">debian/</span></code>, which the source format lets seine edit directly, so a fragment
+does not go stale the way a patch against a configuration file would.</p>
+<p><code class="docutils literal notranslate"><span class="pre">configs</span></code> is the same idea, without a fragment file: a dictionary of group
+names to a list of <code class="docutils literal notranslate"><span class="pre">CONFIG_OPTION=value</span></code> lines, written directly in the
+specification, for the common case of wanting a handful of symbols set
+without a <code class="docutils literal notranslate"><span class="pre">configs/*.fragment</span></code> file to hold them:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">configs</span><span class="p">:</span>
+                  <span class="n">rtc</span><span class="o">-</span><span class="ow">and</span><span class="o">-</span><span class="n">lpss</span><span class="p">:</span>
+                      <span class="o">-</span> <span class="n">CONFIG_RTC_DRV_CMOS</span><span class="o">=</span><span class="n">m</span>
+                      <span class="o">-</span> <span class="n">CONFIG_RTC_DRV_RX6110</span><span class="o">=</span><span class="n">m</span>
+                      <span class="o">-</span> <span class="n">CONFIG_I2C_DESIGNWARE_PCI</span><span class="o">=</span><span class="n">m</span>
+                      <span class="o">-</span> <span class="n">CONFIG_MFD_INTEL_LPSS_PCI</span><span class="o">=</span><span class="n">m</span>
+                      <span class="o">-</span> <span class="n">CONFIG_MFD_INTEL_LPSS</span><span class="o">=</span><span class="n">m</span>
+                      <span class="o">-</span> <span class="n">CONFIG_MFD_INTEL_LPSS_ACPI</span><span class="o">=</span><span class="n">m</span>
+</pre></div>
+</div>
+<p>Each group is appended to the same configuration stack as <code class="docutils literal notranslate"><span class="pre">fragments</span></code>’
+own files, after them, under a <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">&lt;group</span> <span class="pre">name&gt;,</span> <span class="pre">added</span> <span class="pre">by</span> <span class="pre">seine</span></code> header of
+its own – the group’s name is what names the fragment it becomes. Two
+groups touching the same symbol settle it the way two fragment files
+would: the one named last wins.</p>
+<p>A line is either an assignment or kconfig’s own way of writing a disabled
+symbol – <code class="docutils literal notranslate"><span class="pre">CONFIG_OPTION=value</span></code> or <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">CONFIG_OPTION</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">set</span></code> – checked
+at parse time rather than left for <code class="docutils literal notranslate"><span class="pre">oldconfig</span></code> to catch. <code class="docutils literal notranslate"><span class="pre">=n</span></code> is accepted
+as a value like any other and rewritten to the comment form when the
+fragment is written, since kconfig itself does not understand <code class="docutils literal notranslate"><span class="pre">=n</span></code> as an
+assignment; a fragment excerpt already written the other way can be
+pasted into a group unchanged.</p>
+<p><code class="docutils literal notranslate"><span class="pre">signing-key</span></code> re-signs every module this kernel builds (in-tree and, via
+the same setting under <code class="docutils literal notranslate"><span class="pre">extends:</span> <span class="pre">module:</span></code>, any out-of-tree module built
+against it) with a named vault key, after the build:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">signing</span><span class="o">-</span><span class="n">key</span><span class="p">:</span> <span class="n">vault</span><span class="p">:</span><span class="n">pc</span><span class="o">-</span><span class="n">uki</span><span class="o">-</span><span class="n">kernel</span><span class="o">-</span><span class="n">modules</span>
+</pre></div>
+</div>
+<p>kbuild’s own module signing is disabled (<code class="docutils literal notranslate"><span class="pre">cmd_sign=</span></code>, both the real and
+debug <code class="docutils literal notranslate"><span class="pre">modules_install</span></code> passes) and <code class="docutils literal notranslate"><span class="pre">CONFIG_MODULE_SIG_KEY</span></code> is pointed
+at the vault’s certificate instead of Debian’s default – which also
+stops Debian’s own kernel build from embedding a fresh, unreproducible
+key/cert of its own every time (<code class="docutils literal notranslate"><span class="pre">certs/Makefile</span></code> only auto-generates
+one when that variable is left at its default value). seine signs
+every module itself, post-build (<code class="docutils literal notranslate"><span class="pre">seine/kmod_sign.py</span></code>), with the vault
+key, RSA and deterministic (not kbuild’s default ECDSA, which signs
+the same module differently every time by design) – so the private
+key never leaves the vault, every rebuild signs the same bytes the
+same way, and the kernel’s own built-in trusted keyring only ever
+carries the vault’s certificate. <code class="docutils literal notranslate"><span class="pre">modprobe</span></code> verification of a
+vault-signed module succeeds against a kernel that never saw the
+private half.</p>
+<p><code class="docutils literal notranslate"><span class="pre">flavour</span></code> cuts the build down to one kernel. Debian builds every kernel an
+architecture has – on amd64 that is a cloud flavour and a realtime kernel
+besides the ordinary one – and each is a full build.</p>
+<p>A flavour name only means something within a <code class="docutils literal notranslate"><span class="pre">featureset</span></code>, which defaults
+to <code class="docutils literal notranslate"><span class="pre">none</span></code> and is where nearly every kernel wanted lives: amd64’s realtime
+kernel and its ordinary one are <em>both</em> the <code class="docutils literal notranslate"><span class="pre">amd64</span></code> flavour, of the <code class="docutils literal notranslate"><span class="pre">rt</span></code>
+and <code class="docutils literal notranslate"><span class="pre">none</span></code> featuresets. Ask for a realtime kernel with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">featureset</span><span class="p">:</span> <span class="n">rt</span>
+              <span class="n">flavour</span><span class="p">:</span> <span class="n">amd64</span>
+</pre></div>
+</div>
+<p>Neither has to be written where the kernel is: which flavour an
+architecture means is a property of the architecture, and
+<code class="docutils literal notranslate"><span class="pre">examples/common/amd64.yaml</span></code> says so under <a class="reference internal" href="specification.html#defaults"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">defaults</span></code></span></a>. A
+file that wants another one – a realtime kernel, a cloud flavour –
+says so the same way, in the file that wants it, and the kernel entry
+itself stays architecture-agnostic.</p>
+<p>One thing that does not follow along: the metapackage a playbook
+installs. Debian names it <code class="docutils literal notranslate"><span class="pre">linux-image-[&lt;featureset&gt;-]&lt;flavour&gt;</span></code>, so an
+<code class="docutils literal notranslate"><span class="pre">rt</span></code> kernel is installed by <code class="docutils literal notranslate"><span class="pre">linux-image-rt-amd64</span></code>, and a playbook still
+asking for <code class="docutils literal notranslate"><span class="pre">linux-image-amd64</span></code> gets the distribution’s ordinary kernel
+rather than the rebuild – which is a working image containing the wrong
+kernel, the failure that does not announce itself. A specification that
+changes flavour or featureset changes that name too.</p>
+<p>Naming a featureset or flavour the architecture does not have is an error
+listing the ones it does.</p>
+<p>One <code class="docutils literal notranslate"><span class="pre">linux</span></code> source package builds three kinds of kernel this way, all
+from the same one-sbuild-run-per-architecture rebuild. Debian’s own
+flavour covers every machine of that architecture, at the cost of
+carrying every machine’s drivers. A flavour derived from it with nothing
+board-specific yet – <code class="docutils literal notranslate"><span class="pre">slim-arm64</span></code>, in the examples below – narrows
+that once, to “any appliance of this architecture”, and is what every
+board sharing that architecture derives from rather than each repeating
+the same trim. A flavour derived from <em>that</em> – <code class="docutils literal notranslate"><span class="pre">rpi4</span></code> – narrows it
+again, to one board, built in what only that board needs and stripped
+of what only some other board would have wanted. Three flavours, three
+things known about the machine running each, and still the one rebuild.</p>
+<p><code class="docutils literal notranslate"><span class="pre">derived-flavours</span></code> gives a Debian flavour a name of its own, with
+configuration of its own, rather than building it as Debian’s own name
+and packaging:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">derived</span><span class="o">-</span><span class="n">flavours</span><span class="p">:</span>
+                  <span class="n">arm64</span><span class="p">:</span>
+                      <span class="n">rpi4</span><span class="p">:</span>
+                          <span class="o">-</span> <span class="n">configs</span><span class="o">/</span><span class="n">rpi4</span><span class="o">.</span><span class="n">fragment</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">linux-image-arm64</span></code> comes out <code class="docutils literal notranslate"><span class="pre">linux-image-rpi4</span></code> instead, with the
+headers and <code class="docutils literal notranslate"><span class="pre">-dbg</span></code> packages beside it following – everything but the
+ABI, which is still read off the kernel version. The key is the Debian
+flavour being derived from, not the architecture: they usually read the
+same (<code class="docutils literal notranslate"><span class="pre">amd64</span></code>, <code class="docutils literal notranslate"><span class="pre">arm64</span></code>), but not always – <code class="docutils literal notranslate"><span class="pre">armhf</span></code> builds <code class="docutils literal notranslate"><span class="pre">armmp</span></code> – and
+which architecture is being built is already answered by the
+specification’s own <code class="docutils literal notranslate"><span class="pre">architecture</span></code>, so naming it again here would only
+be able to disagree. <code class="docutils literal notranslate"><span class="pre">flavour</span></code> names a bare rebuild of one of Debian’s
+own flavours, unrenamed; <code class="docutils literal notranslate"><span class="pre">derived-flavours</span></code> is a replacement for it
+rather than something written beside it, and takes precedence if both
+somehow end up set – an architecture file’s <code class="docutils literal notranslate"><span class="pre">defaults</span></code> commonly gives
+every kernel a plain <code class="docutils literal notranslate"><span class="pre">flavour</span></code>, for a module built against it, which a
+package also deriving inherits whether it means to use it or not.</p>
+<p>A single name under one base, as above, is a plain rename. Several are
+several flavours out of the one source package this builds, sharing one
+sbuild run rather than costing one apiece:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">derived</span><span class="o">-</span><span class="n">flavours</span><span class="p">:</span>
+                  <span class="n">arm64</span><span class="p">:</span>
+                      <span class="n">rpi4</span><span class="p">:</span>
+                          <span class="o">-</span> <span class="n">configs</span><span class="o">/</span><span class="n">rpi4</span><span class="o">.</span><span class="n">fragment</span>
+                      <span class="n">rpi5</span><span class="p">:</span>
+                          <span class="o">-</span> <span class="n">configs</span><span class="o">/</span><span class="n">rpi5</span><span class="o">.</span><span class="n">fragment</span>
+</pre></div>
+</div>
+<p>Each name’s fragment list is appended to <code class="docutils literal notranslate"><span class="pre">config</span></code>’s on top of the base
+flavour’s own – Debian’s own mechanism for telling <code class="docutils literal notranslate"><span class="pre">cloud-amd64</span></code> apart
+from <code class="docutils literal notranslate"><span class="pre">amd64</span></code>, not something seine adds beside it, so a name already in
+use by the architecture (<code class="docutils literal notranslate"><span class="pre">cloud-arm64</span></code>, say) works the same way a fresh
+one does. A name’s list may be left empty or out entirely: a derived
+flavour with nothing beyond the common <code class="docutils literal notranslate"><span class="pre">config</span></code> is still a flavour of
+its own – which is all a plain rename is.</p>
+<p>A base does not have to be one of Debian’s own flavours – it may be
+another name derived here, one flavour built on one already derived:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">derived</span><span class="o">-</span><span class="n">flavours</span><span class="p">:</span>
+                  <span class="n">arm64</span><span class="p">:</span>
+                      <span class="n">slim</span><span class="o">-</span><span class="n">arm64</span><span class="p">:</span>
+                          <span class="o">-</span> <span class="n">configs</span><span class="o">/</span><span class="n">slim</span><span class="o">-</span><span class="n">common</span><span class="o">.</span><span class="n">fragment</span>
+                          <span class="o">-</span> <span class="n">configs</span><span class="o">/</span><span class="n">slim</span><span class="o">-</span><span class="n">arm64</span><span class="o">.</span><span class="n">fragment</span>
+                  <span class="n">slim</span><span class="o">-</span><span class="n">arm64</span><span class="p">:</span>
+                      <span class="n">rpi4</span><span class="p">:</span>
+                          <span class="o">-</span> <span class="n">configs</span><span class="o">/</span><span class="n">rpi4</span><span class="o">.</span><span class="n">fragment</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">rpi4</span></code> comes out with both fragment lists, <code class="docutils literal notranslate"><span class="pre">slim-arm64</span></code>’s and its own,
+in that order – and <code class="docutils literal notranslate"><span class="pre">slim-arm64</span></code> is still built too, under its own
+name: naming it as another flavour’s base does not take it away, only
+<code class="docutils literal notranslate"><span class="pre">arm64</span></code> – what it was itself derived from – loses to it. Names may be
+given across several files this way, each adding to what an earlier one
+started rather than replacing it – one file deriving the generic
+flavour, a board file naming it as the base for one of its own, which is
+what <code class="docutils literal notranslate"><span class="pre">examples/slim-flavours.yml</span></code>, <code class="docutils literal notranslate"><span class="pre">examples/pc-kernel.yml</span></code> and
+<code class="docutils literal notranslate"><span class="pre">examples/rpi4-kernel.yml</span></code> do.</p>
+<p>The whole dictionary may name bases from more than one architecture at
+once – <code class="docutils literal notranslate"><span class="pre">examples/slim-flavours.yml</span></code> derives <code class="docutils literal notranslate"><span class="pre">slim-amd64</span></code> from <code class="docutils literal notranslate"><span class="pre">amd64</span></code>
+and <code class="docutils literal notranslate"><span class="pre">slim-arm64</span></code> from <code class="docutils literal notranslate"><span class="pre">arm64</span></code> in the one entry, since a shared fragment
+covering every architecture is more useful than one file per
+architecture repeating the same shape. Only the entries for the
+architecture actually being built are ever reached; the rest are
+silently not this build’s problem, the same as a base naming nothing at
+all or a cycle of two names deriving from each other – none of them is
+an error on their own, since seine cannot tell a genuine mistake from a
+board file composed without the one that derives the base it names.
+What catches a real mistake is that nothing gets built under the name
+asked for: a working image containing the wrong kernel is exactly the
+failure that must not pass quietly, so debian/control is still checked
+against what was actually derived for this architecture.</p>
+<p>It needs the newer <code class="docutils literal notranslate"><span class="pre">defines.toml</span></code> an architecture carries, not the ini
+format: the ini flavour list is names only, with nowhere to point a
+fragment of its own.</p>
+<p>Its default revision follows the reasoning <a class="reference internal" href="specification.html#local-versions"><span class="std std-ref">above</span></a> for
+an ordinary rebuild, widened the same way as the check that everything
+asked for came out: every name actually derived for this build, joined
+with <code class="docutils literal notranslate"><span class="pre">.</span></code> (not <code class="docutils literal notranslate"><span class="pre">-</span></code>, which a Debian revision cannot hold), so <code class="docutils literal notranslate"><span class="pre">rpi4</span></code> and
+<code class="docutils literal notranslate"><span class="pre">rpi5</span></code> together default to <code class="docutils literal notranslate"><span class="pre">rpi4.rpi5</span></code> rather than <code class="docutils literal notranslate"><span class="pre">mod1</span></code>. A name that
+cannot be a Debian revision on its own – <code class="docutils literal notranslate"><span class="pre">cloud-edge</span></code>, say, or the
+joined result of several – needs <code class="docutils literal notranslate"><span class="pre">revision</span></code> written down instead.</p>
+<p>Build profiles matter more here than elsewhere. <code class="docutils literal notranslate"><span class="pre">noudeb</span></code> is effectively
+required once a fragment removes drivers: the debian-installer udebs are
+checked against the list of modules the stock configuration produces, and
+that check fails at the very end, once the kernel has already been built.
+The <code class="docutils literal notranslate"><span class="pre">pkg.linux.*</span></code> ones are savings rather than necessities:
+<code class="docutils literal notranslate"><span class="pre">nokerneldbginfo</span></code> drops a debug package several times the size of the
+kernel itself, and <code class="docutils literal notranslate"><span class="pre">notools</span></code> and <code class="docutils literal notranslate"><span class="pre">nosource</span></code> drop packages an image does
+not install. Documentation is dropped by the standard <code class="docutils literal notranslate"><span class="pre">nodoc</span></code>.</p>
+<p>That distinction is worth care, because a profile a package does not
+define is accepted and ignored rather than reported – a misspelt one
+costs a full kernel build to notice, and only if you were watching what
+came out of it.</p>
+<p>Two things to keep in mind when writing a fragment. The rebuilt kernel is
+pinned above the distribution’s, so seine’s own imager boots it as well –
+it needs virtio and 9p to reach its disks and the host’s files, and an
+image whose kernel cannot mount its root file-system will fail at the end
+of a long build rather than the start. <code class="docutils literal notranslate"><span class="pre">examples/configs/slim-common.fragment</span></code>
+and the architecture’s own beside it document what they leave enabled,
+and why, for this reason.</p>
+<p>A kernel is also where the rebuild cache earns its keep: the fragments are
+part of what decides whether a package needs rebuilding, by content, so
+editing one is enough to ask for a new kernel – and not editing one means
+the hours are paid once.</p>
+</section>
+<section id="bring-your-own-kernel">
+<h2>Bring your own kernel<a class="headerlink" href="#bring-your-own-kernel" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">upstream</span></code> builds a tree the distribution does not package – a stable
+release from kernel.org, a release candidate, or a vendor’s BSP – under
+the distribution’s own packaging:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">packages</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">linux</span>
+      <span class="n">extends</span><span class="p">:</span>
+          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">upstream</span><span class="p">:</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">cdn</span><span class="o">.</span><span class="n">kernel</span><span class="o">.</span><span class="n">org</span><span class="o">/</span><span class="n">pub</span><span class="o">/</span><span class="n">linux</span><span class="o">/</span><span class="n">kernel</span><span class="o">/</span><span class="n">v6</span><span class="o">.</span><span class="n">x</span><span class="o">/</span><span class="n">linux</span><span class="o">-</span><span class="mf">6.18.43</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">xz</span>
+              <span class="n">flavour</span><span class="p">:</span> <span class="n">amd64</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">source</span></code> says whose <code class="docutils literal notranslate"><span class="pre">debian/</span></code> to build with, <code class="docutils literal notranslate"><span class="pre">upstream</span></code> says what to build.
+Two forms are understood, the same two a package <code class="docutils literal notranslate"><span class="pre">source</span></code> takes:</p>
+<ul class="simple">
+<li><p>a release tarball, <code class="docutils literal notranslate"><span class="pre">https://.../linux-&lt;version&gt;.tar.{xz,gz,bz2}</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">git://&lt;host&gt;/&lt;path&gt;;rev=&lt;commit&gt;</span></code>, in the notation described above,
+<code class="docutils literal notranslate"><span class="pre">rev</span></code> required for the same reason</p></li>
+</ul>
+<p>Both are unpacked, Debian’s <code class="docutils literal notranslate"><span class="pre">debian/</span></code> directory is moved onto the result,
+and the orig tarball is regenerated from it – so what comes out is an
+ordinary source package that sbuild builds in the ordinary way. The
+packages it produces carry Debian’s names: <code class="docutils literal notranslate"><span class="pre">linux-image-&lt;abi&gt;-&lt;flavour&gt;</span></code>,
+the headers packages and their <code class="docutils literal notranslate"><span class="pre">-common</span></code> half, <code class="docutils literal notranslate"><span class="pre">linux-libc-dev</span></code>, the
+metapackages, and the maintainer scripts that drive the initramfs and the
+boot loader. They replace the distribution’s kernel rather than sitting
+beside it, which is the point of doing this the hard way.</p>
+<p>Naming a version is only needed when the packaging wanted is not the one
+the suite would hand you – which is the case for bookworm below, and not
+the case when the release packages a kernel recent enough to build with.
+An unpinned <code class="docutils literal notranslate"><span class="pre">apt://linux</span></code> follows the suite’s point releases; the patches
+that are kept have been in every one of them, and what changes between
+them is dropped whatever it is called. Pin it, or build from a snapshot,
+when the build has to be reproducible rather than merely repeatable.</p>
+<p>The packaging has to be one the tree can be built by, which is a weaker
+requirement than it sounds – Debian’s kernel packaging changes slowly –
+but not an empty one. Two things to weigh: the further apart the two
+versions are, the more of the series has to be dropped (see below), and
+the packaging’s build dependencies have to be satisfiable in the chroot,
+which is the suite being built for. That is what <code class="docutils literal notranslate"><span class="pre">examples/linux-6.18/</span></code>
+shows: trixie takes its packaging from the release, bookworm takes the
+<em>same</em> packaging from <code class="docutils literal notranslate"><span class="pre">bookworm-backports</span></code>, because a backport
+build-depends on what the suite it was backported to has. Taking
+trixie’s copy into a bookworm chroot would ask it for a newer compiler
+than bookworm carries.</p>
+<p>Which is also why that directory is two files rather than one per suite.
+<code class="docutils literal notranslate"><span class="pre">kernel.yml</span></code> holds everything that is a property of the packaging and the
+tree – the upstream, the flavour, the patches to drop – and is what
+trixie uses directly. <code class="docutils literal notranslate"><span class="pre">bookworm.yml</span></code> <code class="docutils literal notranslate"><span class="pre">requires</span></code> it and adds one line, the
+version that reaches into backports. Packages are merged across files by
+the source package they name, the way partitions are merged by label, so
+a file may say <em>what</em> to build without restating <em>how</em>, and the suite
+keeps only what is genuinely its own:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># examples/linux-6.18/bookworm.yml, in full</span>
+<span class="n">requires</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">kernel</span>
+
+<span class="n">packages</span><span class="p">:</span>
+    <span class="o">-</span> <span class="n">source</span><span class="p">:</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">linux</span><span class="o">=</span><span class="mf">6.12.95</span><span class="o">-</span><span class="mi">1</span><span class="o">~</span><span class="n">bpo12</span><span class="o">+</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>A setting already given wins, and <code class="docutils literal notranslate"><span class="pre">requires</span></code> loads what it names after
+the file that asked for it – so the specification reaching for a
+fragment is the one that gets to override it.</p>
+<section id="what-is-kept-of-debian-s-patches">
+<h3>What is kept of Debian’s patches<a class="headerlink" href="#what-is-kept-of-debian-s-patches" title="Link to this heading">#</a></h3>
+<p>Debian’s series is not applied whole. What is taken automatically is the
+<em>packaging</em>: the patches without which the build does not work. What is
+left behind is Debian’s kernel <em>policy</em> – unprivileged user namespaces
+off, yama off, autoloading of half a dozen protocols disabled, a warning
+on mounting raid5 – along with everything under <code class="docutils literal notranslate"><span class="pre">bugfix/</span></code>, which is a
+backport a newer tree already has, and everything under <code class="docutils literal notranslate"><span class="pre">features/</span></code>,
+which is keyed to config symbols that <code class="docutils literal notranslate"><span class="pre">oldconfig</span></code> drops along with the
+patch.</p>
+<p>The series says nothing about which is which, so it is decided by what
+each patch touches: a patch under <code class="docutils literal notranslate"><span class="pre">debian/</span></code> that only touches build files
+– <code class="docutils literal notranslate"><span class="pre">Makefile</span></code>, <code class="docutils literal notranslate"><span class="pre">Kbuild</span></code>, <code class="docutils literal notranslate"><span class="pre">.gitignore</span></code>, <code class="docutils literal notranslate"><span class="pre">scripts/</span></code> – is packaging, and a
+patch reaching into C source is a change to the kernel. By content rather
+than by name, because the set differs between releases, so a list of
+names would be locked to one baseline.</p>
+<p>Which files count is data, not code: <code class="docutils literal notranslate"><span class="pre">seine/data/kernel.yml</span></code> holds the
+patterns, and is the one place to edit when the packaging moves under us.
+Its content is part of what decides whether a grafted kernel needs
+rebuilding, so editing it asks for one, the way editing a kconfig
+fragment does – and only for grafted kernels, since an ordinary rebuild
+never consults it.</p>
+<p>A specification whose packaging builds through files those patterns do
+not name says so itself, without editing anything seine ships:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">upstream</span><span class="p">:</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">git</span><span class="o">.</span><span class="n">example</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">bsp</span><span class="o">/</span><span class="n">linux</span><span class="o">.</span><span class="n">git</span><span class="p">;</span><span class="n">rev</span><span class="o">=</span><span class="mf">1e4</span><span class="n">a0c9</span>
+              <span class="n">build</span><span class="o">-</span><span class="n">files</span><span class="p">:</span>
+                  <span class="o">-</span> <span class="s1">&#39;(^|/)Kconfig[^/]*$&#39;</span>
+</pre></div>
+</div>
+<p>They are Python regular expressions, matched against every path a patch
+changes, and they are <strong>added</strong> to the shipped ones rather than replacing
+them: what makes a kernel build is the same wherever the tree came from,
+and a packaging that reaches somewhere else reaches there <em>as well</em>. A
+pattern that is not a valid expression is reported by the specification
+that wrote it rather than by the first patch it fails on, and the list
+counts in the digest, so extending it asks for the rebuild it deserves.</p>
+<p><code class="docutils literal notranslate"><span class="pre">drop-patches</span></code> is the same arrangement seen from the other side: the
+<code class="docutils literal notranslate"><span class="pre">drop-patches</span></code> in <code class="docutils literal notranslate"><span class="pre">seine/data/kernel.yml</span></code> is a floor that a specification
+adds to, never something it has to restate.</p>
+<p>That line is drawn where it is for two reasons, and the second is the
+practical one. A specification that asked for another tree did not ask
+for another distribution’s opinions about it – but more to the point, a
+patch to C source is a patch that has to <em>apply</em>, and the whole premise
+here is a tree far enough from Debian’s that it packages a different
+kernel. Build files are the part of the kernel that barely moves, which
+is why taking them automatically works at all; <code class="docutils literal notranslate"><span class="pre">net/</span></code>, <code class="docutils literal notranslate"><span class="pre">security/</span></code> and
+<code class="docutils literal notranslate"><span class="pre">fs/</span></code> are not, and a policy patch written against 6.12 more often than
+not fails against 6.18. Automatic selection would turn every one of them
+into a rebase seine cannot do for you.</p>
+<p><strong>So preserving Debian’s semantics is the developer’s job, not the
+tool’s.</strong> If the goal is a kernel that behaves like Debian’s rather than
+merely one packaged like it, take the policy patches from the source
+package the packaging came from, rebase them onto your tree, and list
+them under <code class="docutils literal notranslate"><span class="pre">patches</span></code> (see below). Which ones matter is a decision about
+the product – an appliance that runs no untrusted code has different
+answers than a general-purpose image – and it is a decision seine
+deliberately leaves to whoever is making it. <code class="docutils literal notranslate"><span class="pre">debian/patches/series</span></code> in
+the source package, minus the patches listed below, is where that work
+starts.</p>
+<p>Of the patches that selection keeps from the packaging the examples use,
+these apply to a 6.18 tree and are what it is built with:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Patch</p></th>
+<th class="head"><p>What it does</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">kernelvariables.patch</span></code></p></td>
+<td><p>carries <code class="docutils literal notranslate"><span class="pre">ARCH</span></code>, <code class="docutils literal notranslate"><span class="pre">CROSS_COMPILE</span></code> and <code class="docutils literal notranslate"><span class="pre">KERNELRELEASE</span></code> into the kernel’s makefiles – the one that matters most</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">uname-version-timestamp.patch</span></code></p></td>
+<td><p>builds <code class="docutils literal notranslate"><span class="pre">uname</span> <span class="pre">-v</span></code> from <code class="docutils literal notranslate"><span class="pre">SOURCE_DATE_EPOCH</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">makefile-make-compiler-version-comparison-optional.patch</span></code></p></td>
+<td><p>lets a build use a compiler Debian did not test</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">perf-traceevent-support-asciidoctor-for-documentatio.patch</span></code></p></td>
+<td><p>builds perf’s documentation with asciidoctor</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tools-perf-install-python-bindings.patch</span></code></p></td>
+<td><p>installs perf’s python bindings where the packaging looks for them</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tools-perf-perf-read-vdso-in-libexec.patch</span></code></p></td>
+<td><p>moves <code class="docutils literal notranslate"><span class="pre">perf-read-vdso</span></code> out of <code class="docutils literal notranslate"><span class="pre">/usr/bin</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">arch-sh4-fix-uimage-build.patch</span></code></p></td>
+<td><p>sh4 only</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">mips-boston-disable-its.patch</span></code></p></td>
+<td><p>mips only</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The rest are dropped by the example files, upstream having since taken
+what they fixed: <code class="docutils literal notranslate"><span class="pre">gitignore.patch</span></code>,
+<code class="docutils literal notranslate"><span class="pre">documentation-drop-sphinx-version-check.patch</span></code>,
+<code class="docutils literal notranslate"><span class="pre">kbuild-look-for-module.lds-under-arch-directory-too.patch</span></code>,
+<code class="docutils literal notranslate"><span class="pre">kbuild-abort-build-if-subdirs-used.patch</span></code> and
+<code class="docutils literal notranslate"><span class="pre">fixdep-allow-overriding-hostcc-and-hostld.patch</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">drop-patches</span></code> is a list of globs subtracted from what was selected, and
+finding what belongs on it costs one build attempt rather than one per
+patch: seine applies the series itself before <code class="docutils literal notranslate"><span class="pre">dpkg-source</span></code> does, and
+reports <em>every</em> patch that fails at once, with the files each one wanted
+– which is what says whether the tree has the change already. A glob
+matching nothing is an error rather than a no-op, so a list does not
+quietly go stale when the packaging is moved forward.</p>
+</section>
+<section id="bringing-your-own-patches">
+<h3>Bringing your own patches<a class="headerlink" href="#bringing-your-own-patches" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">keep-patches</span></code> takes the decision over. It is a list of globs matched
+against the series, and naming it replaces the content-derived selection
+rather than adding to it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">upstream</span><span class="p">:</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">git</span><span class="o">.</span><span class="n">example</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">bsp</span><span class="o">/</span><span class="n">linux</span><span class="o">.</span><span class="n">git</span><span class="p">;</span><span class="n">rev</span><span class="o">=</span><span class="mf">1e4</span><span class="n">a0c9</span>
+              <span class="n">flavour</span><span class="p">:</span> <span class="n">arm64</span>
+              <span class="n">keep</span><span class="o">-</span><span class="n">patches</span><span class="p">:</span>
+                  <span class="o">-</span> <span class="n">debian</span><span class="o">/</span><span class="n">kernelvariables</span><span class="o">.</span><span class="n">patch</span>
+                  <span class="o">-</span> <span class="n">debian</span><span class="o">/</span><span class="n">uname</span><span class="o">-</span><span class="n">version</span><span class="o">-</span><span class="n">timestamp</span><span class="o">.</span><span class="n">patch</span>
+</pre></div>
+</div>
+<p>Setting it to nothing at all drops Debian’s series entirely, which is
+what to do when the packaging patches have been ported into the tree
+already, or when you would rather carry your own:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          <span class="n">kernel</span><span class="p">:</span>
+              <span class="n">upstream</span><span class="p">:</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">git</span><span class="o">.</span><span class="n">example</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">bsp</span><span class="o">/</span><span class="n">linux</span><span class="o">.</span><span class="n">git</span><span class="p">;</span><span class="n">rev</span><span class="o">=</span><span class="mf">1e4</span><span class="n">a0c9</span>
+              <span class="n">flavour</span><span class="p">:</span> <span class="n">arm64</span>
+              <span class="n">keep</span><span class="o">-</span><span class="n">patches</span><span class="p">:</span> <span class="p">[]</span>
+      <span class="n">patches</span><span class="p">:</span>
+          <span class="o">-</span> <span class="n">patches</span><span class="o">/</span><span class="mi">0001</span><span class="o">-</span><span class="n">kernelvariables</span><span class="o">-</span><span class="n">ported</span><span class="o">.</span><span class="n">patch</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">patches</span></code> is the ordinary package attribute, applied after the graft, so
+what it adds ends up in the series of the source package that is built.
+It is where two rather different jobs are done. One is the escape hatch
+above: a tree far enough from Debian’s that the automatic selection has
+nothing useful to say about it. The other is putting Debian’s policy back
+– <code class="docutils literal notranslate"><span class="pre">yama-disable-by-default.patch</span></code>,
+<code class="docutils literal notranslate"><span class="pre">add-sysctl-to-disallow-unprivileged-CLONE_NEWUSER-by-default.patch</span></code>,
+the <code class="docutils literal notranslate"><span class="pre">*-disable-auto-loading-as-mitigation-*</span></code> set, the lockdown series –
+rebased onto your tree, one at a time, keeping what the image actually
+wants. seine takes them as it takes any other patch; what it will not do
+is rebase them for you, or pretend a patch that no longer applies did.</p>
+<p>Note that <code class="docutils literal notranslate"><span class="pre">kernelvariables.patch</span></code> in some form is not optional whichever
+route is taken: without it the build does not pass <code class="docutils literal notranslate"><span class="pre">ARCH</span></code> down, and
+cross-building is the case that fails first.</p>
+<p>Two things are dropped whatever these say. <code class="docutils literal notranslate"><span class="pre">debian/dfsg/*</span></code> disables code
+Debian removed from its own orig tarball, which an upstream tree still
+has, so those patches are neither needed nor applicable – that list is
+<code class="docutils literal notranslate"><span class="pre">drop-patches</span></code> in <code class="docutils literal notranslate"><span class="pre">seine/data/kernel.yml</span></code>, alongside the patterns above,
+and is a consequence of the tree being built from rather than a default a
+specification overrides. And signed code is turned off for a grafted
+kernel, since the Secure Boot signature is issued by a key nobody outside
+Debian holds.</p>
+</section>
+<section id="what-you-do-not-get">
+<h3>What you do not get<a class="headerlink" href="#what-you-do-not-get" title="Link to this heading">#</a></h3>
+<p>Worth being plain about, since the aim here is a true replacement:</p>
+<ul>
+<li><p><strong>No Secure Boot lockdown.</strong> The <code class="docutils literal notranslate"><span class="pre">features/all/lockdown/*</span></code> patches
+change C source, so they are not among the packaging, and
+<code class="docutils literal notranslate"><span class="pre">CONFIG_LOCK_DOWN_IN_EFI_SECURE_BOOT</span></code> goes with them. The signature
+was never obtainable, but the enforcement is a real difference. An
+image that needs it has to carry those patches rebased onto its tree,
+through <code class="docutils literal notranslate"><span class="pre">patches</span></code>.</p></li>
+<li><p><strong>No Debian kernel policy.</strong> Nothing is silently changed – the
+kernel is simply upstream’s, with upstream’s defaults, and what
+Debian would have changed is listed above. Rebase those patches and
+list them under <code class="docutils literal notranslate"><span class="pre">patches</span></code> if the image wants them.</p></li>
+<li><p><strong>No featureset that Debian carries patches for.</strong> Featuresets other
+than the one being built are disabled, and <code class="docutils literal notranslate"><span class="pre">features/*</span></code> is not among
+the patches kept, so asking a graft for <code class="docutils literal notranslate"><span class="pre">rt</span></code> gets the featureset’s
+<em>configuration</em> and none of Debian’s realtime patches. For a 6.12 or
+newer tree that may be enough – <code class="docutils literal notranslate"><span class="pre">PREEMPT_RT</span></code> is upstream since 6.12
+– but seine has not been used that way, and against an older tree it
+would quietly build something that is not a realtime kernel.</p></li>
+<li><p><strong>A distinct ABI name.</strong> The rebuild is marked <code class="docutils literal notranslate"><span class="pre">UNRELEASED</span></code>, so a
+6.18.43 tree comes out as <code class="docutils literal notranslate"><span class="pre">6.18+unreleased-amd64</span></code> rather than
+borrowing an ABI number the distribution assigns. Nothing mistakes it
+for the distribution’s kernel, which is the intent. <code class="docutils literal notranslate"><span class="pre">abi-suffix</span></code>
+replaces <code class="docutils literal notranslate"><span class="pre">+unreleased</span></code> with a suffix of your own:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>       <span class="n">kernel</span><span class="p">:</span>
+           <span class="n">abi</span><span class="o">-</span><span class="n">suffix</span><span class="p">:</span> <span class="s2">&quot;+acme1&quot;</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">linux-libc-dev</span></code> from the new tree.</strong> It is built and it is in the
+local repository, above the distribution’s, so packages built after
+the kernel and the image itself get its headers. Usually what you
+want; worth knowing when it is not.</p></li>
+</ul>
+</section>
+</section>
+<section id="bring-your-own-modules">
+<h2>Bring your own modules<a class="headerlink" href="#bring-your-own-modules" title="Link to this heading">#</a></h2>
+<p>A driver that lives outside the kernel tree is a package like any
+other, built by <code class="docutils literal notranslate"><span class="pre">extends:</span> <span class="pre">module:</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>packages:
+    - source: git://github.com/NVIDIA/open-gpu-kernel-modules.git;rev=c8e6998…
+      name: nvidia-open
+      version: &quot;580.178.04&quot;
+      extends:
+          module:
+              build: .
+              modules: [nvidia, nvidia-drm, nvidia-modeset, nvidia-uvm]
+              make-vars:
+                  SYSSRC: $KERNEL_SRC
+                  SYSOUT: $KERNEL_OBJ
+                  ARCH: $KERNEL_ARCH
+                  TARGET_ARCH: $KERNEL_MACHINE
+              amd64-kernels:
+                  - apt://linux-headers-amd64
+</pre></div>
+</div>
+<p>Such a tree carries a makefile and, usually, no <code class="docutils literal notranslate"><span class="pre">debian/</span></code> directory, so
+seine writes the packaging. That is what <code class="docutils literal notranslate"><span class="pre">name</span></code> and <code class="docutils literal notranslate"><span class="pre">version</span></code> are for:
+the repository a clone came from is not what the driver is called, and a
+tree with no changelog cannot say what version is being built. A
+version is a string – yaml reads an unquoted <code class="docutils literal notranslate"><span class="pre">1.10</span></code> as <code class="docutils literal notranslate"><span class="pre">1.1</span></code>.</p>
+<p>A tree that does carry packaging has it replaced rather than refused.
+What upstream packaging exists for an out-of-tree module tends to ship
+the module as <em>source</em>, for dkms to build on whichever machine installs
+it – a compiler and a kernel’s headers on the device, and a build at
+first boot. <code class="docutils literal notranslate"><span class="pre">extends:</span> <span class="pre">module:</span></code> asks for the other thing, so it writes
+its own packaging over the tree’s.</p>
+<p>Two examples are shipped. <code class="docutils literal notranslate"><span class="pre">examples/nvidia-open.yml</span></code> builds NVIDIA’s
+open GPU modules for whichever kernel a flavour is at, and
+<code class="docutils literal notranslate"><span class="pre">examples/bcachefs/</span></code> builds bcachefs – which left the kernel at 6.18
+and is maintained beside it – against the kernel the specification
+builds, since the filesystem needs one newer than trixie ships.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head text-center"><p>Required</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&lt;arch&gt;-kernels</span></code></p></td>
+<td class="text-center"><p>yes</p></td>
+<td><p>Kernels to build against, per architecture</p></td>
+</tr>
+<tr class="row-odd"><td><p>build</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Directory whose makefile to run, <code class="docutils literal notranslate"><span class="pre">.</span></code> by default</p></td>
+</tr>
+<tr class="row-even"><td><p>build-depends</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>What the tree needs to compile</p></td>
+</tr>
+<tr class="row-odd"><td><p>make-vars</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Variables to pass to make</p></td>
+</tr>
+<tr class="row-even"><td><p>modules</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>The <code class="docutils literal notranslate"><span class="pre">.ko</span></code> files that should come out</p></td>
+</tr>
+<tr class="row-odd"><td><p>runtime-depends</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>What the modules need once installed</p></td>
+</tr>
+<tr class="row-even"><td><p>target</p></td>
+<td class="text-center"><p>no</p></td>
+<td><p>Make target, <code class="docutils literal notranslate"><span class="pre">modules</span></code> by default</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The tree is built through its own makefile rather than by driving
+kbuild at it. Packaging that has something to do first, or that works
+out what kbuild needs, is skipped entirely otherwise – and skipped
+quietly, leaving a build that succeeded and a package with no modules
+in it.</p>
+<section id="naming-the-kernels">
+<h3>Naming the kernels<a class="headerlink" href="#naming-the-kernels" title="Link to this heading">#</a></h3>
+<p>Kernels are named per architecture, by their <strong>headers</strong> package:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>              <span class="n">amd64</span><span class="o">-</span><span class="n">kernels</span><span class="p">:</span>
+                  <span class="o">-</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">linux</span><span class="o">-</span><span class="n">headers</span><span class="o">-</span><span class="n">amd64</span>
+                  <span class="o">-</span> <span class="n">apt</span><span class="p">:</span><span class="o">//</span><span class="n">linux</span><span class="o">-</span><span class="n">headers</span><span class="o">-</span><span class="mf">6.12.101</span><span class="o">+</span><span class="n">deb13</span><span class="o">-</span><span class="n">rt</span><span class="o">-</span><span class="n">amd64</span>
+              <span class="n">arm64</span><span class="o">-</span><span class="n">kernels</span><span class="p">:</span>
+                  <span class="o">-</span> <span class="n">linux</span>
+</pre></div>
+</div>
+<p>Three ways to name one. A metapackage (<code class="docutils literal notranslate"><span class="pre">linux-headers-amd64</span></code>) follows
+whichever kernel that flavour is at, and seine rebuilds the modules
+when the answer moves – which is what a specification wants, since an
+ABI changes under it with every kernel update. An ABI written out names
+one kernel exactly. A bare name is a kernel this specification builds,
+and saying so is all that is needed: the module is built after it, and
+a kernel that changes for any reason rebuilds the modules on it.</p>
+<p>Naming an <em>image</em> package is refused. A module is compiled against
+headers, and which headers belong to an image is a question with more
+than one answer once featuresets exist.</p>
+<p>Per architecture, rather than one flat list, so that a specification
+building for amd64 never has to make sense of arm64’s kernels. A module
+that names no kernels for an architecture it is built for is refused
+when the specification is parsed, rather than producing an image that
+boots and carries none of the modules asked for.</p>
+</section>
+<section id="what-comes-out">
+<h3>What comes out<a class="headerlink" href="#what-comes-out" title="Link to this heading">#</a></h3>
+<p>One binary package per kernel, named for the kernel the modules will
+load into, and a metapackage beside it named for the flavour:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">nvidia</span><span class="o">-</span><span class="nb">open</span><span class="o">-</span><span class="n">modules</span><span class="o">-</span><span class="mf">6.12.101</span><span class="o">+</span><span class="n">deb13</span><span class="o">-</span><span class="n">amd64</span>
+<span class="n">nvidia</span><span class="o">-</span><span class="nb">open</span><span class="o">-</span><span class="n">modules</span><span class="o">-</span><span class="n">amd64</span>
+</pre></div>
+</div>
+<p>A playbook installs the second. The first is renamed by every kernel
+update; the flavour is not.</p>
+</section>
+<section id="what-the-build-is-told">
+<h3>What the build is told<a class="headerlink" href="#what-the-build-is-told" title="Link to this heading">#</a></h3>
+<p>A tree left to itself asks <code class="docutils literal notranslate"><span class="pre">uname</span></code> which machine it is building for,
+which answers for the builder rather than for the package. So the
+rules set these, and a <code class="docutils literal notranslate"><span class="pre">make-vars</span></code> value may name them:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Variable</p></th>
+<th class="head"><p>What it is</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">$KERNEL_SRC</span></code></p></td>
+<td><p>The kernel’s generic sources (<code class="docutils literal notranslate"><span class="pre">-common</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">$KERNEL_OBJ</span></code></p></td>
+<td><p>Its configuration and <code class="docutils literal notranslate"><span class="pre">Module.symvers</span></code> (flavour)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">$KERNEL_RELEASE</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&lt;abi&gt;-&lt;flavour&gt;</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">$KERNEL_ARCH</span></code></p></td>
+<td><p>What the kernel calls the architecture</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">$KERNEL_MACHINE</span></code></p></td>
+<td><p>What <code class="docutils literal notranslate"><span class="pre">uname</span> <span class="pre">-m</span></code> calls it</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The last two are not the same thing. The kernel says <code class="docutils literal notranslate"><span class="pre">arm64</span></code> where
+<code class="docutils literal notranslate"><span class="pre">uname</span></code> says <code class="docutils literal notranslate"><span class="pre">aarch64</span></code> – and both say <code class="docutils literal notranslate"><span class="pre">x86_64</span></code>, which is how a
+specification that confuses them looks correct until it is built for
+something else.</p>
+<p><code class="docutils literal notranslate"><span class="pre">$KERNEL_SRC</span></code> and <code class="docutils literal notranslate"><span class="pre">$KERNEL_OBJ</span></code> are two paths because Debian splits a
+kernel’s headers into two packages. A tree that tests the kernel by
+compiling against it needs the first; kbuild needs the second. Given
+only one, such a tree concludes the kernel is missing headers it has,
+and fails much later and somewhere else.</p>
+</section>
+<section id="cross-compiling-modules">
+<h3>Cross-compiling modules<a class="headerlink" href="#cross-compiling-modules" title="Link to this heading">#</a></h3>
+<p>Modules cross-compile like everything else. It takes some arranging,
+which seine does without being asked: a kernel’s headers reach for
+<code class="docutils literal notranslate"><span class="pre">linux-kbuild</span></code>, whose <code class="docutils literal notranslate"><span class="pre">fixdep</span></code> and <code class="docutils literal notranslate"><span class="pre">modpost</span></code> are compiled for the
+kernel’s architecture and cannot run on a machine of another – and a
+kernel seine grafted has no such package in any archive at all.</p>
+<p>So seine builds one: that kernel’s headers with the tools rebuilt for
+the machine doing the building, from the kernel’s own source. It is
+built once per kernel however many modules are built against it, and
+it lands in the local repository like anything else.</p>
+<p>Nothing about a specification changes for it. <code class="docutils literal notranslate"><span class="pre">cross:</span> <span class="pre">false</span></code> still
+means what it means elsewhere – build under emulation, for packaging
+that has to run what it just built.</p>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="merging.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Merging specification fragments</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="building.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Building</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#rebuilding-the-kernel">Rebuilding the kernel</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bring-your-own-kernel">Bring your own kernel</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-is-kept-of-debian-s-patches">What is kept of Debian’s patches</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bringing-your-own-patches">Bringing your own patches</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-you-do-not-get">What you do not get</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#bring-your-own-modules">Bring your own modules</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#naming-the-kernels">Naming the kernels</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-comes-out">What comes out</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-the-build-is-told">What the build is told</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cross-compiling-modules">Cross-compiling modules</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Cedric Hombourger
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Cedric Hombourger.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

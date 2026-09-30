@@ -1,0 +1,870 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Caching &#8212; seine documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=4418a689" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="_static/documentation_options.js?v=4d2f5802"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'caching';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Releasing seine as .deb packages" href="release-as-debs.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">seine documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="specification.html">Specification files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="merging.html">Merging specification fragments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernels.html">Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="environment.html">Environment variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tui.html">TUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ai.html">The AI chat</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vault-openbao.html">Running a vault for seine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="release-as-debs.html">Releasing seine as .deb packages</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Caching</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine/issues/new?title=Issue%20on%20page%20%2Fcaching.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/caching.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Caching</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-is-cached">What is cached</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-cache-objects-are-keyed">How cache objects are keyed</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#index-kinds">Index kinds</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#filesystem-layout-behind-a-key">Filesystem layout behind a key</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#scoped-exports">Scoped exports</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-index">The index</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#metadata">Metadata</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#writing">Writing</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reading">Reading</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-travels">What travels</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#users-of-the-mechanism">Users of the mechanism</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reporting-eviction-and-transport">Reporting, eviction and transport</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="caching">
+<h1>Caching<a class="headerlink" href="#caching" title="Link to this heading">#</a></h1>
+<p>What a build keeps so the next build does not make it again. Nothing
+here is needed for a build to succeed — only to spare work already done
+— which is what makes removing any of it safe. <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">info</span></code>
+shows it, <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">clear</span></code> removes it, and <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">export</span></code> /
+<code class="docutils literal notranslate"><span class="pre">import</span></code> carries it to another machine. See
+<a class="reference internal" href="building.html#what-a-build-keeps-and-getting-the-space-back"><span class="std std-ref">What a build keeps, and getting the space back</span></a>
+for the user-facing surface; this page is the internals behind it.</p>
+<section id="what-is-cached">
+<h2>What is cached<a class="headerlink" href="#what-is-cached" title="Link to this heading">#</a></h2>
+<p>The registry in <code class="docutils literal notranslate"><span class="pre">CACHES</span></code>:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>name</p></th>
+<th class="head"><p>what it holds</p></th>
+<th class="head"><p>where <code class="docutils literal notranslate"><span class="pre">ContainerEngine</span></code> puts it</p></th>
+<th class="head"><p>portable</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">downloads</span></code></p></td>
+<td><p>per-suite <code class="docutils literal notranslate"><span class="pre">.deb</span></code> download cache bind-mounted into <code class="docutils literal notranslate"><span class="pre">apt</span></code> (<code class="docutils literal notranslate"><span class="pre">ContainerEngine.downloads_root()</span></code> / <code class="docutils literal notranslate"><span class="pre">downloads(suite)</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SEINE_DL_DIR</span></code> or <code class="docutils literal notranslate"><span class="pre">SEINE_BUILD_DIR/downloads</span></code></p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">packages</span></code></p></td>
+<td><p>per-release flat repository of rebuilt <code class="docutils literal notranslate"><span class="pre">.deb</span></code>s, <code class="docutils literal notranslate"><span class="pre">.dsc</span></code>/<code class="docutils literal notranslate"><span class="pre">.changes</span></code>/<code class="docutils literal notranslate"><span class="pre">.buildinfo</span></code>, <code class="docutils literal notranslate"><span class="pre">.stamps</span></code> and <code class="docutils literal notranslate"><span class="pre">.stamps-spec</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ContainerEngine.cache(&quot;packages&quot;,</span> <span class="pre">release)</span></code></p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">chroots</span></code></p></td>
+<td><p>per-<code class="docutils literal notranslate"><span class="pre">release</span></code>/<code class="docutils literal notranslate"><span class="pre">arch</span></code> sbuild chroot tarballs <code class="docutils literal notranslate"><span class="pre">*.tar.zst</span></code> + beside it <code class="docutils literal notranslate"><span class="pre">&lt;release&gt;-&lt;arch&gt;.inputs</span></code> digest</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ContainerEngine.cache(&quot;chroots&quot;,</span> <span class="pre">release,</span> <span class="pre">arch)</span></code></p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">bootstraps</span></code></p></td>
+<td><p>image-build package cache kept under <code class="docutils literal notranslate"><span class="pre">TMPDIR</span></code> via <code class="docutils literal notranslate"><span class="pre">--mount=type=cache</span></code> (<code class="docutils literal notranslate"><span class="pre">ContainerEngine.cache(&quot;bootstraps&quot;)</span></code>, shunted through <code class="docutils literal notranslate"><span class="pre">XDG_RUNTIME_DIR</span></code> by <code class="docutils literal notranslate"><span class="pre">_short_tmpdir()</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SEINE_CACHE_DIR/bootstraps</span></code></p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">vendor</span></code></p></td>
+<td><p>per-suite flat fetch of <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> artifacts (<code class="docutils literal notranslate"><span class="pre">.deb</span></code>, <code class="docutils literal notranslate"><span class="pre">.dsc</span></code>, <code class="docutils literal notranslate"><span class="pre">.orig.tar.*</span></code>, <code class="docutils literal notranslate"><span class="pre">.debian.tar.*</span></code>)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ContainerEngine.cache(&quot;vendor&quot;,</span> <span class="pre">suite)</span></code></p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">images</span></code></p></td>
+<td><p>container images in podman’s storage (tooling, builder, imager, transport, source, plus pulled base images)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ContainerEngine.root()</span></code> (<code class="docutils literal notranslate"><span class="pre">SEINE_BUILD_DIR/containers</span></code>)</p></td>
+<td><p>yes (via <code class="docutils literal notranslate"><span class="pre">podman</span> <span class="pre">save</span></code> / <code class="docutils literal notranslate"><span class="pre">load</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">analyze</span></code></p></td>
+<td><p>per-build cost records</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ContainerEngine.cache(&quot;analyze&quot;)</span></code></p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scratch</span></code></p></td>
+<td><p>ephemeral workbenches, unpacked sources, <code class="docutils literal notranslate"><span class="pre">tmp</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ContainerEngine.scratch()</span></code> / <code class="docutils literal notranslate"><span class="pre">workbench()</span></code></p></td>
+<td><p>no</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Only <code class="docutils literal notranslate"><span class="pre">PORTABLE</span> <span class="pre">=</span> <span class="pre">[&quot;downloads&quot;,</span> <span class="pre">&quot;packages&quot;,</span> <span class="pre">&quot;chroots&quot;,</span> <span class="pre">IMAGES]</span></code> travel
+in a <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">export</span></code> tar. <code class="docutils literal notranslate"><span class="pre">CARRIED</span> <span class="pre">=</span> <span class="pre">[&quot;packages&quot;,</span> <span class="pre">&quot;chroots&quot;,</span> <span class="pre">IMAGES]</span></code>
+is what an export carries when nothing is named; <code class="docutils literal notranslate"><span class="pre">downloads</span></code> is left out
+unless asked for because a build still needs the archive to serve
+<code class="docutils literal notranslate"><span class="pre">Packages</span></code>/<code class="docutils literal notranslate"><span class="pre">Sources</span></code> — carrying the <code class="docutils literal notranslate"><span class="pre">.deb</span></code>s only saves bandwidth.
+<code class="docutils literal notranslate"><span class="pre">scratch</span></code> never travels, <code class="docutils literal notranslate"><span class="pre">vendor</span></code> is registered so <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">clear</span> <span class="pre">vendor</span></code> exists but is never exported, and <code class="docutils literal notranslate"><span class="pre">bootstraps</span></code>/<code class="docutils literal notranslate"><span class="pre">analyze</span></code> are
+local.</p>
+<p>Images carry by what their <code class="docutils literal notranslate"><span class="pre">seine.kind</span></code> label says
+(<code class="docutils literal notranslate"><span class="pre">tooling</span></code>, <code class="docutils literal notranslate"><span class="pre">builder</span></code>, <code class="docutils literal notranslate"><span class="pre">imager</span></code>, <code class="docutils literal notranslate"><span class="pre">transport</span></code>, <code class="docutils literal notranslate"><span class="pre">source</span></code>). <code class="docutils literal notranslate"><span class="pre">rootfs</span></code> does
+not — the root filesystem is what <code class="docutils literal notranslate"><span class="pre">mmdebstrap</span></code> made of the archive on
+the day, stale as soon as the archive moves, and every image standing on
+it remains current anyway because its label carries the base’s
+<code class="docutils literal notranslate"><span class="pre">seine.inputs</span></code> digest. <code class="docutils literal notranslate"><span class="pre">--with-image-rootfs</span></code> overrides that. Unlabelled
+images are rebuilt on sight, base images (<code class="docutils literal notranslate"><span class="pre">docker.io/...</span></code>) travel
+unconditionally.</p>
+<p>What travels omits the derived
+indices (<code class="docutils literal notranslate"><span class="pre">Packages</span></code>, <code class="docutils literal notranslate"><span class="pre">Packages.gz</span></code>, <code class="docutils literal notranslate"><span class="pre">Sources</span></code>, <code class="docutils literal notranslate"><span class="pre">Sources.gz</span></code>, <code class="docutils literal notranslate"><span class="pre">Release</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Release.gpg</span></code>, <code class="docutils literal notranslate"><span class="pre">InRelease</span></code>, <code class="docutils literal notranslate"><span class="pre">.packages.db</span></code>), <code class="docutils literal notranslate"><span class="pre">apt</span></code> locks, <code class="docutils literal notranslate"><span class="pre">partial</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sbuild</span></code> <code class="docutils literal notranslate"><span class="pre">.build</span></code> logs and their <code class="docutils literal notranslate"><span class="pre">*.build</span></code> symlink, and <code class="docutils literal notranslate"><span class="pre">*.lock</span></code>.</p>
+</section>
+<section id="how-cache-objects-are-keyed">
+<h2>How cache objects are keyed<a class="headerlink" href="#how-cache-objects-are-keyed" title="Link to this heading">#</a></h2>
+<p>The filesystem names an object by path; the <strong>index</strong> names it by
+<code class="docutils literal notranslate"><span class="pre">(kind,</span> <span class="pre">key)</span></code>. The index is advisory — what
+decides a build is still the stamp, the <code class="docutils literal notranslate"><span class="pre">&lt;release&gt;-&lt;arch&gt;.inputs</span></code> file,
+or the <code class="docutils literal notranslate"><span class="pre">seine.inputs</span></code> label. A missing or corrupt index costs a report,
+never a wrong build.</p>
+<section id="index-kinds">
+<h3>Index kinds<a class="headerlink" href="#index-kinds" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>kind</p></th>
+<th class="head"><p>constant</p></th>
+<th class="head"><p>key shape</p></th>
+<th class="head"><p>who writes it</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">chroot</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CHROOT</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&lt;release&gt;-&lt;arch&gt;</span></code> e.g. <code class="docutils literal notranslate"><span class="pre">bookworm-amd64</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SbuildChroot</span></code> — <code class="docutils literal notranslate"><span class="pre">hit</span></code> on reuse, <code class="docutils literal notranslate"><span class="pre">made</span></code> on creation</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">package</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">PACKAGE</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&lt;release&gt;/&lt;arch&gt;/&lt;source&gt;</span></code> e.g. <code class="docutils literal notranslate"><span class="pre">bookworm/amd64/busybox</span></code> — one entry per architecture’s build; <code class="docutils literal notranslate"><span class="pre">scope:</span> <span class="pre">both</span></code> is two entries</p></td>
+<td><p>package builder — <code class="docutils literal notranslate"><span class="pre">hit</span></code> on reuse, <code class="docutils literal notranslate"><span class="pre">made</span></code> on creation</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">image</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">IMAGE</span></code></p></td>
+<td><p>podman name e.g. <code class="docutils literal notranslate"><span class="pre">bootstrap/debian/trixie/all</span></code>, <code class="docutils literal notranslate"><span class="pre">builder/debian/trixie</span></code></p></td>
+<td><p>bootstrap builder — <code class="docutils literal notranslate"><span class="pre">hit</span></code> on reuse, <code class="docutils literal notranslate"><span class="pre">made</span></code> on creation</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">downloads</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DOWNLOADS</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&lt;release&gt;</span></code> e.g. <code class="docutils literal notranslate"><span class="pre">bookworm</span></code></p></td>
+<td><p>image assembly (hitting the archive cache)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">vendor</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">VENDOR</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&lt;suite&gt;_&lt;source&gt;_&lt;name&gt;_&lt;arch&gt;_&lt;version&gt;</span></code> e.g. <code class="docutils literal notranslate"><span class="pre">bookworm_libssl3_libssl3_amd64_3.0.11-1</span></code> (<code class="docutils literal notranslate"><span class="pre">source</span></code> literal is <code class="docutils literal notranslate"><span class="pre">&quot;source&quot;</span></code> for source artifacts, binary name otherwise; arch is <code class="docutils literal notranslate"><span class="pre">&quot;-&quot;</span></code> for source)</p></td>
+<td><p>vendor fetch — <code class="docutils literal notranslate"><span class="pre">made</span></code> on fetch, <code class="docutils literal notranslate"><span class="pre">hit</span></code> for already-fetched</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">downloads</span></code> is deliberately coarse — which <code class="docutils literal notranslate"><span class="pre">.deb</span></code> <code class="docutils literal notranslate"><span class="pre">apt</span></code> took is decided
+inside the container, so the honest unit is the release. <code class="docutils literal notranslate"><span class="pre">VENDOR</span></code> is the
+opposite — one entry per artifact so a superseded version ages out on its
+own via <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">clear</span> <span class="pre">--older-than</span> <span class="pre">…</span> <span class="pre">vendor</span></code>.</p>
+</section>
+<section id="filesystem-layout-behind-a-key">
+<h3>Filesystem layout behind a key<a class="headerlink" href="#filesystem-layout-behind-a-key" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>downloads</strong> <code class="docutils literal notranslate"><span class="pre">downloads/&lt;suite&gt;/</span></code> plus <code class="docutils literal notranslate"><span class="pre">downloads/&lt;suite&gt;/lists/</span></code> (host-persisted <code class="docutils literal notranslate"><span class="pre">apt</span></code> lists reused by the vendor resolver).</p></li>
+<li><p><strong>packages</strong> <code class="docutils literal notranslate"><span class="pre">packages/&lt;release&gt;/</span></code> flat: <code class="docutils literal notranslate"><span class="pre">*.deb</span></code>, <code class="docutils literal notranslate"><span class="pre">*.dsc</span></code>, <code class="docutils literal notranslate"><span class="pre">*.changes</span></code>, <code class="docutils literal notranslate"><span class="pre">*.buildinfo</span></code>, hidden <code class="docutils literal notranslate"><span class="pre">.stamps/&lt;source&gt;_&lt;arch&gt;_&lt;digest&gt;</span></code> (the stamp lists the <code class="docutils literal notranslate"><span class="pre">.deb</span></code>s it produced), beside it <code class="docutils literal notranslate"><span class="pre">.stamps-spec/&lt;stamp&gt;.spec</span></code> digest excerpts, plus <code class="docutils literal notranslate"><span class="pre">Packages</span></code>/<code class="docutils literal notranslate"><span class="pre">Sources</span></code>/<code class="docutils literal notranslate"><span class="pre">Release</span></code> and <code class="docutils literal notranslate"><span class="pre">.packages.db</span></code> built from the directory. One repository per release for every arch — an <code class="docutils literal notranslate"><span class="pre">all</span></code> package belongs to none and is not kept per-arch.</p></li>
+<li><p><strong>chroots</strong> <code class="docutils literal notranslate"><span class="pre">chroots/&lt;release&gt;/&lt;arch&gt;/bookworm-amd64.tar.zst</span></code> and <code class="docutils literal notranslate"><span class="pre">bookworm-amd64.inputs</span></code>.</p></li>
+<li><p><strong>vendor</strong> <code class="docutils literal notranslate"><span class="pre">vendor/&lt;suite&gt;/</span></code> flat fetched files, indexed on demand into <code class="docutils literal notranslate"><span class="pre">deploy/vendor/&lt;suite&gt;/pool/{main,extra}/</span></code> / <code class="docutils literal notranslate"><span class="pre">dists/&lt;suite&gt;/…</span></code>.</p></li>
+<li><p><strong>images</strong> <code class="docutils literal notranslate"><span class="pre">build/containers/</span></code> — podman’s graph-root, asked via <code class="docutils literal notranslate"><span class="pre">podman</span> <span class="pre">images</span></code> and <code class="docutils literal notranslate"><span class="pre">podman</span> <span class="pre">system</span> <span class="pre">df</span></code>.</p></li>
+</ul>
+</section>
+<section id="scoped-exports">
+<h3>Scoped exports<a class="headerlink" href="#scoped-exports" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">Wanted</span></code> derives, without building,
+what a build of those specs would reach for: <code class="docutils literal notranslate"><span class="pre">releases</span></code>, per-release file
+sets derived from each package’s stamp, <code class="docutils literal notranslate"><span class="pre">chroots</span></code>
+as <code class="docutils literal notranslate"><span class="pre">(release,</span> <span class="pre">chroot_arch)</span></code> pairs, and image names. <code class="docutils literal notranslate"><span class="pre">Wanted.records(kind,key)</span></code>
+and <code class="docutils literal notranslate"><span class="pre">Wanted.holds(path)</span></code> then filter the tar and the <code class="docutils literal notranslate"><span class="pre">index.json</span></code> it
+carries. Release-wide for <code class="docutils literal notranslate"><span class="pre">downloads</span></code>, stamp-named for <code class="docutils literal notranslate"><span class="pre">packages</span></code>, choice
+is exact for <code class="docutils literal notranslate"><span class="pre">chroots</span></code>/<code class="docutils literal notranslate"><span class="pre">images</span></code>; base images again travel regardless.</p>
+</section>
+</section>
+<section id="the-index">
+<h2>The index<a class="headerlink" href="#the-index" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">index.db</span></code> under <code class="docutils literal notranslate"><span class="pre">SEINE_CACHE_DIR</span></code> (or <code class="docutils literal notranslate"><span class="pre">SEINE_BUILD_DIR/cache</span></code>).
+SQLite via stdlib <code class="docutils literal notranslate"><span class="pre">sqlite3</span></code>, WAL, <code class="docutils literal notranslate"><span class="pre">busy_timeout=5000</span></code>, <code class="docutils literal notranslate"><span class="pre">synchronous=NORMAL</span></code>.
+Migrated from <code class="docutils literal notranslate"><span class="pre">index.json</span></code> — the JSON file rewrote the whole
+store under a file lock per <code class="docutils literal notranslate"><span class="pre">hit</span></code>/<code class="docutils literal notranslate"><span class="pre">made</span></code>, which did not scale past tens of
+entries. <code class="docutils literal notranslate"><span class="pre">index.db</span></code> is a different file
+from <code class="docutils literal notranslate"><span class="pre">index.json</span></code>, so there is nothing to migrate — a bad file is dropped
+and recreated.</p>
+<p>Schema:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">cache_entries</span><span class="w"> </span><span class="p">(</span>
+<span class="w">  </span><span class="n">kind</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w"> </span><span class="k">key</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">  </span><span class="n">made</span><span class="w"> </span><span class="nb">INTEGER</span><span class="p">,</span><span class="w"> </span><span class="n">used</span><span class="w"> </span><span class="nb">INTEGER</span><span class="p">,</span><span class="w"> </span><span class="n">uses</span><span class="w"> </span><span class="nb">INTEGER</span><span class="p">,</span>
+<span class="w">  </span><span class="n">metadata</span><span class="w"> </span><span class="nb">TEXT</span><span class="p">,</span>
+<span class="w">  </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="p">(</span><span class="n">kind</span><span class="p">,</span><span class="w"> </span><span class="k">key</span><span class="p">)</span>
+<span class="p">)</span><span class="w"> </span><span class="k">STRICT</span><span class="p">;</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_used</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">cache_entries</span><span class="p">(</span><span class="n">used</span><span class="p">);</span>
+<span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_kind</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">cache_entries</span><span class="p">(</span><span class="n">kind</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Fixed fields:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">made</span></code> — when last made (unix epoch, <code class="docutils literal notranslate"><span class="pre">int</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">used</span></code> — when last used (unix epoch).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">uses</span></code> — how many times reused since made; <code class="docutils literal notranslate"><span class="pre">made</span></code> resets to 0.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">metadata</span></code> — <code class="docutils literal notranslate"><span class="pre">TEXT</span></code> holding a JSON object (see below).</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">entries(present=None)</span></code> returns <code class="docutils literal notranslate"><span class="pre">(kind,</span> <span class="pre">key,</span> <span class="pre">entry)</span></code> dicts oldest-<code class="docutils literal notranslate"><span class="pre">used</span></code>
+first, merging <code class="docutils literal notranslate"><span class="pre">metadata</span></code> JSON keys into the entry dict. <code class="docutils literal notranslate"><span class="pre">stripped()</span></code> is
+what an export carries — only <code class="docutils literal notranslate"><span class="pre">{&quot;made&quot;:</span> <span class="pre">…}</span></code> per key, without <code class="docutils literal notranslate"><span class="pre">used</span></code>/<code class="docutils literal notranslate"><span class="pre">uses</span></code>;
+the importer resets <code class="docutils literal notranslate"><span class="pre">used=now</span></code>, <code class="docutils literal notranslate"><span class="pre">uses=0</span></code> preserving <code class="docutils literal notranslate"><span class="pre">made</span></code> (<code class="docutils literal notranslate"><span class="pre">merge()</span></code>).
+<code class="docutils literal notranslate"><span class="pre">forget(kind,</span> <span class="pre">key)</span></code> deletes by kind or key, used by <code class="docutils literal notranslate"><span class="pre">clear</span></code>/<code class="docutils literal notranslate"><span class="pre">stale</span></code>/eviction.</p>
+<p><code class="docutils literal notranslate"><span class="pre">hit(kind,</span> <span class="pre">key,</span> <span class="pre">metadata=None)</span></code> vs <code class="docutils literal notranslate"><span class="pre">made(kind,</span> <span class="pre">key,</span> <span class="pre">metadata=None)</span></code>:
+<code class="docutils literal notranslate"><span class="pre">hit</span></code> bumps <code class="docutils literal notranslate"><span class="pre">uses</span></code>, keeps <code class="docutils literal notranslate"><span class="pre">made</span></code>; <code class="docutils literal notranslate"><span class="pre">made</span></code> replaces <code class="docutils literal notranslate"><span class="pre">made</span></code>
+with <code class="docutils literal notranslate"><span class="pre">now</span></code> and resets <code class="docutils literal notranslate"><span class="pre">uses</span></code> to 0. Both set <code class="docutils literal notranslate"><span class="pre">used=now</span></code>. Counted alongside
+so summary and record cannot disagree; <code class="docutils literal notranslate"><span class="pre">summary()</span></code>
+prints <code class="docutils literal notranslate"><span class="pre">reused:</span> <span class="pre">…;</span> <span class="pre">made:</span> <span class="pre">…</span></code> at the end of a build.</p>
+<p><code class="docutils literal notranslate"><span class="pre">get(kind,</span> <span class="pre">key)</span></code> returns the same merged dict as <code class="docutils literal notranslate"><span class="pre">entries()</span></code> would for a
+single <code class="docutils literal notranslate"><span class="pre">(kind,</span> <span class="pre">key)</span></code> or <code class="docutils literal notranslate"><span class="pre">None</span></code> if absent/corrupt — advisory, never raises.</p>
+<p><code class="docutils literal notranslate"><span class="pre">patch(kind,</span> <span class="pre">key,</span> <span class="pre">patch)</span></code> merges <code class="docutils literal notranslate"><span class="pre">patch</span></code> dict into the existing metadata
+and bumps <code class="docutils literal notranslate"><span class="pre">used</span></code> (via <code class="docutils literal notranslate"><span class="pre">hit</span></code>), preserving other metadata keys. Unlike
+<code class="docutils literal notranslate"><span class="pre">hit(...,</span> <span class="pre">metadata=...)</span></code> which replaces <code class="docutils literal notranslate"><span class="pre">metadata</span></code> wholesale, <code class="docutils literal notranslate"><span class="pre">patch</span></code> is for
+incremental updates (e.g. <code class="docutils literal notranslate"><span class="pre">vendor</span></code>’s <code class="docutils literal notranslate"><span class="pre">has_gocode</span></code> flag). If no entry exists
+it creates one.</p>
+<p>The store is advisory and concurrent-build friendly: <code class="docutils literal notranslate"><span class="pre">BEGIN</span> <span class="pre">IMMEDIATE</span></code>,
+WAL, and on error / lock contention
+a write is silently dropped — a worse report, never a worse build. A corrupt
+DB is dropped and recreated.</p>
+<p>Compatibility shims re-express the old
+<code class="docutils literal notranslate"><span class="pre">{kind:</span> <span class="pre">{key:</span> <span class="pre">entry}}</span></code> JSON shape atop SQLite so the <code class="docutils literal notranslate"><span class="pre">aged()</span></code> test helper
+and any code poking the old internals continue to work;
+they are not public API.</p>
+</section>
+<section id="metadata">
+<h2>Metadata<a class="headerlink" href="#metadata" title="Link to this heading">#</a></h2>
+<p>Every entry can carry arbitrary extra data beyond <code class="docutils literal notranslate"><span class="pre">made</span></code>/<code class="docutils literal notranslate"><span class="pre">used</span></code>/<code class="docutils literal notranslate"><span class="pre">uses</span></code>
+through the <code class="docutils literal notranslate"><span class="pre">metadata</span></code> column.</p>
+<section id="writing">
+<h3>Writing<a class="headerlink" href="#writing" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">seine.cache_index</span><span class="w"> </span><span class="kn">import</span> <span class="n">Index</span><span class="p">,</span> <span class="n">PACKAGE</span>
+
+<span class="n">Index</span><span class="p">()</span><span class="o">.</span><span class="n">hit</span><span class="p">(</span><span class="n">PACKAGE</span><span class="p">,</span> <span class="s2">&quot;bookworm/amd64/linux&quot;</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;revision&quot;</span><span class="p">:</span> <span class="s2">&quot;mod1&quot;</span><span class="p">,</span> <span class="s2">&quot;pinned&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+<span class="n">Index</span><span class="p">()</span><span class="o">.</span><span class="n">made</span><span class="p">(</span><span class="n">PACKAGE</span><span class="p">,</span> <span class="s2">&quot;bookworm/amd64/linux&quot;</span><span class="p">,</span> <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;digest&quot;</span><span class="p">:</span> <span class="s2">&quot;b41c…&quot;</span><span class="p">,</span> <span class="s2">&quot;spec&quot;</span><span class="p">:</span> <span class="s2">&quot;…&quot;</span><span class="p">})</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">metadata</span></code> should be a JSON-serialisable <code class="docutils literal notranslate"><span class="pre">dict</span></code>. A non-dict is stored
+as <code class="docutils literal notranslate"><span class="pre">{&quot;metadata&quot;:</span> <span class="pre">value}</span></code> on read.</p></li>
+<li><p>Keys <code class="docutils literal notranslate"><span class="pre">made</span></code>, <code class="docutils literal notranslate"><span class="pre">used</span></code>, <code class="docutils literal notranslate"><span class="pre">uses</span></code> are dropped from <code class="docutils literal notranslate"><span class="pre">metadata</span></code> before storing
+— they are real columns and would be unreadable back
+(column wins on read) if stored and silently lost.</p></li>
+<li><p>On <code class="docutils literal notranslate"><span class="pre">INSERT</span></code> the dict is serialised into <code class="docutils literal notranslate"><span class="pre">metadata</span> <span class="pre">TEXT</span></code>. On
+<code class="docutils literal notranslate"><span class="pre">UPDATE</span></code>, if <code class="docutils literal notranslate"><span class="pre">metadata</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">None</span></code> it replaces the previous JSON
+wholesale; if <code class="docutils literal notranslate"><span class="pre">metadata</span> <span class="pre">is</span> <span class="pre">None</span></code> the previous JSON is kept.
+Use <code class="docutils literal notranslate"><span class="pre">patch(kind,</span> <span class="pre">key,</span> <span class="pre">{&quot;k&quot;:</span> <span class="pre">v})</span></code> to merge incrementally instead of
+replacing — it reads the existing JSON, merges <code class="docutils literal notranslate"><span class="pre">patch</span></code>, and <code class="docutils literal notranslate"><span class="pre">hit</span></code>s.</p></li>
+<li><p>Serialization errors fall back to keeping the
+old JSON or dropping the new one; storage errors fall back to a
+transient in-memory entry, never a raised build error.</p></li>
+</ul>
+</section>
+<section id="reading">
+<h3>Reading<a class="headerlink" href="#reading" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">entries()</span></code> decodes <code class="docutils literal notranslate"><span class="pre">metadata</span></code> JSON and merges dict keys into
+the returned <code class="docutils literal notranslate"><span class="pre">entry</span></code> dict, skipping any key already present as a column.
+<code class="docutils literal notranslate"><span class="pre">get(kind,</span> <span class="pre">key)</span></code> is the same but for a single <code class="docutils literal notranslate"><span class="pre">(kind,</span> <span class="pre">key)</span></code> — <code class="docutils literal notranslate"><span class="pre">None</span></code> if
+absent/corrupt:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">kind</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">Index</span><span class="p">()</span><span class="o">.</span><span class="n">entries</span><span class="p">():</span>
+    <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;made&quot;</span><span class="p">]</span>   <span class="c1"># int</span>
+    <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;used&quot;</span><span class="p">]</span>   <span class="c1"># int</span>
+    <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;uses&quot;</span><span class="p">]</span>   <span class="c1"># int</span>
+    <span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;revision&quot;</span><span class="p">)</span>  <span class="c1"># from metadata, if stored</span>
+
+<span class="n">entry</span> <span class="o">=</span> <span class="n">Index</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">PACKAGE</span><span class="p">,</span> <span class="s2">&quot;bookworm/amd64/linux&quot;</span><span class="p">)</span>
+<span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;revision&quot;</span><span class="p">)</span>  <span class="c1"># same merged view, or None</span>
+</pre></div>
+</div>
+<p>Non-dict metadata appears as <code class="docutils literal notranslate"><span class="pre">entry[&quot;metadata&quot;]</span></code>. Bad JSON is ignored.</p>
+</section>
+<section id="what-travels">
+<h3>What travels<a class="headerlink" href="#what-travels" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Export</strong> carries
+only <code class="docutils literal notranslate"><span class="pre">made</span></code>. An extra <code class="docutils literal notranslate"><span class="pre">metadata</span></code> key does not ride the <code class="docutils literal notranslate"><span class="pre">index.json</span></code>
+member inside the tar — how often someone else reached
+for a chroot says nothing about the receiving machine, and historical
+locality matters more than foreign history. <code class="docutils literal notranslate"><span class="pre">Wanted</span></code> scopes it
+with the same filter as the objects themselves.</p></li>
+<li><p><strong>Import</strong> takes <code class="docutils literal notranslate"><span class="pre">made</span></code> and any extra keys beyond
+<code class="docutils literal notranslate"><span class="pre">made</span></code>/<code class="docutils literal notranslate"><span class="pre">used</span></code>/<code class="docutils literal notranslate"><span class="pre">uses</span></code> in the carried dict as new metadata. Existing
+metadata is preserved and merged — carried extra keys update / add, not
+wipe, the local dict; <code class="docutils literal notranslate"><span class="pre">used</span></code> is reset to <code class="docutils literal notranslate"><span class="pre">now</span></code>, <code class="docutils literal notranslate"><span class="pre">uses</span></code> to the local
+count, and <code class="docutils literal notranslate"><span class="pre">made</span></code> to the carried value (or <code class="docutils literal notranslate"><span class="pre">now</span></code> if missing).</p></li>
+</ul>
+<p>So metadata is <strong>local by default</strong> — written and read on one machine,
+not replicated. If future cross-machine metadata is needed, <code class="docutils literal notranslate"><span class="pre">stripped()</span></code>
+and <code class="docutils literal notranslate"><span class="pre">merge()</span></code> are the extension points (add the JSON to <code class="docutils literal notranslate"><span class="pre">stripped()</span></code> and
+let <code class="docutils literal notranslate"><span class="pre">merge()</span></code> keep it).</p>
+</section>
+<section id="users-of-the-mechanism">
+<h3>Users of the mechanism<a class="headerlink" href="#users-of-the-mechanism" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">vendor</span></code> writes <code class="docutils literal notranslate"><span class="pre">has_gocode</span></code> per binary artifact via
+<code class="docutils literal notranslate"><span class="pre">Index().made(VENDOR,</span> <span class="pre">key,</span> <span class="pre">metadata={&quot;has_gocode&quot;:</span> <span class="pre">bool})</span></code> on fetch and
+<code class="docutils literal notranslate"><span class="pre">Index().patch(VENDOR,</span> <span class="pre">key,</span> <span class="pre">{&quot;has_gocode&quot;:</span> <span class="pre">bool})</span></code> / <code class="docutils literal notranslate"><span class="pre">Index().get()</span></code> on
+reuse/index — advisory, with <code class="docutils literal notranslate"><span class="pre">dpkg-deb</span> <span class="pre">-c</span></code> fallback if the index is wiped.
+Otherwise the column and the <code class="docutils literal notranslate"><span class="pre">hit</span></code>/<code class="docutils literal notranslate"><span class="pre">made</span></code>/<code class="docutils literal notranslate"><span class="pre">patch</span></code>/<code class="docutils literal notranslate"><span class="pre">get</span></code> path exist as
+infrastructure and as an extension point. The design lets
+future users attach per-entry data without schema changes:</p>
+<ul class="simple">
+<li><p>a package entry could store its stamp excerpt, resolved
+<code class="docutils literal notranslate"><span class="pre">version</span></code>, or signing fingerprint so <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">info</span> <span class="pre">--entries-matching</span></code> or <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">plan</span></code> can answer without re-reading the
+repository;</p></li>
+<li><p>a vendor artifact could store <code class="docutils literal notranslate"><span class="pre">files</span></code> or <code class="docutils literal notranslate"><span class="pre">component</span></code> so eviction and
+reporting avoid re-listing the directory;</p></li>
+<li><p>an image could store <code class="docutils literal notranslate"><span class="pre">inputs</span></code> digest in the index as well as on the
+label, or a chroot its <code class="docutils literal notranslate"><span class="pre">inputs</span></code> digest, for faster staleness checks.</p></li>
+</ul>
+<p>Any such user follows the contract above: pass <code class="docutils literal notranslate"><span class="pre">metadata=dict</span></code> to
+<code class="docutils literal notranslate"><span class="pre">hit</span></code>/<code class="docutils literal notranslate"><span class="pre">made</span></code>, read it back from <code class="docutils literal notranslate"><span class="pre">entries()</span></code> entry dict, never use
+<code class="docutils literal notranslate"><span class="pre">made</span></code>/<code class="docutils literal notranslate"><span class="pre">used</span></code>/<code class="docutils literal notranslate"><span class="pre">uses</span></code> as metadata keys, and expect it not to be exported
+unless <code class="docutils literal notranslate"><span class="pre">stripped()</span></code> is extended.</p>
+</section>
+</section>
+<section id="reporting-eviction-and-transport">
+<h2>Reporting, eviction and transport<a class="headerlink" href="#reporting-eviction-and-transport" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Reporting</strong>: <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">cache</span> <span class="pre">info</span></code> sizes each cache; <code class="docutils literal notranslate"><span class="pre">--entries</span></code> lists filtered
+by cache name and sorts by <code class="docutils literal notranslate"><span class="pre">used</span></code>; <code class="docutils literal notranslate"><span class="pre">--entries-matching</span></code>
+regex-filters <code class="docutils literal notranslate"><span class="pre">key</span></code> and, for <code class="docutils literal notranslate"><span class="pre">PACKAGE</span></code>, appends the
+on-disk stamp name and its digest excerpt.</p></li>
+<li><p><strong>Build summary</strong>: every <code class="docutils literal notranslate"><span class="pre">hit</span></code>/<code class="docutils literal notranslate"><span class="pre">made</span></code> increments the per-kind counter, <code class="docutils literal notranslate"><span class="pre">summary()</span></code>
+is the <code class="docutils literal notranslate"><span class="pre">reused:</span> <span class="pre">…;</span> <span class="pre">made:</span> <span class="pre">…</span></code> line at the end of a build, <code class="docutils literal notranslate"><span class="pre">say()</span></code> is the
+<code class="docutils literal notranslate"><span class="pre">cache:</span> <span class="pre">…</span> <span class="pre">reused,</span> <span class="pre">made</span> <span class="pre">…</span></code> lines under <code class="docutils literal notranslate"><span class="pre">--verbose</span></code>.</p></li>
+<li><p><strong>Stale sweep</strong>: <code class="docutils literal notranslate"><span class="pre">clear</span> <span class="pre">--older-than</span> <span class="pre">30d</span></code> asks the
+index for <code class="docutils literal notranslate"><span class="pre">used</span> <span class="pre">&lt;</span> <span class="pre">cutoff</span></code> and evicts per entry, then
+forgets it. A cache with no record is left alone — a guess about
+<code class="docutils literal notranslate"><span class="pre">mtime</span></code> is not made. Eviction knows how to remove each kind (image removal, directory removal,
+flat file(s) for vendor, stamp + named <code class="docutils literal notranslate"><span class="pre">.deb</span></code>s for package).</p></li>
+<li><p><strong>Whole-cache clear</strong>: <code class="docutils literal notranslate"><span class="pre">clear</span> <span class="pre">[names]</span></code> under a non-blocking storage lock — refuses with <em>“a build is running”</em> instead of queuing, removes per cache best-effort (a <code class="docutils literal notranslate"><span class="pre">partial</span></code> dir owned by the container’s user may be undeletable — the rest still goes), then forgets the kind, exit 1 if anything was left with a hint about <code class="docutils literal notranslate"><span class="pre">podman</span> <span class="pre">unshare</span> <span class="pre">rm</span> <span class="pre">-rf</span></code>.</p></li>
+<li><p><strong>Export / import</strong>: <code class="docutils literal notranslate"><span class="pre">export</span> <span class="pre">[file]</span> <span class="pre">[caches]</span></code> writes a tar with one
+top-level member per cache plus <code class="docutils literal notranslate"><span class="pre">index.json</span></code> for the
+record and <code class="docutils literal notranslate"><span class="pre">images/images.tar.gz</span></code> via <code class="docutils literal notranslate"><span class="pre">podman</span> <span class="pre">save</span> <span class="pre">|</span> <span class="pre">gzip</span> <span class="pre">-1</span></code>.
+Derived indices, locks, and <code class="docutils literal notranslate"><span class="pre">partial</span></code> are skipped.
+Import validates every tar member
+fails on devices/absolute paths/unknown caches, extracts,
+prunes superseded stamps and unreachable
+<code class="docutils literal notranslate"><span class="pre">.deb</span></code>s (<code class="docutils literal notranslate"><span class="pre">--force</span></code> for orphans), removes stale indices, merges the index.
+<code class="docutils literal notranslate"><span class="pre">Wanted</span></code> scopes both sides without fetching or building.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="release-as-debs.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Releasing seine as .deb packages</p>
+      </div>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-is-cached">What is cached</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-cache-objects-are-keyed">How cache objects are keyed</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#index-kinds">Index kinds</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#filesystem-layout-behind-a-key">Filesystem layout behind a key</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#scoped-exports">Scoped exports</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-index">The index</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#metadata">Metadata</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#writing">Writing</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reading">Reading</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-travels">What travels</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#users-of-the-mechanism">Users of the mechanism</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reporting-eviction-and-transport">Reporting, eviction and transport</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Cedric Hombourger
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Cedric Hombourger.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

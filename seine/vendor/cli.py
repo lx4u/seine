@@ -29,7 +29,7 @@ from seine.containers import (container_archive_filename, fetch_container,
                               resolve_container)
 from .fetch import (_artifact_key, _binary_already_fetched, _binary_has_gocode,
                     _dedup_binaries, _index_has_gocode, fetch_binary,
-                    fetch_source, index)
+                    fetch_source, index, update_lists)
 from .manifest import (GRAPH_VERSION, _binary_file_path, _binary_hashes,
                        _cached_local_matches, _expand_binaries, _expand_files,
                        _file_hashes, _local_sha1, _lock_sources, _reverse_of,
@@ -113,6 +113,7 @@ def fetch_tasks(distro, suite, manifest, options, hostBootstrap, archs=None):
                         None if snap else vendor._builder_for(distro, suite, options, hostBootstrap),
                         suite, source, version, snapshot_hashes=snap,
                         expected_hashes=hashes, options=options)))
+            tasks[-1].apt = snap is None
         for binpkg, arch, binver in _dedup_binaries(entry, seen_bins, archs):
             bin_key = _artifact_key(suite, binpkg, binpkg, arch, binver)
             if _binary_already_fetched(where, binpkg, arch, binver):
@@ -137,7 +138,23 @@ def fetch_tasks(distro, suite, manifest, options, hostBootstrap, archs=None):
                         None if snap else vendor._builder_for(distro, suite, options, hostBootstrap),
                         suite, binpkg, arch, binver, snapshot_sha1=snap,
                         expected_hash=bin_hash, options=options)))
+            tasks[-1].apt = snap is None
     return tasks
+
+# A task to fill the suite's apt lists when a fetch needs apt and they are empty.
+def update_lists_tasks(distro, suite, manifest, tasks, options, hostBootstrap, archs=None):
+    from seine import vendor
+    lists = ContainerEngine.downloads_lists(suite)
+    filled = any("_Packages" in f or "_Sources" in f for f in os.listdir(lists))
+    if filled or not any(getattr(task, "apt", False) for task in tasks):
+        return []
+    archs = archs or sorted({arch for entry in manifest.values()
+                             for per_arch in entry.get("binaries", {}).values()
+                             for arch in per_arch})
+    return [Task("update-lists:%s" % suite,
+                 lambda: update_lists(
+                     vendor._builder_for(distro, suite, options, hostBootstrap),
+                     suite, archs))]
 
 # One task per suite, run only once that suite's fetches have all
 # finished -- a later, separate 'tasks.run()' call rather than a 'needs'
@@ -548,9 +565,14 @@ class VendorCmd(Cmd):
 
         if len(wanted) > 0:
             fetch = []
+            update = []
             for suite in wanted:
-                fetch += vendor.fetch_tasks(distro, suite, manifests[suite], self.options,
-                                            hostBootstrap, archs)
+                suite_tasks = vendor.fetch_tasks(distro, suite, manifests[suite],
+                                                 self.options, hostBootstrap, archs)
+                update += update_lists_tasks(distro, suite, manifests[suite], suite_tasks,
+                                             self.options, hostBootstrap, archs)
+                fetch += suite_tasks
+            self._run_wave(update, retryable=False, display=display)
             self._run_wave(fetch, retryable=True, display=display)
 
             signer = signing.vendor_signer(self.options, vault_defaults)
