@@ -2236,7 +2236,8 @@ class EnrichForLockSaysMadeOnAQueryAndReusedOnACacheHit(_CleansUpPaths, avocado.
         with patch("seine.vendor.snapshot.session", lambda: sess), \
              patch("sys.stdout", new=io.StringIO()) as out:
             quiet_cmd._enrich_for_lock(suite, sources2)
-        self.assertEqual(out.getvalue(), "")
+        self.assertEqual([l for l in out.getvalue().splitlines()
+                          if "/1 (100%)" not in l], [])
 
     # A binary's own version churns (binNMUs) far more than its
     # source's, so its cache misses far more too under real archive
@@ -2307,6 +2308,41 @@ class EnrichForLockFindsAnArchAllBinaryUnderAll(_CleansUpPaths, avocado.Test):
             enriched = _vendor_cmd()._enrich_for_lock(suite, sources)
         self.assertEqual(enriched["zvbi"]["binary_snapshot"],
                          {"zvbi-doc": {"amd64": local_sha1}})
+
+class ProgressReportsDoneOfTotal(avocado.Test):
+    def test_lines_are_rate_limited_and_the_last_always_shows(self):
+        from seine.vendor.cli import _Progress
+        now = [0.0]
+        progress = _Progress(None, "fetch-bin", 4, clock=lambda: now[0])
+        with patch("sys.stdout", new=io.StringIO()) as out:
+            for _ in range(4):
+                progress.step()
+                now[0] += 1.0
+        lines = out.getvalue().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("fetch-bin: 1/4 (25%)"))
+        self.assertTrue(lines[1].startswith("fetch-bin: 4/4 (100%)"))
+
+    def test_a_display_with_progress_gets_the_numbers_not_lines(self):
+        from seine.vendor.cli import _Progress
+        seen = []
+        class Display:
+            def progress(self, label, done, total):
+                seen.append((label, done, total))
+        with patch("sys.stdout", new=io.StringIO()) as out:
+            progress = _Progress(Display(), "fetch-bin", 2)
+            progress.step()
+            progress.step()
+        self.assertEqual(out.getvalue(), "")
+        self.assertEqual(seen[-1], ("fetch-bin", 2, 2))
+
+    def test_a_wave_counts_its_tasks_without_a_display(self):
+        from seine.tasks import Task
+        with patch("sys.stdout", new=io.StringIO()) as out:
+            _vendor_cmd(jobs=2, verbose=False)._run_wave(
+                [Task("fetch-bin:x:%d" % i, lambda: None) for i in range(3)],
+                retryable=True)
+        self.assertIn("fetch-bin: 3/3 (100%)", out.getvalue())
 
 class EnrichForLockRecordsASnapshotUrlOnHashMatch(_CleansUpPaths, avocado.Test):
     def test(self):

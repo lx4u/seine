@@ -3540,6 +3540,15 @@ class VendorStateBehaviour(avocado.Test):
         self.assertEqual(state.retries, 1)
         self.assertIn("retries: 1", state.render_stats())
 
+    def test_progress_shows_as_a_bar_in_the_stats(self):
+        state = self.VendorState()
+        state.reset(["bookworm"])
+        self.assertNotIn("[", state.render_stats())
+        state.progress("fetch-bin", 5, 10)
+        self.assertIn("fetch-bin: [##########----------] 5/10", state.render_stats())
+        state.reset(["bookworm"])
+        self.assertNotIn("fetch-bin", state.render_stats())
+
     def test_wave_logs_tracks_the_current_waves_own_directory(self):
         state = self.VendorState()
         state.reset(["bookworm"])

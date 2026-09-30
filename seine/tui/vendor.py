@@ -38,6 +38,8 @@ class VendorState:
         self.retries = 0
         # Log directory of the wave currently running; changes per wave.
         self.logs = None
+        # Latest (label, done, total) of the phase running, or None.
+        self.phase = None
         # 'repo_size' at reset() is the baseline every sample() subtracts
         # back out, since a suite's repository persists across runs --
         # this tracks what the current run itself added.
@@ -65,6 +67,7 @@ class VendorState:
         self.notify_ai = False
         self.retries = 0
         self.logs = None
+        self.phase = None
         self._baseline = self._repo_bytes()
         self.repo_size = self._baseline
         self.bytes_downloaded_session = 0
@@ -109,6 +112,9 @@ class VendorState:
     def wave_logs(self, path):
         self.logs = path
 
+    def progress(self, label, done, total):
+        self.phase = (label, done, total)
+
     # Message not overwritten here: _run()'s final say() already set the
     # per-suite summary a successful run wants shown.
     def finished_ok(self):
@@ -149,6 +155,12 @@ class VendorState:
             "tasks: %d done, %d running, %d failed, %d total"
             % (done, running, failed, len(self.rows)),
         ]
+        if self.phase is not None:
+            label, done, total = self.phase
+            width = 20
+            filled = width * done // total if total else width
+            lines.append("%s: [%s%s] %d/%d" % (label, "#" * filled,
+                                               "-" * (width - filled), done, total))
         if self.retries:
             lines.append("retries: %d" % self.retries)
         lines.append("")
