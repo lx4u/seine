@@ -877,6 +877,112 @@ class CacheCmd(Cmd):
             sys.stderr.write("error: cache %s failed: %s\n" % (action, e))
             sys.exit(1)
 
+
+# ---------------------------------------------------------------------------
+# Clean Chroot Gate
+# ---------------------------------------------------------------------------
+
+class CleanChrootViolation(ValueError):
+    """Raised when a chroot archive contains sensitive files or credentials."""
+
+
+# Sensitive path patterns forbidden from reaching shared storage.
+FORBIDDEN_CHROOT_PATTERNS = [
+    re.compile(r"(^|/)\.ssh/id_[^/]+(?<!\.pub)$"),
+    re.compile(r"(^|/)etc/ssh/ssh_host_[^/]+_key$"),
+    re.compile(r"(^|/)etc/ssl/private/.+$"),
+    re.compile(r"(^|/)\.netrc$"),
+    re.compile(r"(^|/)\.dockercfg$"),
+    re.compile(r"(^|/)\.docker/config\.json$"),
+    re.compile(r"(^|/)\.aws/(credentials|config)$"),
+]
+
+
+def _open_tar_archive(path):
+    if path.endswith((".zst", ".tar.zst")):
+        try:
+            import zstandard as zstd
+            fh = open(path, "rb")
+            dctx = zstd.ZstdDecompressor()
+            reader = dctx.stream_reader(fh)
+            tar = tarfile.open(fileobj=reader, mode="r|")
+            return tar, [fh, reader, tar]
+        except ImportError:
+            proc = subprocess.Popen(["zstd", "-dc", path], stdout=subprocess.PIPE)
+            tar = tarfile.open(fileobj=proc.stdout, mode="r|")
+            return tar, [proc.stdout, tar, proc]
+    tar = tarfile.open(path, "r:*")
+    return tar, [tar]
+
+
+def check_clean_chroot(target, spec=None):
+    """Scan a chroot archive or directory for secrets before pushing to cache.
+
+    Raises CleanChrootViolation if forbidden sensitive paths or redaction
+    patterns/secrets are detected.
+    """
+    patterns = []
+    if spec is not None:
+        from seine.utils import redactions
+        patterns, _ = redactions(spec)
+
+    def verify_entry(rel_path, read_content_fn=None):
+        clean_path = rel_path[2:] if rel_path.startswith("./") else rel_path
+        clean_path = clean_path.lstrip("/")
+        for forbidden in FORBIDDEN_CHROOT_PATTERNS:
+            if forbidden.search(clean_path):
+                raise CleanChrootViolation(
+                    f"clean-chroot gate rejected archive: sensitive path '{clean_path}' detected")
+        for pattern in patterns:
+            if pattern.search(clean_path):
+                raise CleanChrootViolation(
+                    f"clean-chroot gate rejected archive: redacted path '{clean_path}' detected")
+        if read_content_fn is not None and clean_path.startswith("etc/") and patterns:
+            try:
+                data = read_content_fn()
+                if data:
+                    text = data.decode("utf-8", errors="ignore")
+                    for pattern in patterns:
+                        if pattern.search(text):
+                            raise CleanChrootViolation(
+                                f"clean-chroot gate rejected archive: secret detected in '{clean_path}'")
+            except OSError:
+                pass
+
+    if os.path.isdir(target):
+        for root, dirs, files in os.walk(target):
+            for fname in files:
+                full_path = os.path.join(root, fname)
+                rel_path = os.path.relpath(full_path, target)
+
+                def read_fn(p=full_path):
+                    with open(p, "rb") as f:
+                        return f.read(1048576)
+
+                verify_entry(rel_path, read_content_fn=read_fn)
+        return True
+
+    tar, resources = _open_tar_archive(target)
+    try:
+        for member in tar:
+            def read_tar_member(t=tar, m=member):
+                if not m.isfile():
+                    return b""
+                f = t.extractfile(m)
+                return f.read(1048576) if f else b""
+
+            verify_entry(member.name, read_content_fn=read_tar_member if member.isfile() else None)
+    finally:
+        for r in resources:
+            if hasattr(r, "close"):
+                with contextlib.suppress(Exception):
+                    r.close()
+            elif hasattr(r, "wait"):
+                with contextlib.suppress(Exception):
+                    r.wait()
+    return True
+
+
 USAGE = """
 Show what seine has cached, remove it, or move it to another machine
 
