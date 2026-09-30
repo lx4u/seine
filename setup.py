@@ -41,6 +41,7 @@ setup(
         'pyyaml>=3.12',
         'ansible-core>=2.15',
         'jinja2>=3.0',
+        'boto3',
         # seine/snapshot.py's own snapshot.debian.org client, used by
         # 'seine vendor --refresh' to find an archive URI for a source
         # or binary the live feed has since moved past.
