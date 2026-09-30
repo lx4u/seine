@@ -725,6 +725,13 @@ class SeineApp(App):
             self._socket_send({"type": "ai_message", "content": msg.get("content", "")})
         self.ai_state._mark_sent()
 
+    # Releases any CredentialModal prompt still blocking a build worker,
+    # so quitting the app can never leave it hung.
+    async def action_quit(self):
+        from seine.tui.credentials import release_pending
+        release_pending()
+        await super().action_quit()
+
     # Nothing to build without a spec, so a bare 'seine tui' opens on
     # Doctor rather than an empty Overview.
     def on_mount(self):

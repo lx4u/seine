@@ -231,8 +231,11 @@ def start_build(app, state, build, packages_only=False, target=None):
     reporter = TextualReporter(app, state)
 
     def run():
+        from seine.build import collect_credentials
         from seine.diffing import remember
+        from seine.tui.credentials import tui_prompt
         try:
+            collect_credentials([build], prompt=tui_prompt(app))
             build.build(reporter=reporter)
         except (tasks.Failed, tasks.Interrupted) as e:
             app.call_from_thread(state.finished_failed, str(e))
