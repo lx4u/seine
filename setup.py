@@ -69,5 +69,8 @@ setup(
         # comment), robotframework is pure Python and has no reason not
         # to be an ordinary extra.
         'test': ['robotframework'],
+        # seine/credentials.py's 'keyring:' backend for feed auth: never a
+        # dependency of core seine, only of specs that name that backend.
+        'keyring': ['keyring'],
     },
 )

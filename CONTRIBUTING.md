@@ -50,6 +50,7 @@ whole project. The ones in use are:
 | `bootstrap`    | The host and target bootstrap images                  |
 | `build`        | Driving a build: the steps it is made of, `seine build` |
 | `cache`        | What seine keeps between builds, and `seine cache`    |
+| `credentials`  | Resolving feed logins/passwords: `seine/credentials.py` |
 | `deps`         | seine's own dependencies and packaging                |
 | `distribution` | The `distribution` section: releases, feeds, mirrors  |
 | `examples`     | The specifications under `examples/`                  |
