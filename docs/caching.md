@@ -263,3 +263,23 @@ unless `stripped()` is extended.
   prunes superseded stamps and unreachable
   `.deb`s (`--force` for orphans), removes stale indices, merges the index.
   `Wanted` scopes both sides without fetching or building.
+
+## Network storage (S3 / Garage)
+
+Seine supports network object caching via S3-compatible object stores (such as
+[Garage](https://garagehq.deuxfleurs.fr/) or MinIO) to share cached packages,
+chroots, vendor assets, and recipes across multiple developers and build workers.
+
+The client layer (`seine/storage/s3/client.py`) is a thin wrapper over `boto3`.
+It signs requests with AWS Signature Version 4 using path-style addressing and
+retries transient errors, with credentials resolved via `seine.credentials`.
+
+Supported operations include:
+* `head_bucket(bucket)` / `create_bucket(bucket)`: verifies bucket accessibility, or creates it.
+* `head_object(bucket, key)`: queries object headers and metadata without downloading.
+* `get_object(bucket, key)` / `download_file(...)`: reads an object into memory, or downloads it to a local file.
+* `put_object(bucket, key, data, metadata, if_none_match)`: uploads a small payload in one request, checked by the server against its SHA-256, with custom `x-amz-meta-*` metadata. `if_none_match` asks for a conditional write-once (`If-None-Match: *`), which Garage ignores.
+* `upload_file(bucket, key, path)`: streams a file, in several parts when large, stores its SHA-256 as metadata and returns it.
+* `delete_object(bucket, key)`: removes objects.
+* `presign_get(bucket, key)`: builds a temporary download URL.
+* `list_objects_v2(bucket, prefix)`: paginates bucket listings.
