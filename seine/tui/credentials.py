@@ -44,9 +44,9 @@ class CredentialModal(ModalScreen):
     #credpane Checkbox, #credpane Checkbox:focus {
         border: none; height: 1; padding: 0; margin-top: 1;
     }
-    #passwordrow { height: 1; }
-    #passwordrow > Input { width: 1fr; }
-    #passwordrow > #reveal { width: 5; min-width: 5; }
+    #passwordrow, .passwordrow { height: 1; }
+    #passwordrow > Input, .passwordrow > Input { width: 1fr; }
+    #passwordrow > #reveal, .passwordrow > .revealbtn { width: 5; min-width: 5; }
     #actionrow { height: 1; padding-top: 1; align-horizontal: right; }
     #actionrow > Button { min-width: 8; margin-left: 1; }
     #credhint { color: $text-muted; padding-top: 1; }
@@ -70,20 +70,25 @@ class CredentialModal(ModalScreen):
         self._fields = fields
         self._event = event
         self._result = result
-        self._revealed = False
+        self._revealed = {}
 
     def compose(self):
-        login_default = self._fields["login"][0]
-        password_default = self._fields["password"][0]
         with Vertical(id="credpane"):
-            yield Static(self._feed_context or "Feed credentials needed",
-                        id="credtitle", markup=False)
-            yield Static("Login")
-            yield Input(value=login_default, id="login")
-            yield Static("Password")
-            with Horizontal(id="passwordrow"):
-                yield Input(value=password_default, password=True, id="password")
-                yield Button(self.HIDDEN_ICON, id="reveal")
+            yield Static(self._feed_context or "Credentials needed",
+                         id="credtitle", markup=False)
+            for field, (default_val, is_secret) in self._fields.items():
+                label = "Access Key" if field == "access_key" else (
+                    "Secret Key" if field == "secret_key" else field.replace("_", " ").title()
+                )
+                yield Static(label)
+                if is_secret:
+                    row_id = "passwordrow" if field == "password" else f"{field}_row"
+                    btn_id = "reveal" if field == "password" else f"reveal_{field}"
+                    with Horizontal(id=row_id, classes="passwordrow"):
+                        yield Input(value=default_val, password=True, id=field)
+                        yield Button(self.HIDDEN_ICON, id=btn_id, classes="revealbtn")
+                else:
+                    yield Input(value=default_val, id=field)
             if self._offer_save:
                 yield Checkbox("Save for next time", value=True, id="save")
             with Horizontal(id="actionrow"):
@@ -92,17 +97,22 @@ class CredentialModal(ModalScreen):
             yield Static("Enter submit · Esc cancel", id="credhint")
 
     def on_mount(self):
-        self.query_one("#login", Input).focus()
+        first_input = self.query(Input).first()
+        if first_input:
+            first_input.focus()
 
     def on_button_pressed(self, event):
-        if event.button.id == "reveal":
-            self._revealed = not self._revealed
-            self.query_one("#password", Input).password = not self._revealed
-            event.button.label = (self.REVEALED_ICON if self._revealed
+        btn_id = event.button.id or ""
+        if btn_id == "reveal" or btn_id.startswith("reveal_"):
+            field = "password" if btn_id == "reveal" else btn_id[len("reveal_"):]
+            self._revealed[field] = not self._revealed.get(field, False)
+            inp = self.query_one(f"#{field}", Input)
+            inp.password = not self._revealed[field]
+            event.button.label = (self.REVEALED_ICON if self._revealed[field]
                                   else self.HIDDEN_ICON)
-        elif event.button.id == "ok":
+        elif btn_id == "ok":
             self._submit()
-        elif event.button.id == "cancel":
+        elif btn_id == "cancel":
             self.action_cancel()
 
     def on_input_submitted(self, event):
@@ -114,8 +124,8 @@ class CredentialModal(ModalScreen):
 
     def _submit(self):
         self._result["values"] = {
-            "login": self.query_one("#login", Input).value,
-            "password": self.query_one("#password", Input).value,
+            field: self.query_one(f"#{field}", Input).value
+            for field in self._fields
         }
         if self._offer_save:
             self._result["values"]["_save"] = self.query_one("#save", Checkbox).value

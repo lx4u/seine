@@ -400,11 +400,20 @@ class AnalyzeScreen(BaseScreen):
 # Not spec-scoped: cache and environment are shared by every build.
 class CacheScreen(BaseScreen):
     def update_body(self):
-        self.query_one("#body", Static).update(render_cache())
+        text = getattr(self.app, "cache_text", None)
+        if text:
+            self.query_one("#body", Static).update(text)
+        else:
+            self.query_one("#body", Static).update(render_cache(self.app.context))
 
 class DoctorScreen(BaseScreen):
     def update_body(self):
-        self.query_one("#body", Static).update(render_doctor())
+        options = {}
+        if self.app.context and self.app.context.active and self.app.context.builds:
+            options = getattr(self.app.context.builds[0], "options", {}) or {}
+            if "spec" not in options and hasattr(self.app.context.builds[0], "spec"):
+                options = dict(options, spec=self.app.context.builds[0].spec)
+        self.query_one("#body", Static).update(render_doctor(options=options))
 
 # What /diff last computed -- not spec-scoped, so reads app.diff_text.
 class DiffScreen(BaseScreen):
@@ -585,6 +594,7 @@ class SeineApp(App):
         self.test_state.on_started = self._test_started
         self.test_state.on_changed = self._test_changed
         self.diff_text = None
+        self.cache_text = None
         # Set by commands.py's _issues() right before app.show("issues");
         # IssuesScreen.update_body() reads these back.
         self.issues_filter = None
