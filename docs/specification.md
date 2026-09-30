@@ -8,6 +8,7 @@ of the following sections:
  * containers
  * playbook
  * image
+ * storage
  * test
 
 The specification may be broken down into smaller files to ease maintenance and
@@ -1890,6 +1891,28 @@ vms:
       cpus: 4
       memory: 4096
 ```
+
+## storage
+
+The `storage` section configures network object storage (such as S3 or Garage)
+used for shared caching:
+
+```yaml
+storage:
+  s3:
+    endpoint: https://garage.example.com:3900
+    bucket: seine-cache
+    region: garage
+    auth:
+      access_key: "keyring:s3-access-key | settings:s3-access-key | env:AWS_ACCESS_KEY_ID"
+      secret_key: "keyring:s3-secret-key | settings:s3-secret-key | env:AWS_SECRET_ACCESS_KEY"
+```
+
+Like feed credentials, S3 credentials are resolved using fallback chains
+(`keyring:`, `settings:`, `env:`, or `vault:`). If `auth` is omitted, the default
+chain searches `keyring` -> `settings` (`~/.config/seine/credentials.json`) -> `env:SEINE_S3_ACCESS_KEY` -> `env:AWS_ACCESS_KEY_ID`.
+Interactive prompts mask `secret_key` and write it back to any writable backend
+named in the chain.
 
 ## test
 

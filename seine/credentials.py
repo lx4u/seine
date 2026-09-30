@@ -52,6 +52,9 @@ prompts.
 """
 
 import base64
+import datetime
+import hashlib
+import hmac
 import json
 import os
 import ssl
@@ -63,9 +66,21 @@ from urllib.parse import urlsplit
 
 __all__ = [
     "CredentialError", "CredentialNotFound",
-    "resolve", "CredentialSource", "probe",
+    "resolve", "CredentialSource", "probe", "probe_s3",
+    "s3_credential_source",
+    "DEFAULT_S3_ACCESS_KEY_CHAIN", "DEFAULT_S3_SECRET_KEY_CHAIN",
     "remember_resolved", "resolved_for", "clear_resolved",
 ]
+
+# Default chains for S3 storage credentials.
+DEFAULT_S3_ACCESS_KEY_CHAIN = (
+    "keyring:s3-access-key | settings:s3-access-key | "
+    "env:SEINE_S3_ACCESS_KEY | env:AWS_ACCESS_KEY_ID"
+)
+DEFAULT_S3_SECRET_KEY_CHAIN = (
+    "keyring:s3-secret-key | settings:s3-secret-key | "
+    "env:SEINE_S3_SECRET_KEY | env:AWS_SECRET_ACCESS_KEY"
+)
 
 _KNOWN_BACKENDS    = frozenset(["env", "keyring", "settings", "vault"])
 _WRITABLE_BACKENDS = frozenset(["keyring", "settings"])
@@ -360,7 +375,7 @@ class CredentialSource:
     MAX_ATTEMPTS = 3
 
     # Fields shown masked by the prompt; everything else is plain text.
-    SECRET_FIELDS = frozenset(["password"])
+    SECRET_FIELDS = frozenset(["password", "secret_key"])
 
     def __init__(self, fields, context=None, prompt=None, vault_reader=None):
         self._fields    = dict(fields)
@@ -518,3 +533,110 @@ def probe(url, suite, login, password, proxies=None, cafile=None, timeout=15):
                     "repository root (404)" % (base, suite))
             continue
         raise CredentialError("%s: unexpected HTTP %d" % (candidate, status))
+
+
+# ---------------------------------------------------------------------------
+# Public: S3 credentials & probe
+# ---------------------------------------------------------------------------
+
+def s3_credential_source(auth=None, context=None, prompt=None, vault_reader=None):
+    """Return a CredentialSource for S3 access_key and secret_key."""
+    auth = auth or {}
+    fields = {
+        "access_key": auth.get("access_key") or DEFAULT_S3_ACCESS_KEY_CHAIN,
+        "secret_key": auth.get("secret_key") or DEFAULT_S3_SECRET_KEY_CHAIN,
+    }
+    return CredentialSource(
+        fields, context=context or "s3 storage", prompt=prompt, vault_reader=vault_reader)
+
+
+# Produces AWS SigV4 authorization headers for S3 requests.
+def _sigv4_headers(method, endpoint, access_key, secret_key, region="garage",
+                   path="", query="", payload=b"", extra_headers=None):
+    parsed = urlsplit(endpoint)
+    host = parsed.netloc
+    region = region or "garage"
+    now = datetime.datetime.now(datetime.timezone.utc)
+    amz_date = now.strftime("%Y%m%dT%H%M%SZ")
+    date_stamp = now.strftime("%Y%m%d")
+
+    payload_hash = hashlib.sha256(payload).hexdigest()
+    canonical_uri = path if path.startswith("/") else f"/{path}"
+    headers = {
+        "host": host,
+        "x-amz-date": amz_date,
+        "x-amz-content-sha256": payload_hash,
+    }
+    if extra_headers:
+        for k, v in extra_headers.items():
+            headers[k.lower()] = v.strip()
+
+    sorted_keys = sorted(headers.keys())
+    canonical_headers = "".join(f"{k}:{headers[k]}\n" for k in sorted_keys)
+    signed_headers = ";".join(sorted_keys)
+    canonical_request = (
+        f"{method}\n{canonical_uri}\n{query}\n"
+        f"{canonical_headers}\n{signed_headers}\n{payload_hash}"
+    )
+
+    scope = f"{date_stamp}/{region}/s3/aws4_request"
+    string_to_sign = (
+        f"AWS4-HMAC-SHA256\n{amz_date}\n{scope}\n"
+        f"{hashlib.sha256(canonical_request.encode()).hexdigest()}"
+    )
+
+    def sign(key, msg):
+        return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
+
+    k_date = sign(("AWS4" + secret_key).encode("utf-8"), date_stamp)
+    k_region = hmac.new(k_date, region.encode("utf-8"), hashlib.sha256).digest()
+    k_service = hmac.new(k_region, b"s3", hashlib.sha256).digest()
+    k_signing = hmac.new(k_service, b"aws4_request", hashlib.sha256).digest()
+    signature = hmac.new(k_signing, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    auth_header = (
+        f"AWS4-HMAC-SHA256 Credential={access_key}/{scope}, "
+        f"SignedHeaders={signed_headers}, Signature={signature}"
+    )
+    result = dict(headers)
+    result["authorization"] = auth_header
+    return result
+
+
+def probe_s3(endpoint, bucket, access_key, secret_key, region="garage",
+             proxies=None, cafile=None, timeout=15):
+    """Check *access_key*/*secret_key* against an S3 bucket with SigV4 HEAD.
+
+    :returns: ``True`` on a 200 (credential valid, bucket accessible),
+        ``False`` on a 401/403 (wrong credential -- re-prompt).
+    :raises CredentialError: bucket not found (404), unreachable, or unexpected status.
+    """
+    base = endpoint.rstrip("/")
+    path = f"/{bucket}"
+    url = f"{base}{path}"
+    headers = _sigv4_headers("HEAD", endpoint, access_key, secret_key, region, path=path)
+
+    req = urllib.request.Request(url, method="HEAD")
+    for k, v in headers.items():
+        req.add_header(k, v)
+
+    handlers = []
+    if proxies is not None:
+        handlers.append(urllib.request.ProxyHandler(proxies))
+    if cafile is not None:
+        handlers.append(urllib.request.HTTPSHandler(
+            context=ssl.create_default_context(cafile=cafile)))
+    opener = urllib.request.build_opener(*handlers)
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            if resp.status == 200:
+                return True
+            raise CredentialError("%s: unexpected HTTP %d" % (url, resp.status))
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return False
+        if e.code == 404:
+            raise CredentialError("%s: bucket %r not found (404)" % (endpoint, bucket))
+        raise CredentialError("%s: unexpected HTTP %d" % (url, e.code))
+    except urllib.error.URLError as e:
+        raise CredentialError("could not reach %r: %s" % (url, e.reason)) from e
