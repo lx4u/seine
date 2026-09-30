@@ -10,7 +10,10 @@ import os
 import platform
 import re
 import shlex
+import shutil
 import subprocess
+import tempfile
+from urllib.parse import urlsplit
 
 # Debian arch of the machine seine runs on. Anything else is a cross build.
 HOST_MACHINE_TO_ARCH = {
@@ -151,6 +154,72 @@ def _check_auth_uri_collisions(parsed):
                 "uri '%s' with different credentials -- ambiguous, which "
                 "one applies?" % (seen[uri][0], feed["suite"], feed["uri"]))
         seen[uri] = (feed["suite"], chain)
+
+# Where every 'podman build --secret'/'podman run -v' site mounts the
+# netrc file for an authenticated feed.
+NETRC_MOUNT = "/run/seine/netrc"
+
+# (host_dir, container_dir) to bind-mount netrc_for()'s file at NETRC_MOUNT.
+def netrc_volume(netrc_path):
+    return (os.path.dirname(netrc_path), os.path.dirname(NETRC_MOUNT))
+
+# sbuild's own nested unshare() chroot can't rely on seeing /run, so its
+# own $unshare_bind_mounts entry (seine/packages.py) lands here instead.
+SBUILD_NETRC_MOUNT = "/seine-auth/netrc"
+
+# apt only honours a netrc entry for a plain http feed when it is
+# annotated 'http://host/path'; an https one needs no prefix.
+def _netrc_machine(uri):
+    parts = urlsplit(uri)
+    host = parts.hostname or ""
+    if parts.port:
+        host = "%s:%d" % (host, parts.port)
+    path = parts.path.rstrip("/")
+    prefix = "http://" if parts.scheme == "http" else ""
+    return "%s%s%s" % (prefix, host, path)
+
+def _netrc_line(uri, login, password):
+    return "machine %s\n\tlogin %s\n\tpassword %s\n" % (
+        _netrc_machine(uri), login, password)
+
+# Feeds with 'auth:' that credentials.py already resolved. A feed never
+# resolved (e.g. 'probe: false') is skipped, same as no 'auth:' at all.
+def feed_auth_entries(distro, entries=None):
+    from seine import credentials
+    result = []
+    for feed in (entries if entries is not None else feeds(distro)):
+        if feed["auth"] is None:
+            continue
+        resolved = credentials.resolved_for(feed["uri"])
+        if resolved is not None:
+            result.append((feed["uri"],) + resolved)
+    return result
+
+# 0644/0755, not 0600: sbuild's nested user namespace maps container
+# uid 0 to nobody and can't read a 0600 file. Safe under a 0700
+# XDG_RUNTIME_DIR/seine; removed in 'finally' on every exit path.
+@contextlib.contextmanager
+def netrc_for(entries):
+    if not entries:
+        yield None
+        return
+    base = os.environ.get("XDG_RUNTIME_DIR")
+    if not base or not os.path.isdir(base):
+        base = "/dev/shm"
+    root = os.path.join(base, "seine")
+    os.makedirs(root, exist_ok=True)
+    os.chmod(root, 0o700)
+    directory = tempfile.mkdtemp(dir=root, prefix="netrc-")
+    os.chmod(directory, 0o755)
+    path = os.path.join(directory, "netrc")
+    text = "".join(_netrc_line(*entry) for entry in entries)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    try:
+        yield path
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 # The feed for the release itself (not the first one merge order lists),
 # which a root file-system bootstraps from.

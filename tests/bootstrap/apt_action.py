@@ -84,6 +84,25 @@ class ChangedIsReadFromAptGetsOwnOutput(avocado.Test):
             result = action.run()
         self.assertFalse(result["changed"])
 
+class NetrcOptAndMountAppearOnlyWhenSet(avocado.Test):
+    def test_no_netrc_env_no_mount_no_option(self):
+        with patch.dict(os.environ, ENV, clear=True):
+            with patch("subprocess.run") as run:
+                apt_action._apt_get("/merged", "install", ["vim"], False)
+        args, script = run.call_args.args[0], run.call_args.args[0][-1]
+        self.assertNotIn("Dir::Etc::netrc", script)
+        self.assertEqual(args.count("-v"), 1)  # only the merged_dir mount
+
+    def test_netrc_env_adds_option_and_bind_mount(self):
+        env = dict(ENV, **{apt_action.ENV_NETRC: "/run/user/1000/seine/x/netrc"})
+        with patch.dict(os.environ, env, clear=True):
+            with patch("subprocess.run") as run:
+                apt_action._apt_get("/merged", "install", ["vim"], False)
+        args, script = run.call_args.args[0], run.call_args.args[0][-1]
+        self.assertIn('Dir::Etc::netrc="/run/seine/netrc"', script)
+        self.assertIn("/run/user/1000/seine/x:/run/seine:ro", args)
+
+
 class RunFailsClosedOnAnUnsupportedState(avocado.Test):
     def test_state_latest_is_rejected(self):
         from ansible.errors import AnsibleActionFail

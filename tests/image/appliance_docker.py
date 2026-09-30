@@ -68,6 +68,7 @@ class ApplianceDockerTest(avocado.Test):
             spec = dict({
                 "distribution": {
                     "source": "debian",
+                    "uri": "http://example.com/debian",
                     "release": "bookworm",
                     "architecture": "amd64",
                 },
@@ -84,6 +85,7 @@ class ApplianceDockerTest(avocado.Test):
         base_spec = {
             "distribution": {
                 "source": "debian",
+                "uri": "http://example.com/debian",
                 "architecture": "amd64",
             },
         }
@@ -100,6 +102,7 @@ class ApplianceDockerTest(avocado.Test):
         spec = {
             "distribution": {
                 "source": "debian",
+                "uri": "http://example.com/debian",
                 "release": "bookworm",
                 "architecture": "amd64",
             },
@@ -118,6 +121,7 @@ class ApplianceDockerTest(avocado.Test):
         spec = {
             "distribution": {
                 "source": "debian",
+                "uri": "http://example.com/debian",
                 "release": "bookworm",
                 "architecture": "amd64",
             },
@@ -138,6 +142,7 @@ class ApplianceDockerTest(avocado.Test):
         spec = {
             "distribution": {
                 "source": "debian",
+                "uri": "http://example.com/debian",
                 "release": "trixie",
                 "architecture": "amd64",
             },

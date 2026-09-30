@@ -12,10 +12,15 @@ from seine.container import ContainerEngine
 from seine.utils     import apt_sources
 from seine.utils     import apt_sources_dockerfile
 from seine.utils     import APT_CLEANUP
+from seine.utils     import feed_auth_entries
 from seine.utils     import feed_keyrings_script
 from seine.utils     import locked
+from seine.utils     import NETRC_MOUNT
+from seine.utils     import netrc_for
+from seine.utils     import netrc_volume
 from seine.utils     import offline_suites
 from seine.utils     import release_feeds
+from seine.utils     import SBUILD_NETRC_MOUNT
 from seine.utils     import vendor_mountpoint
 from seine.utils     import BUILDER_KIND
 from seine.utils     import HOST_ARCH
@@ -38,12 +43,21 @@ class BuilderImage(Bootstrap):
     kind = BUILDER_KIND
 
     def create(self, hostBootstrap):
-        return self.build(self.dockerfile(hostBootstrap), base=hostBootstrap.name)
+        entries = feed_auth_entries(self.distro, entries=self._online_feeds())
+        with netrc_for(entries) as netrc_path:
+            options = (["--secret", "id=seine-netrc,src=%s" % netrc_path]
+                      if netrc_path else None)
+            return self.build(self.dockerfile(hostBootstrap), base=hostBootstrap.name,
+                              options=options)
 
     # Split out so a caller can inspect/digest the dockerfile without a
     # podman to build it. The image name alone does not capture what
     # _sources() bakes in, so this is also used to detect feed collisions.
     def dockerfile(self, hostBootstrap):
+        netrc_mount, netrc_aptopt = "", ""
+        if feed_auth_entries(self.distro, entries=self._online_feeds()):
+            netrc_mount = " --mount=type=secret,id=seine-netrc,target=%s" % NETRC_MOUNT
+            netrc_aptopt = ' -o Dir::Etc::netrc="%s"' % NETRC_MOUNT
         return BUILDER_IMAGE_SCRIPT.format(
             hostBootstrap.name,
             self.distro["source"],
@@ -52,17 +66,23 @@ class BuilderImage(Bootstrap):
             "apt-{}".format(self.distro["release"]),
             REPOSITORY,
             TOOLCHAINS,
-            APT_CLEANUP)
+            APT_CLEANUP,
+            netrc_mount,
+            netrc_aptopt)
+
+    # release_feeds() minus the offline ones, same set _sources() writes
+    # into sources.list -- what the apt-get below actually reads from.
+    def _online_feeds(self):
+        offline = set(offline_suites(self.distro))
+        return [feed for feed in release_feeds(self.distro)
+               if feed["suite"] not in offline]
 
     # Same feeds the image itself uses, plus deb-src for 'apt-get source'.
     # Offline suites are skipped: their vendor repo is refreshed between
     # builds, so packages.py's fetch() adds that line at exec time instead
     # of baking a path that would go stale.
     def _sources(self):
-        offline = set(offline_suites(self.distro))
-        online = [feed for feed in release_feeds(self.distro)
-                 if feed["suite"] not in offline]
-        return apt_sources_dockerfile(self.distro, online, sources=True)
+        return apt_sources_dockerfile(self.distro, self._online_feeds(), sources=True)
 
     # Host arch, not the target's -- named so storage from another host
     # misses and rebuilds native instead of running sbuild's unshare()
@@ -181,6 +201,18 @@ class SbuildChroot:
 
     def _create(self, builderImage, offline=False):
 
+        # Only added when a feed is authenticated, so an unauthenticated
+        # build's digest and tarball stay unchanged.
+        netrc_entries = feed_auth_entries(self.distro, entries=release_feeds(self.distro))
+        netrc_hook, netrc_aptopt = [], []
+        if netrc_entries:
+            netrc_hook = [
+                "--customize-hook=mkdir -p \"$1\"%s"
+                % os.path.dirname(SBUILD_NETRC_MOUNT),
+                "--customize-hook=printf 'Dir::Etc::netrc \"%s\";\\n' "
+                "> \"$1\"/etc/apt/apt.conf.d/99seine-netrc" % SBUILD_NETRC_MOUNT]
+            netrc_aptopt = ["--aptopt=Dir::Etc::netrc \"%s\"" % NETRC_MOUNT]
+
         # --mode=root: already root in the container, no need for
         # mmdebstrap to unshare its own namespace. sync-in/sync-out seed
         # apt's archives from the shared download cache and put new
@@ -198,6 +230,7 @@ class SbuildChroot:
             # holds unfinished downloads anyway.
             "--customize-hook=rm -rf \"$1\"/var/cache/apt/archives/partial",
             "--customize-hook=sync-out /var/cache/apt/archives /var/cache/mmdebstrap",
+        ] + netrc_hook + netrc_aptopt + [
             self.distro["release"],
             "/root/.cache/sbuild/%s" % self.filename,
         ] + apt_sources(self.distro, entries=release_feeds(self.distro), offline=offline)
@@ -233,11 +266,14 @@ class SbuildChroot:
         if install:
             args = ["sh", "-c", install + '; exec "$@"', "sh"] + args
         try:
-            # Not 'architecture=self.architecture': that would mount
-            # builderImage's own distro chroot cache, which differs from
-            # this chroot's for a vendor resolver -- see
-            # VendorResolver.base_chroot().
-            builderImage.exec(args, volumes=volumes)
+            with netrc_for(netrc_entries) as netrc_path:
+                if netrc_path:
+                    volumes = volumes + [netrc_volume(netrc_path)]
+                # Not 'architecture=self.architecture': that would mount
+                # builderImage's own distro chroot cache, which differs
+                # from this chroot's for a vendor resolver -- see
+                # VendorResolver.base_chroot().
+                builderImage.exec(args, volumes=volumes)
         except subprocess.CalledProcessError:
             # Remove only the failed temp file -- an existing chroot stays
             # valid and matching its inputs.
@@ -256,9 +292,9 @@ FROM {0}
 RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.sources \
            /etc/apt/sources.list.d/*.list && \
     {3}
-RUN --mount=type=cache,target=/var/cache/apt/archives,id={4},sharing=locked \
-     apt-get update -qqy &&                       \
-     apt-get install -qqy --no-install-recommends \
+RUN{8} --mount=type=cache,target=/var/cache/apt/archives,id={4},sharing=locked \
+     apt-get update -qqy{9} &&                       \
+     apt-get install -qqy{9} --no-install-recommends \
          sbuild mmdebstrap uidmap zstd apt-utils  \
          dpkg-dev devscripts quilt git            \
          ca-certificates curl iproute2 openssh-client \

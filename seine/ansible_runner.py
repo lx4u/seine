@@ -11,7 +11,10 @@ from seine.transport_bootstrap import TransportBootstrap
 from seine import tasks
 from seine.container import ContainerEngine, spawn_own_pgroup
 from seine.utils                import base_feed
+from seine.utils                import feed_auth_entries
 from seine.utils                import locale_purge_script
+from seine.utils                import NETRC_MOUNT
+from seine.utils                import netrc_for
 from seine.utils                import offline_apt_script
 from seine.utils                import release_feeds
 from seine.utils                import vendor_mountpoint
@@ -56,9 +59,17 @@ class AnsibleContainerRunner:
         self.host_image = host_image
         self.locales = locales or ["en"]
         self.cid = None
+        # Set for the lifetime of run(), by netrc_for() -- 'exported' as
+        # a bind mount, never as filesystem content, so it never reaches
+        # the shipped image (see run()).
+        self._netrc_path = None
 
     def _exec(self, args, check=True):
         return ContainerEngine.run(["container", "exec", self.cid] + args, check=check)
+
+    # -o Dir::Etc::netrc=..., or nothing when no feed is authenticated.
+    def _netrc_opt(self):
+        return ["-o", "Dir::Etc::netrc=%s" % NETRC_MOUNT] if self._netrc_path else []
 
     # Container the playbooks run against; also what gets exported as the image.
     def container_command(self, image):
@@ -68,6 +79,9 @@ class AnsibleContainerRunner:
     def _volumes(self):
         volumes = ["-v", "%s:%s" % (
             ContainerEngine.downloads(self.distro["release"]), DOWNLOADS)]
+        if self._netrc_path:
+            volumes += ["-v", "%s:%s:ro" % (
+                os.path.dirname(self._netrc_path), os.path.dirname(NETRC_MOUNT))]
         # Packages rebuilt from the spec's 'packages' section (if any), so
         # playbooks can install them via a plain apt task.
         if packages.has_packages(self.distro):
@@ -150,28 +164,31 @@ class AnsibleContainerRunner:
                                        vendor_digest=self.vendor_digest)
         transport.create()
 
-        self.cid = ContainerEngine.check_output(
-            self.container_command(transport.name)).strip()
-        try:
-            # Marks 'now' so _finalize() can reset anything apt/dpkg
-            # triggers touch with the real build time (e.g. ldconfig's
-            # cache dirs) back to a fixed epoch.
-            self._exec(["touch", "/.ansible-marker"])
-            if packages.has_packages(self.distro):
-                self._exec(["sh", "-c", packages.apt_configuration(
-                    packages.REPOSITORY,
-                    keyring=packages.keyring(self.distro))])
-            self._seed_downloads()
-            self._configure_feeds()
-            self._exec(["apt-get", "update", "-qqy"])
-            self._run_playbooks(playbooks)
-            self._save_downloads()
-            self._restore_online_feeds()
-            self._finalize()
-        except:
-            ContainerEngine.discard(self.cid, force=True, failed=True)
-            self.cid = None
-            raise
+        entries = feed_auth_entries(self.distro, entries=release_feeds(self.distro))
+        with netrc_for(entries) as netrc_path:
+            self._netrc_path = netrc_path
+            self.cid = ContainerEngine.check_output(
+                self.container_command(transport.name)).strip()
+            try:
+                # Marks 'now' so _finalize() can reset anything apt/dpkg
+                # triggers touch with the real build time (e.g. ldconfig's
+                # cache dirs) back to a fixed epoch.
+                self._exec(["touch", "/.ansible-marker"])
+                if packages.has_packages(self.distro):
+                    self._exec(["sh", "-c", packages.apt_configuration(
+                        packages.REPOSITORY,
+                        keyring=packages.keyring(self.distro))])
+                self._seed_downloads()
+                self._configure_feeds()
+                self._exec(["apt-get", "update", "-qqy"] + self._netrc_opt())
+                self._run_playbooks(playbooks)
+                self._save_downloads()
+                self._restore_online_feeds()
+                self._finalize()
+            except:
+                ContainerEngine.discard(self.cid, force=True, failed=True)
+                self.cid = None
+                raise
         return self.cid
 
     def _run_playbooks(self, playbooks):
@@ -238,6 +255,8 @@ class AnsibleContainerRunner:
         env["SEINE_CONTAINER_RUNROOT"] = ContainerEngine.runroot()
         env["SEINE_APT_ARCH"] = self.distro["architecture"]
         env["SEINE_APT_HOST_IMAGE"] = self.host_image
+        if self._netrc_path:
+            env["SEINE_APT_NETRC"] = self._netrc_path
         # The 'apt' action plugin's own container only bind-mounts the
         # target root file-system, not this repository -- without it, a
         # 'file:/packages' source there would find nothing.

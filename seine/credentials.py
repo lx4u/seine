@@ -64,6 +64,8 @@ from urllib.parse import urlsplit
 __all__ = [
     "CredentialError", "CredentialNotFound",
     "resolve", "CredentialSource", "probe",
+    "remember_resolved", "resolved_for", "clear_resolved",
+    "load_feed_auth", "DelegatedSource", "FEED_AUTH_ENV",
 ]
 
 _KNOWN_BACKENDS    = frozenset(["env", "keyring", "settings", "vault"])
@@ -77,6 +79,23 @@ _KEYRING_SERVICE = "seine"
 # edit away from being dumped alongside theme/jobs settings.
 _SETTINGS_FILE_ENV     = "SEINE_CREDENTIALS_FILE"
 _SETTINGS_FILE_DEFAULT = os.path.expanduser("~/.config/seine/credentials.json")
+
+# Resolved values, by feed uri, for the netrc writer (seine/utils.py) --
+# the only way a resolved secret reaches those call sites, since it is
+# never written back into the spec itself.
+_RESOLVED = {}
+
+
+def remember_resolved(uri, login, password):
+    _RESOLVED[uri.rstrip("/")] = (login, password)
+
+
+def resolved_for(uri):
+    return _RESOLVED.get(uri.rstrip("/"))
+
+
+def clear_resolved():
+    _RESOLVED.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +459,48 @@ class CredentialSource:
     def _retry_context(self):
         tail = "wrong credentials, attempt %d of %d" % (self._attempts, self.MAX_ATTEMPTS)
         return "%s -- %s" % (self._context, tail) if self._context else tail
+
+
+# ---------------------------------------------------------------------------
+# Delegated credentials (a remote build's worker gets them already resolved)
+# ---------------------------------------------------------------------------
+
+# Path of the file where a worker's agent puts {feed uri: {login, password}}.
+FEED_AUTH_ENV = "SEINE_FEEDAUTH_FILE"
+
+
+def load_feed_auth(path):
+    """Read {feed uri: {login, password}} from the file the agent wrote."""
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        raise CredentialError(f"cannot read the delegated feed credentials: {e}")
+    if not isinstance(data, dict) or not all(
+            isinstance(pair, dict)
+            and isinstance(pair.get("login"), str)
+            and isinstance(pair.get("password"), str)
+            for pair in data.values()):
+        raise CredentialError("the delegated feed credentials are malformed")
+    return data
+
+
+class DelegatedSource:
+    """A feed's credential resolved elsewhere: it never prompts nor writes back."""
+
+    def __init__(self, pair):
+        self._pair = pair
+
+    def get(self):
+        if self._pair is None:
+            raise CredentialNotFound("no credential was delegated for this feed")
+        return {"login": self._pair["login"], "password": self._pair["password"]}
+
+    def failed(self):
+        raise CredentialNotFound("the delegated credential was rejected")
+
+    def commit(self):
+        pass
 
 
 # ---------------------------------------------------------------------------

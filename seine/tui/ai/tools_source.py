@@ -50,6 +50,16 @@ def _source_pull_preview(app, arguments):
                    "%s/%s" % (package, distro["source"], distro["release"],
                              ContainerEngine.workbench(), name))
 
+# collect_credentials()'s own TTY auto-detect would call input()/getpass()
+# on this thread, which the TUI can't show -- fail closed instead, only
+# reached when a feed's chain genuinely has no resolvable value yet.
+def _refuse_prompt(context, fields):
+    from seine.credentials import CredentialNotFound
+    raise CredentialNotFound(
+        "'%s' needs a login/password the AI chat can't prompt for -- "
+        "resolve it another way (keyring, settings file, env) first"
+        % (context or "a feed"))
+
 def _tool_source_pull(app, arguments):
     build = _single_group(app)
     if build is None:
@@ -58,7 +68,9 @@ def _tool_source_pull(app, arguments):
     if not package:
         return "source-pull needs 'package' ('name' or 'name=version')"
     from seine import sources
+    from seine.build import collect_credentials
     try:
+        collect_credentials([build], prompt=_refuse_prompt)
         dirname = sources.pull(package, build.spec["distribution"])
     except ValueError as e:
         return "could not pull: %s" % e

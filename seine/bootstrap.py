@@ -19,9 +19,12 @@ from seine.utils import apt_sources
 from seine.utils import apt_sources_dockerfile
 from seine.utils import APT_CLEANUP
 from seine.utils import base_feed
+from seine.utils import feed_auth_entries
 from seine.utils import feed_digest
 from seine.utils import feed_keyrings_script
 from seine.utils import locked
+from seine.utils import NETRC_MOUNT
+from seine.utils import netrc_for
 from seine.utils import TOOLING_KIND
 from seine.utils import vendor_mountpoint
 
@@ -224,7 +227,12 @@ class TargetBootstrap(Bootstrap):
     # by AnsibleContainerRunner._configure_feeds().
     def create(self, hostBootstrap):
         self.hostBootstrap = hostBootstrap
-        return self.build(self.dockerfile(), base=self.hostBootstrap.name)
+        entries = feed_auth_entries(self.distro, entries=[base_feed(self.distro)])
+        with netrc_for(entries) as netrc_path:
+            options = (["--secret", "id=seine-netrc,src=%s" % netrc_path]
+                      if netrc_path else None)
+            return self.build(self.dockerfile(), base=self.hostBootstrap.name,
+                              options=options)
 
     # Split out from create() so a test can read what this would bootstrap
     # from without a podman to build it.
@@ -232,15 +240,22 @@ class TargetBootstrap(Bootstrap):
         # Deferred: seine.packages imports seine.bootstrap indirectly, so
         # importing this at module load time would be circular.
         from seine.packages import FALLBACK_EPOCH
+        base = base_feed(self.distro)
+        netrc_mount, netrc_aptopt = "", ""
+        if feed_auth_entries(self.distro, entries=[base]):
+            netrc_mount = " --mount=type=secret,id=seine-netrc,target=%s" % NETRC_MOUNT
+            netrc_aptopt = " --aptopt='Dir::Etc::netrc \"%s\"'" % NETRC_MOUNT
         return TARGET_BOOTSTRAP_SCRIPT.format(
             self.hostBootstrap.name,
             self.distro["architecture"],
             self.distro["release"],
             " ".join("'%s'" % source for source in
-                     apt_sources(self.distro, entries=[base_feed(self.distro)])),
+                     apt_sources(self.distro, entries=[base])),
             "mmdebstrap-{}".format(self.distro["release"]),
             FALLBACK_EPOCH,
-            feed_keyrings_script([base_feed(self.distro)]) or "true")
+            feed_keyrings_script([base]) or "true",
+            netrc_mount,
+            netrc_aptopt)
 
     def defaultName(self):
         return os.path.join(
@@ -308,7 +323,7 @@ RUN {7}
 # dpkg triggers (ldconfig, etc.) stamp with the real build time.
 TARGET_BOOTSTRAP_SCRIPT = """
 FROM {0} AS bootstrap
-RUN --mount=type=cache,target=/var/cache/mmdebstrap,id={4},sharing=locked \
+RUN{7} --mount=type=cache,target=/var/cache/mmdebstrap,id={4},sharing=locked \
     export container=lxc;                                            \
     touch /.bootstrap-marker &&                                      \
     mkdir -p rootfs &&                                               \
@@ -319,7 +334,7 @@ RUN --mount=type=cache,target=/var/cache/mmdebstrap,id={4},sharing=locked \
         --setup-hook='mkdir -p "$1"/var/cache/apt/archives/'         \
         --setup-hook='sync-in /var/cache/mmdebstrap /var/cache/apt/archives/' \
         --customize-hook='rm -rf "$1"/var/cache/apt/archives/partial' \
-        --customize-hook='sync-out /var/cache/apt/archives /var/cache/mmdebstrap' \
+        --customize-hook='sync-out /var/cache/apt/archives /var/cache/mmdebstrap'{8} \
         --arch {1} {2} rootfs {3} &&                                 \
     cp /usr/bin/qemu-*-static rootfs/usr/bin/ &&                     \
     echo 'APT::Install-Recommends "false";'                          \
