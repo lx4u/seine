@@ -45,12 +45,22 @@ printf '[engine]\nruntime = "crun"\n' > ~/.config/containers/containers.conf
 ```
 
 Python dependencies (`pyyaml`, `ansible-core`) can be installed in a virtual
-environment instead of system-wide:
+environment instead of system-wide.
+
+Using [uv](https://docs.astral.sh/uv/) (fast, recommended for development):
+
+```
+uv venv --system-site-packages
+uv pip install -r requirements.txt -e .
+uv run ansible-galaxy collection install containers.podman ansible.posix community.general
+```
+
+Or using standard Python `venv`:
 
 ```
 python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -e .
 ansible-galaxy collection install containers.podman ansible.posix community.general
 ```
 
@@ -58,16 +68,23 @@ ansible-galaxy collection install containers.podman ansible.posix community.gene
 install and seine imports.
 
 seine runs `ansible-playbook` as a command rather than importing it, so it
-has to be on `PATH` -- from the activated environment, or installed
+has to be on `PATH` -- from the virtual environment, or installed
 system-wide with `apt-get install -y ansible`. The `containers.podman`
 collection is what connects it to the target container; `ansible-galaxy` is
 part of the `ansible` package rather than `ansible-core`, so a machine with
 only the latter installs the collection with a system `ansible-galaxy` or
 `pip install ansible`.
 
-You may then either use seine in place (use the `seine.py` script from the top
-level directory of this source tree) or generate a binary package. To build
-a sample image without installing `seine` on your system, use:
+You may then either use seine directly in place or generate a binary package.
+To build a sample image without installing `seine` on your system:
+
+With `uv`:
+
+```
+uv run seine build examples/pc-image/main.yaml
+```
+
+Or with an activated virtual environment (or using `./seine.py`):
 
 ```
 ./seine.py build examples/pc-image/main.yaml
@@ -78,7 +95,7 @@ what the machine actually has -- hours the first time, and cached
 afterwards -- name the kernel fragment as well:
 
 ```
-./seine.py build examples/pc-image/main.yaml examples/slim-kernel.yml
+uv run seine build examples/pc-image/main.yaml examples/slim-kernel.yml
 ```
 
 To produce a binary package, use the `dpkg-buildpackage` command as follows:
@@ -129,6 +146,16 @@ The tests under `tests/`, one directory per theme, use
 [avocado](https://avocado-framework.github.io/), which Debian does not
 package -- install it in a virtual environment that can still see the
 system packages pip cannot install:
+
+With `uv`:
+
+```
+sudo apt-get install -y python3-guestfs python3-libarchive-c
+uv pip install avocado-framework 'setuptools<81'
+uv run avocado run tests/*/*.py
+```
+
+Or using an activated `venv`:
 
 ```
 sudo apt-get install -y python3-guestfs python3-libarchive-c
