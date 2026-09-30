@@ -120,7 +120,11 @@ def collect_credentials(builds, prompt=None):
                 probes.append((build, feed, source))
 
     for build, feed, source in probes:
-        values = source.get()
+        try:
+            values = source.get()
+        except credentials.CredentialNotFound as e:
+            raise credentials.CredentialNotFound(
+                "feed '%s' (%s): %s" % (feed["suite"], feed["uri"], e)) from e
         _record_credential_secrets(build.spec, values)
         while True:
             try:
@@ -138,7 +142,11 @@ def collect_credentials(builds, prompt=None):
     # A 'probe: false' feed still needs its credential resolved for
     # apt's netrc, even though it skipped the network check above.
     for build, feed, source in all_feeds:
-        values = source.get()
+        try:
+            values = source.get()
+        except credentials.CredentialNotFound as e:
+            raise credentials.CredentialNotFound(
+                "feed '%s' (%s): %s" % (feed["suite"], feed["uri"], e)) from e
         _record_credential_secrets(build.spec, values)
         credentials.remember_resolved(
             feed["uri"], values["login"], values["password"])
