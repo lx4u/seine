@@ -1,0 +1,894 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Testing &#8212; seine documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=4418a689" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="_static/documentation_options.js?v=4d2f5802"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'testing';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="TUI" href="tui.html" />
+    <link rel="prev" title="Environment variables" href="environment.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">seine documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="specification.html">Specification files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="merging.html">Merging specification fragments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernels.html">Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="environment.html">Environment variables</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tui.html">TUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ai.html">The AI chat</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vault-openbao.html">Running a vault for seine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="release-as-debs.html">Releasing seine as .deb packages</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="caching.html">Caching</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine/issues/new?title=Issue%20on%20page%20%2Ftesting.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/testing.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Testing</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#running-one">Running one</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#writing-tests">Writing tests</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#steps">Steps</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#conditions">Conditions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reusable-named-actions-keywords">Reusable named actions (<code class="docutils literal notranslate"><span class="pre">keywords:</span></code>)</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#keywords">Keywords</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-robot-framework-brings-and-what-doesn-t-apply-here">What Robot Framework brings, and what doesn’t apply here</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#doctor">Doctor</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ai-chat">AI chat</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="testing">
+<h1>Testing<a class="headerlink" href="#testing" title="Link to this heading">#</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">test</span></code> runs a specification’s own tests – boot a real target,
+drive it over the console or HID, check what came back – against a
+target reachable through <a class="reference external" href="https://github.com/siemens/mtda">mtda</a>, the
+same one <code class="docutils literal notranslate"><span class="pre">/target</span></code> (see <a class="reference internal" href="tui.html"><span class="std std-doc">docs/tui.md</span></a>) already drives.</p>
+<p>A specification carries its tests the same way it carries its
+<code class="docutils literal notranslate"><span class="pre">packages</span></code>/<code class="docutils literal notranslate"><span class="pre">playbook</span></code>/<code class="docutils literal notranslate"><span class="pre">image</span></code> – <code class="docutils literal notranslate"><span class="pre">test</span></code> is an ordinary section (see
+<a class="reference internal" href="specification.html#test"><span class="std std-ref">docs/specification.md#test</span></a>), a list of entries
+composed across <code class="docutils literal notranslate"><span class="pre">requires</span></code>: an entry named the same as one already
+loaded is merged into it rather than duplicated, the same way <code class="docutils literal notranslate"><span class="pre">packages</span></code>
+merge by name – see <a class="reference internal" href="merging.html"><span class="std std-doc">docs/merging.md</span></a> for the full rule
+(a fragment reached via <code class="docutils literal notranslate"><span class="pre">requires</span></code> loses a field both files set; a
+second file named directly on the command line amends instead), and
+for why <code class="docutils literal notranslate"><span class="pre">keywords:</span></code>/<code class="docutils literal notranslate"><span class="pre">steps:</span></code> are refused rather than merged on a real
+mismatch either way. It is not a second,
+static language living beside a build spec’s own: a build spec
+deliberately has no <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">for</span></code> (see
+<a class="reference internal" href="specification.html#variables"><span class="std std-ref">Variables</span></a> for why), but a test’s whole job
+is reacting to what a real, physical target actually does, so it gets
+real control flow – <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">for</span></code>/<code class="docutils literal notranslate"><span class="pre">while</span></code>/<code class="docutils literal notranslate"><span class="pre">try</span></code>, reusable named keywords,
+variables assigned from what a step returned – borrowed from
+<a class="reference external" href="https://robotframework.org/">Robot Framework</a>, a mature, widely used
+test-automation engine, rather than seine inventing a second control-flow
+language of its own. seine’s own part is the YAML shape below, the
+keywords that expose seine/mtda actions to it, and the CLI/TUI/AI
+plumbing; IF/FOR/WHILE/TRY, variables, tags, setup/teardown and
+structured pass/fail/skip results are Robot’s, unmodified.</p>
+<section id="running-one">
+<h2>Running one<a class="headerlink" href="#running-one" title="Link to this heading">#</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">seine</span> <span class="n">test</span> <span class="n">SPEC</span><span class="o">.</span><span class="n">yml</span>
+<span class="n">seine</span> <span class="n">test</span> <span class="o">--</span><span class="n">tags</span><span class="o">=</span><span class="n">smoke</span> <span class="n">SPEC</span><span class="o">.</span><span class="n">yml</span> <span class="n">OTHER</span><span class="o">.</span><span class="n">yml</span>   <span class="c1"># only tests tagged &#39;smoke&#39;</span>
+<span class="n">seine</span> <span class="n">test</span> <span class="o">--</span><span class="n">dry</span><span class="o">-</span><span class="n">run</span> <span class="n">SPEC</span><span class="o">.</span><span class="n">yml</span>                <span class="c1"># resolve every keyword, touch no hardware</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">SPEC.yml</span></code> is loaded exactly the way <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span></code> would – <code class="docutils literal notranslate"><span class="pre">requires</span></code>,
+<code class="docutils literal notranslate"><span class="pre">[[</span> <span class="pre">]]</span></code> variables, several files on one command line – and the merged
+specification’s own <code class="docutils literal notranslate"><span class="pre">test</span></code> section runs. Needs the <code class="docutils literal notranslate"><span class="pre">test</span></code> extra (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">seine[test]</span></code>, or the <code class="docutils literal notranslate"><span class="pre">seine-test</span></code> package – <code class="docutils literal notranslate"><span class="pre">robotframework</span></code>
+itself, a pure-Python package, unlike <code class="docutils literal notranslate"><span class="pre">mtda</span></code> which is a system package
+seine never pip-installs, see <a class="reference internal" href="#doctor">doctor</a>). Exit status is 0 only
+if every test that ran passed, 1 if any failed, 2 if <code class="docutils literal notranslate"><span class="pre">SPEC.yml</span></code> has no
+<code class="docutils literal notranslate"><span class="pre">test</span></code> section or could not be loaded – a CI job reads that alone, no
+output parsing needed. <code class="docutils literal notranslate"><span class="pre">--outdir</span></code> (default a fresh directory under the
+same logs root a build’s own logs land under, see
+<a class="reference internal" href="environment.html"><span class="std std-doc">Environment variables</span></a>) is where Robot’s own
+<code class="docutils literal notranslate"><span class="pre">output.xml</span></code> and any captured screen/image artifacts go; point Robot’s
+own <code class="docutils literal notranslate"><span class="pre">rebot</span></code>/<code class="docutils literal notranslate"><span class="pre">libdoc</span></code> tooling at <code class="docutils literal notranslate"><span class="pre">output.xml</span></code> for a richer <code class="docutils literal notranslate"><span class="pre">log.html</span></code> than
+seine’s own plain-text summary. <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> is Robot’s own dry run:
+every step’s keyword is resolved and its arguments checked, but no
+keyword body actually runs – nothing touches real hardware, the way
+<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">validate</span></code> checks a build spec without building it.</p>
+<p>From <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">tui</span></code>, <code class="docutils literal notranslate"><span class="pre">/test</span> <span class="pre">[--tags=TAG,...]</span> <span class="pre">[SPEC...]</span></code> does the same
+thing, on the Test screen, through the exact same engine – omit
+<code class="docutils literal notranslate"><span class="pre">SPEC</span></code> to run the active specification’s own tests, the same default
+<code class="docutils literal notranslate"><span class="pre">/build</span></code> falls back to; typing <code class="docutils literal notranslate"><span class="pre">/test</span></code> again while one is running just
+switches to watching it. <code class="docutils literal notranslate"><span class="pre">/cancel</span></code> doesn’t reach a test run yet. The AI
+chat’s own <code class="docutils literal notranslate"><span class="pre">run-test</span></code>/<code class="docutils literal notranslate"><span class="pre">test-validate</span></code> tools (<a class="reference internal" href="ai.html"><span class="std std-doc">docs/ai.md</span></a> covers
+the AI chat generally) report into the same Test screen, so a test
+started either way is visible either way.</p>
+</section>
+<section id="writing-tests">
+<h2>Writing tests<a class="headerlink" href="#writing-tests" title="Link to this heading">#</a></h2>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># examples/rebuild-busybox/busybox.yaml</span>
+<span class="nt">test</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">busybox rebuild</span>
+<span class="w">      </span><span class="nt">tags</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">smoke</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">setup</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">connect_target</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">teardown</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">disconnect_target</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">      </span><span class="nt">tests</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">banner shows the rebuild marker</span>
+<span class="w">            </span><span class="nt">steps</span><span class="p">:</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">power_cycle</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">settle</span><span class="p">:</span><span class="w"> </span><span class="nv">2s</span><span class="p p-Indicator">}</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">log_in</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">console_send</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;busybox</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">head</span><span class="nv"> </span><span class="s">-1\n&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">console_wait</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">pattern</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;rebuilt-by-seine&quot;</span><span class="p p-Indicator">,</span><span class="nt"> timeout</span><span class="p">:</span><span class="w"> </span><span class="nv">15s</span><span class="p p-Indicator">,</span><span class="nt"> assign</span><span class="p">:</span><span class="w"> </span><span class="nv">MATCHED</span><span class="p p-Indicator">}</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">should_be_true</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;${MATCHED}&quot;</span><span class="p p-Indicator">]</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">test</span></code> is a list; each entry is one suite fragment: <code class="docutils literal notranslate"><span class="pre">name</span></code>, <code class="docutils literal notranslate"><span class="pre">tags</span></code>
+(applied to every test the entry contributes), <code class="docutils literal notranslate"><span class="pre">variables</span></code> (seeded
+once, plain scalars), <code class="docutils literal notranslate"><span class="pre">library</span></code> (extra Python keyword library modules,
+dotted paths, beyond the seine ones below – always available, nothing
+to import), <code class="docutils literal notranslate"><span class="pre">keywords</span></code> (reusable named actions, see below),
+<code class="docutils literal notranslate"><span class="pre">setup</span></code>/<code class="docutils literal notranslate"><span class="pre">teardown</span></code> (one keyword call each, exactly like Robot’s own
+<code class="docutils literal notranslate"><span class="pre">[Setup]</span></code>/<code class="docutils literal notranslate"><span class="pre">[Teardown]</span></code> – bundle more than one step under a <code class="docutils literal notranslate"><span class="pre">keywords:</span></code>
+entry, don’t list several here), and <code class="docutils literal notranslate"><span class="pre">tests</span></code> (each with its own
+optional <code class="docutils literal notranslate"><span class="pre">tags</span></code>/<code class="docutils literal notranslate"><span class="pre">setup</span></code>/<code class="docutils literal notranslate"><span class="pre">teardown</span></code> and a <code class="docutils literal notranslate"><span class="pre">steps:</span></code> list). An entry’s own
+<code class="docutils literal notranslate"><span class="pre">setup</span></code>/<code class="docutils literal notranslate"><span class="pre">teardown</span></code> is the default for the tests <em>that entry</em>
+contributes, not the whole merged suite – two entries (a shared
+fragment’s own suite and a board’s own, say) each declaring one is the
+ordinary case, not a conflict; a test’s own <code class="docutils literal notranslate"><span class="pre">setup</span></code>/<code class="docutils literal notranslate"><span class="pre">teardown</span></code>
+overrides its entry’s default the same way it always would.</p>
+<p>Every entry a specification’s own <code class="docutils literal notranslate"><span class="pre">requires</span></code> chain contributes compiles
+into <strong>one</strong> suite, sharing keywords and variables – not one suite per
+file. This is what makes <code class="docutils literal notranslate"><span class="pre">log_in:</span> <span class="pre">{}</span></code> above work: <code class="docutils literal notranslate"><span class="pre">Log</span> <span class="pre">In</span></code> is defined
+in <code class="docutils literal notranslate"><span class="pre">examples/common/conf-accounts.yaml</span></code>, beside the very password it
+sets, not in <code class="docutils literal notranslate"><span class="pre">busybox.yaml</span></code> at all:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># examples/common/conf-accounts.yaml</span>
+<span class="nt">playbook</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">configure user accounts</span>
+<span class="w">      </span><span class="nt">tasks</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">set root password</span>
+<span class="w">            </span><span class="nt">user</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">name=root password=$6$...</span>
+
+<span class="nt">test</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared login</span>
+<span class="w">      </span><span class="nt">keywords</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Log In</span>
+<span class="w">            </span><span class="nt">steps</span><span class="p">:</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">console_wait</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">pattern</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;login:&quot;</span><span class="p p-Indicator">,</span><span class="nt"> timeout</span><span class="p">:</span><span class="w"> </span><span class="nv">120s</span><span class="p p-Indicator">}</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">console_send</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;root\n&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">console_wait</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">pattern</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Password:&quot;</span><span class="p p-Indicator">,</span><span class="nt"> timeout</span><span class="p">:</span><span class="w"> </span><span class="nv">15s</span><span class="p p-Indicator">}</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">console_send</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;welcome123\n&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">console_wait</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">pattern</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;[$#]</span><span class="nv"> </span><span class="s">$&quot;</span><span class="p p-Indicator">,</span><span class="nt"> timeout</span><span class="p">:</span><span class="w"> </span><span class="nv">15s</span><span class="p p-Indicator">}</span>
+</pre></div>
+</div>
+<p>Any board <code class="docutils literal notranslate"><span class="pre">requires:</span></code>-ing <code class="docutils literal notranslate"><span class="pre">conf-accounts</span></code> reaches <code class="docutils literal notranslate"><span class="pre">Log</span> <span class="pre">In</span></code> the same way
+it already reaches the password – change the hash once and every
+board’s own suite picks it up, rather than a search-and-replace across
+each one. Follow the same placement logic a spec’s own <code class="docutils literal notranslate"><span class="pre">packages</span></code>/
+<code class="docutils literal notranslate"><span class="pre">playbook</span></code> fragments already do (see <a class="reference internal" href="specification.html"><span class="std std-doc">docs/specification.md</span></a>):
+a keyword belongs where what it depends on is defined, a suite testing
+one concern belongs beside the fragment describing that concern. Two
+entries defining the same keyword name is refused (<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">test</span></code>/
+<code class="docutils literal notranslate"><span class="pre">test-validate</span></code> catch it, see below), since which of the two would
+apply is not something to guess at silently.</p>
+<p>An entry named the same as one already loaded amends it rather than
+duplicating it: a board’s own file naming <code class="docutils literal notranslate"><span class="pre">shared</span> <span class="pre">login</span></code> again can add
+<code class="docutils literal notranslate"><span class="pre">tags</span></code>/<code class="docutils literal notranslate"><span class="pre">setup</span></code> the shared fragment didn’t set, or add a case to its
+<code class="docutils literal notranslate"><span class="pre">tests</span></code>, without repeating what <code class="docutils literal notranslate"><span class="pre">conf-accounts.yaml</span></code> already says.
+Cases inside <code class="docutils literal notranslate"><span class="pre">tests</span></code> are matched and amended the same way, by their own
+<code class="docutils literal notranslate"><span class="pre">name</span></code>. A setting both files already set keeps the first-loaded value,
+the same “the specification reaching for a fragment overrides it” rule
+<code class="docutils literal notranslate"><span class="pre">packages</span></code> follows; <code class="docutils literal notranslate"><span class="pre">keywords</span></code> and a case’s own <code class="docutils literal notranslate"><span class="pre">steps</span></code> are the
+exception – two different bodies under the same name is refused rather
+than silently picking one, the same as two entries defining the same
+keyword name above.</p>
+<p><code class="docutils literal notranslate"><span class="pre">examples/rebuild-busybox/busybox.yaml</span></code> and
+<code class="docutils literal notranslate"><span class="pre">examples/pc-image/test-boot.yaml</span></code> are complete, runnable examples;
+<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">test</span> <span class="pre">examples/pc-image/main.yaml</span></code> runs the latter (<code class="docutils literal notranslate"><span class="pre">test-boot</span></code>
+is in <code class="docutils literal notranslate"><span class="pre">main.yaml</span></code>’s own <code class="docutils literal notranslate"><span class="pre">requires:</span></code>).</p>
+<section id="steps">
+<h3>Steps<a class="headerlink" href="#steps" title="Link to this heading">#</a></h3>
+<p>A step is either Robot’s own plain text (<code class="docutils literal notranslate"><span class="pre">&quot;Log</span>&#160;&#160;&#160; <span class="pre">hello&quot;</span></code>, space-
+separated, for a one-off call needing nothing fancier) or one of:</p>
+<ul>
+<li><p><strong>A keyword call</strong>, the common case:
+<code class="docutils literal notranslate"><span class="pre">{snake_name:</span> <span class="pre">ARGS}</span></code>, e.g. <code class="docutils literal notranslate"><span class="pre">power_cycle:</span> <span class="pre">{settle:</span> <span class="pre">2s}</span></code> calls the
+<code class="docutils literal notranslate"><span class="pre">Power</span> <span class="pre">Cycle</span></code> keyword (snake_case turns into Title Case) with
+<code class="docutils literal notranslate"><span class="pre">settle=2s</span></code> as a named argument. A scalar (<code class="docutils literal notranslate"><span class="pre">console_send:</span> <span class="pre">&quot;hi\n&quot;</span></code>) or a
+list (<code class="docutils literal notranslate"><span class="pre">should_be_equal:</span> <span class="pre">[&quot;${X}&quot;,</span> <span class="pre">&quot;1&quot;]</span></code>) becomes positional arguments
+instead of named ones. <code class="docutils literal notranslate"><span class="pre">assign</span></code> inside the mapping form captures the
+keyword’s return value: <code class="docutils literal notranslate"><span class="pre">{console_run:</span> <span class="pre">{command:</span> <span class="pre">&quot;uname</span> <span class="pre">-s&quot;,</span> <span class="pre">assign:</span> <span class="pre">KERNEL_NAME}}</span></code> makes <code class="docutils literal notranslate"><span class="pre">${KERNEL_NAME}</span></code> available to every step after
+it. <code class="docutils literal notranslate"><span class="pre">{call:</span> <span class="pre">NAME,</span> <span class="pre">args:</span> <span class="pre">[...],</span> <span class="pre">assign:</span> <span class="pre">VAR}</span></code> is the explicit escape
+hatch for a keyword name <code class="docutils literal notranslate"><span class="pre">snake_name</span></code> can’t spell (one with digits or
+punctuation in it, say).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">elif</span></code>/<code class="docutils literal notranslate"><span class="pre">else</span></code></strong>:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&#39;${ARCH}&#39;</span><span class="nv"> </span><span class="s">==</span><span class="nv"> </span><span class="s">&#39;amd64&#39;&quot;</span>
+<span class="w">  </span><span class="nt">then</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">...</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">elif</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&#39;${ARCH}&#39;</span><span class="nv"> </span><span class="s">==</span><span class="nv"> </span><span class="s">&#39;arm64&#39;&quot;</span>
+<span class="w">      </span><span class="nt">then</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">...</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">else</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">...</span><span class="p p-Indicator">]</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">for_each</span></code></strong> (iterate a list) / <strong><code class="docutils literal notranslate"><span class="pre">for_range</span></code></strong> (iterate a range):</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">for_each</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">as</span><span class="p">:</span><span class="w"> </span><span class="nv">PORT</span><span class="p p-Indicator">,</span><span class="nt"> in</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;1&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;2&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;3&quot;</span><span class="p p-Indicator">]}</span>
+<span class="w">  </span><span class="nt">do</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">...</span><span class="p p-Indicator">]</span>
+<span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">for_range</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">as</span><span class="p">:</span><span class="w"> </span><span class="nv">I</span><span class="p p-Indicator">,</span><span class="nt"> start</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="nt"> stop</span><span class="p">:</span><span class="w"> </span><span class="nv">5</span><span class="p p-Indicator">,</span><span class="nt"> step</span><span class="p">:</span><span class="w"> </span><span class="nv">1</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">do</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">...</span><span class="p p-Indicator">]</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">while</span></code></strong> (Robot’s own polling primitive, <code class="docutils literal notranslate"><span class="pre">limit</span></code> a duration string
+it fails with a clear message past rather than spin forever) and
+<strong><code class="docutils literal notranslate"><span class="pre">retry_until</span></code></strong> (sugar over it – <code class="docutils literal notranslate"><span class="pre">timeout</span></code>/<code class="docutils literal notranslate"><span class="pre">interval</span></code> instead of
+writing the <code class="docutils literal notranslate"><span class="pre">not</span> <span class="pre">(...)</span></code>/<code class="docutils literal notranslate"><span class="pre">Sleep</span></code> yourself). The condition is checked
+<em>before</em> the first iteration too, same as Robot’s own <code class="docutils literal notranslate"><span class="pre">WHILE</span></code> –
+a variable the loop body only assigns (<code class="docutils literal notranslate"><span class="pre">SCREEN</span></code> below) needs a value
+set before the loop, or that first check fails with “Variable
+‘$SCREEN’ not found” instead of running the loop at all:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">set</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">SCREEN</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="p p-Indicator">}</span>
+<span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">retry_until</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&#39;login:&#39;</span><span class="nv"> </span><span class="s">in</span><span class="nv"> </span><span class="s">$SCREEN&quot;</span>
+<span class="w">  </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120s</span>
+<span class="w">  </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
+<span class="w">  </span><span class="nt">do</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">capture_screen</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">boot</span><span class="p p-Indicator">,</span><span class="nt"> assign</span><span class="p">:</span><span class="w"> </span><span class="nv">SCREEN</span><span class="p p-Indicator">}</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">try</span></code>/<code class="docutils literal notranslate"><span class="pre">except</span></code>/<code class="docutils literal notranslate"><span class="pre">else</span></code>/<code class="docutils literal notranslate"><span class="pre">finally</span></code></strong>, Robot’s own structured error
+handling:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">try</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">console_run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;apt-get</span><span class="nv"> </span><span class="s">install</span><span class="nv"> </span><span class="s">-y</span><span class="nv"> </span><span class="s">might-not-exist&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">except</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">pattern</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;*&quot;</span>
+<span class="w">      </span><span class="nt">do</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">message</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;install</span><span class="nv"> </span><span class="s">failed,</span><span class="nv"> </span><span class="s">continuing</span><span class="nv"> </span><span class="s">anyway&quot;</span><span class="p p-Indicator">}</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">pattern</span></code> is a glob against the failure’s message by default (<code class="docutils literal notranslate"><span class="pre">type:</span> <span class="pre">regexp</span></code>/<code class="docutils literal notranslate"><span class="pre">type:</span> <span class="pre">literal</span></code> for the other two Robot supports); omit it to
+catch anything.</p>
+</li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">break</span></code></strong> / <strong><code class="docutils literal notranslate"><span class="pre">continue</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">{break:</span> <span class="pre">true}</span></code> / <code class="docutils literal notranslate"><span class="pre">{continue:</span> <span class="pre">true}</span></code>),
+valid inside <code class="docutils literal notranslate"><span class="pre">for_each</span></code>/<code class="docutils literal notranslate"><span class="pre">for_range</span></code>/<code class="docutils literal notranslate"><span class="pre">while</span></code> only – Robot itself
+refuses one anywhere else, with its own clear error.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">set</span></code></strong>: <code class="docutils literal notranslate"><span class="pre">{set:</span> <span class="pre">{name:</span> <span class="pre">X,</span> <span class="pre">value:</span> <span class="pre">&quot;1&quot;}}</span></code> assigns <code class="docutils literal notranslate"><span class="pre">${X}</span></code> directly,
+Robot’s own <code class="docutils literal notranslate"><span class="pre">VAR</span></code> statement, for a value that isn’t a keyword’s return.</p></li>
+</ul>
+</section>
+<section id="conditions">
+<h3>Conditions<a class="headerlink" href="#conditions" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">elif</span></code>/<code class="docutils literal notranslate"><span class="pre">while</span></code>/<code class="docutils literal notranslate"><span class="pre">retry_until</span></code> conditions are Robot’s own expression
+syntax – ordinary Python-like comparisons. Reference a captured value
+with <code class="docutils literal notranslate"><span class="pre">$NAME</span></code> (no braces): Robot binds the variable’s real value into the
+expression directly, rather than splicing its text in, so a captured
+screen full of quotes and newlines is still safe to compare with <code class="docutils literal notranslate"><span class="pre">in</span></code>.
+<code class="docutils literal notranslate"><span class="pre">${NAME}</span></code> (with braces) still works for building a string, e.g. inside a
+keyword’s own arguments.</p>
+<p><code class="docutils literal notranslate"><span class="pre">set:</span></code>’s own <code class="docutils literal notranslate"><span class="pre">value:</span></code> is always text (Robot’s <code class="docutils literal notranslate"><span class="pre">VAR</span></code>, the same as a
+<code class="docutils literal notranslate"><span class="pre">.robot</span></code> file’s own variable table) – <code class="docutils literal notranslate"><span class="pre">{set:</span> <span class="pre">{name:</span> <span class="pre">N,</span> <span class="pre">value:</span> <span class="pre">&quot;0&quot;}}</span></code>
+makes <code class="docutils literal notranslate"><span class="pre">${N}</span></code> the <em>string</em> <code class="docutils literal notranslate"><span class="pre">&quot;0&quot;</span></code>, not the number, which then fails a
+<code class="docutils literal notranslate"><span class="pre">while:</span> <span class="pre">&quot;$N</span> <span class="pre">&lt;</span> <span class="pre">3&quot;</span></code> comparing a string against an int. <code class="docutils literal notranslate"><span class="pre">${{</span> <span class="pre">...</span> <span class="pre">}}</span></code>
+(double braces) is Robot’s own escape into a real Python expression
+instead of text substitution: <code class="docutils literal notranslate"><span class="pre">{set:</span> <span class="pre">{name:</span> <span class="pre">N,</span> <span class="pre">value:</span> <span class="pre">&quot;${{0}}&quot;}}</span></code> makes
+<code class="docutils literal notranslate"><span class="pre">${N}</span></code> a native int, and <code class="docutils literal notranslate"><span class="pre">{set:</span> <span class="pre">{name:</span> <span class="pre">N,</span> <span class="pre">value:</span> <span class="pre">&quot;${{$N</span> <span class="pre">+</span> <span class="pre">1}}&quot;}}</span></code>
+increments it as one. A <code class="docutils literal notranslate"><span class="pre">for_each</span></code>/<code class="docutils literal notranslate"><span class="pre">for_range</span></code> loop variable is already
+native (an int for <code class="docutils literal notranslate"><span class="pre">for_range</span></code>, whatever type the list held for
+<code class="docutils literal notranslate"><span class="pre">for_each</span></code>) – this only matters for <code class="docutils literal notranslate"><span class="pre">set:</span></code>.</p>
+</section>
+<section id="reusable-named-actions-keywords">
+<h3>Reusable named actions (<code class="docutils literal notranslate"><span class="pre">keywords:</span></code>)<a class="headerlink" href="#reusable-named-actions-keywords" title="Link to this heading">#</a></h3>
+<p>A <code class="docutils literal notranslate"><span class="pre">keywords:</span></code> entry is a named, parameterised bundle of steps – Robot’s
+own user keyword, defined once and called like any other step
+(<code class="docutils literal notranslate"><span class="pre">log_in:</span> <span class="pre">{}</span></code> above). Give it <code class="docutils literal notranslate"><span class="pre">args:</span></code> (a list of parameter names) and
+its own <code class="docutils literal notranslate"><span class="pre">steps:</span></code>, exactly the same grammar as a test’s. This is the
+only way to bundle more than one step under <code class="docutils literal notranslate"><span class="pre">setup:</span></code>/<code class="docutils literal notranslate"><span class="pre">teardown:</span></code>, since
+those (like Robot’s own <code class="docutils literal notranslate"><span class="pre">[Setup]</span></code>/<code class="docutils literal notranslate"><span class="pre">[Teardown]</span></code>) take a single keyword
+call each. Every <code class="docutils literal notranslate"><span class="pre">test:</span></code> entry a specification’s <code class="docutils literal notranslate"><span class="pre">requires</span></code> chain
+contributes shares one set of keywords – see “Writing tests” above for
+why that is where <code class="docutils literal notranslate"><span class="pre">Log</span> <span class="pre">In</span></code> lives, and why a name collision is refused.</p>
+</section>
+</section>
+<section id="keywords">
+<h2>Keywords<a class="headerlink" href="#keywords" title="Link to this heading">#</a></h2>
+<p>Every seine/mtda action is a keyword, ready with no <code class="docutils literal notranslate"><span class="pre">library:</span></code> needed.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">seine.testing.library.target.TargetLibrary</span></code></strong> – thin wrappers over
+<code class="docutils literal notranslate"><span class="pre">seine.tui.target</span></code>, the same functions <code class="docutils literal notranslate"><span class="pre">/target</span></code> itself calls:
+<code class="docutils literal notranslate"><span class="pre">Connect</span> <span class="pre">Target</span> <span class="pre">[agent]</span></code>, <code class="docutils literal notranslate"><span class="pre">Disconnect</span> <span class="pre">Target</span></code>, <code class="docutils literal notranslate"><span class="pre">Power</span> <span class="pre">On</span></code>/<code class="docutils literal notranslate"><span class="pre">Power</span> <span class="pre">Off</span></code>/
+<code class="docutils literal notranslate"><span class="pre">Power</span> <span class="pre">Toggle</span></code>/<code class="docutils literal notranslate"><span class="pre">Power</span> <span class="pre">Cycle</span> <span class="pre">[settle]</span></code>, <code class="docutils literal notranslate"><span class="pre">USB</span> <span class="pre">Port</span> <span class="pre">PORT</span> <span class="pre">STATE</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Console</span> <span class="pre">Send</span> <span class="pre">DATA</span></code>, <code class="docutils literal notranslate"><span class="pre">Console</span> <span class="pre">Run</span> <span class="pre">COMMAND</span></code> (waits for mtda’s configured
+prompt to know a command finished – its default, <code class="docutils literal notranslate"><span class="pre">=&gt;</span> </code>, is a U-Boot
+prompt, so it needs a real one set first; <code class="docutils literal notranslate"><span class="pre">Console</span> <span class="pre">Prompt</span> <span class="pre">[NEW_PROMPT]</span></code> sets it, <code class="docutils literal notranslate"><span class="pre">Log</span> <span class="pre">In</span></code> (examples/common/conf-accounts.yaml)
+already does after login. <code class="docutils literal notranslate"><span class="pre">Console</span> <span class="pre">Send</span></code> + <code class="docutils literal notranslate"><span class="pre">Console</span> <span class="pre">Wait</span></code> don’t depend
+on it at all. A command that pages its own output – <code class="docutils literal notranslate"><span class="pre">dpkg</span> <span class="pre">-l</span></code> past a
+terminal’s height, say – never returns either, for the same reason: it
+is genuinely still running, sitting at its own <code class="docutils literal notranslate"><span class="pre">--More--</span></code> prompt, not
+the shell’s; pipe it through <code class="docutils literal notranslate"><span class="pre">|</span> <span class="pre">cat</span></code> the way any non-interactive use of
+a pager-backed tool has to), <code class="docutils literal notranslate"><span class="pre">Console</span> <span class="pre">Wait</span> <span class="pre">PATTERN</span> <span class="pre">[TIMEOUT]</span></code>
+(truthy once <code class="docutils literal notranslate"><span class="pre">PATTERN</span></code> appears, falsy on timeout – not the matched
+text, that’s mtda’s own protocol; read the console with <code class="docutils literal notranslate"><span class="pre">Console</span> <span class="pre">Tail</span></code>/
+<code class="docutils literal notranslate"><span class="pre">Console</span> <span class="pre">Dump</span></code>/<code class="docutils literal notranslate"><span class="pre">Capture</span> <span class="pre">Screen</span></code> instead), <code class="docutils literal notranslate"><span class="pre">Console</span> <span class="pre">Dump</span></code>/<code class="docutils literal notranslate"><span class="pre">Console</span> <span class="pre">Tail</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Target</span> <span class="pre">Status</span></code>, <code class="docutils literal notranslate"><span class="pre">Storage</span> <span class="pre">To</span> <span class="pre">Host</span></code>/<code class="docutils literal notranslate"><span class="pre">Storage</span> <span class="pre">To</span> <span class="pre">Target</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Write</span> <span class="pre">Image</span> <span class="pre">To</span> <span class="pre">Target</span> <span class="pre">PATH</span></code>, <code class="docutils literal notranslate"><span class="pre">Storage</span> <span class="pre">Snapshot</span></code>/<code class="docutils literal notranslate"><span class="pre">Storage</span> <span class="pre">Rollback</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Keyboard</span> <span class="pre">Press</span> <span class="pre">KEY</span> <span class="pre">[repeat]</span> <span class="pre">[ctrl]</span> <span class="pre">[shift]</span> <span class="pre">[alt]</span> <span class="pre">[meta]</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Keyboard</span> <span class="pre">Write</span> <span class="pre">TEXT</span></code>, <code class="docutils literal notranslate"><span class="pre">Mouse</span> <span class="pre">Move</span> <span class="pre">X</span> <span class="pre">Y</span> <span class="pre">[buttons]</span></code> (one HID report –
+<code class="docutils literal notranslate"><span class="pre">buttons</span></code> held down right now, absolute HID coordinates 0-32767, not
+pixels), <code class="docutils literal notranslate"><span class="pre">Mouse</span> <span class="pre">Click</span> <span class="pre">X</span> <span class="pre">Y</span> <span class="pre">[button]</span> <span class="pre">[hold]</span></code> (a real click is two reports,
+button down then up a moment apart, exactly like a physical mouse –
+this is that pair, <code class="docutils literal notranslate"><span class="pre">Mouse</span> <span class="pre">Move</span></code> alone is not a click).</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">seine.testing.library.image.ImageLibrary</span></code></strong> – the very
+specification <code class="docutils literal notranslate"><span class="pre">test</span></code> came from, and the image seine already knows how
+to build/read: <code class="docutils literal notranslate"><span class="pre">Get</span> <span class="pre">Spec</span> <span class="pre">Value</span> <span class="pre">PATH</span></code> (dotted, e.g.
+<code class="docutils literal notranslate"><span class="pre">distribution.architecture</span></code>), <code class="docutils literal notranslate"><span class="pre">Build</span> <span class="pre">Image</span> <span class="pre">[FILES...]</span></code> (defaults to the
+same files; the same <code class="docutils literal notranslate"><span class="pre">BuildCmd</span></code> <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span></code> uses), <code class="docutils literal notranslate"><span class="pre">Inspect</span> <span class="pre">Image</span> <span class="pre">Path</span> <span class="pre">[PATH]</span></code> (lists a directory or reads a file from the last built
+image, via the same read-only <code class="docutils literal notranslate"><span class="pre">Inspector</span></code> <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">inspect</span></code> uses).</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">seine.testing.library.observation.ObservationLibrary</span></code></strong> – two kinds
+of screen, both plain values a step can <code class="docutils literal notranslate"><span class="pre">assign:</span></code> and use in any
+condition or <code class="docutils literal notranslate"><span class="pre">should_*</span></code> keyword: <code class="docutils literal notranslate"><span class="pre">Capture</span> <span class="pre">Screen</span> <span class="pre">[name]</span></code> (the console’s
+decoded text, pyte’s own screen – the same one the Remote Target screen
+renders) and <code class="docutils literal notranslate"><span class="pre">Capture</span> <span class="pre">Screen</span> <span class="pre">Image</span> <span class="pre">[name]</span></code> (a real video frame, mtda’s
+own <code class="docutils literal notranslate"><span class="pre">VideoSnapshot</span></code>, for a target with nothing useful on its serial
+console – a Wayland/Qt app has pixels, not text, to check; saved under
+<code class="docutils literal notranslate"><span class="pre">--outdir</span></code> and returns the file path). <code class="docutils literal notranslate"><span class="pre">Screen</span> <span class="pre">Should</span> <span class="pre">Contain</span></code>/
+<code class="docutils literal notranslate"><span class="pre">Screen</span> <span class="pre">Matches</span></code> are convenience over the text case, calling straight
+into Robot’s own <code class="docutils literal notranslate"><span class="pre">BuiltIn</span></code>. <code class="docutils literal notranslate"><span class="pre">Classify</span> <span class="pre">Screen</span></code> is a documented,
+not-yet-implemented seam for an OpenCV/vision-model classifier over a
+captured frame – see that module’s own comment for why capturing is
+done and classifying isn’t.</p>
+<p><strong>Robot’s own <code class="docutils literal notranslate"><span class="pre">BuiltIn</span></code></strong> needs no import either – <code class="docutils literal notranslate"><span class="pre">Should</span> <span class="pre">Be</span> <span class="pre">Equal</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Should</span> <span class="pre">Contain</span></code>, <code class="docutils literal notranslate"><span class="pre">Should</span> <span class="pre">Be</span> <span class="pre">True</span></code>, <code class="docutils literal notranslate"><span class="pre">Should</span> <span class="pre">Match</span> <span class="pre">Regexp</span></code>, <code class="docutils literal notranslate"><span class="pre">Sleep</span></code>, <code class="docutils literal notranslate"><span class="pre">Log</span></code>,
+<code class="docutils literal notranslate"><span class="pre">Fail</span></code>, <code class="docutils literal notranslate"><span class="pre">Skip</span></code>, and the rest are already there, reached through the same
+<code class="docutils literal notranslate"><span class="pre">{snake_name:</span> <span class="pre">ARGS}</span></code> shorthand as a seine keyword (<code class="docutils literal notranslate"><span class="pre">should_contain:</span> <span class="pre">[...]</span></code> calls <code class="docutils literal notranslate"><span class="pre">Should</span> <span class="pre">Contain</span></code>). No seine-specific assertion library was
+written: Robot’s own is mature and already covers this, reinventing it
+would only be a second thing to keep correct.</p>
+</section>
+<section id="what-robot-framework-brings-and-what-doesn-t-apply-here">
+<h2>What Robot Framework brings, and what doesn’t apply here<a class="headerlink" href="#what-robot-framework-brings-and-what-doesn-t-apply-here" title="Link to this heading">#</a></h2>
+<p>Keywords, variables, return values, <code class="docutils literal notranslate"><span class="pre">IF</span></code>/<code class="docutils literal notranslate"><span class="pre">ELSE</span></code>, <code class="docutils literal notranslate"><span class="pre">FOR</span></code>, <code class="docutils literal notranslate"><span class="pre">WHILE</span></code>, <code class="docutils literal notranslate"><span class="pre">BREAK</span></code>/
+<code class="docutils literal notranslate"><span class="pre">CONTINUE</span></code>, <code class="docutils literal notranslate"><span class="pre">TRY</span></code>/<code class="docutils literal notranslate"><span class="pre">EXCEPT</span></code>/<code class="docutils literal notranslate"><span class="pre">FINALLY</span></code>, setup/teardown, tags, suites, and
+structured pass/fail/skip results are all Robot’s, reached through
+<code class="docutils literal notranslate"><span class="pre">robot.running</span></code>’s own programmatic model (<code class="docutils literal notranslate"><span class="pre">TestSuite</span></code>/<code class="docutils literal notranslate"><span class="pre">.body.create_*()</span></code>)
+rather than by generating <code class="docutils literal notranslate"><span class="pre">.robot</span></code> text and re-parsing it – one less
+format to keep in sync with Robot’s own.</p>
+<p>Deliberately not exposed:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">.robot</span></code>/<code class="docutils literal notranslate"><span class="pre">.resource</span></code> text files.</strong> A test is always written as
+seine’s own YAML, inside an ordinary specification; Robot’s plain-text
+format is not a second front-end seine offers. <code class="docutils literal notranslate"><span class="pre">library:</span></code> still names
+ordinary Robot/Python keyword libraries by dotted path, so an existing
+Python library (not a <code class="docutils literal notranslate"><span class="pre">.robot</span></code> file) drops in unchanged.</p></li>
+<li><p><strong>Data-driven templates (<code class="docutils literal notranslate"><span class="pre">[Template]</span></code>) and <code class="docutils literal notranslate"><span class="pre">robot.api.TestSuiteBuilder</span></code>
+directory discovery.</strong> <code class="docutils literal notranslate"><span class="pre">for_each</span></code>/<code class="docutils literal notranslate"><span class="pre">for_range</span></code> already cover “run this
+shape with different data” for what a hardware suite needs; a
+directory-of-files test layout wasn’t asked for and would be a second
+way to organise suites alongside <code class="docutils literal notranslate"><span class="pre">requires:</span></code>-style composition,
+which a specification already has.</p></li>
+<li><p><strong>Robot’s own CLI (<code class="docutils literal notranslate"><span class="pre">robot</span></code>/<code class="docutils literal notranslate"><span class="pre">rebot</span></code>) and <code class="docutils literal notranslate"><span class="pre">--listener</span></code>/<code class="docutils literal notranslate"><span class="pre">--prerunmodifier</span></code>
+plugin surface.</strong> <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">test</span></code> is the one entry point; Robot’s own is
+not additionally exposed, so there is one command to learn, one set of
+flags, one place results are reported (though <code class="docutils literal notranslate"><span class="pre">output.xml</span></code> is still
+written, for anyone who wants Robot’s own <code class="docutils literal notranslate"><span class="pre">rebot</span></code>/<code class="docutils literal notranslate"><span class="pre">log.html</span></code> on top).</p></li>
+<li><p><strong>Remote library / XML-RPC keyword servers.</strong> Every keyword here runs
+in-process, in the same Python process already talking to mtda; a
+keyword server would only matter for a keyword implemented in another
+language, which nothing in seine needs yet.</p></li>
+</ul>
+</section>
+<section id="doctor">
+<h2>Doctor<a class="headerlink" href="#doctor" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">doctor</span></code> reports whether <code class="docutils literal notranslate"><span class="pre">robotframework</span></code> is importable, the same
+“optional, a note not an error” shape it already reports <code class="docutils literal notranslate"><span class="pre">mtda</span></code> in
+(<code class="docutils literal notranslate"><span class="pre">Optional</span> <span class="pre">test</span> <span class="pre">automation</span> <span class="pre">(seine.testing)</span></code>).</p>
+</section>
+<section id="ai-chat">
+<h2>AI chat<a class="headerlink" href="#ai-chat" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">run-test</span></code> (gated, needs confirmation) runs the active specification’s
+own tests the same way <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">test</span></code> does, reporting into the Test
+screen as it goes; <code class="docutils literal notranslate"><span class="pre">test-validate</span></code> (ungated – Robot’s own dry run,
+nothing real happens) proves a <code class="docutils literal notranslate"><span class="pre">test:</span></code> section just edited via
+<code class="docutils literal notranslate"><span class="pre">spec-update</span></code>/<code class="docutils literal notranslate"><span class="pre">spec-create</span></code> is at least well-formed before spending a
+real run on it; <code class="docutils literal notranslate"><span class="pre">test-result</span></code> (ungated) reads back what the last run in
+this session did. There is no dedicated tool for writing or editing a
+<code class="docutils literal notranslate"><span class="pre">test:</span></code> section – it is spec content, changed with <code class="docutils literal notranslate"><span class="pre">spec-update</span></code>/
+<code class="docutils literal notranslate"><span class="pre">spec-create</span></code> the same as any other section. See <a class="reference internal" href="ai.html"><span class="std std-doc">docs/ai.md</span></a>
+for the AI chat generally.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="environment.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Environment variables</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="tui.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">TUI</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#running-one">Running one</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#writing-tests">Writing tests</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#steps">Steps</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#conditions">Conditions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reusable-named-actions-keywords">Reusable named actions (<code class="docutils literal notranslate"><span class="pre">keywords:</span></code>)</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#keywords">Keywords</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-robot-framework-brings-and-what-doesn-t-apply-here">What Robot Framework brings, and what doesn’t apply here</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#doctor">Doctor</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ai-chat">AI chat</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Cedric Hombourger
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Cedric Hombourger.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

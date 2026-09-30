@@ -1,0 +1,844 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>seine &#8212; seine documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=90905a2f556bf617f1a9" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=4418a689" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=90905a2f556bf617f1a9"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9" />
+
+    <script src="_static/documentation_options.js?v=4d2f5802"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?v=fab101a9"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'introduction';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Getting started" href="getting-started.html" />
+    <link rel="prev" title="seine" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">seine documentation</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="specification.html">Specification files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="merging.html">Merging specification fragments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernels.html">Kernels</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building.html">Building</a></li>
+<li class="toctree-l1"><a class="reference internal" href="environment.html">Environment variables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tui.html">TUI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ai.html">The AI chat</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vault-openbao.html">Running a vault for seine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="release-as-debs.html">Releasing seine as .deb packages</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="caching.html">Caching</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/chombourger/seine/issues/new?title=Issue%20on%20page%20%2Fintroduction.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="_sources/introduction.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button pst-navbar-icon"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<button class="sidebar-toggle secondary-toggle btn btn-sm pst-navbar-icon" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>seine</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#a-minimal-specification">A minimal specification</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#composition-not-a-bespoke-package-universe">Composition, not a bespoke package universe</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vendor-the-inputs-not-just-the-image">Vendor the inputs, not just the image</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#committed-vendor-locks">Committed vendor locks</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#when-debian-no-longer-has-the-package">When Debian no longer has the package</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debian-packages-remain-debian-packages">Debian packages remain Debian packages</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#grafts">Grafts</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#configuration-with-ansible">Configuration with Ansible</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#kernels">Kernels</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#signing-with-a-vault">Signing with a vault</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-a-build-runs">How a build runs</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building">Building</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#testing">Testing</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#software-bill-of-materials">Software Bill of Materials</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tui">TUI</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-seine-deliberately-does-not-do">What seine deliberately does not do</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#documentation">Documentation</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="seine">
+<h1>seine<a class="headerlink" href="#seine" title="Link to this heading">#</a></h1>
+<p><strong>Debian system composition for embedded Linux</strong></p>
+<p>seine builds bootable embedded Linux images from a YAML specification.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>      specification
+            │
+            ├── Debian packages
+            ├── grafts
+            ├── vendor inputs
+            ├── configuration
+            └── kernel
+                   │
+                   ▼
+              target system
+                   │
+                   ▼
+               disk image
+</pre></div>
+</div>
+<p>The basic idea is deliberately small:</p>
+<blockquote>
+<div><p><strong>Debian + composition = target system</strong></p>
+</div></blockquote>
+<p>seine does not introduce a new Linux distribution, package format, or package build language. It uses Debian packages where possible, Debian packaging when a package needs to be rebuilt (a <strong>graft</strong>), Ansible for system configuration, and standard Linux tools for creating the resulting image.</p>
+<p>It also provides a way to <strong>vendor the inputs to a build</strong> so that a system can be rebuilt later without depending on the state of a live Debian archive.</p>
+<section id="a-minimal-specification">
+<h2>A minimal specification<a class="headerlink" href="#a-minimal-specification" title="Link to this heading">#</a></h2>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="c1"># spec.yaml</span>
+<span class="nt">distribution</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">architecture</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">amd64</span>
+<span class="w">    </span><span class="nt">release</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bookworm</span>
+
+<span class="nt">packages</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apt://busybox</span>
+<span class="w">      </span><span class="nt">patches</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">patches/0001-mark-the-banner-as-rebuilt.patch</span>
+
+<span class="nt">vendor</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">busybox</span>
+
+<span class="nt">playbook</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">base packages</span>
+<span class="w">      </span><span class="nt">tasks</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">install vim</span>
+<span class="w">            </span><span class="nt">apt</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">state</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">present</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">vim</span><span class="p p-Indicator">]</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">seine plan spec.yaml</span>
+<span class="go">seine build spec.yaml</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">packages:</span></code> rebuilds <code class="docutils literal notranslate"><span class="pre">busybox</span></code> from Debian source with a local patch. <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> asks seine to keep that source, and everything it build-depends on, around for a future rebuild. <code class="docutils literal notranslate"><span class="pre">playbook:</span></code> runs an Ansible task against the assembled system.</p>
+<p>This excerpt leaves out the <code class="docutils literal notranslate"><span class="pre">distribution:</span> <span class="pre">feeds:</span></code> and <code class="docutils literal notranslate"><span class="pre">image:</span></code> sections a runnable specification also needs. <code class="docutils literal notranslate"><span class="pre">examples/rebuild-busybox/</span></code> grafts this same patch onto a bootable image and tests it on real hardware; <code class="docutils literal notranslate"><span class="pre">examples/vendor/main.yaml</span></code> is a vendor-only specification covering a realistic Debian package set; <code class="docutils literal notranslate"><span class="pre">examples/pc-image/main.yaml</span></code> (<code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">build</span> <span class="pre">examples/pc-image/main.yaml</span></code>) is a complete image with neither.</p>
+</section>
+<section id="composition-not-a-bespoke-package-universe">
+<h2>Composition, not a bespoke package universe<a class="headerlink" href="#composition-not-a-bespoke-package-universe" title="Link to this heading">#</a></h2>
+<p>Building an embedded Linux system involves two different problems:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>source ────────────────&gt; Debian package
+                             │
+                             │
+packages + configuration ────┴───&gt; target system
+                                      │
+                                      ▼
+                                  disk image
+</pre></div>
+</div>
+<p>The first is <strong>package production</strong>. The second is <strong>system composition</strong>.</p>
+<p>seine is primarily concerned with the second.</p>
+<p>A target system is normally assembled from existing Debian binary packages. There is no need to create a separate binary package universe for every board or image.</p>
+<p>When Debian’s package is genuinely not sufficient – for example, a patch is required or the kernel comes from a tree that Debian does not package – seine can rebuild it using Debian’s own packaging. This is called a <strong>graft</strong>.</p>
+<p>The result is still an ordinary Debian package and goes through the same composition process as everything else.</p>
+</section>
+<section id="vendor-the-inputs-not-just-the-image">
+<h2>Vendor the inputs, not just the image<a class="headerlink" href="#vendor-the-inputs-not-just-the-image" title="Link to this heading">#</a></h2>
+<p>A system build depends on more than the packages explicitly named in its specification.</p>
+<p>A package that seine rebuilds has build dependencies. Those dependencies have dependencies of their own. Some packages are needed only to build the image and never appear in the resulting root filesystem.</p>
+<p><code class="docutils literal notranslate"><span class="pre">vendor:</span></code> lets seine preserve those inputs.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">vendor</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openssl</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">busybox</span>
+<span class="w">    </span><span class="nt">suite</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">bookworm</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">trixie</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libfoo</span>
+<span class="w">    </span><span class="nt">suite</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bookworm</span>
+<span class="w">    </span><span class="nt">arch</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">armhf</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&gt;=1.2&quot;</span>
+</pre></div>
+</div>
+<p>For each requested source package, <code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span></code> resolves its complete build-dependency closure for the requested Debian suites and architectures.</p>
+<p>The result is a local Debian repository containing the source packages and binary packages needed by that closure.</p>
+<p>This is deliberately different from <code class="docutils literal notranslate"><span class="pre">packages:</span></code>:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>packages:  what should seine rebuild?
+vendor:    what inputs must survive?
+</pre></div>
+</div>
+<p>The dependency closure is recorded with provenance, so it is possible to determine not only <em>what</em> was vendored but <em>why</em> a source package was included.</p>
+<p>The resolver also skips packages a real Debian build environment already provides, so it copies only the inputs that actually need preserving.</p>
+</section>
+<section id="committed-vendor-locks">
+<h2>Committed vendor locks<a class="headerlink" href="#committed-vendor-locks" title="Link to this heading">#</a></h2>
+<p>A vendor repository in a local build cache is useful, but it is not enough for a project that wants its build inputs to survive for years.</p>
+<p>A specification can therefore have a committed lock file:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>foo.yaml
+foo.lock.yaml
+</pre></div>
+</div>
+<p>The lock file is discovered automatically when it sits beside the specification.</p>
+<p>It records the resolved vendor inputs, including versions and hashes of the files that were fetched. It is generated by seine rather than edited by hand:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">seine vendor --refresh foo.yaml</span>
+</pre></div>
+</div>
+<p>Once committed, an ordinary:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">seine vendor foo.yaml</span>
+</pre></div>
+</div>
+<p>uses the frozen resolution rather than asking APT what the current candidate happens to be.</p>
+<p>Changing the <code class="docutils literal notranslate"><span class="pre">vendor:</span></code> request without refreshing the lock is an error rather than an invitation to silently resolve something different.</p>
+<p>This gives two useful properties:</p>
+<ol class="arabic simple">
+<li><p>two checkouts of the same specification ask for the same vendor inputs;</p></li>
+<li><p>changes in the Debian archive do not silently change an existing vendor lock.</p></li>
+</ol>
+<p><code class="docutils literal notranslate"><span class="pre">seine</span> <span class="pre">vendor</span> <span class="pre">--check</span> <span class="pre">foo.yaml</span></code> can be used by CI to resolve the current archive and report whether it still agrees with the committed lock.</p>
+</section>
+<section id="when-debian-no-longer-has-the-package">
+<h2>When Debian no longer has the package<a class="headerlink" href="#when-debian-no-longer-has-the-package" title="Link to this heading">#</a></h2>
+<p>Debian’s live archives normally retain the current version of a package, not its complete history.</p>
+<p>A lock can therefore outlive the copy of a package in the live archive.</p>
+<p>When a vendor lock is refreshed, seine checks the fetched files against <code class="docutils literal notranslate"><span class="pre">snapshot.debian.org</span></code> where possible and records the snapshot’s content identifier in the lock.</p>
+<p>If the live archive later stops providing the pinned version, an ordinary vendor operation can fetch the file directly from its historical snapshot and verify it against the lock’s hash.</p>
+<p>The normal build path therefore does not need to query snapshot.debian.org. The information required to retrieve a historical file is already part of the committed lock.</p>
+<p>This is an important distinction:</p>
+<blockquote>
+<div><p><strong>snapshot.debian.org is used to preserve history, not as the build system’s package repository.</strong></p>
+</div></blockquote>
+<p>If a file has never been indexed by snapshot.debian.org, seine does not pretend otherwise: the lock still retains the file’s own hash, and the vendor operation continues to require those bytes to match.</p>
+<p>This is particularly useful for embedded systems, where an image may need to stay buildable long after the development environment – and the corresponding Debian archive – have moved on. A vendor lock pins and preserves the inputs to that future build. Package builds are given a fixed <code class="docutils literal notranslate"><span class="pre">SOURCE_DATE_EPOCH</span></code> and a fixed build path (see <a class="reference internal" href="building.html#reproducibility"><span class="std std-ref">Reproducibility</span></a>); snapshot-pinned root filesystem and disk image builds are tested byte-for-byte reproducible.</p>
+</section>
+<section id="debian-packages-remain-debian-packages">
+<h2>Debian packages remain Debian packages<a class="headerlink" href="#debian-packages-remain-debian-packages" title="Link to this heading">#</a></h2>
+<p>Debian is fundamentally a binary distribution: a <code class="docutils literal notranslate"><span class="pre">.deb</span></code> is built independently of the system that will eventually install it and can be reused wherever its dependencies are satisfied.</p>
+<p>seine preserves that property wherever practical.</p>
+<p>Most packages in an image therefore come directly from the configured Debian feeds. System-specific behaviour belongs in the image specification and its configuration rather than being encoded by rebuilding packages unnecessarily.</p>
+<p>When a package really does need to change, seine starts from the Debian source package and rebuilds it. The modified package then becomes another Debian package in the image.</p>
+<p>The same distinction applies to vendoring: the vendored repository contains Debian packages and Debian source packages. It is not a second package format.</p>
+</section>
+<section id="grafts">
+<h2>Grafts<a class="headerlink" href="#grafts" title="Link to this heading">#</a></h2>
+<p>A graft is the escape hatch for cases where the Debian package is not sufficient.</p>
+<p>For example, a package can be rebuilt from Debian source with additional changes, or a kernel can be grafted from a source tree that Debian does not package.</p>
+<p>The important distinction is that grafting does not create a second packaging mechanism. The result is fed back into the normal Debian package composition process.</p>
+<p>In the common case, no grafts are necessary.</p>
+</section>
+<section id="configuration-with-ansible">
+<h2>Configuration with Ansible<a class="headerlink" href="#configuration-with-ansible" title="Link to this heading">#</a></h2>
+<p>System configuration is expressed with Ansible playbooks.</p>
+<p>seine runs <code class="docutils literal notranslate"><span class="pre">ansible-playbook</span></code> from the build environment against the system being assembled. Ansible is therefore a build-time dependency; it is not installed into the resulting image unless the specification explicitly asks for it.</p>
+<p>Using Ansible avoids creating another configuration DSL that Linux developers would have to learn.</p>
+</section>
+<section id="kernels">
+<h2>Kernels<a class="headerlink" href="#kernels" title="Link to this heading">#</a></h2>
+<p>seine keeps kernel builds inside Debian’s kernel packaging model.</p>
+<p>A Debian kernel can be reconfigured using configuration fragments:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">packages</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apt://linux</span>
+<span class="w">    </span><span class="nt">extends</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">kernel</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">config</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">configs/slim-common.fragment</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">configs/slim-amd64.fragment</span>
+</pre></div>
+</div>
+<p>When Debian’s kernel source is not appropriate, a kernel can instead be grafted from another source tree.</p>
+<p>In either case, the result is packaged as a Debian kernel and installed in the usual way.</p>
+</section>
+<section id="signing-with-a-vault">
+<h2>Signing with a vault<a class="headerlink" href="#signing-with-a-vault" title="Link to this heading">#</a></h2>
+<p>seine can get passwords and signing keys from an OpenBao vault instead of
+keeping them on the build machine. It can sign package repositories, kernel
+modules and Secure Boot UKIs there, so the private signing keys do not leave
+the vault.</p>
+<p>See <a class="reference internal" href="vault-openbao.html"><span class="std std-doc">Running a vault for seine</span></a> for setup and the
+<a class="reference internal" href="specification.html#signing"><span class="std std-ref">specification reference</span></a> for the <code class="docutils literal notranslate"><span class="pre">vault:</span></code>
+forms.</p>
+</section>
+<section id="how-a-build-runs">
+<h2>How a build runs<a class="headerlink" href="#how-a-build-runs" title="Link to this heading">#</a></h2>
+<p>Mechanically, the build separates system composition from disk creation:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>                 specification
+                       │
+                       ▼
+             packages / vendor inputs
+                       │
+                       ▼
+                root filesystem
+                   (Podman)
+                       │
+                       ▼
+                     tar
+                       │
+                       ▼
+               libguestfs / QEMU
+                       │
+                       ▼
+                  disk image
+</pre></div>
+</div>
+<p>The root filesystem is assembled inside a rootless Podman container.</p>
+<p>The disk image is then created by a temporary libguestfs appliance running under QEMU/KVM.</p>
+<p>No elevated privileges are required after installation.</p>
+<p>Cross-architecture builds use QEMU where necessary.</p>
+</section>
+<section id="building">
+<h2>Building<a class="headerlink" href="#building" title="Link to this heading">#</a></h2>
+<p>The basic commands are:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">seine plan spec.yaml</span>
+<span class="go">seine build spec.yaml</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">plan</span></code> shows what would be built and what has changed.</p>
+<p><code class="docutils literal notranslate"><span class="pre">build</span></code> performs the build.</p>
+<p>Build results are cached and reused when their inputs have not changed.</p>
+<p>Several images can be built together:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">seine build examples/pc-image/main.yaml -- examples/rpi4-image/main.yaml</span>
+</pre></div>
+</div>
+<p>Shared work is scheduled once when the specifications require the same inputs.</p>
+</section>
+<section id="testing">
+<h2>Testing<a class="headerlink" href="#testing" title="Link to this heading">#</a></h2>
+<p>A specification can carry its own tests:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">seine test spec.yaml</span>
+</pre></div>
+</div>
+<p>Tests run against a real target using mtda and Robot Framework semantics.</p>
+<p>This allows a specification to describe not only how an image is assembled, but also how the resulting system is validated.</p>
+</section>
+<section id="software-bill-of-materials">
+<h2>Software Bill of Materials<a class="headerlink" href="#software-bill-of-materials" title="Link to this heading">#</a></h2>
+<p>An image can be built together with an SPDX-format SBOM:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">seine build --sbom spec.yaml</span>
+</pre></div>
+</div>
+<p>The SBOM records the binary packages installed in the image and the source packages from which they were built.</p>
+</section>
+<section id="tui">
+<h2>TUI<a class="headerlink" href="#tui" title="Link to this heading">#</a></h2>
+<p>The same build engine can be driven interactively:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">seine tui [SPEC...]</span>
+</pre></div>
+</div>
+<p>The TUI provides views for specifications, plans, builds, built images and tests.</p>
+<p>It is an alternative interface to the existing commands rather than a separate build implementation.</p>
+</section>
+<section id="what-seine-deliberately-does-not-do">
+<h2>What seine deliberately does not do<a class="headerlink" href="#what-seine-deliberately-does-not-do" title="Link to this heading">#</a></h2>
+<p>seine intentionally does not try to expose every possible build-time mechanism a package or image might conceivably need.</p>
+<p>It favours a small system-composition model backed by ordinary Debian packaging over arbitrary build-time flexibility.</p>
+<p>It is therefore not:</p>
+<ul class="simple">
+<li><p>a replacement for Debian packaging;</p></li>
+<li><p>a general-purpose package build system;</p></li>
+<li><p>a new package format;</p></li>
+<li><p>a new package manager;</p></li>
+<li><p>a complete replacement for systems such as Yocto or Buildroot.</p></li>
+</ul>
+<p>If most of a system’s packages need extensive source-level customization, a different build system may be a better fit.</p>
+<p>The goal is narrower:</p>
+<blockquote>
+<div><p><strong>Compose a Debian system from explicit inputs, and keep enough of those inputs around that the system can still be understood and rebuilt later.</strong></p>
+</div></blockquote>
+</section>
+<section id="documentation">
+<h2>Documentation<a class="headerlink" href="#documentation" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/getting-started.md</span></code> — installation and first build</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/specification.md</span></code> — specification format</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/merging.md</span></code> — composing specification files</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/kernels.md</span></code> — kernel configuration and grafting</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/building.md</span></code> — builds, caching, cross-compilation and reproducibility</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/environment.md</span></code> — environment variables and build directories</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/vault-openbao.md</span></code> — running a vault to sign build output remotely</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/testing.md</span></code> — target testing</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/tui.md</span></code> — interactive interface</p></li>
+</ul>
+<p>See <code class="docutils literal notranslate"><span class="pre">examples/</span></code> for complete specifications, including <code class="docutils literal notranslate"><span class="pre">examples/vendor/</span></code> for a vendor-only build covering a realistic Debian package set across Bookworm/Trixie and amd64/arm64.</p>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">seine</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="getting-started.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Getting started</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item"><div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#a-minimal-specification">A minimal specification</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#composition-not-a-bespoke-package-universe">Composition, not a bespoke package universe</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vendor-the-inputs-not-just-the-image">Vendor the inputs, not just the image</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#committed-vendor-locks">Committed vendor locks</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#when-debian-no-longer-has-the-package">When Debian no longer has the package</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debian-packages-remain-debian-packages">Debian packages remain Debian packages</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#grafts">Grafts</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#configuration-with-ansible">Configuration with Ansible</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#kernels">Kernels</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#signing-with-a-vault">Signing with a vault</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-a-build-runs">How a build runs</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building">Building</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#testing">Testing</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#software-bill-of-materials">Software Bill of Materials</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#tui">TUI</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-seine-deliberately-does-not-do">What seine deliberately does not do</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#documentation">Documentation</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Cedric Hombourger
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2026, Cedric Hombourger.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=90905a2f556bf617f1a9"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=90905a2f556bf617f1a9"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
