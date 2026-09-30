@@ -12,6 +12,7 @@ import sys
 import yaml
 
 from seine            import settings
+from seine.credentials import CredentialError
 from seine.image      import Image
 from seine.extends import module
 from seine.cmd        import Cmd
@@ -50,6 +51,90 @@ def parse_resources(text, previous=None):
 def format_resources(resources):
     return ",".join("%s=%d" % (cls, cap)
                     for cls, cap in sorted((resources or {}).items()))
+
+# Plain TTY prompt for a feed's login/password pair. The TUI wires its
+# own modal in instead.
+def _tty_prompt(context, fields):
+    import getpass
+    if context:
+        print(context)
+    values = {}
+    for name in ("login", "password"):
+        default, secret = fields[name]
+        label = "%s [%s]" % (name, default) if default else name
+        if secret:
+            entered = getpass.getpass("%s: " % label)
+        else:
+            entered = input("%s: " % label)
+        values[name] = entered or default
+    return values
+
+# None (never prompt, fail closed) unless stdin is a real terminal --
+# a CI run or a piped invocation must not block waiting for typing that
+# will never come.
+def _default_prompt():
+    from seine.progress import interactive
+    return _tty_prompt if interactive(sys.stdin, os.environ) else None
+
+# Resolves and checks every authenticated feed across all builds before
+# any task runs. Feeds sharing the same login/password chain share one
+# CredentialSource, so the value is only asked for once.
+def collect_credentials(builds, prompt=None):
+    from seine import credentials
+    from seine import vault as _vault
+    from seine.utils import feeds, redactions
+
+    if prompt is None:
+        prompt = _default_prompt()
+
+    # 'probes' only ever gets the first feed seen for a given chain --
+    # once that one server is checked, a sibling feed sharing the exact
+    # same credential needs no fresh network round trip.
+    sources = {}
+    probes = []
+    for build in builds:
+        for feed in feeds(build.spec["distribution"]):
+            auth = feed["auth"]
+            if auth is None:
+                continue
+            key = (auth["login"], auth["password"])
+            source = sources.get(key)
+            first_time = source is None
+            if first_time:
+                source = credentials.CredentialSource(
+                    {"login": auth["login"], "password": auth["password"]},
+                    context=feed["uri"], prompt=prompt,
+                    vault_reader=build._vault_lookup)
+                sources[key] = source
+            if auth["probe"] and first_time:
+                probes.append((build, feed, source))
+
+    for build, feed, source in probes:
+        values = source.get()
+        _record_credential_secrets(build.spec, values)
+        while True:
+            try:
+                ok = credentials.probe(feed["uri"], feed["suite"],
+                                       values["login"], values["password"])
+            except credentials.CredentialError as e:
+                raise ValueError("feed '%s' (%s): %s"
+                                 % (feed["suite"], feed["uri"], e)) from e
+            if ok:
+                source.commit()
+                break
+            values = source.failed()
+            _record_credential_secrets(build.spec, values)
+    return sources
+
+# Password always redacts; login only if the spec's 'redact:' asks for it.
+def _record_credential_secrets(spec, values):
+    from seine import vault as _vault
+    from seine.utils import redactions
+    _vault.record_secret(values["password"])
+    _patterns, paths = redactions(spec)
+    login_path = ("distribution", "feeds", "auth", "login")
+    if any(login_path[:len(p)] == p for p in paths):
+        _vault.record_secret(values["login"])
 
 class BuildCmd(Cmd):
     # Command name and its '-h' text. A variant of this command (see
@@ -1360,6 +1445,7 @@ class BuildCmd(Cmd):
                 if self.options["tasks"]:
                     result = self.build()
             else:
+                collect_credentials([self])
                 # Taken before the build, which writes into the
                 # specification as it goes -- the ansible runner puts each
                 # playbook's environment there. Taken after, every playbook
@@ -1381,6 +1467,9 @@ class BuildCmd(Cmd):
         except OSError as e:
             sys.stderr.write("error: couldn't open build YAML file: {0}\n".format(e))
             sys.exit(2)
+        except CredentialError as e:
+            sys.stderr.write("error: %s\n" % e)
+            sys.exit(3)
         except ValueError as e:
             sys.stderr.write("error: YAML file is invalid: {0}\n".format(e))
             sys.exit(3)
