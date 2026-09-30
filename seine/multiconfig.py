@@ -18,7 +18,7 @@ from seine import progress
 from seine import tasks
 from seine import utils
 from seine.bootstrap import HostBootstrap
-from seine.build     import BuildCmd, remember
+from seine.build     import BuildCmd, collect_credentials, remember
 from seine.image     import print_trust_recap
 from seine.sbuild    import BuilderImage
 from seine.container import ContainerEngine
@@ -341,6 +341,7 @@ def run(groups_files, options):
         return 0
 
     all_tasks = merged_tasks(builds)
+    collect_credentials(builds)
     jobs = options.get("jobs", 1)
     resources = options.get("resources")
     verbose = options.get("verbose", False)

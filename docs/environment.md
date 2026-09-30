@@ -87,5 +87,6 @@ downloads directories.
 | `SEINE_KEEP_DEAD_CONTAINERS` | Keeps a failed step's container instead of removing it, for reading back what podman recorded about the commands run inside. See [Keeping a failed build's containers](building.md#keeping-a-failed-builds-containers) |
 | `SEINE_SIGN_KEY` | Same as `--sign-key`: sign the rebuilt packages and their repository with this gpg key, or `vault:<name>` to sign inside the vault |
 | `SEINE_VAULT_CERT` | CA certificate (PEM) to verify `SEINE_VAULT_ADDR` against, for a vault behind a private or self-signed TLS certificate |
+| `SEINE_CREDENTIALS_FILE` | Where the `settings:` feed-auth backend reads and writes ([Authenticating to a feed](specification.md#authenticating-to-a-feed)), overriding `~/.config/seine/credentials.json` |
 | `NO_COLOR` | Same as `--no-color`: print a `--dry-run` plan without colour |
 | `SSH_AUTH_SOCK` | Forwarded into the builder container so a `git+ssh://` package source can be fetched with your own agent |
