@@ -312,3 +312,34 @@ When an object is pushed to S3:
    input derivation components, allowing cross-machine cache hit/miss explanation.
 4. A `<key>.touch` heartbeat sidecar is updated with the current timestamp to
    enable LRU space eviction.
+
+Garage ignores `If-None-Match`, so the store does not enforce write-once. For a
+digest-addressed key the provider checks that the object is absent before
+uploading it; other (alias) keys are always overwritten.
+
+Every pull is verified: the archive is refused when its SHA-256 differs from
+the `x-amz-meta-sha256` stored with the object, or when none is stored. Tar
+archives are extracted with Python's safe `data` filter, which rejects paths
+and links leaving the destination and device files.
+
+### Cache explainability (`seine cache explain`)
+
+To inspect why a build missed the cache or what changed between cached revisions:
+
+```console
+# Diff local build against remote S3 cached recipe
+seine cache explain packages/trixie/amd64/mypkg
+
+# Diff live spec against remote S3 cached recipe before building
+seine cache explain packages trixie/amd64/mypkg --spec images/app.yaml
+
+# Compare two recipe files directly
+seine cache explain old.recipe new.recipe
+
+# Inspect derivation inputs of a single recipe file or remote cache key
+seine cache explain local.recipe
+seine cache explain chroots trixie-amd64
+```
+
+When comparing recipes, differences in kernel configurations, files, dependencies,
+or specification contents are highlighted field by field.

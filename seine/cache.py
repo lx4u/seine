@@ -20,6 +20,7 @@ from seine       import analyze
 from seine       import cache_index
 from seine.cmd   import Cmd
 from seine.container import ContainerEngine
+from seine import utils
 from seine.utils import locked
 from seine.utils import KIND_LABEL
 from seine.utils import BUILDER_KIND
@@ -226,6 +227,104 @@ class CacheCmd(Cmd):
         if entries:
             self._entries(names, matching)
         return 0
+
+    def explain(self, targets, spec_files=None, options=None):
+        """Explain cache hit/miss derivation differences or inspect recipes."""
+        options = options or {}
+
+        if len(targets) == 2 and any(t.endswith(".recipe") for t in targets):
+            r1 = utils.read_recipe_file(targets[0])
+            r2 = utils.read_recipe_file(targets[1])
+            if r1 is None:
+                sys.stderr.write("error: could not read recipe from '%s'\n" % targets[0])
+                return 1
+            if r2 is None:
+                sys.stderr.write("error: could not read recipe from '%s'\n" % targets[1])
+                return 1
+            diff = utils.diff_recipes(r1, r2)
+            if not diff:
+                print("recipes '%s' and '%s' are identical" % (targets[0], targets[1]))
+                return 0
+            print("diff between '%s' and '%s' --" % (targets[0], targets[1]))
+            for line in diff:
+                print("  %s" % line)
+            return 0
+
+        if len(targets) == 1 and (targets[0].endswith(".recipe") or os.path.isfile(targets[0])):
+            r = utils.read_recipe_file(targets[0])
+            if r is None:
+                sys.stderr.write("error: could not read recipe from '%s'\n" % targets[0])
+                return 1
+            print("recipe for '%s':" % targets[0])
+            for label, val in r:
+                print("  %-32s %s" % (utils.format_recipe_label(label), val))
+            return 0
+
+        if len(targets) == 2 and targets[0] in ("packages", "chroots", "rootfs", "images", "vendor", "downloads"):
+            kind, key = targets[0], targets[1]
+        elif len(targets) == 1:
+            arg = targets[0]
+            if "/" in arg and arg.split("/")[0] in ("packages", "chroots", "rootfs", "images", "vendor", "downloads"):
+                kind, _, key = arg.partition("/")
+            else:
+                kind = "packages" if "/" in arg else "chroots"
+                key = arg
+        else:
+            sys.stderr.write("error: cache explain expects [kind] key or recipe files\n")
+            return 1
+
+        from seine import storage
+        provider = storage.for_build(options)
+        remote_recipe = provider.explain(kind, key)
+
+        local_recipe = None
+        if spec_files:
+            try:
+                from seine.build import BuildCmd
+                build = BuildCmd()
+                for sf in spec_files:
+                    build.load(sf)
+                parsed = build.parse()
+                distro = parsed["distribution"]
+                from seine import packages as pkg_module
+                builder = pkg_module.Builder(distro, build.options, None)
+                pkg_name = key.split("/")[-1]
+                target_pkg = next((p for p in build.image.packages if p.name == pkg_name), None)
+                if target_pkg:
+                    arch = key.split("/")[1] if len(key.split("/")) == 3 else distro["architecture"]
+                    builder.stamp(target_pkg, arch)
+                    local_recipe = builder._recipes.get((target_pkg.name, arch))
+            except Exception:
+                pass
+
+        if local_recipe is None:
+            local_provider = storage.LocalStorageProvider()
+            local_recipe = local_provider.explain(kind, key)
+
+        if remote_recipe and local_recipe:
+            diff = utils.diff_recipes(remote_recipe, local_recipe)
+            if not diff:
+                print("%s/%s: cached (matches remote recipe)" % (kind, key))
+                return 0
+            print("%s/%s: not cached --" % (kind, key))
+            for line in diff:
+                print("  %s" % line)
+            return 0
+
+        if remote_recipe:
+            print("remote recipe for %s/%s:" % (kind, key))
+            for label, val in remote_recipe:
+                print("  %-32s %s" % (utils.format_recipe_label(label), val))
+            return 0
+
+        if local_recipe:
+            print("local recipe for %s/%s (not found on remote storage):" % (kind, key))
+            for label, val in local_recipe:
+                print("  %-32s %s" % (utils.format_recipe_label(label), val))
+            return 0
+
+        sys.stderr.write("error: no recipe found for %s/%s\n" % (kind, key))
+        return 1
 
     # List cache entries oldest-used first -- the order to read them in
     # when deciding what to remove. Times are seine's own record, not the
@@ -758,7 +857,8 @@ class CacheCmd(Cmd):
             opts, args = getopt.gnu_getopt(
                 argv, "h", ["entries", "entries-matching=", "force", "help",
                             "older-than=", "replace", "spec=",
-                            "with-image-rootfs"])
+                            "with-image-rootfs", "s3-cache", "s3-endpoint=",
+                            "s3-bucket=", "s3-region="])
         except getopt.GetoptError as err:
             sys.stderr.write("%s\n%s" % (err, USAGE))
             sys.exit(1)
@@ -769,6 +869,7 @@ class CacheCmd(Cmd):
         replace = False
         specifications = []
         with_image_rootfs = False
+        s3_options = {}
         for o, a in opts:
             if o in ("-h", "--help"):
                 print(USAGE)
@@ -801,8 +902,16 @@ class CacheCmd(Cmd):
                 specifications.append([name for name in a.split(",") if name])
             elif o in ("--with-image-rootfs"):
                 with_image_rootfs = True
+            elif o in ("--s3-cache"):
+                s3_options["s3_cache"] = True
+            elif o in ("--s3-endpoint"):
+                s3_options["s3_endpoint"] = a
+            elif o in ("--s3-bucket"):
+                s3_options["s3_bucket"] = a
+            elif o in ("--s3-region"):
+                s3_options["s3_region"] = a
 
-        ACTIONS = ["info", "clear", "export", "import"]
+        ACTIONS = ["info", "clear", "export", "import", "explain"]
         if len(args) == 0:
             sys.stderr.write("error: cache command expects one of %s\n"
                              % ", ".join(ACTIONS))
@@ -823,13 +932,24 @@ class CacheCmd(Cmd):
             sys.stderr.write("error: --older-than is for 'clear', not '%s'\n"
                              % action)
             sys.exit(1)
-        if len(specifications) > 0 and action != "export":
-            sys.stderr.write("error: --spec is for 'export', not '%s'\n" % action)
+        if len(specifications) > 0 and action not in ("export", "explain"):
+            sys.stderr.write("error: --spec is for 'export' or 'explain', not '%s'\n" % action)
             sys.exit(1)
         for flag, asked in [("--force", force), ("--replace", replace)]:
             if asked and action != "import":
                 sys.stderr.write("error: %s is for 'import', not '%s'\n"
                                  % (flag, action))
+                sys.exit(1)
+
+        if action == "explain":
+            if len(names) == 0:
+                sys.stderr.write("error: cache explain expects a cache key or recipe file\n")
+                sys.exit(1)
+            spec_files = specifications[0] if specifications else None
+            try:
+                sys.exit(self.explain(names, spec_files=spec_files, options=s3_options))
+            except Exception as e:
+                sys.stderr.write("error: cache explain failed: %s\n" % e)
                 sys.exit(1)
 
         # A tar to write or to read, named first so the caches after it read
@@ -1061,8 +1181,15 @@ Description:
   file path relative to whichever specification file named it rather than
   where it happened to sit on this machine.
 
+  'explain' inspects cached derivation recipes and explains cache hits and
+  misses. It can compare two recipe files, inspect a single recipe file, or
+  diff a local or spec-derived recipe against a remote storage (S3) cached
+  recipe sidecar.
+
 Usage:
   seine cache info [--entries] [--entries-matching PATTERN] [CACHE...|all]
+  seine cache explain [--spec FILE] [KIND] KEY
+  seine cache explain RECIPE_FILE [RECIPE_FILE]
   seine cache clear [--older-than SPAN] [CACHE...|all]
   seine cache export [--with-image-rootfs] FILE|- [CACHE...|all]
   seine cache import [--replace] [--force] FILE|- [CACHE...|all]
@@ -1091,6 +1218,9 @@ Examples:
   seine cache info
   seine cache info --entries
   seine cache info --entries-matching linux
+  seine cache explain packages/trixie/amd64/mypkg
+  seine cache explain packages trixie/amd64/mypkg --spec image.yaml
+  seine cache explain local.recipe remote.recipe
   seine cache clear chroots
   seine cache clear downloads packages
   seine cache clear --older-than 30d
