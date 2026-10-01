@@ -41,6 +41,18 @@ class StorageProvider:
         """Verify storage bucket existence and accessibility."""
         pass
 
+    def push_worktree(self, project: str, digest: str, path: str):
+        """Push a staged project worktree archive to storage."""
+        raise NotImplementedError
+
+    def has_worktree(self, project: str, digest: str) -> bool:
+        """Return True if the worktree bundle is staged in storage."""
+        raise NotImplementedError
+
+    def pull_worktree(self, project: str, digest: str, dest_dir: str):
+        """Pull and unpack a staged project worktree from storage into dest_dir."""
+        raise NotImplementedError
+
 
 def for_build(options=None, spec=None):
     """Instantiate the configured StorageProvider for a build."""

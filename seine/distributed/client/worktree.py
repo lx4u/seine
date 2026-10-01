@@ -1,0 +1,230 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+"""Worktree packing and unpacking for distributed builds."""
+
+import fnmatch
+import os
+import sys
+import tarfile
+import tempfile
+from typing import Optional
+
+from seine.storage.base import StorageError
+from seine.storage.s3.provider import _file_sha256, _zstd_reader, _zstd_writer
+
+DEFAULT_EXCLUDES = [
+    ".git", "__pycache__", ".venv", "/build/", "*.pyc",
+    "*.db", "*.db-shm", "*.db-wal",
+    ".env", ".env.*", "*.key", "id_rsa*", "id_ed25519*",
+    "/deploy/", "/home/",
+]
+
+# Names that look like secrets but are not excluded: warn, do not fail.
+SECRET_NAME_HINTS = ("secret", "token", "credential")
+SECRET_NAME_SUFFIXES = (".pem",)
+
+
+class PathTraversalError(ValueError, tarfile.TarError, StorageError):
+    """Raised when an archive member attempts directory traversal."""
+
+
+class IgnoreRule:
+    """Represents a single gitignore/seineignore pattern."""
+
+    def __init__(self, raw_pattern: str):
+        self.raw = raw_pattern.strip()
+        self.negation = False
+        self.only_dir = False
+        self.anchored = False
+        pattern = self.raw
+        if pattern.startswith("!"):
+            self.negation = True
+            pattern = pattern[1:]
+        if pattern.endswith("/"):
+            self.only_dir = True
+            pattern = pattern[:-1]
+        if pattern.startswith("/"):
+            self.anchored = True
+            pattern = pattern[1:]
+        elif "/" in pattern:
+            self.anchored = True
+        self.pattern = pattern
+
+    def matches(self, relpath: str, is_dir: bool) -> bool:
+        if self.only_dir and not is_dir:
+            return False
+        norm_path = relpath.replace(os.sep, "/")
+        if self.anchored:
+            return (
+                fnmatch.fnmatch(norm_path, self.pattern)
+                or fnmatch.fnmatch(norm_path, self.pattern + "/*")
+            )
+        else:
+            basename = os.path.basename(norm_path)
+            if fnmatch.fnmatch(basename, self.pattern):
+                return True
+            parts = norm_path.split("/")
+            return any(fnmatch.fnmatch(p, self.pattern) for p in parts)
+
+
+class IgnoreFilter:
+    """Matches relative paths against a collection of ignore patterns."""
+
+    def __init__(self, patterns: list[str]):
+        self.rules = []
+        for p in patterns:
+            p = p.strip()
+            if p and not p.startswith("#"):
+                self.rules.append(IgnoreRule(p))
+
+    def is_ignored(self, relpath: str, is_dir: bool = False) -> bool:
+        norm_path = relpath.replace(os.sep, "/").strip("/")
+        if not norm_path:
+            return False
+
+        if not is_dir:
+            parts = norm_path.split("/")
+            for i in range(1, len(parts)):
+                parent = "/".join(parts[:i])
+                if self._matches(parent, is_dir=True):
+                    return True
+
+        return self._matches(norm_path, is_dir=is_dir)
+
+    def _matches(self, norm_path: str, is_dir: bool) -> bool:
+        ignored = False
+        for rule in self.rules:
+            if rule.matches(norm_path, is_dir):
+                ignored = not rule.negation
+        return ignored
+
+
+def _normalise(info: tarfile.TarInfo) -> tarfile.TarInfo:
+    """Drop owner and mode noise; mtimes stay, seine derives timestamps from them."""
+    info.mtime = int(info.mtime)
+    info.uid = info.gid = 0
+    info.uname = info.gname = ""
+    if info.issym():
+        info.mode = 0o777
+    elif info.isdir() or info.mode & 0o111:
+        info.mode = 0o755
+    else:
+        info.mode = 0o644
+    return info
+
+
+def pack_worktree(
+    root_dir: str,
+    ignore_rules: Optional[list[str]] = None,
+    out_path: Optional[str] = None,
+) -> tuple[str, str]:
+    """Package root_dir into a reproducible .tar.zst and return (path, sha256)."""
+    root_dir = os.path.abspath(root_dir)
+    if not os.path.isdir(root_dir):
+        raise FileNotFoundError(f"Root directory does not exist: {root_dir}")
+
+    patterns = list(DEFAULT_EXCLUDES)
+
+    gitignore_path = os.path.join(root_dir, ".gitignore")
+    if os.path.isfile(gitignore_path):
+        with open(gitignore_path, "r", encoding="utf-8", errors="replace") as f:
+            patterns.extend(f.readlines())
+
+    seineignore_path = os.path.join(root_dir, ".seineignore")
+    if os.path.isfile(seineignore_path):
+        with open(seineignore_path, "r", encoding="utf-8", errors="replace") as f:
+            patterns.extend(f.readlines())
+
+    if ignore_rules:
+        patterns.extend(ignore_rules)
+
+    ignore_filter = IgnoreFilter(patterns)
+
+    if out_path is None:
+        fd, out_path = tempfile.mkstemp(suffix=".tar.zst", prefix="worktree-")
+        os.close(fd)
+
+    suspicious = []
+    try:
+        with _zstd_writer(out_path) as out, \
+                tarfile.open(fileobj=out, mode="w|", format=tarfile.PAX_FORMAT) as tar:
+            for dirpath, dirnames, filenames in os.walk(root_dir, followlinks=False):
+                rel_dir = os.path.relpath(dirpath, root_dir).replace(os.sep, "/")
+                if rel_dir == ".":
+                    rel_dir = ""
+
+                dirnames.sort()
+                kept_dirnames = []
+                for d in dirnames:
+                    rel_d = f"{rel_dir}/{d}" if rel_dir else d
+                    full_d = os.path.join(dirpath, d)
+                    if ignore_filter.is_ignored(rel_d, is_dir=True):
+                        continue
+                    # If directory symlink, add immediately since os.walk won't recurse into it
+                    if os.path.islink(full_d):
+                        tar.add(full_d, arcname=rel_d, recursive=False, filter=_normalise)
+                    else:
+                        kept_dirnames.append(d)
+                dirnames[:] = kept_dirnames
+
+                if rel_dir and not os.path.islink(dirpath):
+                    tar.add(dirpath, arcname=rel_dir, recursive=False, filter=_normalise)
+
+                for f in sorted(filenames):
+                    rel_f = f"{rel_dir}/{f}" if rel_dir else f
+                    full_f = os.path.join(dirpath, f)
+                    if os.path.abspath(full_f) == os.path.abspath(out_path):
+                        continue
+                    if not ignore_filter.is_ignored(rel_f, is_dir=False):
+                        tar.add(full_f, arcname=rel_f, recursive=False, filter=_normalise)
+                        lower = f.lower()
+                        if (any(h in lower for h in SECRET_NAME_HINTS)
+                                or lower.endswith(SECRET_NAME_SUFFIXES)):
+                            suspicious.append(rel_f)
+        tree_digest = _file_sha256(out_path)
+    except BaseException:
+        os.unlink(out_path)
+        raise
+
+    if suspicious:
+        shown = ", ".join(suspicious[:5])
+        more = f" (+{len(suspicious) - 5} more)" if len(suspicious) > 5 else ""
+        print(f"warning: worktree bundle includes files that look like secrets: "
+              f"{shown}{more}; add them to .seineignore", file=sys.stderr)
+
+    return out_path, tree_digest
+
+
+def unpack_worktree(archive_path: str, dest_dir: str) -> str:
+    """Safely unpack the .tar.zst bundle into dest_dir, preventing path traversal."""
+    dest_dir = os.path.abspath(dest_dir)
+    os.makedirs(dest_dir, exist_ok=True)
+
+    # A stream cannot be rewound: check every member first, then extract
+    with _zstd_reader(archive_path) as reader, \
+            tarfile.open(fileobj=reader, mode="r|*") as tar:
+        for member in tar:
+            if member.name.startswith("/") or member.name.startswith("\\"):
+                raise PathTraversalError(f"Absolute path in archive: {member.name}")
+
+            target_path = os.path.abspath(os.path.join(dest_dir, member.name))
+            if not (target_path == dest_dir or target_path.startswith(dest_dir + os.sep)):
+                raise PathTraversalError(f"Path traversal detected: {member.name}")
+
+            if member.issym() or member.islnk():
+                if member.linkname.startswith("/") or member.linkname.startswith("\\"):
+                    raise PathTraversalError(f"Absolute link target detected: {member.linkname}")
+                link_target = os.path.abspath(os.path.join(os.path.dirname(target_path), member.linkname))
+                if not (link_target == dest_dir or link_target.startswith(dest_dir + os.sep)):
+                    raise PathTraversalError(
+                        f"Symlink traversal detected: {member.name} -> {member.linkname}"
+                    )
+
+    with _zstd_reader(archive_path) as reader, \
+            tarfile.open(fileobj=reader, mode="r|*") as tar:
+        if hasattr(tarfile, "data_filter"):
+            tar.extractall(dest_dir, filter="data")
+        else:
+            tar.extractall(dest_dir)
+
+    return dest_dir
