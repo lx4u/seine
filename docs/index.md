@@ -17,6 +17,7 @@ specification
 merging
 kernels
 building
+distributed-build
 environment
 testing
 tui
@@ -31,6 +32,7 @@ release-as-debs
 :caption: Reference
 
 caching
+worker-setup
 ```
 
 ## Project resources
