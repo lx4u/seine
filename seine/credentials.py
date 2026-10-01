@@ -620,6 +620,17 @@ def s3_credential_source(auth=None, context=None, prompt=None, vault_reader=None
         fields, context=context or "s3 storage", prompt=prompt, vault_reader=vault_reader)
 
 
+DEFAULT_TOKEN_CHAIN = (
+    "env:SEINE_TOKEN | keyring:seine-token | settings:seine-token"
+)
+
+
+def token_source(url, prompt=None):
+    return CredentialSource(
+        {"token": DEFAULT_TOKEN_CHAIN}, context="seine-server @ %s" % url,
+        prompt=prompt, offer_save=True, skip_empty=True)
+
+
 # Produces AWS SigV4 authorization headers for S3 requests.
 def _sigv4_headers(method, endpoint, access_key, secret_key, region="garage",
                    path="", query="", payload=b"", extra_headers=None):
