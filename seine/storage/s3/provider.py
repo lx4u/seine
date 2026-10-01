@@ -11,8 +11,10 @@ import subprocess
 import tarfile
 import tempfile
 
-from ..base import StorageProvider, StorageError, StorageOfflineError
-from .client import S3Client, S3NotFoundError, S3ConditionFailedError
+from typing import Optional
+
+from ..base import StorageProvider, StorageError, StorageNotFoundError, StorageOfflineError
+from .client import S3NotFoundError
 from seine.cache import check_clean_chroot, CleanChrootViolation
 
 
@@ -392,3 +394,56 @@ class S3StorageProvider(StorageProvider):
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+
+    def push_artifact(self, project: str, build_id: str, file_path: str,
+                      artifact_name: Optional[str] = None) -> str:
+        """Upload a build deliverable to S3 under artifacts prefix."""
+        return self.push_artifact_info(project, build_id, file_path, artifact_name)["key"]
+
+    def push_artifact_info(self, project: str, build_id: str, file_path: str,
+                           artifact_name: Optional[str] = None) -> dict:
+        """Upload a deliverable and return its name, key, sha256 and size."""
+        if not os.path.isfile(file_path):
+            raise StorageError(f"push_artifact failed: path '{file_path}' does not exist")
+        name = artifact_name or os.path.basename(file_path)
+        key = f"artifacts/{project}/{build_id}/{name}"
+        try:
+            sha256 = self.client.upload_file(self.bucket, key, file_path)
+        except Exception as e:
+            if self.offline_mode == "strict":
+                raise StorageOfflineError(f"s3 push_artifact failed for {key}: {e}") from e
+            raise StorageError(f"s3 push_artifact failed for {key}: {e}") from e
+        return {"name": name, "key": key, "sha256": sha256, "size": os.path.getsize(file_path)}
+
+    def pull_artifact(self, project: str, build_id: str, artifact_name: str,
+                      dest_path: str) -> str:
+        """Download a build deliverable from S3 to dest_path."""
+        key = f"artifacts/{project}/{build_id}/{artifact_name}"
+        if os.path.isdir(dest_path) or dest_path.endswith(os.sep):
+            dest_file = os.path.join(dest_path, artifact_name)
+        else:
+            dest_file = dest_path
+        parent = os.path.dirname(os.path.abspath(dest_file))
+        os.makedirs(parent, exist_ok=True)
+        # next to dest: the file can be large and /tmp may be a tmpfs
+        fd, tmp_path = tempfile.mkstemp(prefix=".pull-", dir=parent)
+        os.close(fd)
+        try:
+            headers = self.client.head_object(self.bucket, key)
+            if not headers:
+                raise S3NotFoundError(f"{key} does not exist")
+            self.client.download_file(self.bucket, key, tmp_path)
+        except S3NotFoundError as e:
+            raise StorageNotFoundError(f"s3 artifact not found: {key}") from e
+        except Exception as e:
+            if self.offline_mode == "strict":
+                raise StorageOfflineError(f"s3 pull_artifact failed for {key}: {e}") from e
+            raise StorageError(f"s3 pull_artifact failed for {key}: {e}") from e
+        else:
+            self._verify("artifact", key, headers, tmp_path)
+            os.replace(tmp_path, dest_file)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp_path)
+        return dest_file
+
