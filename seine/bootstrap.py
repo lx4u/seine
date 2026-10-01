@@ -95,16 +95,39 @@ class Bootstrap(ABC):
         return ContainerEngine.imageLabel(self.name, INPUTS_LABEL) \
                == self.digest(dockerfile, base)
 
+    # Whether an existing 'self.name' image can be reused instead of
+    # rebuilding 'dockerfile', under 'rebuild':
+    #   'different' (default) -- reuse only if its inputs match exactly.
+    #   'missing'   -- reuse whatever is tagged 'self.name', regardless of
+    #                  whether its inputs still match (an imager appliance
+    #                  rarely needs to change just because the rootfs it
+    #                  builds alongside came from a different feed).
+    #   'always'    -- never reuse; always rebuild.
+    def _reusable(self, dockerfile, base, rebuild):
+        if rebuild == "always":
+            return False
+        if rebuild == "missing":
+            return ContainerEngine.imageId(self.name) is not None
+        return self.current(dockerfile, base)
+
+    # Verbose-only: names 'rebuild' when it's the only reason an
+    # inputs-mismatched image gets reused anyway.
+    def _say_reused(self, dockerfile, base, rebuild):
+        if rebuild == "missing" and not self.current(dockerfile, base):
+            say(self.options, "image %s inputs differ, not rebuilding "
+                              "(rebuild: missing)" % self.name)
+        entry = Index().hit(IMAGE, self.name)
+        say(self.options, "image %s reused, made %s"
+                          % (self.name, since(entry.get("made"))))
+
     # Builds 'dockerfile' unless an image with matching inputs already
     # exists, checking first for one bundled by a 'seine-oci-<hostarch>'
     # package under /usr/share/seine/oci.
-    def build(self, dockerfile, base=None, options=None):
-        if self.current(dockerfile, base) == False:
+    def build(self, dockerfile, base=None, options=None, rebuild="different"):
+        if self._reusable(dockerfile, base, rebuild) == False and rebuild != "always":
             import_bundled()
-        if self.current(dockerfile, base):
-            entry = Index().hit(IMAGE, self.name)
-            say(self.options, "image %s reused, made %s"
-                              % (self.name, since(entry.get("made"))))
+        if self._reusable(dockerfile, base, rebuild):
+            self._say_reused(dockerfile, base, rebuild)
             return self
 
         # Storage lock (shared) keeps a concurrent prune/cache-clear from
@@ -113,10 +136,8 @@ class Bootstrap(ABC):
         with locked(ContainerEngine.storage_lock(), shared=True), \
              locked(os.path.join(ContainerEngine.root(), "images.d",
                                  self.name)):
-            if self.current(dockerfile, base):
-                entry = Index().hit(IMAGE, self.name)
-                say(self.options, "image %s reused, made %s"
-                                  % (self.name, since(entry.get("made"))))
+            if self._reusable(dockerfile, base, rebuild):
+                self._say_reused(dockerfile, base, rebuild)
                 return self
 
             if self.is_remote():
@@ -129,10 +150,8 @@ class Bootstrap(ABC):
                     except Exception:
                         if getattr(self.storage_provider, "offline_mode", None) == "strict":
                             raise
-                if self.current(dockerfile, base):
-                    entry = Index().hit(IMAGE, self.name)
-                    say(self.options, "image %s reused, made %s"
-                                      % (self.name, since(entry.get("made"))))
+                if self._reusable(dockerfile, base, rebuild):
+                    self._say_reused(dockerfile, base, rebuild)
                     return self
 
             written = tempfile.NamedTemporaryFile(mode="w", delete=False)
