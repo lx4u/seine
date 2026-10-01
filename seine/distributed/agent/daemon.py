@@ -11,10 +11,10 @@ import time
 from typing import Callable, Optional
 
 import requests
-from websockets.sync.client import connect as ws_connect
 
 from seine.distributed.agent.detect import detect_capabilities
 from seine.distributed.agent.executor import SubprocessExecutor
+from seine.distributed.agent.stream import LogStreamer, redacting
 from seine.distributed.common.models import (
     ClaimJobRequest,
     HeartbeatRequest,
@@ -229,24 +229,9 @@ class WorkerAgent:
     def run_job(self, manifest: JobManifest) -> None:
         """Run a claimed job and stream stdout/stderr over WebSocket."""
         print(f"[agent] Starting job {manifest.job_id} (build: {manifest.build_id}, target: {manifest.target_arch})")
-        ws_url = self.server_url.replace("http://", "ws://").replace("https://", "wss://")
-        stream_url = f"{ws_url}/api/v1/builds/{manifest.build_id}/stream"
-
         try:
-            with ws_connect(stream_url) as ws:
-                def on_log(source: str, text: str):
-                    payload = {
-                        "build_id": manifest.build_id,
-                        "source": source,
-                        "text": text,
-                        "timestamp": time.time(),
-                    }
-                    try:
-                        ws.send(json.dumps(payload))
-                    except Exception:
-                        pass
-
-                ret = self.executor.execute_job(manifest, on_log=on_log)
+            with LogStreamer(self.server_url, manifest.build_id, self.worker_token or "") as streamer:
+                ret = self.executor.execute_job(manifest, on_log=streamer.send)
                 status = "completed" if ret == 0 else "failed"
                 self.update_job_status(manifest.job_id, manifest.build_id, status)
                 print(f"[agent] Completed job {manifest.job_id} with status {status}")

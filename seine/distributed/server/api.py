@@ -55,45 +55,10 @@ from seine.distributed.server.auth import (
     require_worker_id,
 )
 from seine.distributed.server.db import Database
-
-
-class BroadcastHub:
-    """Manages active WebSocket connections for build log streaming."""
-
-    def __init__(self):
-        self._listeners: dict[str, set[WebSocket]] = {}
-        self._history: dict[str, list[dict[str, Any]]] = {}
-
-    async def connect(self, build_id: str, websocket: WebSocket) -> None:
-        await websocket.accept()
-        if build_id not in self._listeners:
-            self._listeners[build_id] = set()
-            self._history[build_id] = []
-        self._listeners[build_id].add(websocket)
-
-        for chunk in self._history.get(build_id, []):
-            try:
-                await websocket.send_json(chunk)
-            except Exception:
-                pass
-
-    def disconnect(self, build_id: str, websocket: WebSocket) -> None:
-        if build_id in self._listeners:
-            self._listeners[build_id].discard(websocket)
-            if not self._listeners[build_id]:
-                del self._listeners[build_id]
-
-    async def broadcast(self, build_id: str, message: dict[str, Any]) -> None:
-        if build_id not in self._history:
-            self._history[build_id] = []
-        self._history[build_id].append(message)
-
-        listeners = list(self._listeners.get(build_id, []))
-        for ws in listeners:
-            try:
-                await ws.send_json(message)
-            except Exception:
-                self.disconnect(build_id, ws)
+from seine.distributed.server.reaper import Reaper
+from seine.distributed.server.settings import Settings
+from seine.distributed.server.storage import StorageCredentialsError, env_name, job_s3, provider_for
+from seine.distributed.server.ws import BroadcastHub, forget_finished_build, serve_stream
 
 
 def _get_db(request: Request) -> Database:
