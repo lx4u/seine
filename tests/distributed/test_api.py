@@ -539,6 +539,68 @@ class WorkerClaimAndHeartbeatTest(Test):
             headers={"Authorization": f"Bearer {token or self.worker_token}"},
         )
 
+    def _heartbeat(self, **fields):
+        body = {"worker_id": self.worker_id, "free_disk_gb": 10.0, **fields}
+        return self.client.post(
+            "/api/v1/workers/heartbeat",
+            json=body,
+            headers={"Authorization": f"Bearer {self.worker_token}"},
+        )
+
+    def _claim_for_reconcile(self):
+        self.db.create_build(
+            build_id="bld-recon", project="testproj", target_arch="arm64", worktree_digest="tree"
+        )
+        job = self.db.scheduler.claim_job(self.worker_id)
+        started = self.db.builds.get_job(job["job_id"])["started_at"]
+        self.db.scheduler.clock = lambda: started + 1000
+        return job["job_id"]
+
+    def test_heartbeat_without_running_jobs_does_not_reconcile(self):
+        job_id = self._claim_for_reconcile()
+        resp = self._heartbeat()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self.db.builds.get_job(job_id)["status"], "claimed")
+
+    def test_heartbeat_with_empty_running_jobs_requeues_lost_job(self):
+        job_id = self._claim_for_reconcile()
+        resp = self._heartbeat(running_jobs=[])
+        self.assertEqual(resp.json(), {"status": "ok", "cancel": []})
+        self.assertEqual(self.db.builds.get_job(job_id)["status"], "queued")
+
+    def test_heartbeat_listing_the_job_keeps_it(self):
+        job_id = self._claim_for_reconcile()
+        self.assertEqual(self._heartbeat(running_jobs=[job_id]).status_code, 200)
+        self.assertEqual(self.db.builds.get_job(job_id)["status"], "claimed")
+
+    def test_heartbeat_rejects_oversized_running_jobs(self):
+        job_id = self._claim_for_reconcile()
+        too_many = self._heartbeat(running_jobs=[f"job-{i}" for i in range(101)])
+        too_long = self._heartbeat(running_jobs=["j" * 200])
+        self.assertEqual((too_many.status_code, too_long.status_code), (400, 400))
+        self.assertEqual(self._heartbeat(running_jobs=[1]).status_code, 422)
+        self.assertEqual(self.db.builds.get_job(job_id)["status"], "claimed")
+
+    def test_requeued_job_cannot_be_completed_by_the_old_worker(self):
+        job, req = self._claim_status_request()
+        started = self.db.builds.get_job(job["job_id"])["started_at"]
+        self.db.scheduler.clock = lambda: started + 1000
+        self._heartbeat(running_jobs=[])
+
+        resp = self._post_status(job["job_id"], req)
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(self.db.builds.get_job(job["job_id"])["status"], "queued")
+
+    def test_owner_can_complete_a_claimed_job_late(self):
+        job, req = self._claim_status_request()
+        started = self.db.builds.get_job(job["job_id"])["started_at"]
+        self.db.scheduler.clock = lambda: started + 1000
+        self._heartbeat(running_jobs=[job["job_id"]])
+
+        resp = self._post_status(job["job_id"], req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self.db.builds.get_job(job["job_id"])["status"], "completed")
+
     def test_job_status_from_other_worker_is_403(self):
         job, req = self._claim_status_request()
         self.db.upsert_worker(
@@ -731,6 +793,36 @@ class BuildSubmissionRBACTest(Test):
         build = self.db.builds.get(data["build_id"])
         self.assertFalse(build["is_release"])
         self.assertEqual(build["user_id"], "developer_bob")
+
+    def _submit_options(self, options):
+        req = BuildSubmitRequest(
+            project="firmware", worktree_digest="tree-x", target_arch="amd64", options=options
+        )
+        return self.client.post(
+            "/api/v1/builds", json=req.model_dump(),
+            headers={"Authorization": f"Bearer {self.dev_tok}"},
+        )
+
+    def test_known_build_options_are_accepted(self):
+        options = {"packages_only": True, "s3_cache": True, "require_native": True,
+                   "min_arch_score": 0.5}
+        resp = self._submit_options(options)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self.db.builds.get(resp.json()["build_id"])["options"], options)
+
+    def test_unknown_build_options_are_listed_in_a_400(self):
+        resp = self._submit_options({"s3_cache": True, "zzz": 1, "aaa": 2})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("aaa, zzz", resp.json()["detail"])
+        self.assertEqual(self.db.builds.list(), [])
+
+    def test_secret_looking_options_are_refused(self):
+        for key in ("token", "api_secret", "Password", "ssh_key", "credentials", "s3_cache_token"):
+            with self.subTest(key=key):
+                resp = self._submit_options({key: "x"})
+                self.assertEqual(resp.status_code, 400)
+                self.assertIn(key, resp.json()["detail"])
+                self.assertIn("secrets", resp.json()["detail"])
 
     def _submit(self, token=None, project="firmware"):
         req = BuildSubmitRequest(project=project, worktree_digest="tree-x", target_arch="amd64")
@@ -1090,6 +1182,16 @@ class ServerCLITest(Test):
             run = self._run("--enrollment-token", "t")
         self.assertEqual(run.call_args[1]["host"], "127.0.0.1")
         self.assertEqual(err.getvalue(), "")
+
+    def test_cli_passes_job_lost_grace_to_the_scheduler(self):
+        run = self._run("--enrollment-token", "t", "--job-lost-grace", "12")
+        self.assertEqual(run.call_args[0][0].state.db.scheduler.job_lost_grace, 12.0)
+
+    def test_cli_refuses_a_zero_job_lost_grace(self):
+        with mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            with self.assertRaises(SystemExit):
+                self._run("--enrollment-token", "t", "--job-lost-grace", "0")
+        self.assertIn("job_lost_grace", err.getvalue())
 
     def test_cli_reads_token_from_environment(self):
         os.environ["SEINE_ENROLLMENT_TOKEN"] = "env-token"

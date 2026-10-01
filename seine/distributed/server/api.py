@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import secrets
 import sqlite3
@@ -23,9 +24,11 @@ from fastapi import (
     status,
 )
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response
 
 from seine.distributed.common.models import (
+    BuildResponse,
     BuildSubmitRequest,
     BuildSubmitResponse,
     ClaimJobRequest,
@@ -58,26 +61,28 @@ from seine.distributed.server.db import Database
 from seine.distributed.server.reaper import Reaper
 from seine.distributed.server.settings import S3_ENVIRONMENTS, Settings
 from seine.distributed.server.storage import StorageCredentialsError, env_name, job_s3, provider_for
+from seine.distributed.server.transient import TransientSecrets
 from seine.distributed.server.ws import BroadcastHub, forget_finished_build, serve_stream
 
+logger = logging.getLogger("seine.server.api")
 
-def _get_db(request: Request) -> Database:
-    if hasattr(request.app.state, "db") and request.app.state.db is not None:
-        return request.app.state.db
-    global _default_db
-    if _default_db is None:
-        db_path = os.environ.get("SEINE_DB_PATH", "seine.db")
-        _default_db = Database(db_path)
-    return _default_db
+_JOB_STATUSES = ("running", "completed", "failed", "cancelled")
+_TERMINAL_STATES = ("completed", "failed", "cancelled")
+MAX_HEARTBEAT_JOBS = 100
+MAX_JOB_ID_LENGTH = 128
+
+
+def _clean_error(message: Optional[str]) -> Optional[str]:
+    """Make a worker-supplied failure reason safe to store and print."""
+    text = "".join(c for c in " ".join((message or "").split()) if c.isprintable())
+    return text[:1000] or None
 
 
 def _get_enrollment_token(request: Request) -> str:
     return request.app.state.enrollment_token or ""
 
 
-def _get_transient_secrets(request: Request) -> dict[str, dict[str, Any]]:
-    if not hasattr(request.app.state, "transient_secrets") or request.app.state.transient_secrets is None:
-        request.app.state.transient_secrets = {}
+def _get_transient_secrets(request: Request) -> TransientSecrets:
     return request.app.state.transient_secrets
 
 
@@ -118,10 +123,13 @@ def create_app(
         stale_after = settings.stale_after
     if reap_interval is None:
         reap_interval = settings.reap_interval
+    db.scheduler.native_grace = settings.native_grace
+    db.scheduler.stale_after = stale_after
+    db.scheduler.job_lost_grace = settings.job_lost_grace
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        reaper = Reaper(app.state.db, stale_after, reap_interval)
+        reaper = Reaper(app.state.db, stale_after, reap_interval, app.state.transient_secrets)
         reaper.start()
         try:
             yield
@@ -137,8 +145,14 @@ def create_app(
     app.state.enrollment_token = enrollment_token if enrollment_token is not None else settings.enrollment_token
     app.state.storage_provider = storage_provider
     app.state.max_upload_bytes = max_upload_bytes if max_upload_bytes is not None else settings.max_upload_bytes
-    app.state.transient_secrets = {}
+    app.state.transient_secrets = TransientSecrets(settings.secret_ttl)
     app.state.hub = BroadcastHub()
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(request: Request, exc: RequestValidationError):
+        # The default answer echoes the rejected input, secrets included.
+        errors = [{"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
+        return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content={"detail": errors})
 
     @app.post("/api/v1/workers/register", response_model=RegisterWorkerResponse)
     def register_worker(
@@ -177,8 +191,17 @@ def create_app(
         worker: dict[str, Any] = Depends(current_worker),
     ):
         require_worker_id(worker, req.worker_id)
+        running = req.running_jobs
+        if running is not None and (
+            len(running) > MAX_HEARTBEAT_JOBS or any(len(j) > MAX_JOB_ID_LENGTH for j in running)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid running_jobs"
+            )
         app_db = get_db(request)
         app_db.heartbeat_worker(req.worker_id, req.free_disk_gb)
+        if running is not None:
+            app_db.scheduler.reconcile_worker_jobs(req.worker_id, running)
         return {
             "status": "ok",
             "cancel": app_db.scheduler.cancel_requested_jobs(req.worker_id),
@@ -248,7 +271,8 @@ def create_app(
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
-        app_db.update_job_status(job_id, req.status)
+        error = _clean_error(req.error_message) if req.status == "failed" else None
+        app_db.update_job_status(job_id, req.status, error_message=error)
         if req.artifact_urls or artifact_meta:
             app_db.builds.update_status(
                 build_id=build_id,
@@ -259,9 +283,7 @@ def create_app(
 
         secrets_mgr = _get_transient_secrets(request)
         build = app_db.get_build(build_id)
-        if req.status in ("completed", "failed", "cancelled") or (
-            build and build.get("status") in ("completed", "failed", "cancelled")
-        ):
+        if build and build.get("status") in _TERMINAL_STATES:
             secrets_mgr.pop(build_id, None)
             forget_finished_build(app_db, request.app.state.hub, build_id)
 
@@ -349,11 +371,32 @@ def create_app(
         token_record: dict[str, Any] = Depends(current_user),
     ):
         app_db = get_db(request)
-        load_project(app_db, req.project)
+        project_row = load_project(app_db, req.project)
         roles = ("releaser", "admin") if req.is_release else ("developer", "releaser", "admin")
         require_member(app_db, token_record, req.project, roles)
         refuse_prod_for_dev_only(project_row, req.is_release)
         user_id = token_record["user_id"]
+        try:
+            validation.check_build_options(req.options)
+            validation.check_transient_secrets(req.transient_secrets)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+        env = env_name(req.is_release)
+        provider = _get_storage_provider(request, req.project, project_row[f"{env}_bucket"], env)
+        try:
+            staged = provider.has_worktree(req.project, req.worktree_digest)
+        except Exception as e:
+            logger.warning("Worktree check failed for project %s: %s", req.project, e)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Storage error while checking the worktree: {e}",
+            ) from e
+        if not staged:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"worktree {req.worktree_digest} is not staged for {env} builds",
+            )
 
         build_id = f"bld-{uuid.uuid4().hex[:8]}"
         app_db.create_build(
@@ -378,13 +421,56 @@ def create_app(
             target_arch=req.target_arch,
         )
 
-    @app.get("/api/v1/builds/{build_id}")
-    async def get_build_status(build_id: str, request: Request):
-        app_db = _get_db(request)
+    @app.get("/api/v1/builds/{build_id}", response_model=BuildResponse)
+    def get_build_status(
+        build_id: str,
+        request: Request,
+        token_record: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
         build = app_db.get_build(build_id)
         if not build:
             raise HTTPException(status_code=404, detail="Build not found")
-        return build
+
+        require_member(app_db, token_record, build["project"])
+
+        download_urls: dict[str, str] = {}
+        manifest = build.get("artifact_meta") or []
+        if build.get("status") == "completed" and manifest:
+            project = build["project"]
+            project_row = app_db.get_project(project)
+            is_release = build.get("is_release", False)
+            if project_row:
+                bucket = project_row["prod_bucket"] if is_release else project_row["dev_bucket"]
+            else:
+                bucket = f"seine-{project}-prod" if is_release else f"seine-{project}-dev"
+
+            try:
+                provider = _get_storage_provider(request, project, bucket, env_name(is_release))
+                for entry in manifest:
+                    name, artifact_key = entry["name"], entry["key"]
+                    try:
+                        url = provider.generate_download_url(project, artifact_key)
+                        if url:
+                            download_urls[name] = url
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to generate download URL for artifact %s in project %s: %s",
+                            artifact_key, project, e,
+                        )
+            except Exception as e:
+                logger.warning(
+                    "Failed to resolve storage provider for project %s: %s",
+                    project, e,
+                )
+
+        build_data = dict(build)
+        build_data["download_urls"] = download_urls
+        build_data["artifacts"] = [
+            {"name": m["name"], "size": m["size"], "sha256": m["sha256"],
+             "subdir": m.get("subdir")} for m in manifest
+        ]
+        return BuildResponse(**build_data)
 
     @app.get("/api/v1/builds")
     def list_builds(
@@ -417,6 +503,9 @@ def create_app(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Build already finished",
             )
+        finished = app_db.get_build(build_id)
+        if finished and finished["status"] in _TERMINAL_STATES:
+            _get_transient_secrets(request).pop(build_id)
         return {"status": "cancelling", "build_id": build_id}
 
     @app.websocket("/api/v1/builds/{build_id}/stream")
