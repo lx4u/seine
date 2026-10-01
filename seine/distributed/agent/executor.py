@@ -1,14 +1,19 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import fnmatch
+import json
 import os
+import re
 import shutil
 import signal
 import subprocess
 import sys
 import threading
-from typing import Callable, Optional
+import time
+from typing import Any, Callable, Optional
 
+from seine.credentials import FEED_AUTH_ENV
 from seine.distributed.common.models import JobManifest, JobS3
 from seine.distributed.common.s3 import provider_from
 
@@ -30,16 +35,37 @@ _ENV_NAMES = frozenset([
 _ENV_PREFIXES = ("LC_", "XDG_", "CONTAINERS_")
 # SEINE_* names holding secrets or keys (the agent's tokens, signing keys...).
 _SECRET_MARKERS = ("TOKEN", "PASSWORD", "SECRET", "KEY")
+
+_JOB_DIR_NAME = re.compile(r"^bld-[\w-]+$")
+# Rootless podman keeps its overlay mounts in the user namespace: unmount them there first.
+_UNMOUNT_AND_REMOVE = (
+    'J="$1"\n'
+    'grep -F " $J/" /proc/self/mounts | awk \'{print $2}\' | sort -r | '
+    'while read -r m; do umount -l "$m" 2>/dev/null || true; done\n'
+    'chmod -R u+rwX "$J" 2>/dev/null || true\n'
+    'rm -rf "$J"'
+)
 # Never inherited: the agent holds no S3 keys, a job brings its own.
 _S3_ENV_PREFIXES = ("AWS_", "SEINE_S3_")
 
 
-def child_env(manifest: JobManifest, build_dir: str, environ: Optional[dict] = None) -> dict:
+def feed_secrets(manifest: JobManifest) -> dict[str, dict[str, str]]:
+    """Return the job's feed credentials as {feed id: {login, password}}."""
+    feeds = manifest.transient_secrets.get("feeds")
+    return feeds if isinstance(feeds, dict) else {}
+
+
+def child_env(
+    manifest: JobManifest,
+    build_dir: str,
+    environ: Optional[dict] = None,
+    feedauth_file: Optional[str] = None,
+) -> dict:
     """Build the environment of a build: an allowlist of the agent's, plus the job's S3 keys."""
     environ = os.environ if environ is None else environ
     env = {}
     for name, value in environ.items():
-        if name.startswith(_S3_ENV_PREFIXES) or name == "SEINE_CREDENTIALS_FILE":
+        if name.startswith(_S3_ENV_PREFIXES) or name in ("SEINE_CREDENTIALS_FILE", FEED_AUTH_ENV):
             continue
         if name in _ENV_NAMES or name.startswith(_ENV_PREFIXES):
             env[name] = value
@@ -50,6 +76,8 @@ def child_env(manifest: JobManifest, build_dir: str, environ: Optional[dict] = N
         env["AWS_SECRET_ACCESS_KEY"] = manifest.s3.secret_key
         # Keep a credentials file of the agent's user out of the key lookup.
         env["SEINE_CREDENTIALS_FILE"] = os.path.join(os.path.dirname(build_dir), "no-credentials.json")
+    if feedauth_file:
+        env[FEED_AUTH_ENV] = feedauth_file
     env["SEINE_BUILD_DIR"] = build_dir
     env["SEINE_BUILD_ID"] = manifest.build_id
     # Ensure child seine process flushes stdout/stderr line by line.
@@ -79,10 +107,13 @@ class SubprocessExecutor:
 
     # Seconds between SIGTERM and SIGKILL when stopping a build.
     kill_grace = 10.0
+    # Pauses before the retries of a job directory wipe.
+    wipe_backoff = (2.0, 5.0)
 
     def __init__(self, work_dir: str):
         self.work_dir = os.path.abspath(work_dir)
         self._cancel = threading.Event()
+        self.failure_reason: Optional[str] = None
 
     @property
     def cancelled(self) -> bool:
@@ -98,9 +129,38 @@ class SubprocessExecutor:
     def job_dir(self, build_id: str) -> str:
         return os.path.join(self.work_dir, "jobs", build_id)
 
+    def secrets_dir(self, build_id: Optional[str] = None) -> str:
+        """Return where job secrets live, outside every job directory."""
+        root = os.path.join(self.work_dir, "secrets")
+        return os.path.join(root, build_id) if build_id else root
+
+    def write_feed_secrets(self, manifest: JobManifest) -> Optional[str]:
+        """Write the job's feed credentials to a private file and return its path, if any."""
+        feeds = feed_secrets(manifest)
+        if not feeds:
+            return None
+        os.makedirs(self.secrets_dir(), mode=0o700, exist_ok=True)
+        directory = self.secrets_dir(manifest.build_id)
+        os.makedirs(directory, mode=0o700, exist_ok=True)
+        os.chmod(directory, 0o700)
+        path = os.path.join(directory, "feeds.json")
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(feeds, f)
+        return path
+
+    def remove_feed_secrets(self, build_id: Optional[str] = None) -> None:
+        """Delete the secrets of one build, or of every build when build_id is None."""
+        if build_id is not None and build_id != os.path.basename(build_id):
+            return
+        shutil.rmtree(self.secrets_dir(build_id), ignore_errors=True)
+
     def _pull_worktree(self, manifest: JobManifest, job_dir: str) -> None:
         provider = provider_from(manifest.s3)
-        provider.pull_worktree(manifest.project, manifest.worktree_digest, dest_dir=job_dir)
+        if provider.pull_worktree(manifest.project, manifest.worktree_digest, dest_dir=job_dir) is None:
+            raise FileNotFoundError(
+                f"worktree {manifest.worktree_digest} not found in bucket {manifest.s3.bucket}"
+            )
 
     def _wait(self, proc: subprocess.Popen, on_log: Callable[[str, str], None]) -> int:
         """Wait for the build; stop its process group once cancelled."""
@@ -188,32 +248,91 @@ class SubprocessExecutor:
         if not os.path.lexists(path):
             return
 
-        shutil.rmtree(path, onexc=lambda func, name, exc: None)
-        if not os.path.lexists(path):
+        for attempt, pause in enumerate((0.0, *self.wipe_backoff), start=1):
+            if pause:
+                time.sleep(pause)
+            log(f"Removing {path} (attempt {attempt})")
+            shutil.rmtree(path, onexc=lambda func, name, exc: None)
+            if not os.path.lexists(path):
+                return
+            try:
+                proc = subprocess.run(
+                    ["podman", "unshare", "bash", "-c", _UNMOUNT_AND_REMOVE, "_", path],
+                    capture_output=True, text=True, timeout=300,
+                )
+                if proc.returncode != 0:
+                    log(f"podman unshare failed: {proc.stderr.strip()}")
+            except (OSError, subprocess.TimeoutExpired) as e:
+                log(f"podman unshare failed: {e}")
+            if not os.path.lexists(path):
+                return
+        log(f"Could not remove {path}")
+
+    def wipe_stale_jobs(self, on_log: Optional[Callable[[str, str], None]] = None) -> None:
+        """Remove the job directories and containers a crashed agent left; never raises."""
+        def log(text):
+            try:
+                if on_log:
+                    on_log("system", f"[agent] {text}\n")
+            except Exception:
+                pass
+
+        try:
+            self._wipe_stale_jobs(log, on_log)
+        except Exception as e:
+            log(f"Could not clean the stale job directories: {e}")
+
+    def _wipe_stale_jobs(self, log, on_log) -> None:
+        jobs = os.path.join(self.work_dir, "jobs")
+        try:
+            names = sorted(os.listdir(jobs))
+        except FileNotFoundError:
             return
-        log(f"Could not remove {path} directly, trying podman unshare")
+        for name in names:
+            path = os.path.join(jobs, name)
+            if not _JOB_DIR_NAME.match(name) or os.path.islink(path) or not os.path.isdir(path):
+                continue
+            log(f"Removing stale job directory {path}")
+            try:
+                self._remove_stale_containers(path, log)
+            except Exception as e:
+                log(f"Could not remove the containers of {name}: {e}")
+            self.wipe_job_dir(name, on_log=on_log)
+
+    @staticmethod
+    def _remove_stale_containers(job_dir: str, log: Callable[[str], None]) -> None:
+        root = os.path.join(job_dir, "build", "containers")
+        if not os.path.isdir(root) or not shutil.which("podman"):
+            return
         try:
             proc = subprocess.run(
-                ["podman", "unshare", "rm", "-rf", path],
+                ["podman", "--root", root, "--runroot", os.path.join(root, "run"), "rm", "-af"],
                 capture_output=True, text=True, timeout=300,
             )
             if proc.returncode != 0:
-                log(f"podman unshare rm failed: {proc.stderr.strip()}")
+                log(f"podman rm failed: {proc.stderr.strip()}")
         except (OSError, subprocess.TimeoutExpired) as e:
-            log(f"podman unshare rm failed: {e}")
-        if os.path.lexists(path):
-            log(f"Could not remove {path}")
+            log(f"podman rm failed: {e}")
 
     def execute_job(
         self,
         manifest: JobManifest,
         on_log: Callable[[str, str], None],
     ) -> int:
+        try:
+            return self._execute_job(manifest, on_log)
+        finally:
+            self.remove_feed_secrets(manifest.build_id)
+
+    def _execute_job(
+        self,
+        manifest: JobManifest,
+        on_log: Callable[[str, str], None],
+    ) -> int:
+        self.failure_reason = None
         job_dir = self.job_dir(manifest.build_id)
         build_dir = os.path.join(job_dir, "build")
         os.makedirs(build_dir, exist_ok=True)
-
-        env = child_env(manifest, build_dir)
 
         if not manifest.worktree_digest:
             on_log("system", f"[agent] Job {manifest.build_id} has no worktree digest\n")
@@ -226,6 +345,7 @@ class SubprocessExecutor:
             self._pull_worktree(manifest, job_dir)
         except Exception as e:
             on_log("system", f"[agent] Failed to pull worktree: {e}\n")
+            self.failure_reason = f"failed to pull worktree: {e}"
             return 1
 
         try:
@@ -233,6 +353,8 @@ class SubprocessExecutor:
         except SpecPathError as e:
             on_log("system", f"[agent] Refusing job {manifest.build_id}: {e}\n")
             return 1
+
+        env = child_env(manifest, build_dir, feedauth_file=self.write_feed_secrets(manifest))
 
         cmd = [find_seine_binary(), "build"]
         if manifest.options.get("packages_only"):
@@ -285,3 +407,96 @@ class SubprocessExecutor:
 
         on_log("system", f"[agent] Build {manifest.build_id} finished with exit code {return_code}\n")
         return return_code
+
+    def harvest_artifacts(self, build_id_or_path: str) -> list[str]:
+        if os.path.isdir(build_id_or_path):
+            return harvest_artifacts(build_id_or_path)
+        job_dir = os.path.join(self.work_dir, "jobs", build_id_or_path)
+        return harvest_artifacts(job_dir)
+
+    def upload_artifacts(
+        self,
+        manifest: JobManifest,
+        on_log: Optional[Callable[[str, str], None]] = None,
+        provider: Optional[Any] = None,
+    ) -> list[dict[str, Any]]:
+        job_dir = os.path.join(self.work_dir, "jobs", manifest.build_id)
+        return upload_artifacts(
+            job_dir=job_dir,
+            project=manifest.project,
+            build_id=manifest.build_id,
+            provider=provider,
+            s3=manifest.s3,
+            on_log=on_log,
+        )
+
+
+DELIVERABLE_PATTERNS = [
+    "*.img",
+    "*.raw",
+    "*.qcow2",
+    "*.iso",
+    "*.rootfs.tar",
+    "*.digest",
+    "*.recipe",
+    "*.boot-signers*",
+    "*.sbom*",
+]
+
+
+def harvest_artifacts(path: str) -> list[str]:
+    """Harvest deliverable and metadata files from build/deploy or directory."""
+    deploy_dir = path
+    candidate = os.path.join(path, "build", "deploy")
+    if os.path.isdir(candidate):
+        deploy_dir = candidate
+    elif os.path.isdir(os.path.join(path, "deploy")):
+        deploy_dir = os.path.join(path, "deploy")
+
+    if not os.path.isdir(deploy_dir):
+        return []
+
+    results = []
+    for root, _, files in os.walk(deploy_dir):
+        for f in sorted(files):
+            for pat in DELIVERABLE_PATTERNS:
+                if fnmatch.fnmatch(f, pat):
+                    results.append(os.path.abspath(os.path.join(root, f)))
+                    break
+    results.sort()
+    return results
+
+
+def upload_artifacts(
+    job_dir: str,
+    project: str,
+    build_id: str,
+    provider: Optional[Any] = None,
+    s3: Optional[JobS3] = None,
+    on_log: Optional[Callable[[str, str], None]] = None,
+) -> list[dict[str, Any]]:
+    """Upload harvested deliverables to S3; return their {name, key, sha256, size}."""
+    files = harvest_artifacts(job_dir)
+    if not files:
+        return []
+
+    if provider is None:
+        if s3 is None:
+            raise ValueError("the job came without S3 access")
+        provider = provider_from(s3)
+
+    uploaded = []
+    for file_path in files:
+        name = os.path.basename(file_path)
+        if on_log:
+            on_log("system", f"[agent] Uploading artifact {name} to S3...\n")
+        try:
+            info = provider.push_artifact_info(project, build_id, file_path, artifact_name=name)
+        except Exception as e:
+            if on_log:
+                on_log("system", f"[agent] Failed to upload artifact {name}: {e}\n")
+            raise
+        uploaded.append(info)
+        if on_log:
+            on_log("system", f"[agent] Uploaded artifact {info['key']}\n")
+    return uploaded

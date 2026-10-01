@@ -53,6 +53,21 @@ class StorageProvider:
         """Pull and unpack a staged project worktree from storage into dest_dir."""
         raise NotImplementedError
 
+    def push_artifact(self, project: str, build_id: str, file_path: str, artifact_name: str | None = None) -> str:
+        """Push a build deliverable to storage."""
+        raise NotImplementedError
+
+    def push_artifact_info(self, project: str, build_id: str, file_path: str, artifact_name: str | None = None) -> dict:
+        """Push a build deliverable and return its name, key, sha256 and size."""
+        raise NotImplementedError
+
+    def pull_artifact(self, project: str, build_id: str, artifact_name: str, dest_path: str) -> str:
+        """Pull a build deliverable from storage to dest_path."""
+        raise NotImplementedError
+
+
+BaseStorageProvider = StorageProvider
+
 
 def for_build(options=None, spec=None):
     """Instantiate the configured StorageProvider for a build."""

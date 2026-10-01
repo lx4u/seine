@@ -12,8 +12,9 @@ from typing import Callable, Optional
 
 import requests
 
+from seine import vault
 from seine.distributed.agent.detect import detect_capabilities
-from seine.distributed.agent.executor import SubprocessExecutor
+from seine.distributed.agent.executor import SubprocessExecutor, feed_secrets
 from seine.distributed.agent.stream import LogStreamer, redacting
 from seine.distributed.common.models import (
     ClaimJobRequest,
@@ -107,7 +108,12 @@ class WorkerAgent:
         return JobManifest(**resp.json())
 
     def update_job_status(
-        self, job_id: str, build_id: str, status: str, err: Optional[str] = None
+        self,
+        job_id: str,
+        build_id: str,
+        status: str,
+        err: Optional[str] = None,
+        artifacts: Optional[list[dict]] = None,
     ) -> None:
         """Report a job status; a final one is persisted and resent until the server answers."""
         if status not in FINAL_STATUSES:
@@ -131,6 +137,8 @@ class WorkerAgent:
             job_id=job_id,
             status=status,
             error_message=err,
+            artifact_urls=[a["key"] for a in artifacts or []],
+            artifacts=artifacts or [],
         )
         resp = requests.post(url, json=req.model_dump(), headers=self._auth_headers(), timeout=10,
                              verify=requests_verify(self.ca_cert))
@@ -229,15 +237,52 @@ class WorkerAgent:
     def run_job(self, manifest: JobManifest) -> None:
         """Run a claimed job and stream stdout/stderr over WebSocket."""
         print(f"[agent] Starting job {manifest.job_id} (build: {manifest.build_id}, target: {manifest.target_arch})")
+        self.executor.clear_cancel()
+        self._current_job_id = manifest.job_id
+        status, err, artifacts = "failed", None, []
+        if manifest.s3:
+            vault.record_secret(manifest.s3.access_key)
+            vault.record_secret(manifest.s3.secret_key)
+        for pair in feed_secrets(manifest).values():
+            vault.record_secret(pair.get("login"))
+            vault.record_secret(pair.get("password"))
         try:
-            with LogStreamer(self.server_url, manifest.build_id, self.worker_token or "") as streamer:
-                ret = self.executor.execute_job(manifest, on_log=streamer.send)
-                status = "completed" if ret == 0 else "failed"
-                self.update_job_status(manifest.job_id, manifest.build_id, status)
-                print(f"[agent] Completed job {manifest.job_id} with status {status}")
+            with LogStreamer(
+                self.server_url, manifest.build_id, self.worker_token or "", ca_cert=self.ca_cert
+            ) as streamer:
+                send = redacting(streamer.send)
+                try:
+                    status, err, artifacts = self._execute(manifest, send)
+                finally:
+                    try:
+                        self.executor.wipe_job_dir(manifest.build_id, on_log=send)
+                    except Exception as e:
+                        print(f"[agent] Cleanup of job {manifest.job_id} failed: {e}")
         except Exception as e:
             print(f"[agent] Error running job {manifest.job_id}: {e}")
-            self.update_job_status(manifest.job_id, manifest.build_id, "failed", err=str(e))
+            status, err, artifacts = "failed", str(e), []
+        finally:
+            self._current_job_id = None
+        self.update_job_status(
+            manifest.job_id, manifest.build_id, status, err=err, artifacts=artifacts
+        )
+        print(f"[agent] Completed job {manifest.job_id} with status {status}")
+
+    def _execute(self, manifest: JobManifest, on_log) -> tuple[str, Optional[str], list[dict]]:
+        """Run the build and upload its artifacts; return (status, error, artifacts)."""
+        if self._shutdown.is_set():
+            return "failed", "agent shutting down", []
+        ret = self.executor.execute_job(manifest, on_log=on_log)
+        if self._shutdown.is_set():
+            return "failed", "agent shutting down", []
+        if self.executor.cancelled:
+            return "cancelled", None, []
+        if ret != 0:
+            return "failed", self.executor.failure_reason or f"build exited with code {ret}", []
+        try:
+            return "completed", None, self.executor.upload_artifacts(manifest, on_log=on_log)
+        except Exception as e:
+            return "failed", f"artifact upload failed: {e}", []
 
     def _send_heartbeat(self) -> list[str]:
         """Send one heartbeat and return the job ids the server wants cancelled."""
@@ -293,6 +338,9 @@ class WorkerAgent:
             print("\n[agent] Shutting down...")
             self.shutdown()
 
+        self.executor.remove_feed_secrets()
+        # Orphaned builds are stopped by systemd's cgroup kill (KillMode=mixed), not here.
+        self.executor.wipe_stale_jobs(on_log=lambda source, text: print(text, end=""))
         signal.signal(signal.SIGTERM, _handle_signal)
         signal.signal(signal.SIGINT, _handle_signal)
 

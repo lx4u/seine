@@ -195,6 +195,21 @@ class SubprocessExecutorTest(Test):
         provider.return_value.pull_worktree.assert_called_once_with("p", "dgst", dest_dir=self.tmp_dir)
         ambient.assert_not_called()
 
+    def test_missing_worktree_fails_the_job_with_a_precise_error(self):
+        ex = SubprocessExecutor(self.tmp_dir)
+        manifest = JobManifest(job_id="j", build_id="bld-5", project="p", worktree_digest="dgst", s3=JOB_S3)
+        logs = []
+        with mock.patch("seine.distributed.agent.executor.provider_from") as provider, \
+                mock.patch("subprocess.Popen") as popen:
+            provider.return_value.pull_worktree.return_value = None
+            ret = ex.execute_job(manifest, on_log=lambda s, t: logs.append(t))
+        self.assertEqual(ret, 1)
+        popen.assert_not_called()
+        message = f"worktree dgst not found in bucket {JOB_S3.bucket}"
+        self.assertIn(message, "".join(logs))
+        self.assertIn(message, ex.failure_reason)
+        self.assertNotIn("not found in the job directory", "".join(logs))
+
     def test_s3_cache_job_passes_scoped_flags_and_env_not_keys_on_the_command_line(self):
         _, popen, _ = self._execute(options={"s3_cache": True})
         cmd = popen.call_args.args[0]
@@ -238,6 +253,27 @@ class SubprocessExecutorTest(Test):
             f.write("name: pc\n")
         _, popen, _ = self._execute(spec_file="examples/pc/../pc/main.yaml")
         self.assertEqual(popen.call_args.args[0][-1], os.path.join("examples", "pc", "main.yaml"))
+
+    def test_upload_uses_the_job_key_and_fails_without_one(self):
+        from seine.distributed.agent.executor import upload_artifacts
+        job_dir = os.path.join(self.tmp_dir, "jobs", "bld-5")
+        os.makedirs(os.path.join(job_dir, "build", "deploy"))
+        with open(os.path.join(job_dir, "build", "deploy", "a.img"), "w") as f:
+            f.write("x")
+        with mock.patch("seine.distributed.agent.executor.provider_from") as provider:
+            provider.return_value.push_artifact_info.return_value = {"key": "k"}
+            self.assertEqual(upload_artifacts(job_dir, "p", "bld-5", s3=JOB_S3), [{"key": "k"}])
+        provider.assert_called_once_with(JOB_S3)
+        with self.assertRaises(ValueError):
+            upload_artifacts(job_dir, "p", "bld-5")
+
+    def test_distributed_code_never_builds_a_provider_from_ambient_credentials(self):
+        root = os.path.join(os.path.dirname(__file__), "..", "..", "seine", "distributed")
+        for folder, _, files in os.walk(root):
+            for name in files:
+                if name.endswith(".py"):
+                    with open(os.path.join(folder, name), encoding="utf-8") as f:
+                        self.assertNotIn("for_build(", f.read(), name)
 
 
 class ChildEnvTest(Test):
@@ -433,6 +469,7 @@ class WipeJobDirTest(Test):
     def setUp(self):
         self.tmp_dir = os.path.realpath(tempfile.mkdtemp(prefix="seine-test-wipe-"))
         self.ex = SubprocessExecutor(self.tmp_dir)
+        self.ex.wipe_backoff = (0.0, 0.0)
         self.jobs = os.path.join(self.tmp_dir, "jobs")
         os.makedirs(os.path.join(self.jobs, "bld-1", "build", "sub"))
         os.makedirs(os.path.join(self.jobs, "bld-2"))
@@ -473,7 +510,7 @@ class WipeJobDirTest(Test):
         with mock.patch("shutil.rmtree"), \
                 mock.patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, "", "")) as sub:
             self._wipe("bld-1")
-        sub.assert_called_once()
+        self.assertEqual(sub.call_count, 3)
         self.assertIn("Could not remove", "".join(self.logs))
 
     def test_wipe_never_raises(self):
@@ -509,9 +546,169 @@ class WipeJobDirTest(Test):
         with mock.patch("shutil.rmtree"), \
                 mock.patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, "", "")) as sub:
             self._wipe("bld-1")
-        self.assertEqual(sub.call_args.args[0],
-                         ["podman", "unshare", "rm", "-rf", os.path.join(self.jobs, "bld-1")])
-        self.assertIn("podman unshare", "".join(self.logs))
+        cmd = sub.call_args.args[0]
+        self.assertEqual(cmd[:4], ["podman", "unshare", "bash", "-c"])
+        self.assertEqual(cmd[-1], os.path.join(self.jobs, "bld-1"))
+        self.assertIn("attempt 2", "".join(self.logs))
+
+    def test_busy_mounts_are_unmounted_with_the_path_as_a_positional_argument(self):
+        path = os.path.join(self.jobs, "bld-1")
+        real_rmtree = shutil.rmtree
+        runs = []
+
+        def run(cmd, **kwargs):
+            runs.append(cmd)
+            if len(runs) == 1:
+                return subprocess.CompletedProcess(cmd, 1, "", "rm: Device or resource busy")
+            real_rmtree(path)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        with mock.patch("subprocess.run", side_effect=run), mock.patch("shutil.rmtree"):
+            self._wipe("bld-1")
+        self.assertEqual(len(runs), 2)
+        for cmd in runs:
+            self.assertEqual(cmd[-2:], ["_", path])
+            self.assertNotIn(path, cmd[4])
+            self.assertIn("umount -l", cmd[4])
+            self.assertIn("sort -r", cmd[4])
+        self.assertIn("Device or resource busy", "".join(self.logs))
+        self.assertFalse(os.path.exists(path))
+
+    def test_wipe_gives_up_after_three_attempts(self):
+        with mock.patch("shutil.rmtree"), \
+                mock.patch("subprocess.run", return_value=subprocess.CompletedProcess([], 1, "", "busy")) as sub:
+            self._wipe("bld-1")
+        self.assertEqual(sub.call_count, 3)
+        self.assertEqual(self.logs[-1], "[agent] Could not remove %s\n" % os.path.join(self.jobs, "bld-1"))
+
+    def test_wipe_pauses_between_attempts(self):
+        self.ex.wipe_backoff = (2.0, 5.0)
+        with mock.patch("shutil.rmtree"), mock.patch("time.sleep") as sleep, \
+                mock.patch("subprocess.run", return_value=subprocess.CompletedProcess([], 1, "", "")):
+            self._wipe("bld-1")
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [2.0, 5.0])
+
+
+class WipeJobDirPodmanTest(Test):
+    """Wipe a job directory through a real `podman unshare`.
+
+    :avocado: tags=container
+    """
+
+    def setUp(self):
+        if not shutil.which("podman"):
+            self.cancel("podman is not installed")
+        if subprocess.run(["podman", "unshare", "true"], capture_output=True).returncode != 0:
+            self.cancel("user namespaces are not available")
+        self.tmp_dir = os.path.realpath(tempfile.mkdtemp(prefix="seine-test-wipe-"))
+        self.ex = SubprocessExecutor(self.tmp_dir)
+        self.ex.wipe_backoff = (0.0, 0.0)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_podman_unshare_removes_a_job_dir(self):
+        path = os.path.join(self.tmp_dir, "jobs", "bld-1", "build")
+        os.makedirs(path)
+        with open(os.path.join(path, "f"), "w") as f:
+            f.write("x")
+        with mock.patch("shutil.rmtree"):
+            self.ex.wipe_job_dir("bld-1")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp_dir, "jobs", "bld-1")))
+
+
+class WipeStaleJobsTest(Test):
+    """Tests for cleaning what a crashed agent left behind."""
+
+    def setUp(self):
+        self.tmp_dir = os.path.realpath(tempfile.mkdtemp(prefix="seine-test-stale-"))
+        self.ex = SubprocessExecutor(self.tmp_dir)
+        self.ex.wipe_backoff = (0.0, 0.0)
+        self.jobs = os.path.join(self.tmp_dir, "jobs")
+        os.makedirs(os.path.join(self.jobs, "bld-aaaa1111", "build", "containers"))
+        os.makedirs(os.path.join(self.jobs, "bld-bbbb2222"))
+        os.makedirs(os.path.join(self.jobs, "keep-me"))
+        with open(os.path.join(self.jobs, "bld-file"), "w") as f:
+            f.write("x")
+        self.logs = []
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _wipe(self):
+        self.ex.wipe_stale_jobs(on_log=lambda s, t: self.logs.append(t))
+
+    def test_job_dirs_are_removed_and_other_entries_kept(self):
+        with mock.patch("shutil.which", return_value=None):
+            self._wipe()
+        self.assertEqual(sorted(os.listdir(self.jobs)), ["bld-file", "keep-me"])
+        self.assertIn("bld-aaaa1111", "".join(self.logs))
+
+    def test_symlinked_job_dir_is_left_alone(self):
+        target = os.path.join(self.tmp_dir, "precious")
+        os.makedirs(target)
+        os.symlink(target, os.path.join(self.jobs, "bld-link"))
+        self._wipe()
+        self.assertTrue(os.path.isdir(target))
+        self.assertTrue(os.path.islink(os.path.join(self.jobs, "bld-link")))
+
+    def test_containers_are_removed_from_the_job_storage_before_the_wipe(self):
+        root = os.path.join(self.jobs, "bld-aaaa1111", "build", "containers")
+        seen = []
+
+        def run(cmd, **kwargs):
+            seen.append((cmd, os.path.isdir(root), kwargs.get("timeout")))
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        with mock.patch("shutil.which", return_value="/usr/bin/podman"), \
+                mock.patch("subprocess.run", side_effect=run):
+            self._wipe()
+        cmd, existed, timeout = seen[0]
+        self.assertEqual(cmd, ["podman", "--root", root, "--runroot", os.path.join(root, "run"), "rm", "-af"])
+        self.assertTrue(existed)
+        self.assertTrue(timeout)
+        self.assertEqual(len([c for c, _, _ in seen if "rm" in c and "-af" in c]), 1)
+
+    def test_container_cleanup_failure_is_logged_and_the_wipe_continues(self):
+        with mock.patch("shutil.which", return_value="/usr/bin/podman"), \
+                mock.patch("subprocess.run", side_effect=OSError("boom")):
+            self._wipe()
+        self.assertIn("podman rm failed: boom", "".join(self.logs))
+        self.assertFalse(os.path.exists(os.path.join(self.jobs, "bld-aaaa1111")))
+
+    def test_never_raises(self):
+        for target in ("os.listdir", "shutil.rmtree"):
+            with mock.patch(target, side_effect=RuntimeError("r")):
+                self._wipe()
+        with mock.patch.object(self.ex, "_remove_stale_containers", side_effect=ValueError("v")), \
+                mock.patch("shutil.rmtree"):
+            self._wipe()
+
+    def test_failure_reason_reaches_the_reported_status(self):
+        from seine.distributed.agent.daemon import WorkerAgent
+        with mock.patch("seine.distributed.agent.daemon.detect_capabilities"):
+            agent = WorkerAgent("http://localhost:8000", "tok", self.tmp_dir, "w1")
+        agent.executor.failure_reason = "worktree d not found in bucket b"
+        manifest = JobManifest(job_id="j", build_id="bld-9", project="p")
+        with mock.patch.object(agent.executor, "execute_job", return_value=1):
+            status, err, _ = agent._execute(manifest, lambda s, t: None)
+        self.assertEqual((status, err), ("failed", "worktree d not found in bucket b"))
+
+    def test_missing_jobs_dir_is_fine(self):
+        shutil.rmtree(self.jobs)
+        self._wipe()
+        self.assertEqual(self.logs, [])
+
+    def test_agent_start_wipes_stale_jobs(self):
+        from seine.distributed.agent.daemon import WorkerAgent
+        with mock.patch("seine.distributed.agent.daemon.detect_capabilities"):
+            agent = WorkerAgent("http://localhost:8000", "tok", self.tmp_dir, "w1")
+        with mock.patch.object(agent, "register", side_effect=RuntimeError("stop")), \
+                mock.patch.object(agent.executor, "wipe_stale_jobs") as wipe, \
+                mock.patch("signal.signal"):
+            with self.assertRaises(RuntimeError):
+                agent.start()
+        wipe.assert_called_once()
 
 
 class WorkerAgentDaemonTest(Test):
@@ -787,6 +984,9 @@ class TransportTest(Test):
         self.assertIs(ctx, create.return_value)
 
 
+ART = {"name": "disk.img", "key": "artifacts/p/bld-1/disk.img", "sha256": "0" * 64, "size": 1}
+
+
 class JobLifecycleTest(Test):
     """Tests for run_job: outcomes, the wipe after them, heartbeats and cancellation."""
 
@@ -810,22 +1010,39 @@ class JobLifecycleTest(Test):
         return agent
 
     def _run(self, execute_job, upload=None):
-        def status(job_id, build_id, status, err=None, artifact_urls=None):
-            self.statuses.append((status, err, artifact_urls))
+        def status(job_id, build_id, status, err=None, artifacts=None):
+            self.statuses.append((status, err, artifacts))
 
         with mock.patch("seine.distributed.agent.daemon.LogStreamer"), \
                 mock.patch.object(self.agent.executor, "execute_job", side_effect=execute_job), \
                 mock.patch.object(self.agent.executor, "upload_artifacts",
-                                  side_effect=upload or (lambda *a, **k: ["art/1"])) as uploaded, \
+                                  side_effect=upload or (lambda *a, **k: [ART])) as uploaded, \
                 mock.patch.object(self.agent, "update_job_status", side_effect=status):
             self.agent.run_job(self.manifest)
         return uploaded
 
+    def test_job_keys_are_registered_and_scrubbed_from_streamed_logs(self):
+        from seine import vault
+        self.manifest = JobManifest(job_id="job-1", build_id="bld-1", project="p", s3=JOB_S3)
+        sent = []
+
+        def execute(manifest, on_log):
+            on_log("stderr", f"denied for {JOB_S3.access_key} / {JOB_S3.secret_key}\n")
+            return 1
+
+        with mock.patch("seine.distributed.agent.daemon.LogStreamer") as streamer:
+            streamer.return_value.__enter__.return_value.send = lambda s, t: sent.append(t)
+            with mock.patch.object(self.agent.executor, "execute_job", side_effect=execute), \
+                    mock.patch.object(self.agent, "update_job_status"):
+                self.agent.run_job(self.manifest)
+        self.assertIn(JOB_S3.secret_key, vault.secrets())
+        self.assertEqual(sent[0], "denied for <redacted> / <redacted>\n")
+
     def test_success_uploads_then_wipes(self):
         order = []
-        self._run(lambda *a, **k: 0, upload=lambda *a, **k: order.append("upload") or ["art/1"])
+        self._run(lambda *a, **k: 0, upload=lambda *a, **k: order.append("upload") or [ART])
         self.assertEqual(order, ["upload"])
-        self.assertEqual(self.statuses, [("completed", None, ["art/1"])])
+        self.assertEqual(self.statuses, [("completed", None, [ART])])
         self.assertFalse(os.path.exists(self.job_dir))
 
     def test_wipe_happens_after_the_upload(self):
