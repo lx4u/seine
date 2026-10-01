@@ -216,6 +216,15 @@ class DatabaseRepositoryTest(Test):
         repo.update_job_status("j-img-1", status="completed")
         self.assertEqual(repo.get("bld-job-test")["status"], "completed")
 
+    def test_failed_job_records_the_reason_on_the_build(self):
+        repo = self.db.builds
+        self.db.ensure_project("demo")
+        repo.create(id="bld-err", project="demo", target_arch="amd64")
+        repo.create_job(id="j-err", build_id="bld-err", kind="image", target_arch="amd64")
+        self.assertIsNone(repo.get("bld-err")["error_message"])
+        repo.update_job_status("j-err", status="failed", error_message="no credentials")
+        self.assertEqual(repo.get("bld-err")["error_message"], "no credentials")
+
     def test_worker_repo_crud_and_heartbeat(self):
         repo = self.db.workers
 
@@ -327,6 +336,28 @@ class DatabaseRepositoryTest(Test):
             self.db.tokens.issue(user_id="alice", kind=kind)
         with self.assertRaises(sqlite3.IntegrityError):
             self.db.tokens.issue(user_id="alice", kind="root")
+
+    def test_worker_tokens_are_hashed(self):
+        self.db.upsert_worker(
+            worker_id="worker-h",
+            hostname="h.lan",
+            native_arch="amd64",
+            arch_scores={"amd64": 1.0},
+            free_disk_gb=10.0,
+            token="raw-worker-secret",
+        )
+        found = self.db.get_worker_by_token("raw-worker-secret")
+        self.assertEqual(found["id"], "worker-h")
+        self.assertIsNone(self.db.get_worker_by_token(hash_secret("raw-worker-secret")))
+        self.assertIsNone(self.db.get_worker_by_token("other"))
+
+        for rec in (found, self.db.get_worker("worker-h"), self.db.workers.list()[0]):
+            self.assertNotIn("token", rec)
+            self.assertNotIn("token_hash", rec)
+
+        row = self.db.conn.execute("SELECT * FROM workers").fetchone()
+        self.assertNotIn("raw-worker-secret", [str(v) for v in tuple(row)])
+        self.assertEqual(row["token_hash"], hash_secret("raw-worker-secret"))
 
     def test_project_name_validation(self):
         for good in ("ab", "demo", "my-proj-1", "0day", "a" * 41):
@@ -483,6 +514,47 @@ class DatabaseRepositoryTest(Test):
         job = self.db.builds.create_job(id="job-1", build_id="bld-1")
         self.assertEqual(job["cancel_requested"], 0)
         self.assertEqual(job["attempts"], 0)
+
+
+class DatabaseMigrationTest(Test):
+    """An existing database gains the newer columns without losing data."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-migrate-")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_projects_table_without_dev_only_is_upgraded(self):
+        conn = connect_db(os.path.join(self.tmp_dir, "old-projects.db"))
+        with conn:
+            conn.execute(
+                "CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, "
+                "prod_bucket TEXT NOT NULL, dev_bucket TEXT NOT NULL, created_at REAL NOT NULL)"
+            )
+            conn.execute("INSERT INTO projects VALUES ('core', 'core', 'p', 'd', 1.0)")
+        init_db(conn)
+        columns = [r["name"] for r in conn.execute("PRAGMA table_info(projects)")]
+        self.assertIn("dev_only", columns)
+        row = conn.execute("SELECT * FROM projects WHERE id = 'core'").fetchone()
+        self.assertEqual(row["dev_only"], 0)
+        conn.close()
+
+    def test_users_table_without_default_project_is_upgraded(self):
+        conn = connect_db(os.path.join(self.tmp_dir, "old.db"))
+        with conn:
+            conn.execute(
+                "CREATE TABLE users (id TEXT PRIMARY KEY, is_admin INTEGER NOT NULL "
+                "DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, created_at REAL)"
+            )
+            conn.execute("INSERT INTO users (id, created_at) VALUES ('alice', 1.0)")
+        init_db(conn)
+        init_db(conn)  # running it again is harmless
+        columns = [r["name"] for r in conn.execute("PRAGMA table_info(users)")]
+        self.assertIn("default_project", columns)
+        row = conn.execute("SELECT * FROM users WHERE id = 'alice'").fetchone()
+        self.assertIsNone(row["default_project"])
+        conn.close()
 
 
 class DatabaseConstraintsAndIntegrationTest(Test):

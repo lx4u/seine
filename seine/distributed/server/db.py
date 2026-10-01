@@ -146,7 +146,8 @@ def init_db(conn: sqlite3.Connection) -> None:
             native_arch TEXT NOT NULL,
             arch_scores TEXT NOT NULL DEFAULT '{}',
             free_disk_gb REAL NOT NULL DEFAULT 0.0,
-            token TEXT NOT NULL UNIQUE,
+            concurrency_slots INTEGER NOT NULL DEFAULT 1,
+            token_hash TEXT NOT NULL UNIQUE,
             status TEXT NOT NULL DEFAULT 'online',
             last_seen REAL NOT NULL,
             created_at REAL NOT NULL
@@ -190,9 +191,26 @@ def init_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_builds_project ON builds(project);
         CREATE INDEX IF NOT EXISTS idx_jobs_build_id ON jobs(build_id);
         CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
-        CREATE INDEX IF NOT EXISTS idx_workers_token ON workers(token);
+        CREATE INDEX IF NOT EXISTS idx_workers_token ON workers(token_hash);
         CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id);
         """)
+        try:
+            conn.execute(
+                "ALTER TABLE workers ADD COLUMN concurrency_slots INTEGER NOT NULL DEFAULT 1"
+            )
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE projects ADD COLUMN dev_only INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN default_project "
+                "TEXT REFERENCES projects(id) ON DELETE SET NULL"
+            )
+        except sqlite3.OperationalError:
+            pass
 
 
 class ProjectRepo:
@@ -547,6 +565,7 @@ class BuildRepo:
         worker_id: Optional[str] = None,
         started_at: Optional[float] = None,
         finished_at: Optional[float] = None,
+        error_message: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
         updates = ["status = ?"]
         params: list[Any] = [status]
@@ -574,7 +593,18 @@ class BuildRepo:
             if row:
                 b_id = row["build_id"]
                 if status in ("failed", "cancelled"):
-                    self.update_status(b_id, status)
+                    self.conn.execute(
+                        "UPDATE jobs SET status = 'cancelled', finished_at = ? "
+                        "WHERE build_id = ? AND status = 'queued'",
+                        (time.time(), b_id),
+                    )
+                    left = self.conn.execute(
+                        "SELECT COUNT(*) FROM jobs WHERE build_id = ? "
+                        "AND status IN ('queued', 'claimed', 'running')",
+                        (b_id,),
+                    ).fetchone()[0]
+                    if status == "failed" or left == 0:
+                        self.update_status(b_id, status, error_message=error_message)
                 elif status == "completed":
                     cur_jobs = self.conn.execute(
                         "SELECT status FROM jobs WHERE build_id = ?",
@@ -601,24 +631,40 @@ class WorkerRepo:
         free_disk_gb: float,
         token: str,
         status: str = "online",
+        concurrency_slots: int = 1,
     ) -> dict[str, Any]:
         now = time.time()
         scores_json = json.dumps(arch_scores or {})
         with self.conn:
             self.conn.execute(
                 """
-                INSERT INTO workers (id, hostname, native_arch, arch_scores, free_disk_gb, token, status, last_seen, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO workers (
+                    id, hostname, native_arch, arch_scores, free_disk_gb,
+                    concurrency_slots, token_hash, status, last_seen, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     hostname = excluded.hostname,
                     native_arch = excluded.native_arch,
                     arch_scores = excluded.arch_scores,
                     free_disk_gb = excluded.free_disk_gb,
-                    token = excluded.token,
+                    concurrency_slots = excluded.concurrency_slots,
+                    token_hash = excluded.token_hash,
                     status = excluded.status,
                     last_seen = excluded.last_seen
                 """,
-                (id, hostname, native_arch, scores_json, free_disk_gb, token, status, now, now),
+                (
+                    id,
+                    hostname,
+                    native_arch,
+                    scores_json,
+                    free_disk_gb,
+                    concurrency_slots,
+                    hash_secret(token),
+                    status,
+                    now,
+                    now,
+                ),
             )
         return self.get(id)  # type: ignore
 
@@ -641,18 +687,21 @@ class WorkerRepo:
         row = cur.fetchone()
         if not row:
             return None
+        return self._to_dict(row)
+
+    @staticmethod
+    def _to_dict(row: sqlite3.Row) -> dict[str, Any]:
         res = dict(row)
+        res.pop("token_hash", None)
         res["arch_scores"] = json.loads(res["arch_scores"]) if res.get("arch_scores") else {}
         return res
 
     def get_by_token(self, token: str) -> Optional[dict[str, Any]]:
-        cur = self.conn.execute("SELECT * FROM workers WHERE token = ?", (token,))
+        cur = self.conn.execute(
+            "SELECT * FROM workers WHERE token_hash = ?", (hash_secret(token),)
+        )
         row = cur.fetchone()
-        if not row:
-            return None
-        res = dict(row)
-        res["arch_scores"] = json.loads(res["arch_scores"]) if res.get("arch_scores") else {}
-        return res
+        return self._to_dict(row) if row else None
 
     def list(self, status: Optional[str] = None) -> list[dict[str, Any]]:
         query = "SELECT * FROM workers"
@@ -663,12 +712,7 @@ class WorkerRepo:
         query += " ORDER BY id ASC"
 
         cur = self.conn.execute(query, tuple(params))
-        results = []
-        for r in cur.fetchall():
-            res = dict(r)
-            res["arch_scores"] = json.loads(res["arch_scores"]) if res.get("arch_scores") else {}
-            results.append(res)
-        return results
+        return [self._to_dict(r) for r in cur.fetchall()]
 
     def update_status(self, worker_id: str, status: str) -> bool:
         now = time.time()
@@ -887,6 +931,8 @@ class Database:
             self.workers = WorkerRepo(self.conn)
             self.users = UserRepo(self.conn)
             self.tokens = TokenRepo(self.conn)
+            from seine.distributed.server.scheduler import BuildScheduler
+            self.scheduler = BuildScheduler(self)
         elif db_type == "postgres":
             raise NotImplementedError("PostgreSQL database engine is not yet implemented")
         else:
@@ -976,6 +1022,7 @@ class Database:
         arch_scores: dict[str, float],
         free_disk_gb: float,
         token: str,
+        concurrency_slots: int = 1,
     ) -> dict[str, Any]:
         return self.workers.register(
             id=worker_id,
@@ -984,6 +1031,7 @@ class Database:
             arch_scores=arch_scores,
             free_disk_gb=free_disk_gb,
             token=token,
+            concurrency_slots=concurrency_slots,
         )
 
     def get_worker(self, worker_id: str) -> Optional[dict[str, Any]]:
@@ -1026,11 +1074,44 @@ class Database:
         )
         return build_id
 
+    def create_build_with_fanout(
+        self,
+        build_id: str,
+        project: str,
+        spec: dict[str, Any],
+        target_arch: str = "amd64",
+        worktree_digest: str = "",
+        spec_file: str = "spec.yaml",
+        is_release: bool = False,
+        options: Optional[dict[str, Any]] = None,
+        cached_packages: Optional[Union[set[str], list[str], Callable[[str, str], bool]]] = None,
+        user_id: Optional[str] = None,
+    ) -> str:
+        self.ensure_project(project)
+        self.builds.create(
+            id=build_id,
+            project=project,
+            target_arch=target_arch,
+            is_release=is_release,
+            worktree_digest=worktree_digest,
+            spec_file=spec_file,
+            options=options,
+            user_id=user_id,
+        )
+        self.scheduler.decompose_and_create_jobs(
+            build_id=build_id,
+            spec=spec,
+            target_arch=target_arch,
+            cached_packages=cached_packages,
+        )
+        return build_id
+
     def get_build(self, build_id: str) -> Optional[dict[str, Any]]:
         return self.builds.get(build_id)
 
     def claim_next_job(self, worker_id: str) -> Optional[dict[str, Any]]:
         return self.scheduler.claim_job(worker_id)
 
-    def update_job_status(self, job_id: str, status: str) -> None:
-        self.builds.update_job_status(job_id, status)
+    def update_job_status(self, job_id: str, status: str, error_message: Optional[str] = None) -> None:
+        self.builds.update_job_status(job_id, status, error_message=error_message)
+

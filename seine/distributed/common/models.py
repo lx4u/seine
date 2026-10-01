@@ -61,6 +61,7 @@ class WorkerModel(BaseModel):
     hostname: str
     native_arch: str
     arch_scores: dict[str, float] = Field(default_factory=dict)
+    concurrency_slots: int = 1
     free_disk_gb: float = 0.0
     token: str
     status: str = "online"
