@@ -55,6 +55,7 @@ jobs:
         with:
           name: debs-${{ matrix.arch }}
           path: debs/*.deb
+          retention-days: 2
 
   release:
     needs: build
