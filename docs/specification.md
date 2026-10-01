@@ -1334,6 +1334,15 @@ as usual, while the imager itself is happy with a stock Debian kernel.
    with (e.g. `/usr/bin/qemu-system-aarch64`). Only needed when
    cross-building for an `architecture` other than the host's; defaults
    to a sensible binary for the target `architecture` if not specified.
+ * rebuild: when to rebuild the appliance image rather than reuse the one
+   already tagged for this `release`/`architecture`/`kernel`. One of:
+   `missing` (default) -- reuse whatever is tagged, even if the feeds it
+   would be rebuilt from have since changed (the appliance is a build
+   tool, not part of the shipped image, so it rarely needs to track a
+   feed change); `different` -- reuse only if its inputs still match
+   exactly, rebuilding otherwise; `always` -- never reuse, always
+   rebuild. `--verbose` names a `missing` reuse whose inputs have
+   actually drifted.
 
 When cross-building (target `architecture` different from the host's),
 seine automatically builds a libguestfs "fixed appliance" for the target

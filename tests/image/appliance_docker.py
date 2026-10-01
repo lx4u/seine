@@ -34,7 +34,7 @@ CONTAINER_TOOLING = [
 def build_dockerfile(appliance):
     dockerfile = None
 
-    def fake_build(script, base, options=None):
+    def fake_build(script, base, options=None, **kwargs):
         nonlocal dockerfile
         dockerfile = script
         return "appliance-image-id"

@@ -125,6 +125,11 @@ class ImagerAppliance(Bootstrap):
             raise ValueError(
                 "no 'imager: kernel:' package configured in the specification and no "
                 "default is known for architecture '%s'" % distro["architecture"])
+        self.rebuild = imager_spec.get("rebuild", "missing")
+        if self.rebuild not in ("missing", "different", "always"):
+            raise ValueError(
+                "'imager: rebuild:' must be one of missing, different, always "
+                "(got %r)" % self.rebuild)
         super().__init__(distro, source.options)
 
     def container_targets(self):
@@ -243,7 +248,8 @@ class ImagerAppliance(Bootstrap):
                     netrc_mount=netrc_mount,
                     netrc_aptopt=netrc_aptopt),
                 base=self.source.targetBootstrap.name,
-                options=options)
+                options=options,
+                rebuild=self.rebuild)
 
     # Flat, not real paths like /usr/bin: /usr may be the mount being
     # packed away on a usrmerged system.
