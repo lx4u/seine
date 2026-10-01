@@ -7,6 +7,8 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
+import sqlite3
+import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Optional
@@ -30,8 +32,13 @@ from seine.distributed.common.models import (
     HeartbeatRequest,
     JobManifest,
     JobStatusUpdateRequest,
+    MemberAddRequest,
+    ProjectCreateRequest,
     RegisterWorkerRequest,
     RegisterWorkerResponse,
+    TokenIssueRequest,
+    UserCreateRequest,
+    UserUpdateRequest,
 )
 from seine.distributed.server import uploads, validation
 from seine.distributed.server.auth import (
@@ -429,6 +436,219 @@ def create_app(
     @app.websocket("/api/v1/builds/{build_id}/stream")
     async def websocket_stream(websocket: WebSocket, build_id: str):
         await serve_stream(websocket, websocket.app.state.hub, websocket.app.state.db, build_id)
+
+    @app.get("/api/v1/projects")
+    def list_projects(
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        projects = app_db.projects.list()
+        if is_system_admin(app_db, tok):
+            return projects
+        # Bucket names are for administrators; members get no more than the name.
+        mine = member_projects(app_db, tok["user_id"])
+        return [
+            {key: p[key] for key in ("id", "name", "created_at")}
+            for p in projects if p["id"] in mine
+        ]
+
+    @app.post("/api/v1/projects", status_code=status.HTTP_201_CREATED)
+    def create_project(
+        req: ProjectCreateRequest,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_system_admin(app_db, tok)
+        try:
+            proj = app_db.projects.create(
+                name=req.name,
+                dev_bucket=req.dev_bucket,
+                prod_bucket=req.prod_bucket,
+            )
+        except sqlite3.IntegrityError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Project '{req.name}' already exists",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+        if req.provision_buckets:
+            for bkt, env in ((proj["dev_bucket"], "dev"), (proj["prod_bucket"], "prod")):
+                provider = _get_storage_provider(request, req.name, bkt, env)
+                if hasattr(provider, "ensure_bucket"):
+                    provider.ensure_bucket()
+        return proj
+
+    @app.delete("/api/v1/projects/{project}")
+    def delete_project(
+        project: str,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_project_admin(app_db, tok, project)
+        proj = app_db.projects.get(project)
+        if not proj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project '{project}' not found",
+            )
+        app_db.projects.delete(project)
+        return {"deleted": True, "project": project}
+
+    @app.get("/api/v1/projects/{project}/members")
+    def list_project_members(
+        project: str,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        proj = app_db.projects.get(project)
+        if not proj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project '{project}' not found",
+            )
+        require_project_admin(app_db, tok, project)
+        return app_db.projects.list_members(project)
+
+    @app.post("/api/v1/projects/{project}/members")
+    def add_project_member(
+        project: str,
+        req: MemberAddRequest,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        proj = app_db.projects.get(project)
+        if not proj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project '{project}' not found",
+            )
+        require_project_admin(app_db, tok, project)
+        if app_db.users.get(req.user_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User '{req.user_id}' not found",
+            )
+        try:
+            return app_db.projects.add_member(project, req.user_id, req.role)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    @app.delete("/api/v1/projects/{project}/members/{user_id}")
+    def remove_project_member(
+        project: str,
+        user_id: str,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        proj = app_db.projects.get(project)
+        if not proj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project '{project}' not found",
+            )
+        require_project_admin(app_db, tok, project)
+        ok = app_db.projects.remove_member(project, user_id)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Member '{user_id}' not found in project '{project}'",
+            )
+        return {"removed": True, "project": project, "user_id": user_id}
+
+    @app.get("/api/v1/tokens")
+    def list_tokens(
+        request: Request,
+        user_id: Optional[str] = None,
+        kind: Optional[str] = None,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_system_admin(app_db, tok)
+        return app_db.tokens.list(user_id=user_id, kind=kind)
+
+    @app.post("/api/v1/tokens")
+    def issue_token(
+        req: TokenIssueRequest,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_system_admin(app_db, tok)
+        if app_db.users.get(req.user_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User '{req.user_id}' not found",
+            )
+        expires_at = time.time() + (req.days * 86400.0) if req.days is not None else None
+        return app_db.tokens.issue(user_id=req.user_id, kind=req.kind, expires_at=expires_at)
+
+    @app.delete("/api/v1/tokens/{token_id}")
+    def revoke_token(
+        token_id: str,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_system_admin(app_db, tok)
+        if not app_db.tokens.revoke(token_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
+        return {"revoked": True, "id": token_id}
+
+    @app.get("/api/v1/users")
+    def list_users(
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_system_admin(app_db, tok)
+        return app_db.users.list()
+
+    @app.post("/api/v1/users", status_code=status.HTTP_201_CREATED)
+    def create_user(
+        req: UserCreateRequest,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_system_admin(app_db, tok)
+        try:
+            return app_db.provision_new_user(
+                req.id, is_admin=req.is_admin, mode=settings.new_user_project)
+        except sqlite3.IntegrityError:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"User '{req.id}' already exists",
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    @app.patch("/api/v1/users/{user_id}")
+    def update_user(
+        user_id: str,
+        req: UserUpdateRequest,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_system_admin(app_db, tok)
+        try:
+            user = app_db.users.update(user_id, is_admin=req.is_admin, active=req.active)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User '{user_id}' not found",
+            )
+        return user
 
     return app
 

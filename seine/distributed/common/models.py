@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Shared data models and wire protocols for distributed seine."""
 
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
@@ -189,3 +189,36 @@ class LogChunk(BaseModel):
     source: str = "stdout"
     text: str
     timestamp: float
+
+
+class ProjectCreateRequest(BaseModel):
+    """Project creation request payload."""
+    name: str
+    dev_bucket: str | None = None
+    prod_bucket: str | None = None
+    provision_buckets: bool = False
+
+
+class MemberAddRequest(BaseModel):
+    """Project member assignment payload."""
+    user_id: str
+    role: str = "developer"
+
+
+class TokenIssueRequest(BaseModel):
+    """Token generation request payload."""
+    user_id: str
+    kind: Literal["pat"] = "pat"
+    days: int | None = None
+
+
+class UserCreateRequest(BaseModel):
+    """User creation payload."""
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$")
+    is_admin: bool = False
+
+
+class UserUpdateRequest(BaseModel):
+    """User update payload; omitted fields are left unchanged."""
+    is_admin: bool | None = None
+    active: bool | None = None
