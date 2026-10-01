@@ -311,6 +311,11 @@ class TargetBootstrap(Bootstrap):
         if feed_auth_entries(self.distro, entries=[base]):
             netrc_mount = " --mount=type=secret,id=seine-netrc,target=%s" % NETRC_MOUNT
             netrc_aptopt = " --aptopt='Dir::Etc::netrc \"%s\"'" % NETRC_MOUNT
+        # Copies the key into rootfs too -- 'FROM scratch' below keeps
+        # only that, not the builder stage's own copy.
+        target_keyring_install = feed_keyrings_script([base], prefix='"$1"')
+        keyring_hook = (" --customize-hook='%s'" % target_keyring_install
+                        if target_keyring_install else "")
         return TARGET_BOOTSTRAP_SCRIPT.format(
             self.hostBootstrap.name,
             self.distro["architecture"],
@@ -321,7 +326,8 @@ class TargetBootstrap(Bootstrap):
             FALLBACK_EPOCH,
             feed_keyrings_script([base]) or "true",
             netrc_mount,
-            netrc_aptopt)
+            netrc_aptopt,
+            keyring_hook)
 
     def defaultName(self):
         return os.path.join(
@@ -400,7 +406,7 @@ RUN{7} --mount=type=cache,target=/var/cache/mmdebstrap,id={4},sharing=locked \
         --setup-hook='mkdir -p "$1"/var/cache/apt/archives/'         \
         --setup-hook='sync-in /var/cache/mmdebstrap /var/cache/apt/archives/' \
         --customize-hook='rm -rf "$1"/var/cache/apt/archives/partial' \
-        --customize-hook='sync-out /var/cache/apt/archives /var/cache/mmdebstrap'{8} \
+        --customize-hook='sync-out /var/cache/apt/archives /var/cache/mmdebstrap'{9}{8} \
         --arch {1} {2} rootfs {3} &&                                 \
     cp /usr/bin/qemu-*-static rootfs/usr/bin/ &&                     \
     echo 'APT::Install-Recommends "false";'                          \
