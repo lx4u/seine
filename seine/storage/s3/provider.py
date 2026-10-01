@@ -44,6 +44,7 @@ def _decompress_zstd(data):
         return out
 
 
+_ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
 _DIGEST_RE = re.compile(r"[0-9a-f]{16,64}")
 
 
@@ -310,3 +311,84 @@ class S3StorageProvider(StorageProvider):
         except Exception as e:
             if self.offline_mode == "strict":
                 raise StorageOfflineError(f"s3 bucket check failed for {self.bucket}: {e}") from e
+
+    def push_worktree(self, project: str, digest: str, path: str):
+        """Push a staged project worktree archive to S3."""
+        if not isinstance(path, (bytes, bytearray)) and not os.path.exists(path):
+            raise StorageError(f"push_worktree failed: path '{path}' does not exist")
+
+        key = f"worktrees/{project}/{digest}.tar.zst"
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                archive = self._worktree_archive(path, tmpdir)
+                if _file_sha256(archive) != digest.lower():
+                    raise StorageError(f"push_worktree {project}: archive does not match {digest}")
+                # Garage ignores If-None-Match, so skip an existing digest key here
+                if not self.client.head_object(self.bucket, key):
+                    self.client.upload_file(self.bucket, key, archive)
+        except StorageError:
+            raise
+        except Exception as e:
+            if self.offline_mode == "strict":
+                raise StorageOfflineError(f"s3 push_worktree failed for {key}: {e}") from e
+            from seine.cache_index import say
+            say(self.options, f"push_worktree {project} {digest} failed: {e}")
+            return False
+
+        return True
+
+    def has_worktree(self, project: str, digest: str) -> bool:
+        """Return True if the worktree bundle is staged in the bucket."""
+        return bool(self.client.head_object(self.bucket, f"worktrees/{project}/{digest}.tar.zst"))
+
+    @staticmethod
+    def _worktree_archive(path, tmpdir):
+        """Return a .tar.zst file for bytes, a file or a directory."""
+        archive = os.path.join(tmpdir, "worktree.tar.zst")
+        if not isinstance(path, (bytes, bytearray)) and os.path.isdir(path):
+            from seine.distributed.client.worktree import pack_worktree
+            pack_worktree(path, out_path=archive)
+            return archive
+        if isinstance(path, (bytes, bytearray)):
+            payload, path = path, os.path.join(tmpdir, "payload")
+            with open(path, "wb") as f:
+                f.write(payload)
+        with open(path, "rb") as f:
+            if f.read(4) == _ZSTD_MAGIC:
+                return path
+            f.seek(0)
+            with _zstd_writer(archive) as out:
+                shutil.copyfileobj(f, out)
+        return archive
+
+    def pull_worktree(self, project: str, digest: str, dest_dir: str):
+        """Pull a staged project worktree, check its sha256 and unpack it into dest_dir."""
+        key = f"worktrees/{project}/{digest}.tar.zst"
+        dest_dir = os.path.abspath(dest_dir)
+        parent = os.path.dirname(dest_dir)
+        os.makedirs(parent, exist_ok=True)
+        # next to dest: the bundle can be large and /tmp may be a tmpfs
+        fd, tmp_path = tempfile.mkstemp(prefix=".pull-", dir=parent)
+        os.close(fd)
+        try:
+            try:
+                headers = self.client.head_object(self.bucket, key)
+                if not headers:
+                    return None
+                self.client.download_file(self.bucket, key, tmp_path)
+            except S3NotFoundError:
+                return None
+            except Exception as e:
+                if self.offline_mode == "strict":
+                    raise StorageOfflineError(f"s3 pull_worktree failed for {key}: {e}") from e
+                return None
+
+            self._verify("worktree", key, headers, tmp_path)
+            if headers["x-amz-meta-sha256"].lower() != digest.lower():
+                raise StorageError(f"pull worktree {key} refused: sha256 is not {digest}")
+
+            from seine.distributed.client.worktree import unpack_worktree
+            return unpack_worktree(tmp_path, dest_dir)
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
