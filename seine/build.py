@@ -168,16 +168,20 @@ class BuildCmd(Cmd):
     NAME = "build"
     SHORT_OPTIONS = "dDhj:kv"
     LONG_OPTIONS = [
+        "ca-cert=",
         "cache-bootstraps",
         "cache-rootfs",
         "debug",
+        "dest-dir=",
         "dry-run",
         "dump",
         "help",
+        "insecure",
         "jobs=",
         "keep",
         "no-cache-bootstraps",
         "no-color",
+        "no-download",
         "offline",
         "min-arch-score=",
         "packages-only",
@@ -214,13 +218,13 @@ class BuildCmd(Cmd):
         self.options = { "ansible_library": [], "build": True, "color": None,
                          "cache_bootstraps": True,
                          "cache_rootfs": False,
-                         "debug": False, "dry_run": False,
+                         "debug": False, "dest_dir": None, "dry_run": False,
                          "jobs": settings.load().get("jobs") or 1, "keep": False,
                          "min_arch_score": None,
-                         "offline": False,
+                         "no_download": False, "offline": False,
                          "packages_only": False, "parallel": None,
                          "prefer_native": False,
-                         "project": os.environ.get("SEINE_PROJECT", "default"),
+                         "project": os.environ.get("SEINE_PROJECT"),
                          "rebuild": False, "release": False,
                          "remote": None, "reproducible": False,
                          "require_hashes": False, "require_native": False,
@@ -1490,6 +1494,14 @@ class BuildCmd(Cmd):
                     sys.exit(1)
             elif o in ("--remote",):
                 self.options["remote"] = a
+            elif o in ("--ca-cert",):
+                self.options["ca_cert"] = a
+            elif o in ("--insecure",):
+                self.options["insecure"] = True
+            elif o in ("--dest-dir",):
+                self.options["dest_dir"] = a
+            elif o in ("--no-download",):
+                self.options["no_download"] = True
             elif o in ("--token",):
                 self.options["token"] = a
             elif o in ("--project",):
@@ -1512,11 +1524,11 @@ class BuildCmd(Cmd):
             sys.exit(1)
 
         if self.options.get("remote"):
-            from seine.distributed.client.remote import dispatch_remote_build
+            from seine.distributed.client.remote import build_remote
             sys.exit(
-                dispatch_remote_build(
+                build_remote(
                     server_url=self.options["remote"],
-                    project=self.options.get("project", "default"),
+                    project=self.options.get("project"),
                     spec_files=args,
                     options=self.options,
                     token=self.options.get("token"),
@@ -1648,10 +1660,22 @@ Flags:
       --parallel N      cores one package build may use. Unset, it is derived
                         from --jobs so that the builds running together do not
                         ask for more of the machine than it has
-      --project NAME    project name for remote build (default: $SEINE_PROJECT or 'default')
+      --ca-cert PATH    CA bundle to verify the remote server's TLS certificate
+                        with ($SEINE_CA_CERT says the same thing)
+      --insecure        allow plain http:// to a remote server that is not on
+                        this machine. Without it only https:// is accepted
+      --dest-dir PATH   custom directory to download build artifacts into
+      --no-download     skip automatic artifact download after remote completion
+      --project NAME    project for a remote build (default: $SEINE_PROJECT, else
+                        your default project on the server, else it asks)
       --release         mark remote build as a release build (requires releaser or admin role)
-      --remote URL      dispatch build to a remote seine-server
+      --remote URL      dispatch build to a remote seine-server. Ctrl+C asks the
+                        server to cancel the build (exit status 130). Exit
+                        status: 0 completed, 1 failed, 2 usage or server error
       --token TOKEN     bearer token for remote server authentication
+                        ($SEINE_TOKEN says the same thing). Without one,
+                        a token saved in the keyring or credentials.json is
+                        used, else it is asked for and may be saved
   --sign-key KEY        sign the rebuilt packages and the repository holding
                         them with this gpg key, named however gpg will take it
                         -- a key id, a fingerprint, an email address. gpg runs
