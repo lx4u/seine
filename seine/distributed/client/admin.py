@@ -11,6 +11,8 @@ from typing import Any, Optional
 
 import requests
 
+from seine.distributed.common.transport import check_server_url, requests_verify
+
 
 class AdminClient:
     """Client for managing projects, members, users, and tokens via REST API."""
@@ -21,12 +23,14 @@ class AdminClient:
         token: Optional[str] = None,
         timeout: float = 10.0,
         ca_cert: Optional[str] = None,
+        insecure: bool = False,
     ):
         self.server_url = (server_url or os.environ.get("SEINE_SERVER_URL", "http://localhost:8000")).rstrip("/")
         self.token = token or os.environ.get("SEINE_TOKEN")
         self.timeout = timeout
+        check_server_url(self.server_url, insecure=insecure)
         self.session = requests.Session()
-        self.session.verify = ca_cert or True
+        self.session.verify = requests_verify(ca_cert)
 
     def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
@@ -154,6 +158,8 @@ def run_client_admin(argv: list[str]) -> int:
     parser.add_argument("--token", default=None, help="Bearer token (default: $SEINE_TOKEN)")
     parser.add_argument("--ca-cert", metavar="PATH", default=os.environ.get("SEINE_CA_CERT"),
                         help="CA bundle to verify the server's TLS certificate with (default: $SEINE_CA_CERT)")
+    parser.add_argument("--insecure", action="store_true",
+                        help="Allow plain http:// to a server that is not on this machine")
 
     subparsers = parser.add_subparsers(dest="command")
 
@@ -216,7 +222,11 @@ def run_client_admin(argv: list[str]) -> int:
     t_list.add_argument("--kind", default=None, help="Filter by token kind")
 
     args = parser.parse_args(argv)
-    client = AdminClient(server_url=args.server, token=args.token, ca_cert=args.ca_cert)
+    try:
+        client = AdminClient(server_url=args.server, token=args.token, ca_cert=args.ca_cert, insecure=args.insecure)
+    except ValueError as err:
+        sys.stderr.write(f"error: {err}\n")
+        return 1
 
     try:
         if args.command == "project":

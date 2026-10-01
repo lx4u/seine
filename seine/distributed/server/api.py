@@ -342,11 +342,10 @@ def create_app(
         try:
             if hasattr(provider, "ensure_bucket"):
                 provider.ensure_bucket()
-            key = f"worktrees/{digest}.tar.zst"
-            if hasattr(provider, "client") and hasattr(provider.client, "put_object"):
-                provider.client.put_object(bucket, key, payload)
-            elif hasattr(provider, "push_worktree"):
+            if hasattr(provider, "push_worktree"):
                 provider.push_worktree(project, digest, payload)
+            elif hasattr(provider, "client") and hasattr(provider.client, "put_object"):
+                provider.client.put_object(bucket, f"worktrees/{project}/{digest}.tar.zst", payload)
         except Exception:
             pass
 

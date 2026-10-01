@@ -810,7 +810,17 @@ class AdminAuthzTest(Test):
 
 
 class AdminClientTransportTest(Test):
-    """Test the TLS options of the admin client."""
+    """Test the server URL check and the TLS options of the admin client."""
+
+    def test_plain_http_to_a_remote_host_is_refused(self):
+        with self.assertRaises(ValueError):
+            AdminClient(server_url="http://203.0.113.5:8000", token="t")
+
+    def test_plain_http_to_a_remote_host_is_accepted_with_insecure(self):
+        AdminClient(server_url="http://203.0.113.5:8000", token="t", insecure=True)
+
+    def test_plain_http_to_loopback_is_accepted(self):
+        AdminClient(server_url="http://127.0.0.1:8000", token="t")
 
     def test_ca_cert_reaches_the_session(self):
         client = AdminClient(server_url="https://seine.example", token="t", ca_cert="/etc/ca.pem")
@@ -828,3 +838,18 @@ class AdminClientTransportTest(Test):
                     argv = ["--server", "https://seine.example", "--token", "t", *argv, "project", "list"]
                     self.assertEqual(run_client_admin(argv), 0)
                     self.assertEqual(cls.call_args.kwargs["ca_cert"], expected)
+
+    def test_cli_refusal_is_one_error_line(self):
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err), mock.patch("requests.Session.get") as get:
+            code = run_client_admin(["--server", "http://203.0.113.5:8000", "--token", "t", "project", "list"])
+        self.assertEqual(code, 1)
+        self.assertEqual(len(err.getvalue().splitlines()), 1)
+        self.assertTrue(err.getvalue().startswith("error: "))
+        get.assert_not_called()
+
+    def test_cli_insecure_allows_plain_http(self):
+        with mock.patch("requests.Session.get") as get:
+            get.return_value.json.return_value = []
+            argv = ["--server", "http://203.0.113.5:8000", "--token", "t", "--insecure", "project", "list"]
+            self.assertEqual(run_client_admin(argv), 0)
