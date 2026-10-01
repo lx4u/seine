@@ -33,6 +33,13 @@ execute_after_dh_auto_build-arch:
 	HOSTARCH=$(DEB_HOST_ARCH) debian/build-oci.py debian/build-oci
 	HOSTARCH=$(DEB_HOST_ARCH) debian/build-vault-image.py debian/build-vault-image
 
+# Not part of the dh sequence at compat 13; the users must exist before tmpfiles runs.
+execute_before_dh_installtmpfiles:
+	dh_installsysusers
+
 override_dh_python3:
 	dh_python3 --skip-private
 	dh_python3 usr/share/seine/pylibs --no-guessing-deps
+
+# Tests run with avocado, not unittest discovery.
+override_dh_auto_test:

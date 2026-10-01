@@ -1,0 +1,8 @@
+# Defaults for seine-server systemd service
+# The enrollment token is required, there is no default. Generate one
+# with 'openssl rand -hex 32' and set it here or in /etc/seine/server.yaml.
+#SEINE_ENROLLMENT_TOKEN=
+SEINE_HOST=127.0.0.1
+SEINE_PORT=8000
+SEINE_DB_PATH=/var/lib/seine/seine.db
+# Serving beyond loopback: also set SEINE_TLS_CERT and SEINE_TLS_KEY.

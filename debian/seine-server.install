@@ -1,0 +1,2 @@
+debian/seine-server.default etc/default/seine-server
+debian/seine-server.yaml etc/seine/server.yaml

@@ -35,7 +35,11 @@ setup(
                             "data/docs/*.md", "data/ansible/action_plugins/*.py"]},
     cmdclass={"build_py": build_py},
     entry_points = {
-        'console_scripts': ['seine=seine.cli:main'],
+        'console_scripts': [
+            'seine=seine.cli:main',
+            'seine-server=seine.distributed.server.cli:main',
+            'seine-agent=seine.distributed.agent.cli:main',
+        ],
     },
     install_requires=[
         'pyyaml>=3.12',
@@ -73,5 +77,8 @@ setup(
         # seine/credentials.py's 'keyring:' backend for feed auth: never a
         # dependency of core seine, only of specs that name that backend.
         'keyring': ['keyring'],
+        'server': ['fastapi', 'uvicorn', 'websockets', 'pydantic'],
+        'agent': ['websockets', 'requests', 'pydantic'],
+        'remote': ['websockets', 'pydantic'],
     },
 )

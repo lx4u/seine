@@ -1,0 +1,2 @@
+z /etc/seine/server.yaml 0640 root seine -
+z /etc/default/seine-server 0640 root seine -

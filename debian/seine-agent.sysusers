@@ -1,0 +1,3 @@
+g kvm -
+u seine-agent - "seine build agent" /var/lib/seine-agent /usr/sbin/nologin
+m seine-agent kvm
