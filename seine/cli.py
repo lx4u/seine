@@ -274,6 +274,34 @@ class PodmanCmd(Cmd):
         env = ContainerEngine._podman_env()
         os.execvpe(cmd[0], cmd, env)
 
+
+class AdminCmd(Cmd):
+    NAME = "admin"
+    USAGE = """
+Usage:
+  seine admin project create <name> [--dev-bucket BKT] [--prod-bucket BKT] [--provision-buckets]
+  seine admin project list
+  seine admin project delete <name>
+  seine admin member add <project> <user_id> <role>
+  seine admin member remove <project> <user_id>
+  seine admin member list <project>
+  seine admin token issue <user_id> [--kind user|worker] [--days N]
+  seine admin token revoke <token>
+  seine admin token list
+
+Manage projects, members, and access tokens against a remote seine-server.
+"""
+
+    def main(self, argv):
+        if argv and argv[0] in ("-h", "--help"):
+            print(self.USAGE)
+            return
+        from seine.distributed.client.admin import run_client_admin
+        code = run_client_admin(argv)
+        if code:
+            sys.exit(code)
+
+
 # Each command explains its own flags via '-h', so we don't restate them here.
 COMMANDS = {
     "build": (BuildCmd, "build an image from one or more specification files"),
@@ -291,6 +319,7 @@ COMMANDS = {
     "podman": (PodmanCmd, "run podman itself against seine's own storage"),
     "test":   (TestCmd, "run a test suite against a real target (needs the 'test' extra)"),
     "tui":    (TuiCmd, "open the interactive TUI (needs the 'tui' extra)"),
+    "admin":  (AdminCmd, "manage projects, members, and access tokens on a remote server"),
 }
 
 USAGE = """
