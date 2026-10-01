@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+#DEBHELPER#
+
+if [ "$1" = configure ]; then
+    # sysusers has no subid support; this range stays clear of adduser's 100000+ ones.
+    grep -q '^seine-agent:' /etc/subuid || usermod --add-subuids 1000000-1065535 seine-agent
+    grep -q '^seine-agent:' /etc/subgid || usermod --add-subgids 1000000-1065535 seine-agent
+fi

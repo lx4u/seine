@@ -1,0 +1,7 @@
+# Defaults for seine-agent systemd service
+# The enrollment token is required, there is no default. Use the one
+# configured on the server ('openssl rand -hex 32' generates a fresh one).
+#SEINE_ENROLLMENT_TOKEN=
+SEINE_SERVER_URL=http://localhost:8000
+# CA bundle that signed the server certificate, if not a public one.
+#SEINE_CA_CERT=/etc/seine/ca.pem

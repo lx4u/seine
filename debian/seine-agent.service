@@ -1,0 +1,32 @@
+[Unit]
+Description=seine distributed build worker agent
+After=network.target
+
+[Service]
+Type=simple
+User=seine-agent
+Group=seine-agent
+EnvironmentFile=-/etc/default/seine-agent
+ExecStart=/usr/bin/seine-agent run --server ${SEINE_SERVER_URL} --work-dir /var/lib/seine-agent
+Restart=always
+RestartSec=10
+# Long enough for the agent to cancel the running job and clean up.
+TimeoutStopSec=60
+KillMode=mixed
+StateDirectory=seine-agent
+StateDirectoryMode=0750
+UMask=0077
+# Rootless podman has no login session: give it a runtime dir that survives restarts.
+RuntimeDirectory=seine-agent
+RuntimeDirectoryPreserve=yes
+Environment=XDG_RUNTIME_DIR=/run/seine-agent
+# No NoNewPrivileges or ProtectSystem=strict (nor RestrictSUIDSGID): rootless
+# podman needs the setuid newuidmap/newgidmap and writes to its own storage.
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

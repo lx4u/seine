@@ -1,0 +1,12 @@
+# seine-server configuration. Readable by root and the seine user only.
+# Environment variables (see /etc/default/seine-server) override these keys.
+
+# Required: pre-shared token workers use to enroll. Generate one with:
+#   openssl rand -hex 32
+#enrollment_token:
+
+db_path: /var/lib/seine/seine.db
+
+# Serve https (strongly recommended when binding beyond loopback).
+#tls_cert: /etc/seine/tls/server.crt
+#tls_key: /etc/seine/tls/server.key
