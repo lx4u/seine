@@ -86,6 +86,9 @@ downloads directories.
 | `SEINE_GISTS_DIR` | Where `seine gist` and the AI chat's `gist-*` tools keep reusable spec fragments, overriding the `XDG_DATA_HOME`-based default -- not under `SEINE_BUILD_DIR`, since a gist is meant to outlive any one project. See [Gists](building.md#gists) |
 | `SEINE_KEEP_DEAD_CONTAINERS` | Keeps a failed step's container instead of removing it, for reading back what podman recorded about the commands run inside. See [Keeping a failed build's containers](building.md#keeping-a-failed-builds-containers) |
 | `SEINE_SIGN_KEY` | Same as `--sign-key`: sign the rebuilt packages and their repository with this gpg key, or `vault:<name>` to sign inside the vault |
+| `SEINE_TOKEN` | Same as `--token`: the personal access token for `seine build --remote`. Without one, a token saved by an earlier run (the keyring, else `~/.config/seine/credentials.json`) is used, or it is asked for. The TUI's `/remote` reads it the same way, ahead of the saved ones. See [Client options](distributed-build.md#client-options) |
+| `SEINE_PROJECT` | Same as `--project`: the project for `seine build --remote`. Without it, your default project on the server is used. See [Choosing a project](distributed-build.md#choosing-a-project) |
+| `SEINE_CA_CERT` | Same as `--ca-cert`: the CA bundle verifying a `seine-server` certificate, when neither `--ca-cert` nor the TUI's `remote_ca_cert` setting names one |
 | `SEINE_VAULT_CERT` | CA certificate (PEM) to verify `SEINE_VAULT_ADDR` against, for a vault behind a private or self-signed TLS certificate |
 | `SEINE_CREDENTIALS_FILE` | Where the `settings:` feed-auth backend reads and writes ([Authenticating to a feed](specification.md#authenticating-to-a-feed)), overriding `~/.config/seine/credentials.json` |
 | `NO_COLOR` | Same as `--no-color`: print a `--dry-run` plan without colour |
