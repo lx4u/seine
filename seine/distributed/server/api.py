@@ -56,7 +56,7 @@ from seine.distributed.server.auth import (
 )
 from seine.distributed.server.db import Database
 from seine.distributed.server.reaper import Reaper
-from seine.distributed.server.settings import Settings
+from seine.distributed.server.settings import S3_ENVIRONMENTS, Settings
 from seine.distributed.server.storage import StorageCredentialsError, env_name, job_s3, provider_for
 from seine.distributed.server.ws import BroadcastHub, forget_finished_build, serve_stream
 
@@ -267,61 +267,83 @@ def create_app(
 
         return {"status": "updated"}
 
-    @app.post("/api/v1/projects/{project}/worktrees")
-    async def upload_worktree(
+    def upload_target(
         project: str,
         request: Request,
-        file: UploadFile = File(...),
-        authorization: Optional[str] = Header(None),
-    ):
-        if not authorization or not authorization.startswith("Bearer "):
+        env: str = "dev",
+        token_record: dict[str, Any] = Depends(current_user),
+    ) -> tuple[dict[str, Any], str]:
+        app_db = get_db(request)
+        project_row = load_project(app_db, project)
+        if env not in S3_ENVIRONMENTS:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or invalid authorization header",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown environment '{env}', expected dev or prod",
             )
-        token = authorization.split("Bearer ", 1)[1].strip()
-        app_db = _get_db(request)
-        token_record = app_db.tokens.validate(token)
-        if not token_record:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired user bearer token",
-            )
+        roles = ("releaser", "admin") if env == "prod" else None
+        require_member(app_db, token_record, project, roles)
+        refuse_prod_for_dev_only(project_row, env == "prod")
+        return project_row, env
 
-        hasher = hashlib.sha256()
-        payload = await file.read()
-        if not payload:
+    def stage_worktree(
+        request: Request, project: str, target: tuple[dict[str, Any], str],
+        temp_path: str, total_bytes: int, digest: str,
+    ) -> dict[str, Any]:
+        project_row, env = target
+        if total_bytes == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Uploaded worktree bundle is empty",
             )
-        hasher.update(payload)
-        digest = hasher.hexdigest()[:16]
-        total_bytes = len(payload)
-
-        app_db.ensure_project(project)
-        project_row = app_db.get_project(project)
-        bucket = project_row["dev_bucket"] if project_row else f"seine-{project}-dev"
-
-        provider = _get_storage_provider(request, bucket)
+        provider = _get_storage_provider(request, project, project_row[f"{env}_bucket"], env)
         try:
             if hasattr(provider, "ensure_bucket"):
                 provider.ensure_bucket()
-            if hasattr(provider, "push_worktree"):
-                provider.push_worktree(project, digest, payload)
-            elif hasattr(provider, "client") and hasattr(provider.client, "put_object"):
-                provider.client.put_object(bucket, f"worktrees/{project}/{digest}.tar.zst", payload)
-        except Exception:
-            pass
+            pushed = provider.push_worktree(project, digest, temp_path)
+        except Exception as e:
+            logger.warning("Worktree staging failed for project %s: %s", project, e)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Storage error while staging worktree: {e}",
+            )
+        if pushed is False:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Storage refused the worktree bundle",
+            )
+        return {"digest": digest, "bytes": total_bytes, "status": "staged"}
 
-        return {
-            "digest": digest,
-            "bytes": total_bytes,
-            "status": "staged",
-        }
+    @app.post("/api/v1/projects/{project}/worktrees")
+    async def upload_worktree(
+        project: str,
+        request: Request,
+        target: tuple[dict[str, Any], str] = Depends(upload_target),
+    ):
+        limit = request.app.state.max_upload_bytes
+        if request.headers.get("content-type", "").split(";")[0].strip() != "application/octet-stream":
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Send the worktree bundle as application/octet-stream",
+            )
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > limit:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Upload exceeds {limit} bytes",
+            )
+
+        hasher = hashlib.sha256()
+        temp_path, total_bytes = await uploads.save_upload(request.stream(), hasher, limit)
+        try:
+            return await run_in_threadpool(
+                stage_worktree, request, project, target,
+                temp_path, total_bytes, hasher.hexdigest(),
+            )
+        finally:
+            os.unlink(temp_path)
 
     @app.post("/api/v1/builds", response_model=BuildSubmitResponse)
-    async def submit_build(
+    def submit_build(
         req: BuildSubmitRequest,
         request: Request,
         token_record: dict[str, Any] = Depends(current_user),

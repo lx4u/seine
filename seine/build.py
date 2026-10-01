@@ -179,11 +179,17 @@ class BuildCmd(Cmd):
         "no-cache-bootstraps",
         "no-color",
         "offline",
+        "min-arch-score=",
         "packages-only",
         "parallel=",
+        "prefer-native",
+        "project=",
         "rebuild",
+        "release",
+        "remote=",
         "reproducible",
         "require-hashes",
+        "require-native",
         "resource=",
         "rootfs-only",
         "s3-bucket=",
@@ -195,7 +201,9 @@ class BuildCmd(Cmd):
         "sign-key=",
         "spec-only",
         "target=",
+        "target-arch=",
         "tasks-only",
+        "token=",
         "verbose"
     ]
 
@@ -208,10 +216,14 @@ class BuildCmd(Cmd):
                          "cache_rootfs": False,
                          "debug": False, "dry_run": False,
                          "jobs": settings.load().get("jobs") or 1, "keep": False,
+                         "min_arch_score": None,
                          "offline": False,
                          "packages_only": False, "parallel": None,
-                         "rebuild": False, "reproducible": False,
-                         "require_hashes": False,
+                         "prefer_native": False,
+                         "project": os.environ.get("SEINE_PROJECT", "default"),
+                         "rebuild": False, "release": False,
+                         "remote": None, "reproducible": False,
+                         "require_hashes": False, "require_native": False,
                          "resources": settings.load().get("resources"),
                          "rootfs_only": False,
                          "s3_bucket": None, "s3_cache": False,
@@ -219,7 +231,8 @@ class BuildCmd(Cmd):
                          "s3_region": None,
                          "sbom": False, "sign_key": None, "spec": True,
                          "target": None,
-                         "tasks": True, "verbose": False }
+                         "tasks": True, "token": os.environ.get("SEINE_TOKEN"),
+                         "verbose": False }
         self.partitionHandler = PartitionHandler()
         self.spec = None
         # self.spec exactly as merged, before parse() mutates it in place
@@ -1375,7 +1388,7 @@ class BuildCmd(Cmd):
 
     def main(self, argv):
         try:
-            opts, args = getopt.getopt(argv, self.SHORT_OPTIONS, self.LONG_OPTIONS)
+            opts, args = getopt.gnu_getopt(argv, self.SHORT_OPTIONS, self.LONG_OPTIONS)
         except getopt.GetoptError as err:
             sys.stderr.write(str(err))
             sys.stderr.write(self.usage())
@@ -1465,6 +1478,26 @@ class BuildCmd(Cmd):
                     sys.stderr.write("error: --s3-offline-mode must be 'fallback' or 'strict'\n")
                     sys.exit(1)
                 self.options["s3_offline_mode"] = a
+            elif o in ("--prefer-native",):
+                self.options["prefer_native"] = True
+            elif o in ("--require-native",):
+                self.options["require_native"] = True
+            elif o in ("--min-arch-score",):
+                try:
+                    self.options["min_arch_score"] = float(a)
+                except ValueError:
+                    sys.stderr.write("error: --min-arch-score expects a float\n")
+                    sys.exit(1)
+            elif o in ("--remote",):
+                self.options["remote"] = a
+            elif o in ("--token",):
+                self.options["token"] = a
+            elif o in ("--project",):
+                self.options["project"] = a
+            elif o in ("--release",):
+                self.options["release"] = True
+            elif o in ("--target-arch",):
+                self.options["target_arch"] = a
             elif o in ("--sign-key"):
                 self.options["sign_key"] = a
             elif o in ("--sbom"):
@@ -1477,6 +1510,19 @@ class BuildCmd(Cmd):
         if len(args) == 0:
             sys.stderr.write("error: %s command expects a YAML file\n" % self.NAME)
             sys.exit(1)
+
+        if self.options.get("remote"):
+            from seine.distributed.client.remote import dispatch_remote_build
+            sys.exit(
+                dispatch_remote_build(
+                    server_url=self.options["remote"],
+                    project=self.options.get("project", "default"),
+                    spec_files=args,
+                    options=self.options,
+                    token=self.options.get("token"),
+                    is_release=self.options.get("release", False),
+                )
+            )
 
         try:
             # '--' separates groups of files: several images, one scheduler. A
@@ -1602,6 +1648,10 @@ Flags:
       --parallel N      cores one package build may use. Unset, it is derived
                         from --jobs so that the builds running together do not
                         ask for more of the machine than it has
+      --project NAME    project name for remote build (default: $SEINE_PROJECT or 'default')
+      --release         mark remote build as a release build (requires releaser or admin role)
+      --remote URL      dispatch build to a remote seine-server
+      --token TOKEN     bearer token for remote server authentication
   --sign-key KEY        sign the rebuilt packages and the repository holding
                         them with this gpg key, named however gpg will take it
                         -- a key id, a fingerprint, an email address. gpg runs

@@ -94,6 +94,41 @@ class WorktreeRelayTest(Test):
         self.assertEqual(staged["content"], dummy_content)
         self.assertFalse(os.path.exists(staged["path"]))
 
+    def test_dev_only_project_takes_no_prod_worktree(self):
+        self.db.projects.create("home-rita", dev_only=True)
+        self.db.users.create("rita")
+        self.db.projects.add_member("home-rita", "rita", role="releaser")
+        token = self.db.tokens.issue(user_id="rita", kind="pat")["token"]
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"}
+        payload = b"\x28\xb5\x2f\xfd" + b"x"
+
+        resp = self.client.post(
+            "/api/v1/projects/home-rita/worktrees?env=prod", content=payload, headers=headers)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("dev-only", resp.json()["detail"])
+
+    def test_dev_only_project_still_takes_dev_worktrees(self):
+        self.db.projects.create("home-rita", dev_only=True)
+        self.db.users.create("rita")
+        self.db.projects.add_member("home-rita", "rita", role="developer")
+        token = self.db.tokens.issue(user_id="rita", kind="pat")["token"]
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"}
+        self.app.state.storage_provider = mock.MagicMock()
+        resp = self.client.post(
+            "/api/v1/projects/home-rita/worktrees", content=b"\x28\xb5\x2f\xfd" + b"x",
+            headers=headers)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_non_member_does_not_learn_that_a_project_is_dev_only(self):
+        self.db.projects.create("home-rita", dev_only=True)
+        self.db.users.create("sam")
+        token = self.db.tokens.issue(user_id="sam", kind="pat")["token"]
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"}
+        resp = self.client.post(
+            "/api/v1/projects/home-rita/worktrees?env=prod", content=b"\x28\xb5\x2f\xfd" + b"x",
+            headers=headers)
+        self.assertEqual(resp.status_code, 403)
+
     def _upload_env(self, env, token):
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/octet-stream"}
         return self.client.post(
