@@ -447,3 +447,20 @@ class S3StorageProvider(StorageProvider):
                 os.unlink(tmp_path)
         return dest_file
 
+    def generate_download_url(self, project: str, key_or_artifact: str,
+                              expires_in: int = 3600) -> str:
+        """Generate a temporary direct download URL for an artifact."""
+        clean = key_or_artifact.lstrip("/")
+        if clean.startswith("artifacts/"):
+            key = clean
+        else:
+            key = f"artifacts/{project}/{clean}"
+
+        try:
+            return self.client.presign_get(self.bucket, key, expires_in)
+        except Exception as e:
+            if self.offline_mode == "strict":
+                raise StorageOfflineError(
+                    f"s3 generate_download_url failed for {key}: {e}"
+                ) from e
+            raise StorageError(f"s3 generate_download_url failed for {key}: {e}") from e

@@ -65,6 +65,10 @@ class StorageProvider:
         """Pull a build deliverable from storage to dest_path."""
         raise NotImplementedError
 
+    def generate_download_url(self, project: str, key_or_artifact: str, expires_in: int = 3600) -> str:
+        """Generate a temporary direct download URL for an artifact."""
+        raise NotImplementedError
+
 
 BaseStorageProvider = StorageProvider
 

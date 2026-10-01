@@ -41,6 +41,19 @@ class BuildModel(BaseModel):
     user_id: str | None = None
 
 
+class ArtifactMeta(BaseModel):
+    """A build deliverable as reported by the worker that produced it."""
+    name: str
+    size: int
+    sha256: str
+
+
+class BuildResponse(BuildModel):
+    """Detailed build response including artifact download URLs."""
+    download_urls: dict[str, str] = Field(default_factory=dict)
+    artifacts: list[ArtifactMeta] = Field(default_factory=list)
+
+
 class JobModel(BaseModel):
     """Discrete task job within a build."""
     id: str
