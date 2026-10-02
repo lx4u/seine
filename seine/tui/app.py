@@ -22,7 +22,8 @@ from textual.widgets import RichLog, Static
 
 from seine.tui import ai, commands
 from seine.tui.base import (BaseScreen, Indicators, VendorIndicator, Prompt,
-                            StaticPane, TargetIndicator)
+                            RemoteIndicator, StaticPane, TargetIndicator)
+from seine.tui.remote_session import RemoteSession
 from seine.tui.build import BuildScreen, BuildState
 from seine.tui.chat import ChatScreen
 from seine.tui.context import Context
@@ -557,6 +558,7 @@ class SeineApp(App):
     #indicators { color: $accent; padding: 0 2; height: 1; width: auto; }
     #vendor-indicator { color: $accent; padding: 0 2; height: 1; width: auto; }
     #target-indicator { color: $accent; padding: 0 2; height: 1; width: auto; }
+    #remote-indicator { color: $accent; padding: 0 2; height: 1; width: auto; }
     #completions {
         height: auto;
         max-height: 5;
@@ -589,6 +591,7 @@ class SeineApp(App):
         # without importing app here.
         self.ai_state.app = self
         self.target_state = TargetState()
+        self.remote_session = RemoteSession(app=self)
         self.test_state = TestState()
         self.test_state.on_finished = self._test_finished
         self.test_state.on_started = self._test_started
@@ -760,6 +763,9 @@ class SeineApp(App):
         # Deferred to after the initial screen's mount -- a startup
         # command like /plan needs a screen already on the stack.
         self.call_after_refresh(self._run_startup_commands, current["startup_commands"])
+        # Auto-connect in a worker thread so UI startup is not blocked by latency.
+        if current.get("auto_connect_remote") and current.get("default_remote"):
+            self.run_worker(lambda: self.remote_session.connect(current["default_remote"]), thread=True)
 
     def _run_startup_commands(self, lines):
         # Nothing seeded: leave the freshly mounted screen exactly as
@@ -822,6 +828,7 @@ class SeineApp(App):
                 self.screen.query_one(Indicators).refresh_text()
                 self.screen.query_one(VendorIndicator).refresh_text()
                 self.screen.query_one(TargetIndicator).refresh_text()
+                self.screen.query_one(RemoteIndicator).refresh_text()
             except NoMatches:
                 pass
 
