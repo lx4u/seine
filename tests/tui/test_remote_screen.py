@@ -336,7 +336,11 @@ class RemoteScreenTest(avocado.Test):
 
             screen.active_tab = 4
             text = screen._render_main()
-            self.assertIn("Active view: Users", text)
+            self.assertIn("USER ROSTER", text)
+
+            screen.active_tab = 7
+            text = screen._render_main()
+            self.assertIn("Active view: Unknown", text)
             self.assertIn("Target cluster: cluster\n", text)
 
     def test_sidebar_click_action(self):

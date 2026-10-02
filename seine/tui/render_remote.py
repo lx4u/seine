@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import time
-from typing import Any
+from typing import Any, Optional
 
 from seine.progress import elapsed
 
@@ -185,4 +185,135 @@ def render_remote_artifacts(
     lines.append("")
     lines.append(" [Enter] Download Artifact   [d] Download All   [↑/↓] Select")
     return "\n".join(lines)
+
+def render_remote_users(
+    users: list[dict[str, Any]],
+    tokens: Optional[list[dict[str, Any]]] = None,
+    selected_index: int = 0,
+) -> str:
+    lines = [
+        " USER ROSTER",
+        " ══════════════════════════════════════════════════════════════════════════════",
+    ]
+    if not users:
+        lines.append("")
+        lines.append("   No users registered.")
+        lines.append("")
+        lines.append(" [n] New User   [t] Issue PAT   [a] Toggle Admin   [x] Toggle Active   [↑/↓] Select")
+        return "\n".join(lines)
+
+    token_counts: dict[str, int] = {}
+    for tok in tokens or []:
+        u = tok.get("user_id")
+        if u:
+            token_counts[u] = token_counts.get(u, 0) + 1
+
+    lines.append(
+        f"   {'STATUS':<10} {'USERNAME':<20} {'ROLE':<12} {'PATS':<6} {'CREATED'}"
+    )
+    lines.append("   " + "─" * 68)
+
+    for i, u in enumerate(users):
+        prefix = " ▸ " if i == selected_index else "   "
+        active = u.get("active", True)
+        status_str = "● active" if active else "○ disabled"
+
+        uid = str(u.get("id") or "")
+        short_uid = uid[:18] if len(uid) > 18 else uid
+
+        role_str = "admin" if u.get("is_admin") else "member"
+        pat_count = str(token_counts.get(uid, 0))
+
+        created = u.get("created_at")
+        if created:
+            try:
+                date_str = time.strftime("%Y-%m-%d", time.localtime(created))
+            except Exception:
+                date_str = "--"
+        else:
+            date_str = "--"
+
+        lines.append(
+            f"{prefix}{status_str:<10} {short_uid:<20} {role_str:<12} {pat_count:<6} {date_str}"
+        )
+
+    lines.append("")
+    lines.append(" [n] New User   [t] Issue PAT   [a] Toggle Admin   [x] Toggle Active   [↑/↓] Select")
+    return "\n".join(lines)
+
+def render_remote_projects(
+    projects: list[dict[str, Any]],
+    selected_index: int = 0,
+) -> str:
+    lines = [
+        " PROJECT INVENTORY",
+        " ══════════════════════════════════════════════════════════════════════════════",
+    ]
+    if not projects:
+        lines.append("")
+        lines.append("   No projects configured.")
+        lines.append("")
+        lines.append(" [n] New Project   [m] Manage Members   [d] Delete Project   [↑/↓] Select")
+        return "\n".join(lines)
+
+    lines.append(
+        f"   {'PROJECT':<18} {'DEV BUCKET':<24} {'PROD BUCKET':<24} {'CREATED'}"
+    )
+    lines.append("   " + "─" * 74)
+
+    for i, p in enumerate(projects):
+        prefix = " ▸ " if i == selected_index else "   "
+        pname = str(p.get("name") or p.get("id") or "")
+        short_pname = pname[:16] if len(pname) > 16 else pname
+
+        dev = str(p.get("dev_bucket") or "-")
+        short_dev = dev[:22] if len(dev) > 22 else dev
+
+        prod = str(p.get("prod_bucket") or "-")
+        short_prod = prod[:22] if len(prod) > 22 else prod
+
+        created = p.get("created_at")
+        if created:
+            try:
+                date_str = time.strftime("%Y-%m-%d", time.localtime(created))
+            except Exception:
+                date_str = "--"
+        else:
+            date_str = "--"
+
+        lines.append(
+            f"{prefix}{short_pname:<18} {short_dev:<24} {short_prod:<24} {date_str}"
+        )
+
+    lines.append("")
+    lines.append(" [n] New Project   [m] Manage Members   [d] Delete Project   [↑/↓] Select")
+    return "\n".join(lines)
+
+def render_remote_ops(settings: dict[str, Any], stats: dict[str, Any]) -> str:
+    lat = f"{settings.get('ping_ms')} ms" if settings.get("ping_ms") is not None else "--"
+    lines = [
+        " SERVER & CLUSTER OPERATIONS",
+        " ══════════════════════════════════════════════════════════════════════════════",
+        "",
+        " CONFIGURATION",
+        " ──────────────────────────────────────────────────────────────────────────────",
+        f"   Server:          {settings.get('url', 'local engine')}",
+        f"   Latency:         {lat}",
+        f"   Active User:     {settings.get('user_id', '--')}" + (" [admin]" if settings.get("is_admin") else ""),
+        f"   Active Project:  {settings.get('active_project', '--')}",
+        "",
+        " BUILD QUEUE METRICS",
+        " ──────────────────────────────────────────────────────────────────────────────",
+        f"   Queued:     {stats.get('queued', 0):<8} Running:    {stats.get('running', 0):<8} Completed: {stats.get('completed', 0)}",
+        f"   Failed:     {stats.get('failed', 0):<8} Cancelled:  {stats.get('cancelled', 0):<8} Total:     {stats.get('total_builds', 0)}",
+        "",
+        " FLEET CAPACITY",
+        " ──────────────────────────────────────────────────────────────────────────────",
+        f"   Online Nodes:    {stats.get('workers_online', 0):<8} Paused Nodes: {stats.get('workers_paused', 0)}",
+        f"   Total Capacity:  {stats.get('total_slots', 0)} slots   Free Storage: {stats.get('free_disk_gb', 0.0):.1f} GB",
+        "",
+        " [r] Refresh Stats   [Tab] Switch Pane   [1-6] Navigation",
+    ]
+    return "\n".join(lines)
+
 
