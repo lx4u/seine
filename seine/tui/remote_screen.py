@@ -1,6 +1,8 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import hashlib
+import os
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
@@ -11,8 +13,14 @@ from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.widgets import Static
 
+from seine.distributed.common.transport import check_server_url
+from seine.tui.download import DownloadState, redraw
 from seine.tui.base import BaseScreen, StaticPane
-from seine.tui.render_remote import render_remote_builds, render_remote_workers
+from seine.tui.render_remote import (
+    render_remote_artifacts,
+    render_remote_builds,
+    render_remote_workers,
+)
 
 def server_host(url: str) -> str:
     """Just the host of a server URL, for display."""
@@ -62,6 +70,9 @@ class RemoteBodyStatic(Static):
                 scr.update_body()
             elif scr.active_tab == 2 and idx < len(getattr(scr, "remote_workers", [])):
                 scr.selected_indices[2] = idx
+                scr.update_body()
+            elif scr.active_tab == 3 and idx < len(getattr(scr, "remote_artifacts", [])):
+                scr.selected_indices[3] = idx
                 scr.update_body()
 
 class RemoteScreen(BaseScreen):
@@ -120,6 +131,7 @@ class RemoteScreen(BaseScreen):
         self.selected_indices: dict[int, int] = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0}
         self.remote_builds: list[dict[str, Any]] = []
         self.remote_workers: list[dict[str, Any]] = []
+        self.remote_artifacts: list[dict[str, Any]] = []
 
     @property
     def builds(self) -> list[dict[str, Any]]:
@@ -128,6 +140,14 @@ class RemoteScreen(BaseScreen):
     @builds.setter
     def builds(self, value: list[dict[str, Any]]):
         self.remote_builds = value
+
+    @property
+    def artifacts(self) -> list[dict[str, Any]]:
+        return self.remote_artifacts
+
+    @artifacts.setter
+    def artifacts(self, value: list[dict[str, Any]]):
+        self.remote_artifacts = value
 
     def compose(self):
         yield Horizontal(
@@ -147,16 +167,23 @@ class RemoteScreen(BaseScreen):
 
     def _clamp_selections(self):
         # Prevent out-of-range cursor when roster size shrinks after API polling.
-        for tab_id, items in [(1, self.remote_builds), (2, self.remote_workers)]:
+        for tab_id, items in [
+            (1, self.remote_builds),
+            (2, self.remote_workers),
+            (3, self.remote_artifacts),
+        ]:
             idx = self.selected_indices.get(tab_id, 0)
             self.selected_indices[tab_id] = max(0, min(idx, len(items) - 1)) if items else 0
 
     def _selected_item(self) -> Optional[dict[str, Any]]:
-        items = (
-            self.remote_builds
-            if self.active_tab == 1
-            else (self.remote_workers if self.active_tab == 2 else [])
-        )
+        if self.active_tab == 1:
+            items = self.remote_builds
+        elif self.active_tab == 2:
+            items = self.remote_workers
+        elif self.active_tab == 3:
+            items = self.remote_artifacts
+        else:
+            items = []
         idx = self.selected_indices.get(self.active_tab, 0)
         return items[idx] if (items and 0 <= idx < len(items)) else None
 
@@ -165,12 +192,13 @@ class RemoteScreen(BaseScreen):
         if not (session and session.connected):
             self.remote_builds = []
             self.remote_workers = []
+            self.remote_artifacts = []
             self.update_body()
             return
 
         def _worker():
             try:
-                if self.active_tab == 1:
+                if self.active_tab in (1, 3):
                     resp = session.request(
                         "get", "/api/v1/builds",
                         timeout=5.0,
@@ -178,6 +206,23 @@ class RemoteScreen(BaseScreen):
                     if resp.status_code == 200:
                         data = resp.json()
                         self.remote_builds = data if isinstance(data, list) else []
+                        arts: list[dict[str, Any]] = []
+                        for b in self.remote_builds:
+                            b_id = str(b.get("id") or b.get("build_id") or "")
+                            proj = str(b.get("project") or "")
+                            arch = str(b.get("target_arch") or b.get("architecture") or "")
+                            for m in (b.get("artifact_meta") or []):
+                                if isinstance(m, dict):
+                                    arts.append({
+                                        "name": m.get("name", "artifact"),
+                                        "size": m.get("size", 0),
+                                        "sha256": m.get("sha256", ""),
+                                        "key": m.get("key", ""),
+                                        "build_id": b_id,
+                                        "project": proj,
+                                        "target_arch": arch,
+                                    })
+                        self.remote_artifacts = arts
                 elif self.active_tab == 2:
                     resp = session.request(
                         "get", "/api/v1/workers",
@@ -264,6 +309,11 @@ class RemoteScreen(BaseScreen):
             return render_remote_builds(self.remote_builds, self.selected_indices.get(1, 0))
         if self.active_tab == 2:
             return render_remote_workers(self.remote_workers, self.selected_indices.get(2, 0))
+        if self.active_tab == 3:
+            state = self._download_state()
+            return render_remote_artifacts(
+                self.remote_artifacts, self.selected_indices.get(3, 0),
+                state.snapshot() if state else None)
 
         lines = [
             f" REMOTE {tab_name.upper()}",
@@ -316,22 +366,60 @@ class RemoteScreen(BaseScreen):
         items = (
             self.remote_builds
             if self.active_tab == 1
-            else (self.remote_workers if self.active_tab == 2 else [])
+            else (
+                self.remote_workers
+                if self.active_tab == 2
+                else (self.remote_artifacts if self.active_tab == 3 else [])
+            )
         )
         idx = self.selected_indices.get(self.active_tab, 0)
         if idx < len(items) - 1:
             self.selected_indices[self.active_tab] = idx + 1
             self.update_body()
 
+    def _download_state(self) -> Optional[DownloadState]:
+        state = getattr(self.app, "download_state", None)
+        return state if isinstance(state, DownloadState) else None
+
+    def _download_changed(self):
+        """Redraw the status bar and the artifacts tab; callable from a worker thread."""
+        if getattr(self.app, "is_running", False) is True and hasattr(self.app, "call_from_thread"):
+            try:
+                self.app.call_from_thread(redraw, self.app)
+            except RuntimeError:
+                pass  # the app is closing
+            return
+        redraw(self.app)
+
+    def _notify_say(self, msg: str, error: bool = False, warning: bool = False):
+        if getattr(self.app, "is_running", False) is True and hasattr(self.app, "call_from_thread"):
+            try:
+                self.app.call_from_thread(self.say, msg, error=error, warning=warning)
+                return
+            except RuntimeError:
+                pass
+        if warning:
+            self.say(msg, warning=True)
+        elif error:
+            self.say(msg, error=True)
+        else:
+            self.say(msg, error=False)
+
     def action_view_logs(self):
-        if self.active_tab != 1:
-            return
-        build = self._selected_item()
-        if not build:
-            self.say("no build selected", warning=True)
-            return
-        build_id = str(build.get("id") or build.get("build_id") or "")
-        self.say(f"streaming logs for build {build_id[:12]}...")
+        if self.active_tab == 1:
+            build = self._selected_item()
+            if not build:
+                self.say("no build selected", warning=True)
+                return
+            build_id = str(build.get("id") or build.get("build_id") or "")
+            self.say(f"streaming logs for build {build_id[:12]}...")
+        elif self.active_tab == 3:
+            item = self._selected_item()
+            if not item:
+                self.say("no artifact selected", warning=True)
+                return
+            build_id = str(item.get("build_id") or "")
+            self._trigger_download(build_id, artifact_name=item.get("name"))
 
     def action_cancel_build(self):
         if self.active_tab != 1:
@@ -378,14 +466,140 @@ class RemoteScreen(BaseScreen):
             _worker()
 
     def action_download_artifact(self):
-        if self.active_tab != 1:
+        if self.active_tab not in (1, 3):
             return
-        build = self._selected_item()
-        if not build:
-            self.say("no build selected", warning=True)
+        item = self._selected_item()
+        if not item:
+            lbl = "build" if self.active_tab == 1 else "artifact"
+            self.say(f"no {lbl} selected", warning=True)
             return
-        build_id = str(build.get("id") or build.get("build_id") or "")
-        self.say(f"downloading artifacts for build {build_id[:12]}...")
+        build_id = str(item.get("id") or item.get("build_id") or "")
+        self._trigger_download(build_id, artifact_name=None)
+
+    def _trigger_download(self, build_id: str, artifact_name: Optional[str] = None):
+        session = getattr(self.app, "remote_session", None)
+        if not (session and session.connected):
+            self.say("not connected to a remote server", warning=True)
+            return
+        if not build_id:
+            self.say("no build associated with selection", warning=True)
+            return
+
+        short_id = build_id[:12]
+        target_dir = getattr(self.app, "download_dir", None) or "./deploy"
+
+        def _worker():
+            try:
+                resp = session.request(
+                    "get", f"/api/v1/builds/{build_id}",
+                    timeout=5.0,
+                )
+                if resp.status_code != 200:
+                    self._notify_say(f"failed to fetch build details: HTTP {resp.status_code}", error=True)
+                    return
+                info = resp.json()
+            except Exception as e:
+                self._notify_say(f"failed to fetch build {short_id}: {e}", error=True)
+                return
+
+            if info.get("status") != "completed":
+                st = info.get("status", "unknown")
+                self._notify_say(f"build {short_id} has no artifacts (status: {st})", warning=True)
+                return
+
+            download_urls = info.get("download_urls") or {}
+            if artifact_name:
+                download_urls = {k: v for k, v in download_urls.items() if k == artifact_name}
+
+            if not download_urls:
+                target_desc = f"artifact '{artifact_name}'" if artifact_name else "artifacts"
+                self._notify_say(f"no download URLs available for {target_desc} in build {short_id}", warning=True)
+                return
+
+            manifest = {
+                a["name"]: a
+                for a in (info.get("artifacts") or [])
+                if isinstance(a, dict) and "name" in a
+            }
+
+            os.makedirs(target_dir, exist_ok=True)
+            count = len(download_urls)
+            done = 0
+            errors = []
+            progress = self._download_state()
+            if progress:
+                for name in download_urls:
+                    progress.queue(build_id, name, (manifest.get(name) or {}).get("size"))
+                self._download_changed()
+
+            for name, url in download_urls.items():
+                expected = manifest.get(name) or {}
+                dest = os.path.join(target_dir, name)
+                part = f"{dest}.part"
+                if progress:
+                    progress.start(build_id, name)
+                    self._download_changed()
+                try:
+                    if progress and progress.cancelled:
+                        raise RuntimeError("cancelled")
+                    try:
+                        check_server_url(url, insecure=session.insecure)
+                    except ValueError as e:
+                        raise RuntimeError(f"{e} (or '/set remote_insecure true')") from e
+                    with requests.get(
+                        url, stream=True, timeout=(5.0, 30.0), verify=session.verify,
+                    ) as r:
+                        if r.status_code != 200:
+                            raise RuntimeError(f"HTTP {r.status_code}")
+                        sha256 = hashlib.sha256()
+                        size = 0
+                        with open(part, "wb") as f:
+                            for chunk in r.iter_content(chunk_size=65536):
+                                f.write(chunk)
+                                sha256.update(chunk)
+                                size += len(chunk)
+                                if progress and progress.cancelled:
+                                    raise RuntimeError("cancelled")
+                                if progress and progress.advance(build_id, name, len(chunk)):
+                                    self._download_changed()
+
+                    expected_sha = (expected.get("sha256") or "").lower()
+                    expected_size = expected.get("size")
+                    if expected_sha and sha256.hexdigest() != expected_sha:
+                        os.replace(part, f"{dest}.corrupt")
+                        raise RuntimeError("checksum verification failed")
+                    if expected_size is not None and size != expected_size:
+                        os.replace(part, f"{dest}.corrupt")
+                        raise RuntimeError("size mismatch")
+
+                    os.replace(part, dest)
+                    done += 1
+                    if progress:
+                        progress.finish(build_id, name)
+                except Exception as e:
+                    if progress:
+                        progress.finish(build_id, name, failed=True)
+                    if os.path.exists(part):
+                        try:
+                            os.remove(part)
+                        except OSError:
+                            pass
+                    errors.append(f"{name}: {e}")
+
+            if progress:
+                self._download_changed()
+            if errors:
+                msg = f"downloaded {done}/{count} artifact(s); failed: {'; '.join(errors)}"
+                self._notify_say(msg, error=True)
+            else:
+                art_label = f"artifact '{artifact_name}'" if artifact_name else f"{done} artifact(s)"
+                self._notify_say(f"downloaded {art_label} to {target_dir}", error=False)
+
+        if getattr(self.app, "is_running", False) is True and hasattr(self.app, "run_worker"):
+            self.app.run_worker(_worker, thread=True)
+        else:
+            _worker()
+
 
     def action_toggle_worker_pause(self):
         if self.active_tab != 2:

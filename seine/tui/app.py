@@ -21,8 +21,9 @@ from textual.css.query import NoMatches
 from textual.widgets import RichLog, Static
 
 from seine.tui import ai, commands
-from seine.tui.base import (BaseScreen, Indicators, VendorIndicator, Prompt,
-                            RemoteIndicator, StaticPane, TargetIndicator)
+from seine.tui.base import (BaseScreen, DownloadIndicator, Indicators, VendorIndicator,
+                            Prompt, RemoteIndicator, StaticPane, TargetIndicator)
+from seine.tui.download import DownloadState
 from seine.tui.remote_session import RemoteSession
 from seine.tui.build import BuildScreen, BuildState
 from seine.tui.chat import ChatScreen
@@ -566,6 +567,7 @@ class SeineApp(App):
     #indicators { color: $accent; padding: 0 2; height: 1; width: auto; }
     #vendor-indicator { color: $accent; padding: 0 2; height: 1; width: auto; }
     #target-indicator { color: $accent; padding: 0 2; height: 1; width: auto; }
+    #download-indicator { color: $accent; padding: 0 2; height: 1; width: auto; }
     #remote-indicator { color: $accent; padding: 0 2; height: 1; width: auto; }
     #completions {
         height: auto;
@@ -605,6 +607,7 @@ class SeineApp(App):
         self.ai_state.app = self
         self.target_state = TargetState()
         self.remote_session = RemoteSession(app=self)
+        self.download_state = DownloadState()
         self.test_state = TestState()
         self.test_state.on_finished = self._test_finished
         self.test_state.on_started = self._test_started
@@ -751,6 +754,12 @@ class SeineApp(App):
             self._socket_send({"type": "ai_message", "content": msg.get("content", "")})
         self.ai_state._mark_sent()
 
+    # Whichever way the app is left, stop the downloads and forget the remote.
+    def exit(self, *args, **kwargs):
+        self.download_state.cancel()
+        self.remote_session.disconnect()
+        super().exit(*args, **kwargs)
+
     # Releases any CredentialModal prompt still blocking a build worker,
     # so quitting the app can never leave it hung.
     async def action_quit(self):
@@ -852,6 +861,7 @@ class SeineApp(App):
                 self.screen.query_one(Indicators).refresh_text()
                 self.screen.query_one(VendorIndicator).refresh_text()
                 self.screen.query_one(TargetIndicator).refresh_text()
+                self.screen.query_one(DownloadIndicator).refresh_text()
                 self.screen.query_one(RemoteIndicator).refresh_text()
             except NoMatches:
                 pass

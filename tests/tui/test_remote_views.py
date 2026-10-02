@@ -35,6 +35,8 @@ class RemoteViewsTest(avocado.Test):
             from seine.tui.remote_screen import RemoteScreen
             from seine.tui.remote_session import RemoteSession
             from seine.tui.render_remote import (
+                _format_size,
+                render_remote_artifacts,
                 render_remote_builds,
                 render_remote_workers,
             )
@@ -44,6 +46,8 @@ class RemoteViewsTest(avocado.Test):
         self.RemoteSession = RemoteSession
         self.render_remote_builds = render_remote_builds
         self.render_remote_workers = render_remote_workers
+        self.render_remote_artifacts = render_remote_artifacts
+        self._format_size = _format_size
 
         self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-remote-views-")
         os.environ["XDG_CONFIG_HOME"] = self.tmp_dir
@@ -337,28 +341,459 @@ class RemoteViewsTest(avocado.Test):
                 )
                 screen.say.assert_called_with("worker worker-44445 deregistered", error=False)
 
-    def test_log_and_artifact_actions(self):
+    def test_format_size(self):
+        self.assertEqual(self._format_size(0), "0 B")
+        self.assertEqual(self._format_size(512), "512 B")
+        self.assertEqual(self._format_size(1024), "1.0 KB")
+        self.assertEqual(self._format_size(1048576), "1.0 MB")
+        self.assertEqual(self._format_size(1500000000), "1.4 GB")
+        self.assertEqual(self._format_size(None), "0 B")
+        self.assertEqual(self._format_size("bad"), "0 B")
+
+    def test_render_artifacts_empty(self):
+        rendered = self.render_remote_artifacts([])
+        self.assertIn("REMOTE ARTIFACTS", rendered)
+        self.assertIn("No artifacts found in remote builds.", rendered)
+        self.assertIn("[Enter] Download Artifact", rendered)
+
+    def test_render_artifacts_populated_and_selection(self):
+        artifacts = [
+            {
+                "name": "pc-image.img",
+                "size": 1500000000,
+                "sha256": "111122223333",
+                "build_id": "b111111111111111",
+                "project": "distro-core",
+                "target_arch": "amd64",
+            },
+            {
+                "name": "pc-image.rootfs.tar",
+                "size": 718274560,
+                "sha256": "444455556666",
+                "build_id": "b111111111111111",
+                "project": "distro-core",
+                "target_arch": "amd64",
+            },
+        ]
+        rendered0 = self.render_remote_artifacts(artifacts, selected_index=0)
+        self.assertIn(" ▸ pc-image.img", rendered0)
+        self.assertIn("   pc-image.rootfs.tar", rendered0)
+        self.assertIn("1.4 GB", rendered0)
+        self.assertIn("685.0 MB", rendered0)
+        self.assertIn("b11111111111", rendered0)
+        self.assertIn("distro-core", rendered0)
+        self.assertIn("amd64", rendered0)
+
+        rendered1 = self.render_remote_artifacts(artifacts, selected_index=1)
+        self.assertIn("   pc-image.img", rendered1)
+        self.assertIn(" ▸ pc-image.rootfs.tar", rendered1)
+
+    def test_fetch_data_artifacts(self):
         mock_app = mock.Mock()
         mock_app.is_running = False
+        session = self.RemoteSession(app=mock_app)
+        session.connected = True
+        session.url = "http://cluster.lan:8000"
+        session.token = "test-token"
+        mock_app.remote_session = session
+
+        screen = self.RemoteScreen()
+        screen.update_body = mock.Mock()
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            with mock.patch("requests.get") as mock_get:
+                mock_resp = mock.Mock(status_code=200)
+                mock_resp.json.return_value = [
+                    {
+                        "id": "b1",
+                        "project": "proj-a",
+                        "target_arch": "arm64",
+                        "status": "completed",
+                        "artifact_meta": [
+                            {"name": "rootfs.tar", "size": 1024, "sha256": "abc"},
+                            {"name": "image.raw", "size": 2048, "sha256": "def"},
+                        ],
+                    }
+                ]
+                mock_get.return_value = mock_resp
+
+                screen.active_tab = 3
+                screen.fetch_data()
+                mock_get.assert_called_with(
+                    "http://cluster.lan:8000/api/v1/builds",
+                    headers={"Authorization": "Bearer test-token"},
+                    timeout=5.0,
+                    verify=True,
+                )
+                self.assertEqual(len(screen.remote_artifacts), 2)
+                self.assertEqual(screen.remote_artifacts[0]["name"], "rootfs.tar")
+                self.assertEqual(screen.remote_artifacts[0]["build_id"], "b1")
+                self.assertEqual(screen.remote_artifacts[1]["name"], "image.raw")
+
+    def test_download_single_artifact_flow(self):
+        import hashlib
+        mock_app = mock.Mock()
+        mock_app.is_running = False
+        mock_app.download_dir = self.tmp_dir
+        session = self.RemoteSession(app=mock_app)
+        session.connected = True
+        session.url = "http://cluster.lan:8000"
+        session.token = "test-token"
+        mock_app.remote_session = session
+
+        screen = self.RemoteScreen()
+        screen.say = mock.Mock()
+
+        payload = b"test disk image payload"
+        digest = hashlib.sha256(payload).hexdigest()
+
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            screen.active_tab = 3
+            screen.remote_artifacts = [
+                {
+                    "name": "disk.raw",
+                    "build_id": "bld-123456",
+                    "project": "demo",
+                    "target_arch": "amd64",
+                }
+            ]
+            screen.selected_indices[3] = 0
+
+            with mock.patch("requests.get") as mock_get:
+                build_resp = mock.Mock(status_code=200)
+                build_resp.json.return_value = {
+                    "id": "bld-123456",
+                    "status": "completed",
+                    "download_urls": {"disk.raw": "https://s3.lan/disk.raw"},
+                    "artifacts": [{"name": "disk.raw", "size": len(payload), "sha256": digest}],
+                }
+
+                stream_resp = mock.Mock(status_code=200)
+                stream_resp.iter_content.return_value = [payload]
+                stream_resp.__enter__ = mock.Mock(return_value=stream_resp)
+                stream_resp.__exit__ = mock.Mock(return_value=None)
+
+                mock_get.side_effect = [build_resp, stream_resp]
+
+                screen.action_view_logs()
+
+                dest_file = os.path.join(self.tmp_dir, "disk.raw")
+                self.assertTrue(os.path.exists(dest_file))
+                with open(dest_file, "rb") as f:
+                    self.assertEqual(f.read(), payload)
+
+                screen.say.assert_called_with(
+                    f"downloaded artifact 'disk.raw' to {self.tmp_dir}",
+                    error=False,
+                )
+                # The presigned URL carries its own authorization: no token.
+                _, kwargs = mock_get.call_args
+                self.assertNotIn("headers", kwargs)
+                self.assertIs(kwargs["verify"], True)
+
+    def _download_with_progress(self, chunks, sha, size_hint=None, status="completed"):
+        import hashlib
+        from seine.tui.download import DownloadState
+        mock_app = mock.Mock()
+        mock_app.is_running = False
+        mock_app.download_dir = self.tmp_dir
+        mock_app.download_state = DownloadState()
+        session = self.RemoteSession(app=mock_app)
+        session.connected = True
+        session.url = "https://cluster.lan:8000"
+        session.token = "test-token"
+        mock_app.remote_session = session
+        screen = self.RemoteScreen()
+        screen.say = mock.Mock()
+        payload = b"".join(chunks)
+        seen = []
+        state = mock_app.download_state
+
+        def iter_content(chunk_size):
+            for chunk in chunks:
+                seen.append(state.percent())
+                yield chunk
+
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            screen.active_tab = 3
+            screen.remote_artifacts = [{"name": "disk.raw", "build_id": "bld-1"}]
+            screen.selected_indices[3] = 0
+            with mock.patch("requests.get") as mock_get:
+                build_resp = mock.Mock(status_code=200)
+                build_resp.json.return_value = {
+                    "id": "bld-1", "status": status,
+                    "download_urls": {"disk.raw": "https://s3.lan/disk.raw"},
+                    "artifacts": [{"name": "disk.raw", "size": size_hint or len(payload),
+                                   "sha256": sha or hashlib.sha256(payload).hexdigest()}],
+                }
+                stream_resp = mock.Mock(status_code=200)
+                stream_resp.iter_content.side_effect = iter_content
+                stream_resp.__enter__ = mock.Mock(return_value=stream_resp)
+                stream_resp.__exit__ = mock.Mock(return_value=None)
+                mock_get.side_effect = [build_resp, stream_resp]
+                screen.action_view_logs()
+        return state, seen
+
+    def test_download_reports_its_progress_and_ends_done(self):
+        state, seen = self._download_with_progress([b"x" * 50, b"y" * 50], sha=None)
+        self.assertEqual(seen, [0, 50])
+        item = state.snapshot()[("bld-1", "disk.raw")]
+        self.assertEqual((item["state"], item["read"], item["total"]), ("done", 100, 100))
+        self.assertFalse(state.active)
+
+    def test_quitting_stops_a_download_and_removes_the_partial_file(self):
+        import hashlib
+        from seine.tui.download import DownloadState
+        mock_app = mock.Mock()
+        mock_app.is_running = False
+        mock_app.download_dir = self.tmp_dir
+        mock_app.download_state = state = DownloadState()
+        session = self.RemoteSession(app=mock_app)
+        session.connected = True
+        session.url = "https://cluster.lan:8000"
+        session.token = "test-token"
+        mock_app.remote_session = session
+        screen = self.RemoteScreen()
+        screen.say = mock.Mock()
+        payload = b"x" * 100
+
+        def iter_content(chunk_size):
+            yield payload[:50]
+            state.cancel()
+            yield payload[50:]
+
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            screen.active_tab = 3
+            screen.remote_artifacts = [{"name": "disk.raw", "build_id": "bld-1"}]
+            screen.selected_indices[3] = 0
+            with mock.patch("requests.get") as mock_get:
+                build_resp = mock.Mock(status_code=200)
+                build_resp.json.return_value = {
+                    "id": "bld-1", "status": "completed",
+                    "download_urls": {"disk.raw": "https://s3.lan/disk.raw"},
+                    "artifacts": [{"name": "disk.raw", "size": 100,
+                                   "sha256": hashlib.sha256(payload).hexdigest()}],
+                }
+                stream_resp = mock.Mock(status_code=200)
+                stream_resp.iter_content.side_effect = iter_content
+                stream_resp.__enter__ = mock.Mock(return_value=stream_resp)
+                stream_resp.__exit__ = mock.Mock(return_value=None)
+                mock_get.side_effect = [build_resp, stream_resp]
+                screen.action_view_logs()
+        self.assertEqual(state.snapshot()[("bld-1", "disk.raw")]["state"], "failed")
+        self.assertFalse(state.active)
+        self.assertEqual(sorted(os.listdir(self.tmp_dir)), [])
+        self.assertTrue(any("cancelled" in str(c) for c in screen.say.call_args_list))
+
+    def test_failed_download_is_marked_failed(self):
+        state, _ = self._download_with_progress([b"x" * 10], sha="0" * 64)
+        self.assertEqual(state.snapshot()[("bld-1", "disk.raw")]["state"], "failed")
+        self.assertFalse(state.active)
+
+    def test_artifacts_tab_shows_the_progress_of_each_download(self):
+        from seine.tui.render_remote import render_remote_artifacts
+        artifacts = [{"name": n, "build_id": "bld-1", "size": 100}
+                     for n in ("a.raw", "b.raw", "c.raw", "d.raw", "e.raw")]
+        progress = {
+            ("bld-1", "a.raw"): {"state": "downloading", "read": 42, "total": 100},
+            ("bld-1", "b.raw"): {"state": "done", "read": 100, "total": 100},
+            ("bld-1", "c.raw"): {"state": "failed", "read": 3, "total": 100},
+            ("bld-1", "d.raw"): {"state": "queued", "read": 0, "total": 100},
+        }
+        rows = render_remote_artifacts(artifacts, 0, progress).splitlines()
+        by_name = {r.split()[1] if r.startswith(" ▸") else r.split()[0]: r for r in rows if ".raw" in r}
+        self.assertTrue(by_name["a.raw"].endswith("42%"))
+        self.assertTrue(by_name["b.raw"].endswith("✔ done"))
+        self.assertTrue(by_name["c.raw"].endswith("✖ failed"))
+        self.assertTrue(by_name["d.raw"].endswith("queued"))
+        self.assertFalse(by_name["e.raw"].rstrip().endswith("%"))
+        self.assertIn("DOWNLOAD", "\n".join(rows))
+
+    def test_download_refuses_plain_http_artifact_url_unless_insecure(self):
+        import hashlib
+        payload = b"payload"
+        digest = hashlib.sha256(payload).hexdigest()
+        for insecure, expect_file in ((False, False), (True, True)):
+            mock_app = mock.Mock()
+            mock_app.is_running = False
+            mock_app.download_dir = self.tmp_dir
+            session = self.RemoteSession(app=mock_app)
+            session.connected = True
+            session.url = "https://cluster.lan:8000"
+            session.token = "test-token"
+            session.insecure = insecure
+            mock_app.remote_session = session
+            screen = self.RemoteScreen()
+            screen.say = mock.Mock()
+            with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+                screen.active_tab = 3
+                screen.remote_artifacts = [{"name": "plain.raw", "build_id": "bld-1"}]
+                screen.selected_indices[3] = 0
+                with mock.patch("requests.get") as mock_get:
+                    build_resp = mock.Mock(status_code=200)
+                    build_resp.json.return_value = {
+                        "id": "bld-1", "status": "completed",
+                        "download_urls": {"plain.raw": "http://10.0.0.9:3900/plain.raw"},
+                        "artifacts": [{"name": "plain.raw", "size": len(payload), "sha256": digest}],
+                    }
+                    stream_resp = mock.Mock(status_code=200)
+                    stream_resp.iter_content.return_value = [payload]
+                    stream_resp.__enter__ = mock.Mock(return_value=stream_resp)
+                    stream_resp.__exit__ = mock.Mock(return_value=None)
+                    mock_get.side_effect = [build_resp, stream_resp]
+                    screen.action_view_logs()
+                    self.assertEqual(mock_get.call_count, 2 if expect_file else 1)
+            dest = os.path.join(self.tmp_dir, "plain.raw")
+            self.assertEqual(os.path.exists(dest), expect_file)
+            if expect_file:
+                os.remove(dest)
+            else:
+                self.assertTrue(any("plain http" in str(c) for c in screen.say.call_args_list))
+                self.assertTrue(any("remote_insecure" in str(c) for c in screen.say.call_args_list))
+
+    def test_download_all_artifacts_flow(self):
+        import hashlib
+        mock_app = mock.Mock()
+        mock_app.is_running = False
+        mock_app.download_dir = self.tmp_dir
+        session = self.RemoteSession(app=mock_app)
+        session.connected = True
+        session.url = "http://cluster.lan:8000"
+        session.token = "test-token"
+        mock_app.remote_session = session
+
+        screen = self.RemoteScreen()
+        screen.say = mock.Mock()
+
+        payload1 = b"disk image payload"
+        digest1 = hashlib.sha256(payload1).hexdigest()
+        payload2 = b"rootfs tar payload"
+        digest2 = hashlib.sha256(payload2).hexdigest()
+
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            screen.active_tab = 1
+            screen.remote_builds = [{"id": "bld-buildall123"}]
+            screen.selected_indices[1] = 0
+
+            with mock.patch("requests.get") as mock_get:
+                build_resp = mock.Mock(status_code=200)
+                build_resp.json.return_value = {
+                    "id": "bld-buildall123",
+                    "status": "completed",
+                    "download_urls": {
+                        "img.raw": "https://s3.lan/img.raw",
+                        "rootfs.tar": "https://s3.lan/rootfs.tar",
+                    },
+                    "artifacts": [
+                        {"name": "img.raw", "size": len(payload1), "sha256": digest1},
+                        {"name": "rootfs.tar", "size": len(payload2), "sha256": digest2},
+                    ],
+                }
+
+                stream_resp1 = mock.Mock(status_code=200)
+                stream_resp1.iter_content.return_value = [payload1]
+                stream_resp1.__enter__ = mock.Mock(return_value=stream_resp1)
+                stream_resp1.__exit__ = mock.Mock(return_value=None)
+
+                stream_resp2 = mock.Mock(status_code=200)
+                stream_resp2.iter_content.return_value = [payload2]
+                stream_resp2.__enter__ = mock.Mock(return_value=stream_resp2)
+                stream_resp2.__exit__ = mock.Mock(return_value=None)
+
+                mock_get.side_effect = [build_resp, stream_resp1, stream_resp2]
+
+                screen.action_download_artifact()
+
+                self.assertTrue(os.path.exists(os.path.join(self.tmp_dir, "img.raw")))
+                self.assertTrue(os.path.exists(os.path.join(self.tmp_dir, "rootfs.tar")))
+                screen.say.assert_called_with(
+                    f"downloaded 2 artifact(s) to {self.tmp_dir}",
+                    error=False,
+                )
+
+    def test_download_corrupt_checksum_handled(self):
+        import hashlib
+        mock_app = mock.Mock()
+        mock_app.is_running = False
+        mock_app.download_dir = self.tmp_dir
+        session = self.RemoteSession(app=mock_app)
+        session.connected = True
+        session.url = "http://cluster.lan:8000"
+        session.token = "test-token"
+        mock_app.remote_session = session
+
+        screen = self.RemoteScreen()
+        screen.say = mock.Mock()
+
+        payload = b"bad corrupted content"
+        wrong_digest = hashlib.sha256(b"original good content").hexdigest()
+
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            screen.active_tab = 3
+            screen.remote_artifacts = [
+                {
+                    "name": "corrupt.raw",
+                    "build_id": "bld-999999",
+                }
+            ]
+            screen.selected_indices[3] = 0
+
+            with mock.patch("requests.get") as mock_get:
+                build_resp = mock.Mock(status_code=200)
+                build_resp.json.return_value = {
+                    "id": "bld-999999",
+                    "status": "completed",
+                    "download_urls": {"corrupt.raw": "https://s3.lan/corrupt.raw"},
+                    "artifacts": [{"name": "corrupt.raw", "size": len(payload), "sha256": wrong_digest}],
+                }
+
+                stream_resp = mock.Mock(status_code=200)
+                stream_resp.iter_content.return_value = [payload]
+                stream_resp.__enter__ = mock.Mock(return_value=stream_resp)
+                stream_resp.__exit__ = mock.Mock(return_value=None)
+
+                mock_get.side_effect = [build_resp, stream_resp]
+
+                screen.action_view_logs()
+
+                corrupt_file = os.path.join(self.tmp_dir, "corrupt.raw.corrupt")
+                self.assertTrue(os.path.exists(corrupt_file))
+                self.assertFalse(os.path.exists(os.path.join(self.tmp_dir, "corrupt.raw")))
+                self.assertTrue(any("failed" in str(call) for call in screen.say.call_args_list))
+
+    def test_download_build_not_completed_warning(self):
+        mock_app = mock.Mock()
+        mock_app.is_running = False
+        session = self.RemoteSession(app=mock_app)
+        session.connected = True
+        session.url = "http://cluster.lan:8000"
+        mock_app.remote_session = session
+
         screen = self.RemoteScreen()
         screen.say = mock.Mock()
 
         with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
             screen.active_tab = 1
-            screen.remote_builds = [{"id": "build-abcdef123456"}]
+            screen.remote_builds = [{"id": "bld-running"}]
             screen.selected_indices[1] = 0
 
-            screen.action_view_logs()
-            screen.say.assert_called_with("streaming logs for build build-abcdef...")
+            with mock.patch("requests.get") as mock_get:
+                build_resp = mock.Mock(status_code=200)
+                build_resp.json.return_value = {
+                    "id": "bld-running",
+                    "status": "running",
+                }
+                mock_get.return_value = build_resp
 
-            screen.action_download_artifact()
-            screen.say.assert_called_with("downloading artifacts for build build-abcdef...")
+                screen.action_download_artifact()
+                screen.say.assert_called_with("build bld-running has no artifacts (status: running)", warning=True)
 
     def test_body_click_selection(self):
         with _tui_required(self):
             from seine.tui.remote_screen import RemoteBodyStatic
         screen = self.RemoteScreen()
         screen.update_body = mock.Mock()
+
+        # Tab 1 click
         screen.active_tab = 1
         screen.remote_builds = [{"id": "b1"}, {"id": "b2"}, {"id": "b3"}]
         screen.selected_indices[1] = 0
@@ -366,9 +801,17 @@ class RemoteViewsTest(avocado.Test):
         body_widget = RemoteBodyStatic()
         body_widget._screen = screen
 
-        # Click at y=5 (which corresponds to row index 5 - 4 = 1)
         click_event = mock.Mock()
         click_event.y = 5
         body_widget.on_click(click_event)
         self.assertEqual(screen.selected_indices[1], 1)
+
+        # Tab 3 click
+        screen.active_tab = 3
+        screen.remote_artifacts = [{"name": "a1"}, {"name": "a2"}]
+        screen.selected_indices[3] = 0
+        click_event.y = 5
+        body_widget.on_click(click_event)
+        self.assertEqual(screen.selected_indices[3], 1)
+
 
