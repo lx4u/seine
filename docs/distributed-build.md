@@ -18,15 +18,15 @@ This guide walks through setting up:
 ## Architecture overview
 
 ```
- [ Developer Laptop ]
-   seine build --remote http://server:8000
-        │ (1. Upload worktree tar.zst)
-        ▼
+ [ Developer Laptop ] ◄───────────────────────────┐ (5. Direct download)
+   seine build --remote https://server:8000       │
+        │ (1. Upload worktree tar.zst)            │
+        ▼                                         │
  [ seine-server:8000 ] ──── (2. Stage bundle) ───► [ S3 / Garage Storage ]
-        │                                                  │
+        │                                                  ▲
         │ (3. Capability-aware scheduling)                 │ (4. Pull worktree & cache)
-   ┌────┴───────────────────────────┐                      ▼
-   ▼                                ▼             ┌─────────────────────────┐
+   ┌────┴───────────────────────────┐                      │ (5. Push deliverables)
+   ▼                                ▼             ┌────────┴────────────────┐
 [ Worker 1 (amd64) ]        [ Worker 2 (arm64) ]  │ OpenBao Vault (Signing) │
   seine-agent                 seine-agent         └─────────────────────────┘
   (Podman + libguestfs)       (Podman + libguestfs)
@@ -34,13 +34,23 @@ This guide walks through setting up:
 
 1. **Client** archives the local spec directory and streams a compressed bundle
    (`tar.zst`) to `seine-server` authenticated with a personal access token.
-2. **Server** relays the bundle into an S3 bucket (`worktrees/<project>/<digest>.tar.zst`).
+2. **Server** hashes the bundle while it receives it and stages it in the
+   project's S3 bucket as `worktrees/<project>/<digest>.tar.zst`, where the
+   digest is the SHA-256 of the upload. Development builds use the `dev`
+   bucket, `--release` builds the `prod` one.
 3. **Scheduler** checks registered workers, evaluates architecture scores
    (native `1.0`, cross `0.7`, emulation `0.3`), and assigns jobs to the best
-   available worker.
-4. **Worker Agent** claims the job, pulls the bundle from S3, runs the build
-   in an isolated container with rootless Podman and libguestfs, and streams
-   progress live over WebSocket.
+   available worker, waiting `native_grace` seconds for a better one.
+4. **Worker Agent** claims the job, pulls the bundle from S3 and checks its
+   SHA-256, then runs `seine build` as an unprivileged subprocess (rootless
+   Podman and libguestfs) and streams its output live over WebSocket.
+5. **Artifact Delivery**: When the build completes, the worker uploads the built
+   disk images and companion metadata directly to S3 (`artifacts/<project>/<build-id>/`)
+   and reports a manifest (name, size, SHA-256) of what it uploaded.
+   `seine-server` stores the manifest and generates temporary pre-signed
+   download URLs for the names in it. The developer's client fetches the
+   deliverables directly from S3, without relaying large disk images through
+   the server, and checks each one against the manifest.
 
 ---
 
@@ -531,6 +541,136 @@ You can fine-tune worker selection with command-line flags:
   until a native worker becomes available.
 - `--min-arch-score <score>`: Require a worker whose architecture score for the
   target is at least `score` (see [worker setup](worker-setup.md)).
+
+Without these flags the scheduler still prefers the best-scoring worker: a
+job waits up to the server's `native_grace` (30 seconds by default) for an idle
+worker that scores higher, such as a native one, before a cross or emulating
+worker may take it.
+
+### Automatic artifact download
+
+When a remote build completes successfully, the client asks `seine-server` for
+the build's status, which carries the artifact manifest and a temporary
+download URL for each artifact, and fetches them directly from S3:
+
+```text
+[client] Build bld-1a2b3c4d finished with status: COMPLETED
+[client] Downloading pc-image.img... done (<size>, sha256 verified)
+[client] Downloading pc-image.img.digest... done (<size>, sha256 verified)
+[client] Downloaded 2 of 2 artifact(s) to ./deploy/trixie
+```
+
+Deliverables are saved to `./deploy/<release>/` by default, matching local build
+behavior.
+
+Each artifact is checked against the manifest, which the worker reported and
+the server stored: name, size and SHA-256.
+
+- The download goes to `<name>.part` and is renamed to `<name>` only when its
+  size and SHA-256 both match. A failed transfer leaves nothing behind.
+- A file that does not match is kept as `<name>.corrupt` and counts as a
+  failure, so the exit status is 1.
+- An artifact the server reported without a checksum is not downloaded.
+- Names that are not plain file names are refused, and redirects from the
+  storage endpoint are not followed.
+- The download URLs follow the `https://` rule of `--remote`: a storage
+  endpoint on plain `http://` needs `--insecure`, and one with a private
+  certificate needs `--ca-cert`.
+
+#### Controlling artifact downloads
+
+- **Custom target directory**: Use `--dest-dir <path>` to store downloaded files
+  in a different directory:
+  ```bash
+  seine build --remote https://192.168.1.111:8000 \
+      --dest-dir /var/images/releases \
+      examples/pc-image/main.yaml
+  ```
+- **Skip download**: In CI/CD pipelines or when disk images are consumed directly
+  from S3, pass `--no-download` to skip local downloading:
+  ```bash
+  seine build --remote https://192.168.1.111:8000 \
+      --no-download \
+      examples/pc-image/main.yaml
+  ```
+
+---
+
+## 4. Shared storage layout
+
+All shared build assets and outputs reside in your S3 bucket (for example,
+`s3://seine-cache`), at the root of the bucket:
+
+```text
+s3://seine-cache/
+├── worktrees/<project>/<digest>.tar.zst   # Staged source worktrees
+├── cache/<kind>/<key>.tar.zst             # Shared cache: bootstraps, chroots,
+│                                          # packages, rootfs (see caching.md)
+└── artifacts/<project>/<build-id>/        # Harvested build deliverables
+    ├── pc-image.img                       # Bootable full disk image
+    ├── pc-image.img.digest                # SHA-256 integrity digest
+    ├── pc-image.img.boot-signers.json     # UEFI / kernel module signing metadata
+    └── pc-image.img.sbom.json             # Software bill of materials
+```
+
+After a successful build the worker uploads the files of the build's `deploy`
+directory that match the deliverable patterns (disk images, root file-system
+tarballs, `.digest`, `.recipe`, `.boot-signers*` and `.sbom*` files) to
+`artifacts/<project>/<build-id>/`.
+
+The server rejects a status report whose manifest names a key outside that
+prefix, a name that is not a plain file name, or an entry without a 64-digit
+SHA-256 and a size. It issues pre-signed URLs (valid for 1 hour) only for the
+names in the manifest, and only to members of the project, so developers
+download images from S3 without proxying them through the API server.
+
+---
+
+## Security model
+
+- **Credentials.** A personal access token acts as its user, within the
+  projects the user belongs to, with the role it has there (see
+  [Users, roles and tokens](#users-roles-and-tokens)). Workers hold a worker
+  token, which only works on the jobs assigned to them and on the log streams
+  of the builds they hold. The enrollment token only registers workers.
+  Tokens are stored hashed.
+- **Transport.** Serve `seine-server` over TLS whenever it is reachable from a
+  network. Clients and agents refuse plain `http://` to a non-loopback host
+  unless told otherwise with `--insecure`.
+- **Worktrees.** The bundle is an archive that is identical for the same tree
+  with the same file mtimes; mtimes are kept because seine derives its
+  timestamps from them. It leaves out `.git`, `__pycache__`, `.venv`,
+  `/build/`, `*.pyc`, `*.db`, `*.db-shm`, `*.db-wal`, `.env`, `.env.*`,
+  `*.key`, `id_rsa*`, `id_ed25519*`, `/deploy/` and `/home/`, plus whatever
+  `.gitignore` and `.seineignore` say, and the client warns about files
+  whose name contains `secret`, `token` or `credential` or ends in `.pem`. Every member of the project can read what is uploaded to its
+  dev bucket, so keep secrets out of the tree.
+- **Release staging.** A `--release` build runs with the `prod` key, so the
+  client uploads its worktree with `?env=prod` and the server stages it in
+  the `prod` bucket; this needs the `releaser` or `admin` role (HTTP 403
+  otherwise) and an unknown `env` is refused with HTTP 400. Submitting a
+  build whose worktree is not staged in the bucket it will run against
+  answers HTTP 400.
+- **Feed credentials.** They are resolved on the developer's machine and sent
+  only over TLS (the client refuses plain `http://` except to this machine).
+  The server holds them in memory for `secret_ttl`, drops them when the build
+  ends, and never stores or logs them, nor shows them in a response. The
+  worker masks them in the streamed logs and gives them to the build through a
+  private file that is deleted when the job ends. A worker that runs a job
+  can read that job's feed credentials, and every job of a build gets all of
+  its feeds.
+- **Builds.** Builds run as the unprivileged agent user and only see the
+  environment described in
+  [How the agent runs a build](#how-the-agent-runs-a-build).
+- **Storage keys.** Workers hold no S3 keys. The server hands each job, in
+  the job assignment sent over TLS to the worker that owns it, the key pair of
+  its bucket only: the project's `dev` pair for a development build and the
+  `prod` pair for a `--release` build, never both. The pair is not stored and
+  not logged. A build submitted with `--s3-cache` can use its own project's
+  key while it runs, so whoever may submit builds to a project can reach that
+  project's bucket for the duration of the build, and no other.
+- **Not protected yet.** A signing proxy for production keys is planned;
+  until then keep production signing keys off the workers.
 
 ---
 
