@@ -244,7 +244,11 @@ class RemoteScreenTest(avocado.Test):
 
             text = screen._render_main()
             self.assertIn("REMOTE WORKERS", text)
-            self.assertIn("Active view: Workers", text)
+            self.assertIn("No remote workers registered", text)
+
+            screen.active_tab = 3
+            text = screen._render_main()
+            self.assertIn("Active view: Artifacts", text)
             self.assertIn("Target cluster: cluster\n", text)
 
     def test_sidebar_click_action(self):
