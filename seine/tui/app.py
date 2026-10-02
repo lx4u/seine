@@ -37,6 +37,7 @@ from seine.tui.render import (append_logs_section, render_analyze,
                               render_packages, render_plan, render_root_node,
                               render_test_node)
 from seine.tui.spectree import SpecTree
+from seine.tui.remote_screen import RemoteScreen
 from seine.tui.sanitize import sanitize
 from seine.tui.target import TargetState
 from seine.tui.target_screen import TargetScreen
@@ -479,7 +480,7 @@ SCREENS = {"overview": OverviewScreen, "plan": PlanScreen, "build": BuildScreen,
           "packages": PackagesScreen, "analyze": AnalyzeScreen,
           "cache": CacheScreen, "doctor": DoctorScreen, "diff": DiffScreen,
           "issues": IssuesScreen, "chat": ChatScreen, "target": TargetScreen,
-          "test": TestScreen, "vendor": VendorScreen}
+          "test": TestScreen, "vendor": VendorScreen, "remote": RemoteScreen}
 
 # Offers the command registry through Ctrl+P. Selecting one fills the
 # prompt rather than running it; a deliberate Enter runs it.
@@ -551,6 +552,11 @@ class SeineApp(App):
     #vendortail { padding: 0 1; }
     #fslist { height: 1fr; }
     #previewpane { height: 1fr; padding: 1 2; }
+    #remotemain { width: 3fr; height: 100%; border: round $foreground 40%; }
+    #remotemain:focus { border: round $border; }
+    #remotesidebar { width: 1fr; min-width: 26; height: 100%; border: round $foreground 40%; }
+    #remotesidebar:focus { border: round $border; }
+    #remotebody, #sidebarbody { padding: 1 2; }
     #hint { color: $text-muted; padding: 0 2; }
     #infobar { height: 1; }
     #status { padding: 0 2; height: 1; width: 1fr; }
