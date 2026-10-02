@@ -267,6 +267,41 @@ class TargetIndicator(Static):
         self.update("writing image %d%%" % percent)
         self.display = True
 
+class RemoteIndicator(Static):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("markup", False)
+        super().__init__(**kwargs)
+        self.display = False
+
+    def on_click(self, event):
+        try:
+            app = self.app
+        except Exception:
+            app = None
+        if not app:
+            return
+        if hasattr(app, "show") and "remote" in getattr(app, "SCREENS", {}):
+            app.show("remote")
+        else:
+            try:
+                commands.dispatch(app, "/remote screen")
+            except Exception:
+                pass
+
+    def refresh_text(self):
+        try:
+            app = self.app
+        except Exception:
+            app = None
+        session = getattr(app, "remote_session", None)
+        if session is None or not session.connected:
+            self.display = False
+            return
+        target = session.active_project or "no project"
+        text = f"[remote: {target}]" + (" [admin]" if session.is_admin else "")
+        self.update(text)
+        self.display = True
+
 class BaseScreen(Screen):
     # Without this, Textual's default auto-focus would land on
     # TargetScreen's ConsolePane (composed before the prompt) and fire
@@ -381,6 +416,7 @@ class BaseScreen(Screen):
             Indicators(id="indicators"),
             VendorIndicator(id="vendor-indicator"),
             TargetIndicator(id="target-indicator"),
+            RemoteIndicator(id="remote-indicator"),
             id="infobar",
         )
         yield Static(self.HINT, id="hint")
@@ -426,6 +462,10 @@ class BaseScreen(Screen):
             self.query_one(Indicators).refresh_text()
             self.query_one(VendorIndicator).refresh_text()
             self.query_one(TargetIndicator).refresh_text()
+            try:
+                self.query_one(RemoteIndicator).refresh_text()
+            except NoMatches:
+                pass
             self.update_body()
         except NoMatches:
             pass
