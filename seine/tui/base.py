@@ -267,6 +267,27 @@ class TargetIndicator(Static):
         self.update("writing image %d%%" % percent)
         self.display = True
 
+# Live "downloading 23%" for artifact downloads; click opens the remote
+# cockpit on its artifacts tab.
+class DownloadIndicator(Static):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.display = False
+
+    def on_click(self, event):
+        app = self.app
+        app.show("remote")
+        app.call_after_refresh(lambda: app.screen.action_select_tab(3))
+
+    def refresh_text(self):
+        state = getattr(self.app, "download_state", None)
+        if state is None or not state.active:
+            self.display = False
+            return
+        percent = state.percent()
+        self.update("downloading" if percent is None else "downloading %d%%" % percent)
+        self.display = True
+
 class RemoteIndicator(Static):
     def __init__(self, **kwargs):
         kwargs.setdefault("markup", False)
@@ -416,6 +437,7 @@ class BaseScreen(Screen):
             Indicators(id="indicators"),
             VendorIndicator(id="vendor-indicator"),
             TargetIndicator(id="target-indicator"),
+            DownloadIndicator(id="download-indicator"),
             RemoteIndicator(id="remote-indicator"),
             id="infobar",
         )
@@ -463,6 +485,7 @@ class BaseScreen(Screen):
             self.query_one(VendorIndicator).refresh_text()
             self.query_one(TargetIndicator).refresh_text()
             try:
+                self.query_one(DownloadIndicator).refresh_text()
                 self.query_one(RemoteIndicator).refresh_text()
             except NoMatches:
                 pass

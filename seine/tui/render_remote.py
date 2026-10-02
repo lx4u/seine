@@ -116,3 +116,73 @@ def render_remote_workers(workers: list[dict[str, Any]], selected_index: int = 0
     lines.append("")
     lines.append(" [p] Pause/Resume Worker   [r] Deregister Worker   [↑/↓] Select")
     return "\n".join(lines)
+
+def _format_size(size_bytes: Any) -> str:
+    try:
+        val = float(size_bytes or 0)
+    except (TypeError, ValueError):
+        return "0 B"
+    if val < 1024:
+        return f"{int(val)} B"
+    for unit in ("KB", "MB", "GB", "TB"):
+        val /= 1024.0
+        if val < 1024.0 or unit == "TB":
+            return f"{val:.1f} {unit}"
+    return f"{val:.1f} TB"
+
+def _download_label(item: Optional[dict[str, Any]]) -> str:
+    if not item:
+        return ""
+    if item["state"] == "done":
+        return "✔ done"
+    if item["state"] == "failed":
+        return "✖ failed"
+    if item["state"] == "queued":
+        return "queued"
+    if item["total"]:
+        return f"{min(100, item['read'] * 100 // item['total'])}%"
+    return _format_size(item["read"])
+
+
+def render_remote_artifacts(
+    artifacts: list[dict[str, Any]],
+    selected_index: int = 0,
+    progress: Optional[dict[tuple[str, str], dict[str, Any]]] = None,
+) -> str:
+    progress = progress or {}
+    lines = [
+        " REMOTE ARTIFACTS",
+        " ══════════════════════════════════════════════════════════════════════════════",
+    ]
+    if not artifacts:
+        lines.append("")
+        lines.append("   No artifacts found in remote builds.")
+        lines.append("")
+        lines.append(" [Enter] Download Artifact   [d] Download All   [↑/↓] Select")
+        return "\n".join(lines)
+
+    lines.append(
+        f"   {'NAME':<26} {'SIZE':<10} {'BUILD ID':<14} {'PROJECT':<14} {'ARCH':<8} {'DOWNLOAD'}"
+    )
+    lines.append("   " + "─" * 82)
+
+    for i, a in enumerate(artifacts):
+        prefix = " ▸ " if i == selected_index else "   "
+        name = str(a.get("name") or "")
+        short_name = name[:24] + ".." if len(name) > 26 else name
+        size_str = _format_size(a.get("size", 0))
+        build_id = str(a.get("build_id") or "")
+        short_id = build_id[:12] if len(build_id) > 12 else build_id
+        project = str(a.get("project") or "")
+        short_proj = project[:12] if len(project) > 12 else project
+        arch = str(a.get("target_arch") or a.get("architecture") or "")
+        download = _download_label(progress.get((build_id, name)))
+
+        lines.append(
+            f"{prefix}{short_name:<26} {size_str:<10} {short_id:<14} {short_proj:<14} {arch:<8} {download}".rstrip()
+        )
+
+    lines.append("")
+    lines.append(" [Enter] Download Artifact   [d] Download All   [↑/↓] Select")
+    return "\n".join(lines)
+

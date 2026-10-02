@@ -187,6 +187,27 @@ class RemoteCommandTest(avocado.Test):
         mock_app.remote_session = session
         return mock_app, session
 
+    def test_leaving_the_app_cancels_downloads_and_disconnects(self):
+        env = {"SEINE_HISTORY_FILE": os.path.join(self.tmp_dir, "history.json"),
+               "SEINE_CACHE_DIR": self.tmp_dir}
+
+        async def scenario():
+            app = self.SeineApp()
+            app.remote_session.connected = True
+            app.remote_session.url = "https://cluster.lan:8443"
+            app.remote_session.token = "secret"
+            app.download_state.queue("bld-1", "disk.raw", 100)
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                self.commands.dispatch(app, "/quit")
+                await pilot.pause()
+            self.assertTrue(app.download_state.cancelled)
+            self.assertFalse(app.remote_session.connected)
+            self.assertIsNone(app.remote_session.token)
+
+        with mock.patch.dict(os.environ, env):
+            asyncio.run(scenario())
+
     def test_real_app_knows_the_cockpit_screen(self):
         self.assertIn("remote", self.SeineApp.SCREENS)
 

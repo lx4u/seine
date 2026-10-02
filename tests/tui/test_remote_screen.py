@@ -120,6 +120,89 @@ class RemoteScreenTest(avocado.Test):
         with mock.patch.dict(os.environ, env):
             asyncio.run(scenario())
 
+    def test_status_bar_shows_download_progress_and_a_click_opens_the_artifacts_tab(self):
+        from seine.tui.remote_screen import RemoteScreen
+        env = {"SEINE_HISTORY_FILE": os.path.join(self.tmp_dir, "history.json"),
+               "SEINE_CACHE_DIR": self.tmp_dir}
+
+        async def scenario():
+            app = self.SeineApp()
+            app.remote_session.connected = True
+            app.remote_session.url = "https://cluster.lan:8443"
+            with mock.patch.object(RemoteScreen, "fetch_data"):
+                async with app.run_test() as pilot:
+                    await pilot.pause()
+                    chip = app.screen.query_one("#download-indicator")
+                    self.assertFalse(chip.display)
+
+                    state = app.download_state
+                    state.queue("bld-1", "disk.raw", 200)
+                    state.start("bld-1", "disk.raw")
+                    state.advance("bld-1", "disk.raw", 46)
+                    app.refresh_indicators()
+                    await pilot.pause()
+                    self.assertTrue(chip.display)
+                    self.assertEqual(str(chip.renderable), "downloading 23%")
+
+                    await pilot.click("#download-indicator")
+                    await pilot.pause()
+                    self.assertIsInstance(app.screen, RemoteScreen)
+                    self.assertEqual(app.screen.active_tab, 3)
+
+                    state.finish("bld-1", "disk.raw")
+                    app.refresh_indicators()
+                    self.assertFalse(app.screen.query_one("#download-indicator").display)
+
+        with mock.patch.dict(os.environ, env):
+            asyncio.run(scenario())
+
+    def test_screen_keeps_its_app_for_workers_that_outlive_it(self):
+        from seine.tui.remote_screen import RemoteScreen
+        screen = RemoteScreen()
+        fake_app = mock.Mock()
+        screen._app_ref = fake_app
+        self.assertIs(screen.app, fake_app)
+
+    def test_say_on_a_detached_screen_goes_to_the_app(self):
+        from seine.tui.base import BaseScreen
+        from seine.tui.remote_screen import RemoteScreen
+        from textual.css.query import NoMatches
+        screen = RemoteScreen()
+        screen._app_ref = fake_app = mock.Mock()
+        with mock.patch.object(BaseScreen, "say", side_effect=NoMatches("#status")):
+            screen.say("downloaded 1 artifact(s)", error=False)
+        fake_app.say.assert_called_once_with("downloaded 1 artifact(s)", error=False, warning=False)
+
+    def test_a_download_worker_can_report_after_another_screen_took_over(self):
+        from seine.tui.remote_screen import RemoteScreen
+        env = {"SEINE_HISTORY_FILE": os.path.join(self.tmp_dir, "history.json"),
+               "SEINE_CACHE_DIR": self.tmp_dir}
+
+        async def scenario():
+            app = self.SeineApp()
+            app.remote_session.connected = True
+            app.remote_session.url = "https://cluster.lan:8443"
+            with mock.patch.object(RemoteScreen, "fetch_data"):
+                async with app.run_test() as pilot:
+                    await pilot.pause()
+                    app.show("remote")
+                    await pilot.pause()
+                    old = app.screen
+                    self.assertIsInstance(old, RemoteScreen)
+                    old.app  # what the real worker has done before the switch
+                    app.show("overview")
+                    await pilot.pause()
+                    self.assertIsNot(app.screen, old)
+                    old._parent = None  # Textual does this when it removes a screen
+                    # Like a Textual worker: a bare executor, no copied context.
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, old._download_changed)
+                    await loop.run_in_executor(None, old._notify_say, "downloaded", False, False)
+                    await pilot.pause()
+
+        with mock.patch.dict(os.environ, env):
+            asyncio.run(scenario())
+
     def test_s_switches_project_and_p_still_pauses_a_worker(self):
         keys = {b.key: b.action for b in self.RemoteScreen.BINDINGS}
         self.assertEqual(keys["s"], "switch_project")
@@ -248,7 +331,12 @@ class RemoteScreenTest(avocado.Test):
 
             screen.active_tab = 3
             text = screen._render_main()
-            self.assertIn("Active view: Artifacts", text)
+            self.assertIn("REMOTE ARTIFACTS", text)
+            self.assertIn("No artifacts found in remote builds", text)
+
+            screen.active_tab = 4
+            text = screen._render_main()
+            self.assertIn("Active view: Users", text)
             self.assertIn("Target cluster: cluster\n", text)
 
     def test_sidebar_click_action(self):
