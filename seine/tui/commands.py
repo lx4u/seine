@@ -159,6 +159,40 @@ def _packages(app, argv):
 # Only -j/--jobs= and --reproducible today, not the whole of
 # BuildCmd.LONG_OPTIONS: the rest either means something else here or
 # isn't wired up yet.
+def _start_remote_build(app, session, build, no_download, project):
+    from seine.tui.build import start_remote_build
+    try:
+        start_remote_build(app, app.build_state, build.options["files"][0],
+                           session, no_download=no_download, project=project)
+    except RuntimeError as e:
+        app.say(str(e), error=True)
+        return
+    app.show("build")
+
+# No project decided: ask first, then start the build the user asked for.
+def _ask_project_for_build(app, session, build, no_download):
+    def chosen(result):
+        if result is None:
+            app.say("build: no project chosen, not started", warning=True)
+            return
+        name, keep = result
+
+        def go():
+            _apply_project(app, session, name, keep)
+            _run_on_app(app, lambda: _start_remote_build(
+                app, session, build, no_download, name))
+        _background(app, go)
+
+    def ask():
+        projects = session.all_projects()
+        if not projects:
+            _report_say(app, "build: you are not a member of any project", warning=True)
+            return
+        from seine.tui.project_picker import ProjectPicker
+        picker = ProjectPicker(projects, None, offer_default=session.default_project is None)
+        _run_on_app(app, lambda: app.push_screen(picker, chosen))
+    _background(app, ask)
+
 def _build(app, argv):
     """build the active specification
 
@@ -168,11 +202,15 @@ def _build(app, argv):
     specifications ('/use a -- b') aren't driven from here yet.
     """
     try:
-        opts, args = getopt.getopt(argv, "j:", ["jobs=", "reproducible"])
+        opts, args = getopt.getopt(
+            argv, "j:", ["jobs=", "reproducible", "local", "no-download", "project="])
     except getopt.GetoptError as e:
         raise CommandError(str(e))
     jobs = None
     reproducible = None
+    local = False
+    no_download = False
+    project = None
     for o, a in opts:
         if o in ("-j", "--jobs"):
             # Same validation BuildCmd.main() applies to '-j'/'--jobs' on the CLI.
@@ -184,6 +222,12 @@ def _build(app, argv):
                 raise CommandError("--jobs shall be at least 1")
         elif o == "--reproducible":
             reproducible = True
+        elif o == "--local":
+            local = True
+        elif o == "--no-download":
+            no_download = True
+        elif o == "--project":
+            project = a
     if len(args) > 0:
         _use(app, args)
     if not app.context.active:
@@ -211,9 +255,18 @@ def _build(app, argv):
     build.options["sbom"] = True
     # Imported here, not at module level: breaks an import cycle
     # (seine.tui.build -> seine.tui.base -> this module).
-    from seine.tui.build import start_build
+    from seine.tui.build import start_build, start_remote_build
     try:
-        start_build(app, app.build_state, build)
+        session = app.remote_session
+        if session.connected and not local:
+            project = project or session.active_project
+            if project is None:
+                _ask_project_for_build(app, session, build, no_download)
+                return
+            start_remote_build(app, app.build_state, build.options["files"][0],
+                               session, no_download=no_download, project=project)
+        else:
+            start_build(app, app.build_state, build)
     except RuntimeError as e:
         raise CommandError(str(e))
     app.show("build")
@@ -223,6 +276,10 @@ _build_options = (
     ("-j N, --jobs=N", "Override the parallel job count for this run only."),
     ("--reproducible", "Normalize disk image partitions so two builds of "
      "the same spec give a byte-identical image. Slower."),
+    ("--local", "Build on this machine even when connected to a remote "
+     "server."),
+    ("--no-download", "Remote build only: leave the artifacts on the server."),
+    ("--project NAME", "Remote build only: build in this project, this once."),
 )
 
 def _vendor(app, argv):
@@ -515,7 +572,11 @@ def _cancel(app, argv):
     # the same global stop either way.
     if not app.build_state.running and not app.vendor_state.running:
         raise CommandError("no build or vendor is running")
-    tasks.interrupt()
+    job = app.build_state.remote_job
+    if job is not None and app.build_state.running:
+        job.stop_requested.set()
+    else:
+        tasks.interrupt()
     app.say("cancelling -- waiting for running steps to finish")
 
 def _target_status(app):
@@ -1010,7 +1071,7 @@ REGISTRY["q"] = REGISTRY["quit"]
 # offers what _build() actually parses.
 OPTIONS = {
     "plan":  BuildCmd.LONG_OPTIONS,
-    "build": ["jobs=", "reproducible"],
+    "build": ["jobs=", "reproducible", "local", "no-download", "project="],
     "remote": ["disconnect", "status", "screen", "insecure", "ca-cert="],
     "project": ["default"],
     "cache": ["explain", "why"],

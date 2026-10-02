@@ -15,6 +15,7 @@ from textual.widgets import RichLog, Static
 from seine import tasks
 from seine.progress import elapsed
 from seine.tui.base import BaseScreen, StaticPane
+from seine.tui.download import redraw
 from seine.tui.reporter import TextualReporter
 from seine.tui.render import render_overview
 from seine.tui.sanitize import sanitize
@@ -104,12 +105,40 @@ class BuildState:
         # App._build_finished() whether to give the AI chat an
         # unprompted turn to report the outcome. Reset each build.
         self.notify_ai = False
+        # Remote build: the server's host, its RemoteBuild (for /cancel)
+        # and the log text not yet written to #tail. None for a local one.
+        self.remote = None
+        self.remote_job = None
+        self.remote_text = []
 
     @property
     def running(self):
         return self.worker is not None and self.worker.is_running
 
+    def reset_remote(self, host, job):
+        self.build = None
+        self.remote = host
+        self.remote_job = job
+        self.remote_text = []
+        self.order = ["remote build"]
+        self.rows = {"remote build": {"needs": [], "state": "pending",
+                                      "started": None, "elapsed": None}}
+        self.current = "remote build"
+        self.message = "[BUILD: REMOTE @ %s]" % host
+        self.error = False
+        self.done = False
+        self.notify_ai = False
+        self.play = None
+        self.ansible_task = None
+        self.package_paths = {}
+        self.task_started("remote build")
+
+    def remote_output(self, text):
+        self.remote_text.append(text)
+
     def reset(self, build):
+        self.remote = None
+        self.remote_job = None
         self.build = build
         ordered = tasks.ordered(build.image.tasks())
         self.order = [t.name for t in ordered]
@@ -168,13 +197,20 @@ class BuildState:
                         % (sample.get("load") or 0.0,
                            round((sample.get("cpu") or 0.0) * 100)))
 
+    def _stop_remote_row(self, failed):
+        # The worker's steps never reach the reporter, so nothing else ends this row.
+        if self.remote and self.rows["remote build"]["state"] == "running":
+            self.task_finished("remote build", failed=failed)
+
     def finished_ok(self):
+        self._stop_remote_row(failed=False)
         self.done = True
         self.message = "build finished"
         if self.on_finished:
             self.on_finished()
 
     def finished_failed(self, text):
+        self._stop_remote_row(failed=True)
         self.done = True
         self.error = True
         self.message = text
@@ -189,6 +225,12 @@ class BuildState:
     def render(self):
         if len(self.order) == 0:
             return "no steps -- '/use SPEC' first\n"
+        if self.remote:
+            # One row: the worker's own steps arrive as log text only.
+            row = self.rows["remote build"]
+            end = row["elapsed"] if row["elapsed"] is not None else time.time() - row["started"]
+            return "[BUILD: REMOTE @ %s]\n%s remote build  %s\n" % (
+                self.remote, MARKS[row["state"]], elapsed(end))
         # An empty 'packages' barrier is left out here, same as in
         # the plan: nothing to build, so no row for it.
         names = set(self.order)
@@ -252,6 +294,61 @@ def start_build(app, state, build, packages_only=False, target=None):
 
     state.worker = app.run_worker(run, thread=True, exclusive=True, group="build")
     # Start edge of the status-bar "N build" chip; on_finished covers the finish side.
+    app.refresh_indicators()
+
+# Same as start_build(), but the build runs on a seine-server worker:
+# RemoteBuild packs and uploads the worktree, submits it, and its log
+# stream lands in state.remote_text for BuildScreen to tail.
+def start_remote_build(app, state, spec_file, session, no_download=False, project=None):
+    from seine.distributed.client.remote import DownloadError, RemoteBuild
+    from seine.tui.credentials import tui_prompt
+    if state.running:
+        raise RuntimeError("a build is already running")
+    if not project:
+        raise RuntimeError("no project chosen -- '/project' picks one")
+    host = session.url.split("://", 1)[-1]
+
+    def write(text):
+        app.call_from_thread(state.remote_output, text)
+
+    downloads = getattr(app, "download_state", None)
+
+    def on_download(kind, build_id, name, n):
+        if downloads is None:
+            return
+        if kind in ("start", "bytes") and downloads.cancelled:
+            raise DownloadError(f"{name}: download cancelled")
+        due = True
+        if kind == "queue":
+            downloads.queue(build_id, name, n)
+        elif kind == "start":
+            downloads.start(build_id, name)
+        elif kind == "bytes":
+            due = downloads.advance(build_id, name, n)
+        else:
+            downloads.finish(build_id, name, failed=(kind == "failed"))
+        if due:
+            app.call_from_thread(redraw, app)
+
+    job = RemoteBuild(
+        session.url, project, spec_file,
+        options={"no_download": no_download, "insecure": session.insecure,
+                 "ca_cert": session.ca_cert}, token=session.token,
+        out=write, err=write, prompt=tui_prompt(app), on_download=on_download)
+    state.reset_remote(host, job)
+
+    def run():
+        try:
+            code = job.run()
+        except Exception as e:
+            app.call_from_thread(state.finished_failed, "%s: %s" % (type(e).__name__, e))
+            return
+        if code == 0:
+            app.call_from_thread(state.finished_ok)
+        else:
+            app.call_from_thread(state.finished_failed, "remote build failed (exit %d)" % code)
+
+    state.worker = app.run_worker(run, thread=True, exclusive=True, group="build")
     app.refresh_indicators()
 
 # Polls a growing log file (stat + seek) rather than watching it. A
@@ -343,6 +440,12 @@ class BuildScreen(BaseScreen):
     # _log_target() picks the single most relevant one.
     def _follow(self):
         state = self.app.build_state
+        if state.remote:
+            text = "".join(state.remote_text)
+            state.remote_text.clear()
+            if text:
+                self.query_one("#tail", RichLog).write(sanitize(text))
+            return
         name = _log_target(state)
         if name is None or state.logs is None:
             return

@@ -127,11 +127,20 @@ def _format_size(size_bytes: int) -> str:
     return f"{num:.1f} TB"
 
 
-def _print_artifacts(artifact_urls: Optional[list[str]]) -> None:
+def _print_artifacts(artifact_urls: Optional[list[str]], say: Callable[[str], None] = print) -> None:
     if artifact_urls:
-        print("\nArtifacts:")
+        say("\nArtifacts:")
         for artifact in artifact_urls:
-            print(f"  - {artifact}")
+            say(f"  - {artifact}")
+
+
+def _stdout(text: str) -> None:
+    sys.stdout.write(text)
+    sys.stdout.flush()
+
+
+def _stderr(text: str) -> None:
+    sys.stderr.write(text)
 
 
 class DownloadError(Exception):
@@ -256,8 +265,17 @@ def spec_architecture(spec_path: str) -> Optional[str]:
 class LogFollower(threading.Thread):
     """Print a build's log from the WebSocket stream until told to stop."""
 
-    def __init__(self, url: str, token: str, ssl_context: Any = None):
+    def __init__(
+        self,
+        url: str,
+        token: str,
+        ssl_context: Any = None,
+        out: Callable[[str], None] = _stdout,
+        err: Callable[[str], None] = _stderr,
+    ):
         super().__init__(daemon=True)
+        self._write = out
+        self._warn = err
         self.url = url
         self.token = token
         self.ssl_context = ssl_context
@@ -295,12 +313,11 @@ class LogFollower(threading.Thread):
             text = json.loads(raw).get("text", "")
         except (ValueError, AttributeError):
             return
-        sys.stdout.write(text)
-        sys.stdout.flush()
+        self._write(text)
 
     def _fail(self, reason: str) -> None:
         self.failure = reason
-        sys.stderr.write(f"\n[client] log stream: {reason}; following the build by polling\n")
+        self._warn(f"\n[client] log stream: {reason}; following the build by polling\n")
 
 
 def _tty_prompt(context: str, fields: dict, offer_save: bool = False) -> dict:
@@ -351,14 +368,23 @@ class RemoteBuild:
         clock: Callable[[], float] = time.monotonic,
         drain_grace: float = DRAIN_GRACE,
         cancel_wait: float = CANCEL_WAIT,
+        out: Callable[[str], None] = _stdout,
+        err: Callable[[str], None] = _stderr,
+        prompt: Optional[Callable[..., Any]] = None,
         ask_project: Optional[Callable[[dict[str, str]], tuple[str, bool]]] = None,
         on_download: Optional[Callable[[str, str, str, int], None]] = None,
     ):
+        # out/err/prompt let the TUI take over what would go to the terminal.
+        self._out = out
+        self._err = err
+        self.prompt = prompt
         if ask_project is None and sys.stdin.isatty():
             ask_project = _tty_project_prompt
         self.ask_project = ask_project
         # on_download(kind, build_id, name, n): queue (n = size), start, bytes, done, failed.
         self.on_download = on_download
+        # Set from another thread to cancel like Ctrl+C would.
+        self.stop_requested = threading.Event()
         self.server_url = server_url.rstrip("/")
         self.project = project
         self.options = dict(options or {})
@@ -377,6 +403,9 @@ class RemoteBuild:
         self.cancel_wait = cancel_wait
         self.verify = requests_verify(self.ca_cert)
 
+    def _say(self, text: str) -> None:
+        self._out(text + "\n")
+
     @property
     def headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.token}"}
@@ -391,10 +420,10 @@ class RemoteBuild:
             digest = self._upload()
             build_id = self._submit(arch, digest, secrets)
         except RemoteError as e:
-            sys.stderr.write(f"error: {e}\n")
+            self._err(f"error: {e}\n")
             return e.code
         except KeyboardInterrupt:
-            print("\n[client] Interrupted before the build was submitted")
+            self._say("\n[client] Interrupted before the build was submitted")
             return EXIT_INTERRUPTED
 
         follower = self._start_log_stream(build_id)
@@ -405,10 +434,10 @@ class RemoteBuild:
                 try:
                     return self._cancel(build_id, follower)
                 except KeyboardInterrupt:
-                    print("\n[client] Not waiting for the build to stop")
+                    self._say("\n[client] Not waiting for the build to stop")
                     return EXIT_INTERRUPTED
             except RemoteError as e:
-                sys.stderr.write(f"error: {e}\n")
+                self._err(f"error: {e}\n")
                 return e.code
             return self._finish(build_id, info, follower)
         finally:
@@ -516,15 +545,15 @@ class RemoteBuild:
     def _target_arch(self) -> str:
         arch = self.options.get("target_arch")
         if arch:
-            print(f"[client] Target architecture: {arch} (from the command line)")
+            self._say(f"[client] Target architecture: {arch} (from the command line)")
             return arch
         arch = spec_architecture(os.path.join(self.root_dir, self.spec_file))
         if arch:
-            print(f"[client] Target architecture: {arch} (from {self.spec_file})")
+            self._say(f"[client] Target architecture: {arch} (from {self.spec_file})")
             return arch
         from seine.utils import HOST_ARCH
 
-        print(
+        self._say(
             f"[client] Target architecture: {HOST_ARCH} "
             f"(host architecture, {self.spec_file} sets none)"
         )
@@ -542,7 +571,7 @@ class RemoteBuild:
         try:
             build.load_all([os.path.join(self.root_dir, self.spec_file)])
             build.parse()
-            collect_credentials([build])
+            collect_credentials([build], prompt=self.prompt)
             for feed in feeds(build.spec["distribution"]):
                 if feed["auth"] is not None:
                     uri = feed["uri"].rstrip("/")
@@ -563,10 +592,10 @@ class RemoteBuild:
     def _upload(self) -> str:
         from seine.distributed.client.worktree import pack_worktree
 
-        print(f"[client] Packaging worktree at {self.root_dir}...")
+        self._say(f"[client] Packaging worktree at {self.root_dir}...")
         archive_path, local_digest = pack_worktree(self.root_dir)
         try:
-            print(f"[client] Uploading worktree bundle ({local_digest})...")
+            self._say(f"[client] Uploading worktree bundle ({local_digest})...")
             try:
                 resp = upload_worktree(
                     self.server_url, self.project, archive_path,
@@ -597,7 +626,7 @@ class RemoteBuild:
             transient_secrets=secrets or {},
         )
         url = f"{self.server_url}/api/v1/builds"
-        print(f"[client] Submitting build to {url} (project: {self.project}, target_arch: {arch})...")
+        self._say(f"[client] Submitting build to {url} (project: {self.project}, target_arch: {arch})...")
         try:
             resp = requests.post(
                 url, json=req.model_dump(), headers=self.headers,
@@ -607,14 +636,17 @@ class RemoteBuild:
             raise RemoteError(f"build submission: cannot reach {self.server_url}: {e}") from e
         _check_response(resp, "build submission")
         accepted = BuildSubmitResponse(**resp.json())
-        print(f"[client] Build accepted as {accepted.build_id} (status: {accepted.status})")
+        self._say(f"[client] Build accepted as {accepted.build_id} (status: {accepted.status})")
         return accepted.build_id
 
     def _start_log_stream(self, build_id: str) -> LogFollower:
         ws_url = self.server_url.replace("http", "ws", 1)
         stream_url = f"{ws_url}/api/v1/builds/{build_id}/stream"
-        print(f"[client] Connecting to live log stream: {stream_url} ...\n" + "-" * 60)
-        follower = LogFollower(stream_url, self.token, ws_ssl_context(stream_url, self.ca_cert))
+        self._say(f"[client] Connecting to live log stream: {stream_url} ...\n" + "-" * 60)
+        follower = LogFollower(
+            stream_url, self.token, ws_ssl_context(stream_url, self.ca_cert),
+            out=self._out, err=self._err,
+        )
         follower.start()
         return follower
 
@@ -654,9 +686,11 @@ class RemoteBuild:
                 if status in TERMINAL_STATES:
                     return info
                 if status != last:
-                    print(f"\n[client] Build {build_id} is {status}")
+                    self._say(f"\n[client] Build {build_id} is {status}")
                     last = status
             self.sleep(self.poll_interval)
+            if self.stop_requested.is_set():
+                raise KeyboardInterrupt
 
     def _drain(self, follower: LogFollower) -> None:
         follower.stop(self.drain_grace)
@@ -665,19 +699,19 @@ class RemoteBuild:
     def _finish(self, build_id: str, info: dict[str, Any], follower: LogFollower) -> int:
         self._drain(follower)
         status = info["status"]
-        print("-" * 60 + f"\n[client] Build {build_id} finished with status: {status.upper()}")
+        self._say("-" * 60 + f"\n[client] Build {build_id} finished with status: {status.upper()}")
         if status == "completed":
             return self._deliver(info)
         if info.get("error_message"):
-            print(f"[client] {info['error_message']}")
-        _print_artifacts(info.get("artifact_urls"))
+            self._say(f"[client] {info['error_message']}")
+        _print_artifacts(info.get("artifact_urls"), self._say)
         return EXIT_FAILED
 
     def _deliver(self, info: dict[str, Any]) -> int:
         """Download and verify the artifacts of a completed build; return the exit code."""
         download_urls = info.get("download_urls") or {}
         if self.options.get("no_download") or not download_urls:
-            _print_artifacts(info.get("artifact_urls"))
+            _print_artifacts(info.get("artifact_urls"), self._say)
             return EXIT_OK
 
         manifest = {
@@ -699,8 +733,7 @@ class RemoteBuild:
             event("queue", name, (manifest.get(name) or {}).get("size", 0))
         for name, url in download_urls.items():
             expected = manifest.get(name)
-            sys.stdout.write(f"[client] Downloading {name}... ")
-            sys.stdout.flush()
+            self._out(f"[client] Downloading {name}... ")
             try:
                 event("start", name)
                 dest = _destination(name, target_dir)
@@ -711,19 +744,19 @@ class RemoteBuild:
                     progress=lambda n, name=name: event("bytes", name, n))
             except DownloadError as e:
                 event("failed", name)
-                sys.stdout.write("failed\n")
-                sys.stderr.write(f"[client] ERROR: {e}\n")
+                self._out("failed\n")
+                self._err(f"[client] ERROR: {e}\n")
                 continue
             event("done", name)
-            print(f"done ({_format_size(expected['size'])}, sha256 verified)")
+            self._say(f"done ({_format_size(expected['size'])}, sha256 verified)")
             done += 1
 
-        print(f"[client] Downloaded {done} of {len(download_urls)} artifact(s) to {target_dir}")
+        self._say(f"[client] Downloaded {done} of {len(download_urls)} artifact(s) to {target_dir}")
         return EXIT_OK if done == len(download_urls) else EXIT_FAILED
 
     def _cancel(self, build_id: str, follower: LogFollower) -> int:
         """Ask the server to cancel after Ctrl+C and wait for it to take effect."""
-        print(f"\n[client] Interrupted, requesting cancellation of {build_id}...")
+        self._say(f"\n[client] Interrupted, requesting cancellation of {build_id}...")
         try:
             resp = requests.post(
                 f"{self.server_url}/api/v1/builds/{build_id}/cancel",
@@ -733,9 +766,9 @@ class RemoteBuild:
             if resp.status_code >= 400 and resp.status_code != 409:
                 _check_response(resp, "cancel request")
         except (requests.RequestException, RemoteError) as e:
-            sys.stderr.write(f"error: cancel request failed: {e}\n")
+            self._err(f"error: cancel request failed: {e}\n")
             return EXIT_INTERRUPTED
-        print("[client] Cancellation requested; press Ctrl+C again to exit now")
+        self._say("[client] Cancellation requested; press Ctrl+C again to exit now")
         deadline = self.clock() + self.cancel_wait
         while self.clock() < deadline:
             try:
@@ -744,10 +777,10 @@ class RemoteBuild:
                 status = None
             if status in TERMINAL_STATES:
                 self._drain(follower)
-                print(f"[client] Build {build_id} finished with status: {status.upper()}")
+                self._say(f"[client] Build {build_id} finished with status: {status.upper()}")
                 return EXIT_INTERRUPTED
             self.sleep(self.poll_interval)
-        print(f"[client] Build {build_id} has not stopped yet; it will end on the server")
+        self._say(f"[client] Build {build_id} has not stopped yet; it will end on the server")
         return EXIT_INTERRUPTED
 
 
