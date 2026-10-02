@@ -52,6 +52,7 @@ whole project. The ones in use are:
 | `cache`        | What seine keeps between builds, and `seine cache`    |
 | `credentials`  | Resolving feed logins/passwords: `seine/credentials.py` |
 | `deps`         | seine's own dependencies and packaging                |
+| `distributed`  | The seine-server/seine-agent subsystem, remote builds (`seine/distributed/`) |
 | `distribution` | The `distribution` section: releases, feeds, mirrors  |
 | `examples`     | The specifications under `examples/`                  |
 | `go`           | What `extends: go` means: Go programs built from source |
@@ -65,6 +66,7 @@ whole project. The ones in use are:
 | `sbom`         | Software Bill of Materials generation                 |
 | `sbuild`       | The buildd chroot packages are rebuilt in             |
 | `spec`         | The specification files, and how they are loaded      |
+| `storage`      | The S3 storage provider and the shared cache transport (`seine/storage/`) |
 | `target`       | Driving real hardware through mtda: `/target`, `seine.tui.target` |
 | `testing`      | Test suites and their execution: `seine test`, `seine.testing` |
 | `tui`          | The terminal UI, `seine tui`                          |
