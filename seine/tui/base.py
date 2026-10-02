@@ -285,6 +285,8 @@ class BaseScreen(Screen):
         ("shell",    "! shell"),
         ("tab",      "Tab switch pane"),
         ("complete", "→ complete"),
+        ("build",    "^B build"),
+        ("remote",   "^R remote"),
         ("palette",  "Ctrl+P palette"),
         ("quit",     "/quit"),
     ]
@@ -308,9 +310,16 @@ class BaseScreen(Screen):
             chips.insert(index, (key, text))
         return " · ".join(t for k, t in chips if k not in self.HINT_REMOVE)
 
-    # '/' refocuses the prompt; not a priority binding, so a focused
-    # Input still consumes it as a normal keystroke.
-    BINDINGS = [Binding("/", "focus_prompt", show=False)]
+    # Universal productivity shortcuts: not priority bindings, so focused
+    # inputs consume their own editing keys first.
+    BINDINGS = [
+        Binding("/", "focus_prompt", show=False),
+        Binding("ctrl+b", "trigger_build", "Build", show=False),
+        Binding("ctrl+r", "toggle_remote", "Remote", show=False),
+        Binding("ctrl+t", "run_tests", "Test", show=False),
+        Binding("ctrl+o", "show_overview", "Overview", show=False),
+        Binding("ctrl+q", "quit_app", "Quit", show=False),
+    ]
 
     # An empty prompt gets the summoning '/' preloaded; existing text
     # is left untouched.
@@ -320,6 +329,32 @@ class BaseScreen(Screen):
             prompt.value = "/"
             prompt.cursor_position = len(prompt.value)
         prompt.focus()
+
+    def action_trigger_build(self):
+        try:
+            commands.dispatch(self.app, "/build")
+        except commands.CommandError as e:
+            self.say(str(e), error=True)
+
+    def action_toggle_remote(self):
+        session = getattr(self.app, "remote_session", None)
+        cmd = "/remote disconnect" if (session and session.connected) else "/remote"
+        try:
+            commands.dispatch(self.app, cmd)
+        except commands.CommandError as e:
+            self.say(str(e), error=True)
+
+    def action_run_tests(self):
+        try:
+            commands.dispatch(self.app, "/test")
+        except commands.CommandError as e:
+            self.say(str(e), error=True)
+
+    def action_show_overview(self):
+        self.app.show("overview")
+
+    def action_quit_app(self):
+        self.app.exit()
 
     # Spec tree on the left, screen content on the right. BuildScreen
     # overrides compose() for its own layout.
