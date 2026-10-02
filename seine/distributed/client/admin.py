@@ -150,6 +150,39 @@ class AdminClient:
         resp.raise_for_status()
         return resp.json()
 
+    def me(self) -> dict[str, Any]:
+        url = f"{self.server_url}/api/v1/me"
+        resp = self.session.get(url, headers=self._headers(), timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()
+
+    def set_default_project(self, project: Optional[str]) -> dict[str, Any]:
+        """Set the default project; None clears it."""
+        url = f"{self.server_url}/api/v1/me"
+        resp = self.session.patch(
+            url, json={"default_project": project}, headers=self._headers(), timeout=self.timeout
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def workers_list(self) -> list[dict[str, Any]]:
+        url = f"{self.server_url}/api/v1/workers"
+        resp = self.session.get(url, headers=self._headers(), timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json().get("workers", [])
+
+    def worker_pause(self, worker_id: str, paused: bool = True) -> bool:
+        url = f"{self.server_url}/api/v1/workers/{worker_id}/pause"
+        resp = self.session.post(url, json={"paused": paused}, headers=self._headers(), timeout=self.timeout)
+        resp.raise_for_status()
+        return bool(resp.json().get("ok"))
+
+    def worker_delete(self, worker_id: str) -> bool:
+        url = f"{self.server_url}/api/v1/workers/{worker_id}"
+        resp = self.session.delete(url, headers=self._headers(), timeout=self.timeout)
+        resp.raise_for_status()
+        return bool(resp.json().get("ok"))
+
 
 def run_client_admin(argv: list[str]) -> int:
     """Parse client CLI arguments and invoke remote administration API."""

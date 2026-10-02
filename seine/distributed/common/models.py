@@ -235,3 +235,39 @@ class UserUpdateRequest(BaseModel):
     """User update payload; omitted fields are left unchanged."""
     is_admin: bool | None = None
     active: bool | None = None
+
+
+class UserProfileResponse(BaseModel):
+    """User profile and project role map for client capability negotiation."""
+    id: str
+    is_admin: bool
+    projects: dict[str, str] = Field(default_factory=dict)
+    default_project: str | None = None
+
+
+class UserPreferencesRequest(BaseModel):
+    """Preferences a user changes about themselves; null clears the default project."""
+    default_project: str | None
+
+
+class WorkerRosterItem(BaseModel):
+    """Worker node record displayed in fleet roster."""
+    id: str
+    hostname: str
+    native_arch: str
+    arch_scores: dict[str, float] = Field(default_factory=dict)
+    concurrency_slots: int = 1
+    free_disk_gb: float = 0.0
+    status: str = "online"
+    last_seen: float
+    created_at: float
+
+
+class WorkerRosterResponse(BaseModel):
+    """Roster of registered worker nodes."""
+    workers: list[WorkerRosterItem] = Field(default_factory=list)
+
+
+class WorkerPauseRequest(BaseModel):
+    """Payload to pause or unpause job scheduling on a worker."""
+    paused: bool = True

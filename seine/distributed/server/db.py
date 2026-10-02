@@ -704,15 +704,26 @@ class WorkerRepo:
         return self._to_dict(row) if row else None
 
     def list(self, status: Optional[str] = None) -> list[dict[str, Any]]:
+        """Return all workers sorted by hostname and ID."""
         query = "SELECT * FROM workers"
         params: list[Any] = []
         if status:
             query += " WHERE status = ?"
             params.append(status)
-        query += " ORDER BY id ASC"
+        query += " ORDER BY hostname ASC, id ASC"
 
         cur = self.conn.execute(query, tuple(params))
         return [self._to_dict(r) for r in cur.fetchall()]
+
+    def pause(self, worker_id: str, paused: bool = True) -> bool:
+        """Toggle worker between 'paused' and 'online' state."""
+        status = "paused" if paused else "online"
+        with self.conn:
+            cur = self.conn.execute(
+                "UPDATE workers SET status = ? WHERE id = ?",
+                (status, worker_id),
+            )
+            return cur.rowcount > 0
 
     def update_status(self, worker_id: str, status: str) -> bool:
         now = time.time()
