@@ -19,7 +19,17 @@ from seine.tui.base import BaseScreen, StaticPane
 from seine.tui.render_remote import (
     render_remote_artifacts,
     render_remote_builds,
+    render_remote_ops,
+    render_remote_projects,
+    render_remote_users,
     render_remote_workers,
+)
+from seine.tui.remote_modals import (
+    MemberAssignModal,
+    ProjectCreateModal,
+    TokenDisplayModal,
+    TokenIssueModal,
+    UserCreateModal,
 )
 
 def server_host(url: str) -> str:
@@ -65,15 +75,17 @@ class RemoteBodyStatic(Static):
             return
         idx = event.y - 4
         if idx >= 0:
-            if scr.active_tab == 1 and idx < len(getattr(scr, "remote_builds", [])):
-                scr.selected_indices[1] = idx
-                scr.update_body()
-            elif scr.active_tab == 2 and idx < len(getattr(scr, "remote_workers", [])):
-                scr.selected_indices[2] = idx
-                scr.update_body()
-            elif scr.active_tab == 3 and idx < len(getattr(scr, "remote_artifacts", [])):
-                scr.selected_indices[3] = idx
-                scr.update_body()
+            for tab_id, attr in [
+                (1, "remote_builds"),
+                (2, "remote_workers"),
+                (3, "remote_artifacts"),
+                (4, "remote_users"),
+                (5, "remote_projects"),
+            ]:
+                if scr.active_tab == tab_id and idx < len(getattr(scr, attr, [])):
+                    scr.selected_indices[tab_id] = idx
+                    scr.update_body()
+                    break
 
 class RemoteScreen(BaseScreen):
     BINDINGS = BaseScreen.BINDINGS + [
@@ -92,6 +104,11 @@ class RemoteScreen(BaseScreen):
         Binding("d", "download_artifact", "Download Artifact", show=False),
         Binding("p", "toggle_worker_pause", "Pause Worker", show=False),
         Binding("r", "deregister_worker", "Deregister Worker", show=False),
+        Binding("n", "admin_new", "New", show=False),
+        Binding("t", "admin_issue_token", "Issue PAT", show=False),
+        Binding("a", "admin_toggle_admin", "Toggle Admin", show=False),
+        Binding("x", "admin_toggle_active", "Toggle Active", show=False),
+        Binding("m", "admin_manage_members", "Members", show=False),
         Binding("s", "switch_project", "Switch Project", show=False),
     ]
 
@@ -132,6 +149,11 @@ class RemoteScreen(BaseScreen):
         self.remote_builds: list[dict[str, Any]] = []
         self.remote_workers: list[dict[str, Any]] = []
         self.remote_artifacts: list[dict[str, Any]] = []
+        self.remote_users: list[dict[str, Any]] = []
+        self.remote_tokens: list[dict[str, Any]] = []
+        self.remote_projects: list[dict[str, Any]] = []
+        self.remote_ops_settings: dict[str, Any] = {}
+        self.remote_ops_stats: dict[str, Any] = {}
 
     @property
     def builds(self) -> list[dict[str, Any]]:
@@ -171,19 +193,21 @@ class RemoteScreen(BaseScreen):
             (1, self.remote_builds),
             (2, self.remote_workers),
             (3, self.remote_artifacts),
+            (4, self.remote_users),
+            (5, self.remote_projects),
         ]:
             idx = self.selected_indices.get(tab_id, 0)
             self.selected_indices[tab_id] = max(0, min(idx, len(items) - 1)) if items else 0
 
     def _selected_item(self) -> Optional[dict[str, Any]]:
-        if self.active_tab == 1:
-            items = self.remote_builds
-        elif self.active_tab == 2:
-            items = self.remote_workers
-        elif self.active_tab == 3:
-            items = self.remote_artifacts
-        else:
-            items = []
+        tab_to_list = {
+            1: self.remote_builds,
+            2: self.remote_workers,
+            3: self.remote_artifacts,
+            4: self.remote_users,
+            5: self.remote_projects,
+        }
+        items = tab_to_list.get(self.active_tab, [])
         idx = self.selected_indices.get(self.active_tab, 0)
         return items[idx] if (items and 0 <= idx < len(items)) else None
 
@@ -193,6 +217,11 @@ class RemoteScreen(BaseScreen):
             self.remote_builds = []
             self.remote_workers = []
             self.remote_artifacts = []
+            self.remote_users = []
+            self.remote_tokens = []
+            self.remote_projects = []
+            self.remote_ops_settings = {}
+            self.remote_ops_stats = {}
             self.update_body()
             return
 
@@ -235,6 +264,65 @@ class RemoteScreen(BaseScreen):
                             if isinstance(data, dict)
                             else (data if isinstance(data, list) else [])
                         )
+                elif self.active_tab == 4 and session.is_admin:
+                    # fetch users and all PATs in parallel within the same worker
+                    r_users = session.request(
+                        "get", "/api/v1/users",
+                        timeout=5.0,
+                    )
+                    if r_users.status_code == 200:
+                        self.remote_users = r_users.json() or []
+                    r_tokens = session.request(
+                        "get", "/api/v1/tokens",
+                        timeout=5.0,
+                    )
+                    if r_tokens.status_code == 200:
+                        self.remote_tokens = r_tokens.json() or []
+                elif self.active_tab == 5 and session.is_admin:
+                    r_proj = session.request(
+                        "get", "/api/v1/projects",
+                        timeout=5.0,
+                    )
+                    if r_proj.status_code == 200:
+                        self.remote_projects = r_proj.json() or []
+                elif self.active_tab == 6 and session.is_admin:
+                    # aggregate queue stats from builds list; no dedicated endpoint yet
+                    r_builds = session.request(
+                        "get", "/api/v1/builds",
+                        timeout=5.0,
+                    )
+                    if r_builds.status_code == 200:
+                        all_builds = r_builds.json() or []
+                    else:
+                        all_builds = []
+                    r_workers = session.request(
+                        "get", "/api/v1/workers",
+                        timeout=5.0,
+                    )
+                    workers_data = []
+                    if r_workers.status_code == 200:
+                        wd = r_workers.json()
+                        workers_data = wd.get("workers", []) if isinstance(wd, dict) else wd or []
+                    stats: dict[str, Any] = {"total_builds": len(all_builds)}
+                    for st in ("queued", "running", "completed", "failed", "cancelled"):
+                        stats[st] = sum(
+                            1 for b in all_builds
+                            if (b.get("status") or "").lower() in (st, st.rstrip("led") + "ling")
+                        )
+                    online_w = [w for w in workers_data if (w.get("status") or "online") == "online"]
+                    paused_w = [w for w in workers_data if (w.get("status") or "") == "paused"]
+                    stats["workers_online"] = len(online_w)
+                    stats["workers_paused"] = len(paused_w)
+                    stats["total_slots"] = sum(w.get("concurrency_slots", 1) for w in workers_data)
+                    stats["free_disk_gb"] = sum(float(w.get("free_disk_gb", 0.0) or 0.0) for w in online_w)
+                    self.remote_ops_stats = stats
+                    self.remote_ops_settings = {
+                        "url": server_host(session.url),
+                        "user_id": session.user_id,
+                        "is_admin": session.is_admin,
+                        "active_project": session.active_project,
+                        "ping_ms": session.ping_ms,
+                    }
             except Exception:
                 pass
 
@@ -314,6 +402,12 @@ class RemoteScreen(BaseScreen):
             return render_remote_artifacts(
                 self.remote_artifacts, self.selected_indices.get(3, 0),
                 state.snapshot() if state else None)
+        if self.active_tab == 4:
+            return render_remote_users(self.remote_users, self.remote_tokens, self.selected_indices.get(4, 0))
+        if self.active_tab == 5:
+            return render_remote_projects(self.remote_projects, self.selected_indices.get(5, 0))
+        if self.active_tab == 6:
+            return render_remote_ops(self.remote_ops_settings, self.remote_ops_stats)
 
         lines = [
             f" REMOTE {tab_name.upper()}",
@@ -363,15 +457,13 @@ class RemoteScreen(BaseScreen):
             self.update_body()
 
     def action_cursor_down(self):
-        items = (
-            self.remote_builds
-            if self.active_tab == 1
-            else (
-                self.remote_workers
-                if self.active_tab == 2
-                else (self.remote_artifacts if self.active_tab == 3 else [])
-            )
-        )
+        items = {
+            1: self.remote_builds,
+            2: self.remote_workers,
+            3: self.remote_artifacts,
+            4: self.remote_users,
+            5: self.remote_projects,
+        }.get(self.active_tab, [])
         idx = self.selected_indices.get(self.active_tab, 0)
         if idx < len(items) - 1:
             self.selected_indices[self.active_tab] = idx + 1
@@ -600,6 +692,253 @@ class RemoteScreen(BaseScreen):
         else:
             _worker()
 
+    def _require_admin(self) -> bool:
+        session = getattr(self.app, "remote_session", None)
+        if not (session and session.connected):
+            self.say("not connected to a remote server", warning=True)
+            return False
+        if not session.is_admin:
+            self.say("admin privileges required", warning=True)
+            return False
+        return True
+
+    def _run_admin_request(self, fn, on_success: str):
+        """Run an admin API call in a background worker; fetch_data on success."""
+        def _worker():
+            try:
+                msg, err = fn()
+            except Exception as e:
+                msg, err = str(e), True
+
+            def _notify():
+                self.say(msg, error=err)
+                if not err:
+                    self.fetch_data()
+
+            if getattr(self.app, "is_running", False) is True and hasattr(self.app, "call_from_thread"):
+                try:
+                    self.app.call_from_thread(_notify)
+                    return
+                except RuntimeError:
+                    pass
+            _notify()
+
+        if getattr(self.app, "is_running", False) is True and hasattr(self.app, "run_worker"):
+            self.app.run_worker(_worker, thread=True)
+        else:
+            _worker()
+
+    def action_admin_new(self):
+        """Open creation modal for the active admin tab (users: n, projects: n)."""
+        if not self._require_admin():
+            return
+        session = getattr(self.app, "remote_session", None)
+
+        if self.active_tab == 4:
+            # create a new user account
+            def _on_result(result):
+                if not result:
+                    return
+                uid = result["username"]
+                is_admin = result.get("is_admin", False)
+
+                def _call():
+                    try:
+                        resp = session.request(
+                            "post", "/api/v1/users",
+                            json={"id": uid, "is_admin": is_admin},
+                            timeout=5.0,
+                        )
+                        if resp.status_code in (200, 201):
+                            return f"user '{uid}' created", False
+                        return f"create failed ({resp.status_code}): {resp.text}", True
+                    except Exception as e:
+                        return f"create failed: {e}", True
+
+                self._run_admin_request(_call, f"user '{uid}' created")
+
+            if getattr(self.app, "is_running", False) is True:
+                self.app.push_screen(UserCreateModal(), _on_result)
+
+        elif self.active_tab == 5:
+            # create a new project
+            def _on_result(result):
+                if not result:
+                    return
+                name = result["name"]
+                payload = {k: v for k, v in result.items() if v is not None}
+
+                def _call():
+                    try:
+                        resp = session.request(
+                            "post", "/api/v1/projects",
+                            json=payload,
+                            timeout=5.0,
+                        )
+                        if resp.status_code in (200, 201):
+                            return f"project '{name}' created", False
+                        return f"create failed ({resp.status_code}): {resp.text}", True
+                    except Exception as e:
+                        return f"create failed: {e}", True
+
+                self._run_admin_request(_call, f"project '{name}' created")
+
+            if getattr(self.app, "is_running", False) is True:
+                self.app.push_screen(ProjectCreateModal(), _on_result)
+
+    def action_admin_issue_token(self):
+        """Issue a PAT for the selected user (tab 4 only)."""
+        if self.active_tab != 4 or not self._require_admin():
+            return
+        session = getattr(self.app, "remote_session", None)
+        user = self._selected_item()
+        if not user:
+            self.say("no user selected", warning=True)
+            return
+        user_id = str(user.get("id") or "")
+
+        def _on_issue(result):
+            if not result:
+                return
+            days = result.get("days")
+
+            def _call():
+                try:
+                    payload: dict = {"user_id": user_id, "kind": "pat"}
+                    if days is not None:
+                        payload["days"] = days
+                    resp = session.request(
+                        "post", "/api/v1/tokens",
+                        json=payload,
+                        timeout=5.0,
+                    )
+                    if resp.status_code in (200, 201):
+                        return resp.json().get("token", ""), False
+                    return f"issue failed ({resp.status_code}): {resp.text}", True
+                except Exception as e:
+                    return f"issue failed: {e}", True
+
+            def _on_token(token_or_err):
+                if not isinstance(token_or_err, str):
+                    return
+                if " failed" in token_or_err:
+                    self.say(token_or_err, error=True)
+                    return
+                # display token once — never stored again after this modal
+                if getattr(self.app, "is_running", False) is True:
+                    self.app.push_screen(TokenDisplayModal(token_or_err))
+                self.fetch_data()
+
+            def _worker():
+                token_or_err, err = _call()
+                def _notify():
+                    _on_token(token_or_err if not err else f"issue failed: {token_or_err}")
+                if getattr(self.app, "is_running", False) is True and hasattr(self.app, "call_from_thread"):
+                    try:
+                        self.app.call_from_thread(_notify)
+                        return
+                    except RuntimeError:
+                        pass
+                _notify()
+
+            if getattr(self.app, "is_running", False) is True and hasattr(self.app, "run_worker"):
+                self.app.run_worker(_worker, thread=True)
+            else:
+                _worker()
+
+        if getattr(self.app, "is_running", False) is True:
+            self.app.push_screen(TokenIssueModal(user_id=user_id), _on_issue)
+
+    def action_admin_toggle_admin(self):
+        """Toggle global admin flag on the selected user (tab 4 only)."""
+        if self.active_tab != 4 or not self._require_admin():
+            return
+        session = getattr(self.app, "remote_session", None)
+        user = self._selected_item()
+        if not user:
+            self.say("no user selected", warning=True)
+            return
+        user_id = str(user.get("id") or "")
+        new_admin = not bool(user.get("is_admin"))
+
+        def _call():
+            try:
+                resp = session.request(
+                    "patch", f"/api/v1/users/{user_id}",
+                    json={"is_admin": new_admin},
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    label = "granted" if new_admin else "revoked"
+                    return f"admin {label} for '{user_id}'", False
+                return f"update failed ({resp.status_code}): {resp.text}", True
+            except Exception as e:
+                return f"update failed: {e}", True
+
+        self._run_admin_request(_call, "")
+
+    def action_admin_toggle_active(self):
+        """Toggle active/disabled state on the selected user (tab 4 only)."""
+        if self.active_tab != 4 or not self._require_admin():
+            return
+        session = getattr(self.app, "remote_session", None)
+        user = self._selected_item()
+        if not user:
+            self.say("no user selected", warning=True)
+            return
+        user_id = str(user.get("id") or "")
+        new_active = not bool(user.get("active", True))
+
+        def _call():
+            try:
+                resp = session.request(
+                    "patch", f"/api/v1/users/{user_id}",
+                    json={"active": new_active},
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    label = "activated" if new_active else "deactivated"
+                    return f"user '{user_id}' {label}", False
+                return f"update failed ({resp.status_code}): {resp.text}", True
+            except Exception as e:
+                return f"update failed: {e}", True
+
+        self._run_admin_request(_call, "")
+
+    def action_admin_manage_members(self):
+        """Open member assignment modal for the selected project (tab 5 only)."""
+        if self.active_tab != 5 or not self._require_admin():
+            return
+        session = getattr(self.app, "remote_session", None)
+        project = self._selected_item()
+        if not project:
+            self.say("no project selected", warning=True)
+            return
+        project_id = str(project.get("name") or project.get("id") or "")
+
+        def _on_result(result):
+            if not result:
+                return
+            uid = result["user_id"]
+            role = result["role"]
+
+            def _call():
+                try:
+                    resp = session.request(
+                        "post", f"/api/v1/projects/{project_id}/members",
+                        json={"user_id": uid, "role": role},
+                        timeout=5.0,
+                    )
+                    if resp.status_code in (200, 201):
+                        return f"assigned '{uid}' as {role} in '{project_id}'", False
+                    return f"assign failed ({resp.status_code}): {resp.text}", True
+                except Exception as e:
+                    return f"assign failed: {e}", True
+
+            self._run_admin_request(_call, "")
+
+        if getattr(self.app, "is_running", False) is True:
+            self.app.push_screen(MemberAssignModal(project_id=project_id), _on_result)
 
     def action_toggle_worker_pause(self):
         if self.active_tab != 2:
