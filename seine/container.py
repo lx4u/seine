@@ -303,8 +303,19 @@ class ContainerEngine:
         os.makedirs(cache, exist_ok=True)
         return dict(os.environ, TMPDIR=ContainerEngine._short_tmpdir(cache))
 
+    # With SEINE_BUILD_ID set (by seine-agent), tag every container,
+    # and image, with it so a cancelled build's can be found and removed.
+    @staticmethod
+    def _label(cmd):
+        build_id = os.environ.get("SEINE_BUILD_ID")
+        verb = 1 if cmd[:1] == ["container"] else 0
+        if build_id and cmd[verb:verb + 1] in (["run"], ["create"], ["build"]):
+            cmd[verb + 1:verb + 1] = ["--label", f"seine.build_id={build_id}"]
+        return cmd
+
     @staticmethod
     def _podman_cmd(cmd):
+        ContainerEngine._label(cmd)
         cmd.insert(0, ContainerEngine.runroot())
         cmd.insert(0, "--runroot")
         cmd.insert(0, ContainerEngine.root())
