@@ -506,6 +506,8 @@ class RegistryProvider(command.Provider):
 
 class SeineApp(App):
     TITLE = "seine"
+    # Commands and the infobar ask the app which screens it has.
+    SCREENS = SCREENS
     COMMANDS = App.COMMANDS | {RegistryProvider}
     CSS = """
     #main, #buildrow { height: 1fr; }
@@ -571,8 +573,13 @@ class SeineApp(App):
     }
     """
 
-    def __init__(self, files=None, interaction_socket=None):
+    def __init__(self, files=None, interaction_socket=None, remote=None, connect_remote=False,
+                 remote_insecure=None, remote_ca_cert=None):
         super().__init__()
+        self._remote = remote
+        self._connect_remote = connect_remote
+        self._remote_insecure = remote_insecure
+        self._remote_ca_cert = remote_ca_cert
         self.context = Context()
         self.history = History()
         self.build_state = BuildState()
@@ -764,8 +771,19 @@ class SeineApp(App):
         # command like /plan needs a screen already on the stack.
         self.call_after_refresh(self._run_startup_commands, current["startup_commands"])
         # Auto-connect in a worker thread so UI startup is not blocked by latency.
-        if current.get("auto_connect_remote") and current.get("default_remote"):
-            self.run_worker(lambda: self.remote_session.connect(current["default_remote"]), thread=True)
+        remote_target = self._remote or current.get("default_remote")
+        should_connect = self._connect_remote or (current.get("auto_connect_remote") and bool(current.get("default_remote")))
+        if should_connect:
+            if remote_target:
+                self.run_worker(lambda: self._auto_connect(remote_target), thread=True)
+            else:
+                self.say("remote: no URL specified and default_remote not configured", error=True)
+
+    def _auto_connect(self, target):
+        session = self.remote_session
+        if session.connect(target, insecure=self._remote_insecure,
+                           ca_cert=self._remote_ca_cert) and session.warning:
+            self.call_from_thread(self.say, f"remote: warning: {session.warning}", warning=True)
 
     def _run_startup_commands(self, lines):
         # Nothing seeded: leave the freshly mounted screen exactly as
@@ -946,27 +964,64 @@ def _is_markdown_retheme_race(error):
     return False
 
 # Entry point for the TUI. 'argv' may contain --interaction-socket
-# (or --interaction-socket=PATH) followed by zero or more spec files;
-# the socket argument is stripped before the rest are treated as specs.
+# (or --interaction-socket=PATH), --remote[=URL] (with --insecure and
+# --ca-cert[=PATH] for the connection) followed by zero or
+# more spec files; flags are stripped before the rest are treated as specs.
 def run(argv=None):
     # Manual parsing, consistent with the rest of the CLI's getopt use.
     spec_files: list[str] = []
     socket_path: str | None = None
+    remote_target: str | None = None
+    connect_remote: bool = False
+    remote_insecure: bool | None = None
+    remote_ca_cert: str | None = None
     if argv:
-        it = iter(argv)
-        for arg in it:
+        args = list(argv)
+        idx = 0
+        while idx < len(args):
+            arg = args[idx]
+            idx += 1
             if arg.startswith("--interaction-socket"):
                 if arg == "--interaction-socket":
-                    try:
-                        socket_path = next(it)
-                    except StopIteration:
+                    if idx >= len(args):
                         raise ValueError("--interaction-socket requires a path")
+                    socket_path = args[idx]
+                    idx += 1
                 else:
                     _, _, path = arg.partition("=")
                     if not path:
                         raise ValueError("--interaction-socket requires a path")
                     socket_path = path
                 continue
+            if arg == "--insecure":
+                remote_insecure = True
+                continue
+            if arg.startswith("--ca-cert"):
+                if arg == "--ca-cert":
+                    if idx >= len(args):
+                        raise ValueError("--ca-cert requires a path")
+                    path = args[idx]
+                    idx += 1
+                else:
+                    _, _, path = arg.partition("=")
+                if not path:
+                    raise ValueError("--ca-cert requires a path")
+                from seine import settings
+                remote_ca_cert = settings.check_ca_cert(path)
+                continue
+            if arg.startswith("--remote"):
+                connect_remote = True
+                if arg == "--remote":
+                    if idx < len(args) and not args[idx].startswith("-") and not args[idx].endswith((".yaml", ".yml")):
+                        remote_target = args[idx]
+                        idx += 1
+                else:
+                    _, _, r_url = arg.partition("=")
+                    if r_url:
+                        remote_target = r_url
+                continue
             spec_files.append(arg)
-    SeineApp(files=spec_files or None, interaction_socket=socket_path).run()
+    SeineApp(files=spec_files or None, interaction_socket=socket_path,
+             remote=remote_target, connect_remote=connect_remote,
+             remote_insecure=remote_insecure, remote_ca_cert=remote_ca_cert).run()
 

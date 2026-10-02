@@ -22,7 +22,8 @@ class TuiCmd(Cmd):
     NAME = "tui"
     USAGE = """
 Usage:
-  seine tui [--interaction-socket=PATH] [SPEC...] [-- SPEC...]...
+  seine tui [--interaction-socket=PATH] [--remote[=URL]] [--insecure]
+            [--ca-cert=PATH] [SPEC...] [-- SPEC...]...
 
 Opens the interactive TUI, optionally starting with SPEC as the active
 specification -- the same grouping 'seine build' takes. Needs the 'tui'
@@ -33,6 +34,12 @@ observing the TUI from another process: newline-delimited JSON in both
 directions, commands in ("input"/"ai_input"), events out (a build or
 test finishing, a screen switch, a gated tool's approval dialog opening/
 resolving, a spec file being written, ...).
+
+--remote[=URL] connects to a remote server on startup (connecting to
+default_remote if URL is omitted). --insecure allows plain http:// to a
+server that is not on this machine, --ca-cert names the CA bundle to
+verify its TLS certificate with; they override the remote_insecure and
+remote_ca_cert settings.
 """
 
     def main(self, argv):

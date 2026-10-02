@@ -631,6 +631,189 @@ def _target(app, argv):
     else:
         raise CommandError("unknown /target verb '%s' -- '/help' lists them" % verb)
 
+def _remote_status(app, session):
+    if session is None or not session.connected:
+        app.say("remote: disconnected (local engine mode)")
+        return
+    ping = f" ({session.ping_ms}ms)" if session.ping_ms is not None else ""
+    role = "admin" if session.is_admin else "member"
+    user = f" · user: {session.user_id} [{role}]" if session.user_id else ""
+    proj = f" · project: {session.active_project}" if session.active_project else ""
+    app.say(f"remote: {session.url}{ping}{user}{proj}")
+
+def _remote_screen(app):
+    if hasattr(app, "show") and "remote" in getattr(app, "SCREENS", {}):
+        app.show("remote")
+    else:
+        app.say("remote: cockpit screen not registered")
+
+def _remote_connect(app, url, insecure=None, ca_cert=None):
+    def _do_connect():
+        target = url
+        if not target:
+            from seine import settings
+            target = settings.load().get("default_remote")
+        if not target:
+            try:
+                from seine.tui.credentials import tui_prompt
+                prompt_fn = tui_prompt(app)
+                values = prompt_fn("Connect to Remote Server", {"server_url": ("", False)})
+                target = values.get("server_url", "").strip()
+            except Exception:
+                target = None
+        if not target:
+            _report_say(app, "remote: no URL specified and default_remote not configured", warning=True)
+            return
+
+        session = getattr(app, "remote_session", None)
+        if session is None:
+            _report_say(app, "remote: session not initialized", error=True)
+            return
+
+        _report_say(app, f"remote: connecting to {target}...")
+        options = {k: v for k, v in (("insecure", insecure), ("ca_cert", ca_cert))
+                   if v is not None}
+        ok = session.connect(target, **options)
+        if ok:
+            _report_say(app, f"remote: connected to {session.url}")
+            if session.warning:
+                _report_say(app, f"remote: warning: {session.warning}", warning=True)
+            if hasattr(app, "show") and "remote" in getattr(app, "SCREENS", {}):
+                _run_on_app(app, lambda: app.show("remote"))
+        else:
+            err = session.last_error or "connection failed"
+            _report_say(app, f"remote error: {err}", error=True)
+
+    if getattr(app, "is_running", False) is True and hasattr(app, "run_worker"):
+        app.run_worker(_do_connect, thread=True)
+    else:
+        _do_connect()
+
+def _report_say(app, msg, **kwargs):
+    if getattr(app, "is_running", False) is True and hasattr(app, "call_from_thread"):
+        app.call_from_thread(app.say, msg, **kwargs)
+    else:
+        app.say(msg, **kwargs)
+
+def _run_on_app(app, fn):
+    if getattr(app, "is_running", False) is True and hasattr(app, "call_from_thread"):
+        app.call_from_thread(fn)
+    else:
+        fn()
+
+def _remote(app, argv):
+    """connect to a remote server, manage remote sessions, or view remote status
+
+    Connect to a remote cluster, disconnect to return to local engine mode,
+    inspect connection latency and session details, or switch to the remote
+    cockpit screen. '/remote [URL] [--insecure] [--ca-cert=PATH]' connects
+    to URL (default_remote if omitted): '--insecure' allows plain http://
+    to a server that is not on this machine, '--ca-cert' names the CA
+    bundle to verify its TLS certificate with. Either one overrides the
+    remote_insecure / remote_ca_cert setting for this connection.
+    """
+    session = getattr(app, "remote_session", None)
+    if not argv:
+        if session and session.connected:
+            _remote_screen(app)
+            return
+        _remote_connect(app, None)
+        return
+
+    verb = argv[0]
+    rest = argv[1:]
+
+    if verb not in ("disconnect", "status", "screen"):
+        try:
+            opts, args = getopt.gnu_getopt(argv, "", ["insecure", "ca-cert="])
+        except getopt.GetoptError as e:
+            raise CommandError(str(e))
+        if len(args) > 1:
+            raise CommandError("/remote takes at most one URL argument")
+        from seine import settings
+        insecure = ca_cert = None
+        for o, a in opts:
+            if o == "--insecure":
+                insecure = True
+            else:
+                try:
+                    ca_cert = settings.check_ca_cert(a)
+                except ValueError as e:
+                    raise CommandError("--ca-cert %s" % e)
+        _remote_connect(app, args[0] if args else None, insecure, ca_cert)
+    elif verb == "disconnect":
+        if rest:
+            raise CommandError("/remote disconnect takes no arguments")
+        if session:
+            session.disconnect()
+        app.say("remote: disconnected")
+    elif verb == "status":
+        if rest:
+            raise CommandError("/remote status takes no arguments")
+        _remote_status(app, session)
+    else:
+        if rest:
+            raise CommandError("/remote screen takes no arguments")
+        _remote_screen(app)
+
+def _background(app, fn):
+    if getattr(app, "is_running", False) is True and hasattr(app, "run_worker"):
+        app.run_worker(fn, thread=True)
+    else:
+        fn()
+
+def _apply_project(app, session, name, keep):
+    session.use_project(name)
+    _report_say(app, f"project: {name}")
+    if keep:
+        error = session.set_default_project(name)
+        if error:
+            _report_say(app, f"project: could not save the default: {error}", warning=True)
+        else:
+            _report_say(app, f"project: {name} is now your default")
+
+def _project_chosen(app, session, result):
+    if result is not None:
+        _background(app, lambda: _apply_project(app, session, *result))
+
+def _choose_project(app, session, name, keep):
+    projects = session.all_projects()
+    if name is not None:
+        if name not in projects:
+            known = ", ".join(sorted(projects)) or "none"
+            _report_say(app, f"project: unknown project '{name}' -- you can use: {known}", error=True)
+            return
+        _apply_project(app, session, name, keep)
+        return
+    if not projects:
+        _report_say(app, "project: you are not a member of any project", warning=True)
+        return
+    from seine.tui.project_picker import ProjectPicker
+    picker = ProjectPicker(projects, session.active_project,
+                           offer_default=session.default_project is None)
+    _run_on_app(app, lambda: app.push_screen(
+        picker, lambda result: _project_chosen(app, session, result)))
+
+def _project(app, argv):
+    """choose the project remote builds go to
+
+    Lists the projects you can use and asks. '/project NAME' picks one
+    directly, and with '--default' also saves it on the server as your
+    default project, used when you give no project.
+    """
+    session = getattr(app, "remote_session", None)
+    if session is None or not session.connected:
+        raise CommandError("not connected to a remote server -- '/remote' first")
+    try:
+        opts, args = getopt.gnu_getopt(argv, "", ["default"])
+    except getopt.GetoptError as e:
+        raise CommandError(str(e))
+    if len(args) > 1:
+        raise CommandError("/project takes at most one project name")
+    if opts and not args:
+        raise CommandError("--default needs a project name")
+    _background(app, lambda: _choose_project(app, session, args[0] if args else None, bool(opts)))
+
 def _test(app, argv):
     """run the active specification's own tests against a real target
 
@@ -801,6 +984,10 @@ REGISTRY = {
                 "storage host|target|write IMAGE|snapshot|rollback|"
                 "console ...|status]",
                 *_doc(_target)),
+        Command("remote",   _remote,
+                "[URL|disconnect|status|screen] [--insecure] [--ca-cert=PATH]",
+                *_doc(_remote)),
+        Command("project",  _project,  "[NAME] [--default]",       *_doc(_project)),
         Command("test",      _test,      "[--tags=TAG,...] [SPEC...]",
                 *_doc(_test)),
         Command("replay",    _replay,    "[CAST-PATH]",              *_doc(_replay)),
@@ -824,6 +1011,8 @@ REGISTRY["q"] = REGISTRY["quit"]
 OPTIONS = {
     "plan":  BuildCmd.LONG_OPTIONS,
     "build": ["jobs=", "reproducible"],
+    "remote": ["disconnect", "status", "screen", "insecure", "ca-cert="],
+    "project": ["default"],
     "cache": ["explain", "why"],
     "issues": ["filter=", "min-urgency=", "min-severity=", "rescan"],
 }
