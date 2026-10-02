@@ -12,7 +12,25 @@ import os
 # seine.tui.history.parse_prune_after()).
 DEFAULTS = {"jobs": None, "resources": None, "theme": None,
            "startup_commands": [], "llm_model": None, "llm_api_base": None,
-           "sbom2cve_program": None, "history_pruning": None}
+           "sbom2cve_program": None, "history_pruning": None,
+           "default_remote": None, "auto_connect_remote": False,
+           "remote_insecure": False, "remote_ca_cert": None}
+
+# The two checks below back both /set and the /settings editor, so the
+# same text is accepted (or refused) either way.
+def parse_bool(text):
+    value = text.strip().lower()
+    if value in ("true", "1", "yes", "on"):
+        return True
+    if value in ("false", "0", "no", "off"):
+        return False
+    raise ValueError("expects 'true' or 'false', not '%s'" % text)
+
+def check_ca_cert(path):
+    expanded = os.path.expanduser(path)
+    if not os.path.isfile(expanded):
+        raise ValueError("expects a certificate file, '%s' is not one" % path)
+    return expanded
 
 def default_path():
     base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")

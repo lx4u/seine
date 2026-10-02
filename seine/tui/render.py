@@ -737,12 +737,17 @@ def render_settings():
     theme = current["theme"] or "dark (default)"
     llm_model = current["llm_model"] or "(unset)"
     llm_api_base = current["llm_api_base"] or "(unset)"
+    default_remote = current.get("default_remote") or "(unset)"
+    remote_insecure = "on" if current.get("remote_insecure") else "off (default)"
+    remote_ca_cert = current.get("remote_ca_cert") or "(unset)"
     # Order matches GeneralSettings.KEYS (seine/tui/settings.py):
     # 'resources' last so 'theme' stays one 'down' press from the top.
     return "\n".join(
         "%-16s %s" % (key, value) for key, value in
         [("jobs", jobs), ("theme", theme), ("llm_model", llm_model),
-         ("llm_api_base", llm_api_base), ("resources", resources)]
+         ("llm_api_base", llm_api_base), ("default_remote", default_remote),
+         ("remote_insecure", remote_insecure),
+         ("remote_ca_cert", remote_ca_cert), ("resources", resources)]
     ) + "\n"
 
 # Same "exactly one active group" restriction ai.py's tools apply to a
