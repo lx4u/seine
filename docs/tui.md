@@ -125,6 +125,56 @@ credentials are not yet saved or are rejected, a modal dialog prompts for the
 access key and secret key (masked with a reveal toggle) before building starts.
 Valid credentials are saved to writable backends (keyring or settings).
 
+## Remote server
+
+`/remote [URL]` (or `seine tui --remote[=URL]`) connects the TUI to a
+`seine-server` (see [distributed-build.md](distributed-build.md)); `URL`
+defaults to the `default_remote` setting. Connected, `/build` runs on the
+server's workers and its log streams into the Build screen -- `--local`
+builds on this machine anyway, `--no-download` skips fetching the
+artifacts. `/remote` again opens the cockpit: builds, workers and
+artifacts, plus users, projects and server settings for an
+administrator. `ctrl-1` to `ctrl-6` switch the cockpit's tabs, even while you
+type in the prompt (the terminal has to report ctrl-digit, as kitty, WezTerm
+and foot do; clicking the sidebar always works). `/remote status` and
+`/remote disconnect` do what they say.
+
+`/project` chooses the project remote builds go to. With no argument it
+lists the projects you can use with your role in each, and a box to make the
+choice your default; `/project NAME` picks one directly, and `--default`
+also saves it as your default on the server. In the cockpit, `s` does the
+same. `/build --project NAME` uses a project for that one build only. With no
+choice made, the TUI takes your default project, else the only project you
+belong to. If there is neither (an administrator, or a member of several
+projects) none is set, the infobar reads `[remote: no project]`, and
+`/build` asks before it starts.
+
+Four settings (`/settings`, or `/set KEY VALUE`) shape the connection:
+
+| Setting | Meaning |
+|---------|---------|
+| `default_remote` | The server `/remote` and `--remote` use when given no URL |
+| `auto_connect_remote` | Connect to `default_remote` when the TUI starts |
+| `remote_insecure` | Allow plain `http://` to a server that is not on this machine, like `seine build --insecure`. Off by default |
+| `remote_ca_cert` | CA bundle verifying the server's TLS certificate (else `$SEINE_CA_CERT`), for a private CA or a self-signed server |
+
+`/remote --insecure` and `/remote --ca-cert=PATH` (also `seine tui
+--insecure --ca-cert=PATH`) override the last two for one connection. A host
+given without a scheme is reached over `https://`, except a loopback one
+(`http://`). Plain `http://` to a remote host is refused unless
+`remote_insecure` allows it, and then the token travels unencrypted: `/remote`
+says so when it connects.
+
+The token comes from `$SEINE_TOKEN` (when not empty), else the keyring, else
+`~/.config/seine/credentials.json`. With none, a dialog asks for it
+(masked, with a reveal toggle) and a "Save for next time" box, ticked, offers
+to keep it in the keyring or, without one, in `credentials.json`. A token is
+saved only once the server has accepted it. When the server rejects a saved
+token the dialog opens again; after 3 rejected tokens the connection fails
+and nothing more is asked until the next `/remote`. A `$SEINE_TOKEN` the
+server rejects is asked for again too, but it keeps winning over what you
+save until you unset it.
+
 ## Vendoring
 
 `/vendor` runs a specification's own `vendor:` section the same way
