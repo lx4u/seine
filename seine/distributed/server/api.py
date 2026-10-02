@@ -41,7 +41,12 @@ from seine.distributed.common.models import (
     RegisterWorkerResponse,
     TokenIssueRequest,
     UserCreateRequest,
+    UserPreferencesRequest,
+    UserProfileResponse,
     UserUpdateRequest,
+    WorkerPauseRequest,
+    WorkerRosterItem,
+    WorkerRosterResponse,
 )
 from seine.distributed.server import uploads, validation
 from seine.distributed.server.auth import (
@@ -724,6 +729,81 @@ def create_app(
                 detail=f"User '{user_id}' not found",
             )
         return user
+
+    def _profile(db: Database, user_token: dict[str, Any]) -> UserProfileResponse:
+        user_id = user_token["user_id"]
+        is_admin = is_system_admin(db, user_token)
+        rows = db.conn.execute(
+            "SELECT project_id, role FROM project_members WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+        projects = {r["project_id"]: r["role"] for r in rows}
+        user = db.users.get(user_id)
+        default = user["default_project"] if user else None
+        # An administrator picks any project; anybody else only keeps one they belong to.
+        if default and not (is_admin or default in projects):
+            default = None
+        return UserProfileResponse(
+            id=user_id, is_admin=is_admin, projects=projects, default_project=default
+        )
+
+    @app.get("/api/v1/me", response_model=UserProfileResponse)
+    async def get_current_user_profile(
+        request: Request,
+        user_token: dict[str, Any] = Depends(current_user),
+    ) -> UserProfileResponse:
+        return _profile(get_db(request), user_token)
+
+    @app.patch("/api/v1/me", response_model=UserProfileResponse)
+    async def update_current_user_preferences(
+        payload: UserPreferencesRequest,
+        request: Request,
+        user_token: dict[str, Any] = Depends(current_user),
+    ) -> UserProfileResponse:
+        db = get_db(request)
+        project_id = None
+        if payload.default_project is not None:
+            project = load_project(db, payload.default_project)
+            require_member(db, user_token, project["id"])
+            project_id = project["id"]
+        db.users.set_default_project(user_token["user_id"], project_id)
+        return _profile(db, user_token)
+
+    @app.get("/api/v1/workers", response_model=WorkerRosterResponse)
+    async def list_workers(
+        request: Request,
+        user_token: dict[str, Any] = Depends(current_user),
+    ) -> WorkerRosterResponse:
+        db = get_db(request)
+        workers = await run_in_threadpool(db.workers.list)
+        return WorkerRosterResponse(workers=[WorkerRosterItem(**w) for w in workers])
+
+    @app.post("/api/v1/workers/{worker_id}/pause")
+    async def pause_worker(
+        worker_id: str,
+        payload: WorkerPauseRequest,
+        request: Request,
+        user_token: dict[str, Any] = Depends(current_user),
+    ) -> dict[str, Any]:
+        db = get_db(request)
+        require_system_admin(db, user_token)
+        ok = await run_in_threadpool(db.workers.pause, worker_id, payload.paused)
+        if not ok:
+            raise HTTPException(status_code=404, detail=f"Worker '{worker_id}' not found")
+        return {"ok": True, "worker_id": worker_id, "status": "paused" if payload.paused else "online"}
+
+    @app.delete("/api/v1/workers/{worker_id}")
+    async def delete_worker(
+        worker_id: str,
+        request: Request,
+        user_token: dict[str, Any] = Depends(current_user),
+    ) -> dict[str, Any]:
+        db = get_db(request)
+        require_system_admin(db, user_token)
+        ok = await run_in_threadpool(db.workers.delete, worker_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail=f"Worker '{worker_id}' not found")
+        return {"ok": True, "deleted": worker_id}
 
     return app
 
