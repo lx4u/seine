@@ -24,7 +24,8 @@ HINT = "Tab switch · Up/Down move · Enter edit · Del clear · Esc close"
 class GeneralSettings(OptionList):
     # Keep 'resources' last, not right after 'jobs': existing tests and
     # navigation both expect 'theme' one 'down' press from the top.
-    KEYS = ["jobs", "theme", "llm_model", "llm_api_base", "resources"]
+    KEYS = ["jobs", "theme", "llm_model", "llm_api_base", "default_remote",
+            "remote_insecure", "remote_ca_cert", "resources"]
 
     def refresh_from(self):
         from seine.tui.render import render_settings
@@ -73,7 +74,7 @@ class SettingsScreen(ModalBase):
 
     DEFAULT_CSS = """
     #generallabel { text-style: bold; }
-    #general { height: 7; border: round $border-blurred; }
+    #general { height: 10; border: round $border-blurred; }
     #general:focus { border: round $border; }
     #startuplabel { text-style: bold; padding-top: 1; }
     #startup { height: 1fr; border: round $border-blurred; }
@@ -155,7 +156,7 @@ class SettingsScreen(ModalBase):
         if key is None:
             return
         current = settings.load()
-        current[key] = None
+        current[key] = settings.DEFAULTS[key]
         settings.save(current)
         self._redraw(focus="general")
 
@@ -191,6 +192,8 @@ class SettingsScreen(ModalBase):
             if key == "resources":
                 from seine.build import format_resources
                 editrow.value = format_resources(value)
+            elif key == "remote_insecure":
+                editrow.value = "true" if value else "false"
             else:
                 editrow.value = str(value) if value is not None else ""
             label = key
@@ -212,13 +215,14 @@ class SettingsScreen(ModalBase):
             self._commit_startup(index, value)
 
     # 'theme' is picked, not typed, so never reaches this. 'jobs' and
-    # 'resources' are validated; llm_model/llm_api_base are free text,
+    # 'resources', remote_insecure and remote_ca_cert are validated;
+    # llm_model/llm_api_base are free text,
     # litellm's to judge.
     def _commit_general(self, index, value):
         key = self.query_one(GeneralSettings).key_at(index)
         current = settings.load()
         if not value:
-            current[key] = None
+            current[key] = settings.DEFAULTS[key]
         elif key == "jobs":
             try:
                 jobs = int(value)
@@ -235,6 +239,18 @@ class SettingsScreen(ModalBase):
                 current[key] = parse_resources(value)
             except ValueError as e:
                 self._edit_error("resources %s" % e)
+                return
+        elif key == "remote_insecure":
+            try:
+                current[key] = settings.parse_bool(value)
+            except ValueError as e:
+                self._edit_error("%s %s" % (key, e))
+                return
+        elif key == "remote_ca_cert":
+            try:
+                current[key] = settings.check_ca_cert(value)
+            except ValueError as e:
+                self._edit_error("%s %s" % (key, e))
                 return
         else:
             current[key] = value

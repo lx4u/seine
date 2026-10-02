@@ -429,20 +429,26 @@ def _settings(app, argv):
 # two keys, never a Textual name.
 THEMES = {"dark": "textual-dark", "light": "textual-light"}
 
-# jobs/resources/theme/sbom2cve_program/history_pruning only;
+# jobs/resources/theme/default_remote/sbom2cve_program/history_pruning only;
 # startup_commands is edited from /settings itself.
 def _set(app, argv):
-    """change one persisted setting: jobs, resources, theme, sbom2cve_program, or history_pruning
+    """change one persisted setting: jobs, resources, theme, default_remote, sbom2cve_program, or history_pruning
 
     Changes one persisted setting and saves it straight away -- 'jobs'
     (an int >= 1, the default '/build'/'seine build' falls back to when
     no '--jobs' is given), 'resources' ('CLASS=N,CLASS=N', the capacity
     a resource class other than "cpu" defaults to -- same as '--resource'
     on the CLI, see 'seine build --help'), 'theme' ('dark' or 'light',
-    applied immediately, not just on the next startup), 'sbom2cve_program'
-    (a program run as 'PROGRAM SBOM_PATH' by '/issues' and 'seine
-    issues' in place of debsbom's own container, expected to write the
-    same JSON-lines shape 'debsbom sec-scan -f json' does), or
+    applied immediately, not just on the next startup), 'default_remote'
+    (the default server URL or host for remote builds and /remote),
+    'auto_connect_remote' ('true' or 'false', auto-connect on startup),
+    'remote_insecure' ('true' or 'false', allow plain http:// to a remote
+    server that is not on this machine -- same as 'seine build --insecure'),
+    'remote_ca_cert' (a CA bundle file to verify the remote server's TLS
+    certificate with, or 'none'),
+    'sbom2cve_program' (a program run as 'PROGRAM SBOM_PATH' by '/issues'
+    and 'seine issues' in place of debsbom's own container, expected to
+    write the same JSON-lines shape 'debsbom sec-scan -f json' does), or
     'history_pruning' (how long a prompt history line is kept -- 'Nd'
     for N days, or '0' to keep it forever; defaults to 30 days when
     never set).
@@ -472,6 +478,19 @@ def _set(app, argv):
             raise CommandError("theme is 'dark' or 'light', not '%s'" % value)
         current["theme"] = value
         app.theme = THEMES[value]
+    elif key == "default_remote":
+        current["default_remote"] = value
+    elif key in ("auto_connect_remote", "remote_insecure"):
+        try:
+            current[key] = settings.parse_bool(value)
+        except ValueError as e:
+            raise CommandError("%s %s" % (key, e))
+    elif key == "remote_ca_cert":
+        try:
+            current[key] = (None if value == "none"
+                            else settings.check_ca_cert(value))
+        except ValueError as e:
+            raise CommandError("%s %s" % (key, e))
     elif key == "sbom2cve_program":
         current["sbom2cve_program"] = value
     elif key == "history_pruning":
@@ -484,7 +503,9 @@ def _set(app, argv):
     else:
         raise CommandError(
             "unknown setting '%s' -- jobs, resources, theme, "
-            "sbom2cve_program, or history_pruning" % key)
+            "default_remote, auto_connect_remote, remote_insecure, "
+            "remote_ca_cert, sbom2cve_program, "
+            "or history_pruning" % key)
     settings.save(current)
     app.say("%s = %s" % (key, value))
 
