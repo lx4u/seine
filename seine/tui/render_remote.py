@@ -4,6 +4,7 @@
 import time
 from typing import Any, Optional
 
+from seine.distributed.common.models import expired_text
 from seine.progress import elapsed
 from seine.utils import format_size, format_timestamp
 
@@ -291,3 +292,194 @@ def render_remote_ops(settings: dict[str, Any], stats: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _section(title: str, rows: list[tuple[str, Any]]) -> list[str]:
+    """A titled block of 'label: value' lines; unset values are left out."""
+    shown = [(k, v) for k, v in rows if v not in (None, "")]
+    if not shown:
+        return []
+    out = ["", f" {title}", " " + "─" * 30]
+    out.extend(f"   {k + ':':<14} {v}" for k, v in shown)
+    return out
+
+
+def _detail(title: str, sections: list[list[str]]) -> str:
+    lines = [f" {title}", " " + "═" * 30]
+    for sec in sections:
+        lines.extend(sec)
+    return "\n".join(lines)
+
+
+def render_build_detail(b: dict[str, Any]) -> str:
+    mark, label = _status_mark(b.get("status", "queued"))
+    started, finished = b.get("started_at"), b.get("finished_at")
+    spent = None
+    if started is not None:
+        spent = elapsed(max(0, int((finished if finished is not None else time.time()) - started)))
+    arts = [
+        f"   {m.get('name', 'artifact')}  {format_size(m.get('size', 0))}\n     {m.get('sha256', '')}"
+        for m in (b.get("artifact_meta") or []) if isinstance(m, dict)
+    ]
+    sections = [
+        _section("BUILD", [
+            ("ID", b.get("id") or b.get("build_id")),
+            ("Project", b.get("project")),
+            ("Arch", b.get("target_arch") or b.get("architecture")),
+            ("Status", f"{mark} {label}"),
+            ("Release", "yes" if b.get("is_release") else None),
+        ]),
+        _section("TIMING", [
+            ("Submitted by", b.get("user_id")),
+            ("Queued", format_timestamp(b.get("created_at")) if b.get("created_at") else None),
+            ("Started", format_timestamp(started) if started else None),
+            ("Finished", format_timestamp(finished) if finished else None),
+            ("Elapsed", spent),
+        ]),
+        _section("EXECUTION", [
+            ("Worker", b.get("worker_id")),
+            ("Spec", b.get("spec_file")),
+            ("Worktree", b.get("worktree_digest")),
+            ("Error", b.get("error_message")),
+        ]),
+    ]
+    if arts:
+        sections.append(["", " DELIVERABLES", " " + "─" * 30, *arts])
+    if b.get("artifacts_expired_at"):
+        sections.append(_section("RETENTION", [
+            ("Artifacts", expired_text(b.get("artifacts_expired_reason"))),
+            ("Expired at", format_timestamp(b["artifacts_expired_at"])),
+        ]))
+    return _detail("BUILD DETAIL", sections)
+
+
+def render_worker_detail(w: dict[str, Any], now: Optional[float] = None) -> str:
+    st = (w.get("status") or "online").lower()
+    mark = {"online": "● online", "paused": "⏸ paused"}.get(st, f"✖ {st}")
+    seen = w.get("last_seen")
+    age = elapsed(max(0, int((now or time.time()) - seen))) + " ago" if seen else None
+    scores = w.get("arch_scores") or {}
+    sections = [
+        _section("WORKER", [
+            ("ID", w.get("id") or w.get("worker_id")),
+            ("Hostname", w.get("hostname")),
+            ("Status", mark),
+        ]),
+        _section("HEALTH", [
+            ("Last seen", f"{format_timestamp(seen)} ({age})" if seen else None),
+        ]),
+        _section("CAPABILITIES", [("Native arch", w.get("native_arch"))]
+                 + [(f"  {a}", f"{sc:.1f}") for a, sc in sorted(scores.items())]),
+        _section("CAPACITY", [
+            ("Slots", w.get("concurrency_slots", 1)),
+            ("Free disk", f"{float(w.get('free_disk_gb') or 0.0):.1f} GB"),
+        ]),
+    ]
+    return _detail("WORKER DETAIL", sections)
+
+
+def render_artifact_detail(a: dict[str, Any], progress: Optional[dict[str, Any]] = None) -> str:
+    expired = a.get("expired")
+    transfer = None
+    if progress:
+        transfer = _download_label(progress)
+        if progress.get("total"):
+            transfer += f" ({format_size(progress['read'])} / {format_size(progress['total'])})"
+    sections = [
+        _section("ARTIFACT", [
+            ("Name", a.get("name")),
+            ("Size", None if expired else format_size(a.get("size", 0))),
+        ]),
+        _section("INTEGRITY", [("SHA-256", a.get("sha256")), ("Storage key", a.get("key"))]),
+        _section("ORIGIN", [
+            ("Build", a.get("build_id")),
+            ("Project", a.get("project")),
+            ("Arch", a.get("target_arch") or a.get("architecture")),
+        ]),
+        _section("STATUS", [
+            ("State", "expired" if expired else "available"),
+            ("Download", transfer),
+        ]),
+    ]
+    return _detail("ARTIFACT DETAIL", sections)
+
+
+def render_user_detail(u: dict[str, Any], tokens: Optional[list[dict[str, Any]]] = None) -> str:
+    uid = u.get("id")
+    mine = [t for t in (tokens or []) if t.get("user_id") == uid]
+    sections = [
+        _section("USER", [
+            ("ID", uid),
+            ("Role", "System Administrator" if u.get("is_admin") else "Member"),
+            ("State", "Active" if u.get("active", True) else "Disabled"),
+        ]),
+        _section("ATTRIBUTES", [
+            ("Default project", u.get("default_project") or "none"),
+            ("Created", format_timestamp(u.get("created_at"))),
+        ]),
+    ]
+    sections.append(["", f" TOKENS ({len(mine)})", " " + "─" * 30,
+                     *[f"   {t.get('id')}  {format_timestamp(t.get('created_at'))}" for t in mine]])
+    return _detail("USER DETAIL", sections)
+
+
+def render_project_detail(p: dict[str, Any], builds: Optional[list[dict[str, Any]]] = None) -> str:
+    name = p.get("name") or p.get("id")
+    mine = [b for b in (builds or []) if b.get("project") == name]
+    quota = p.get("quota_gb")
+    sections = [
+        _section("PROJECT", [
+            ("Name", name),
+            ("Created", format_timestamp(p.get("created_at"))),
+        ]),
+        _section("CONFIGURATION", [
+            ("Mode", "dev-only" if p.get("dev_only") else "dev + prod"),
+            ("Dev bucket", p.get("dev_bucket")),
+            ("Prod bucket", None if p.get("dev_only") else p.get("prod_bucket")),
+            ("Quota", f"{quota:g} GB" if quota else "none"),
+        ]),
+        _section("ACTIVITY", [
+            ("Queued", sum(1 for b in mine if b.get("status") == "queued")),
+            ("Running", sum(1 for b in mine if b.get("status") == "running")),
+        ]),
+    ]
+    members = p.get("members") or []
+    if members:
+        sections.append(["", " MEMBERS", " " + "─" * 30,
+                         *[f"   {m.get('user_id')}  {m.get('role')}" for m in members]])
+    return _detail("PROJECT DETAIL", sections)
+
+
+def render_ops_detail(settings: dict[str, Any], stats: dict[str, Any]) -> str:
+    lat = settings.get("ping_ms")
+    return _detail("SERVER DETAIL", [
+        _section("DIAGNOSTICS", [
+            ("Endpoint", settings.get("url")),
+            ("Latency", f"{lat} ms" if lat is not None else None),
+            ("Identity", settings.get("user_id")),
+        ]),
+        _section("QUEUE", [(k.capitalize(), stats.get(k, 0)) for k in ("queued", "running")]),
+        _section("FLEET", [
+            ("Online", stats.get("workers_online", 0)),
+            ("Paused", stats.get("workers_paused", 0)),
+        ]),
+    ])
+
+
+def render_remote_detail(tab: int, item: Optional[dict[str, Any]], connected: bool = True, **extra: Any) -> str:
+    """Details of the selected item of a cockpit tab, as plain text."""
+    if not connected:
+        return " No active server connection"
+    if tab == 6:
+        return render_ops_detail(extra.get("settings") or {}, extra.get("stats") or {})
+    if item is None:
+        return " Select an item to view details"
+    if tab == 1:
+        return render_build_detail(item)
+    if tab == 2:
+        return render_worker_detail(item)
+    if tab == 3:
+        return render_artifact_detail(item, extra.get("progress"))
+    if tab == 4:
+        return render_user_detail(item, extra.get("tokens"))
+    if tab == 5:
+        return render_project_detail(item, extra.get("builds"))
+    return ""
