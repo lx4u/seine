@@ -101,14 +101,14 @@ class RemoteSettingsTest(avocado.Test):
 
     def test_render_settings_shows_tls_keys(self):
         text = self.render_settings()
-        self.assertIn("remote_insecure  off (default)", text)
+        self.assertIn("remote_insecure  [○ on | ● OFF] (default)", text)
         self.assertIn("remote_ca_cert   (unset)", text)
         current = self.settings.load()
         current["remote_insecure"] = True
         current["remote_ca_cert"] = "/etc/seine/ca.pem"
         self.settings.save(current)
         text = self.render_settings()
-        self.assertIn("remote_insecure  on", text)
+        self.assertIn("remote_insecure  [● ON | ○ off]", text)
         self.assertIn("remote_ca_cert   /etc/seine/ca.pem", text)
 
     def test_set_command_remote_insecure(self):
@@ -132,6 +132,33 @@ class RemoteSettingsTest(avocado.Test):
         with self.assertRaises(self.commands.CommandError):
             self.commands.dispatch(mock_app, "/set remote_ca_cert /no/such/ca.pem")
         self.assertIsNone(self.settings.load()["remote_ca_cert"])
+
+    def test_settings_screen_toggles_boolean_setting(self):
+        screen = self.SettingsScreen()
+        keys = self.GeneralSettings.KEYS
+        idx = keys.index("remote_insecure")
+        mock_general = mock.Mock()
+        mock_general.key_at.side_effect = lambda i: keys[i] if 0 <= i < len(keys) else None
+        mock_general.has_focus = True
+        mock_general.highlighted = idx
+
+        with mock.patch.object(screen, "_redraw"), \
+                mock.patch.object(screen, "query_one", return_value=mock_general):
+            self.assertFalse(self.settings.load()["remote_insecure"])
+            screen._toggle_general(idx)
+            self.assertTrue(self.settings.load()["remote_insecure"])
+            screen._toggle_general(idx)
+            self.assertFalse(self.settings.load()["remote_insecure"])
+
+            event = mock.Mock()
+            event.option_list.id = "general"
+            event.option_index = idx
+            screen.on_option_list_option_selected(event)
+            self.assertTrue(self.settings.load()["remote_insecure"])
+            self.assertIsNone(screen._editing)
+
+            screen.action_toggle_selected()
+            self.assertFalse(self.settings.load()["remote_insecure"])
 
     def test_settings_screen_validates_and_clears_tls_keys(self):
         screen = self.SettingsScreen()

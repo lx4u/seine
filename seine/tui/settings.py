@@ -32,7 +32,7 @@ class GeneralSettings(OptionList):
         previous = self.highlighted
         self.clear_options()
         for line in render_settings().splitlines():
-            self.add_option(line)
+            self.add_option(Text(line))
         self.highlighted = min(previous, self.option_count - 1) if previous is not None else 0
 
     def key_at(self, index):
@@ -70,6 +70,7 @@ class SettingsScreen(ModalBase):
 
     BINDINGS = [
         Binding("delete", "clear_selected", show=False),
+        Binding("space", "toggle_selected", show=False),
     ]
 
     DEFAULT_CSS = """
@@ -151,6 +152,22 @@ class SettingsScreen(ModalBase):
         elif startup.has_focus:
             self._clear_startup(startup.highlighted)
 
+    def action_toggle_selected(self):
+        if self._editing is not None:
+            return
+        general = self.query_one(GeneralSettings)
+        if general.has_focus:
+            self._toggle_general(general.highlighted)
+
+    def _toggle_general(self, index):
+        key = self.query_one(GeneralSettings).key_at(index)
+        if key is None or not settings.is_bool(key):
+            return
+        current = settings.load()
+        current[key] = not bool(current.get(key, settings.DEFAULTS.get(key)))
+        settings.save(current)
+        self._redraw(focus="general")
+
     def _clear_general(self, index):
         key = self.query_one(GeneralSettings).key_at(index)
         if key is None:
@@ -178,13 +195,19 @@ class SettingsScreen(ModalBase):
             return
         section = "general" if event.option_list.id == "general" else "startup"
         index = event.option_index
+        if section == "general":
+            key = self.query_one(GeneralSettings).key_at(index)
+            if key == "theme":
+                self._editing = (section, index)
+                current_theme = settings.load()["theme"] or "dark"
+                self.query_one(ThemePicker).refresh_from(current_theme)
+                self.query_one("#editlabel", Static).update("theme")
+                self._redraw()
+                return
+            if settings.is_bool(key):
+                self._toggle_general(index)
+                return
         self._editing = (section, index)
-        if section == "general" and self.query_one(GeneralSettings).key_at(index) == "theme":
-            current_theme = settings.load()["theme"] or "dark"
-            self.query_one(ThemePicker).refresh_from(current_theme)
-            self.query_one("#editlabel", Static).update("theme")
-            self._redraw()
-            return
         editrow = self.query_one("#editrow", Input)
         if section == "general":
             key = self.query_one(GeneralSettings).key_at(index)
@@ -192,8 +215,6 @@ class SettingsScreen(ModalBase):
             if key == "resources":
                 from seine.build import format_resources
                 editrow.value = format_resources(value)
-            elif key == "remote_insecure":
-                editrow.value = "true" if value else "false"
             else:
                 editrow.value = str(value) if value is not None else ""
             label = key

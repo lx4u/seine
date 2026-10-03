@@ -746,6 +746,10 @@ def render_chat_header(context):
 # Not spec-scoped: jobs/resources/theme/llm_* only; startup_commands has
 # its own widget on Settings. Unset shows the real fallback value;
 # llm_model/llm_api_base have no fallback, so '(unset)' is used instead.
+def format_bool_toggle(value, is_default=False):
+    toggle = "[● ON | ○ off]" if value else "[○ on | ● OFF]"
+    return "%s (default)" % toggle if is_default else toggle
+
 def render_settings():
     from seine import settings
     from seine.build import format_resources
@@ -756,7 +760,9 @@ def render_settings():
     llm_model = current["llm_model"] or "(unset)"
     llm_api_base = current["llm_api_base"] or "(unset)"
     default_remote = current.get("default_remote") or "(unset)"
-    remote_insecure = "on" if current.get("remote_insecure") else "off (default)"
+    insecure = bool(current.get("remote_insecure"))
+    insecure_default = insecure == settings.DEFAULTS.get("remote_insecure")
+    remote_insecure = format_bool_toggle(insecure, is_default=insecure_default)
     remote_ca_cert = current.get("remote_ca_cert") or "(unset)"
     # Order matches GeneralSettings.KEYS (seine/tui/settings.py):
     # 'resources' last so 'theme' stays one 'down' press from the top.

@@ -16,6 +16,9 @@ DEFAULTS = {"jobs": None, "resources": None, "theme": None,
            "default_remote": None, "auto_connect_remote": False,
            "remote_insecure": False, "remote_ca_cert": None}
 
+def is_bool(key):
+    return key in ("auto_connect_remote", "remote_insecure") or isinstance(DEFAULTS.get(key), bool)
+
 # The two checks below back both /set and the /settings editor, so the
 # same text is accepted (or refused) either way.
 def parse_bool(text):
