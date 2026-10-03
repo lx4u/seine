@@ -145,6 +145,27 @@ class S3Client:
         except S3NotFoundError:
             pass
 
+    def delete_objects(self, bucket, keys):
+        """Delete keys in batches of 1000; keys that are already gone are fine."""
+        keys = list(keys)
+        failed = []
+        for i in range(0, len(keys), 1000):
+            batch = keys[i:i + 1000]
+            resp = self._call(
+                f"delete {len(batch)} objects in {bucket}", self._s3.delete_objects,
+                Bucket=bucket,
+                Delete={"Objects": [{"Key": k} for k in batch], "Quiet": True})
+            # a 200 reply can still carry per-key errors
+            failed += [e for e in resp.get("Errors", [])
+                       if e.get("Code") not in _NOT_FOUND]
+        if failed:
+            names = ", ".join(e.get("Key", "?") for e in failed[:3])
+            first = failed[0]
+            raise S3ClientError(
+                f"delete in {bucket} failed for {len(failed)} keys ({names}): "
+                f"{first.get('Code', '')} {first.get('Message', '')}".strip(),
+                error_code=first.get("Code"))
+
     def presign_get(self, bucket, key, expires_in=3600):
         return self._s3.generate_presigned_url(
             "get_object", Params={"Bucket": bucket, "Key": key},
@@ -171,13 +192,17 @@ class S3Client:
             "next_continuation_token": resp.get("NextContinuationToken") if truncated else None,
         }
 
-    def list_all_keys(self, bucket, prefix=""):
-        """Yield all object keys matching prefix."""
+    def list_all_objects(self, bucket, prefix=""):
+        """Yield every object (key, size, ...) matching prefix, across pages."""
         token = None
         while True:
             res = self.list_objects_v2(bucket, prefix=prefix, continuation_token=token)
-            for item in res["contents"]:
-                yield item["key"]
+            yield from res["contents"]
             if not res["is_truncated"]:
                 break
             token = res["next_continuation_token"]
+
+    def list_all_keys(self, bucket, prefix=""):
+        """Yield all object keys matching prefix."""
+        for item in self.list_all_objects(bucket, prefix):
+            yield item["key"]
