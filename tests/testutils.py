@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import glob
+import multiprocessing.util
 import os
 import shutil
 import subprocess
@@ -22,6 +23,11 @@ def remove_tree(path):
                             stderr=subprocess.DEVNULL)
         except OSError:
             pass
+
+# avocado runs tests in forked children that end with os._exit(), which
+# skips atexit. multiprocessing finalizers still run there.
+def remove_at_exit(path):
+    multiprocessing.util.Finalize(None, remove_tree, (path,), exitpriority=10)
 
 # What a passing test leaves behind should be what avocado itself always
 # writes (debug.log, whiteboard, the results files) -- not a build's own
