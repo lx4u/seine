@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 import requests
 
-from seine.distributed.client.remote import format_size
+from seine.utils import format_size
 from seine.distributed.common.models import format_quota
 from seine.distributed.common.transport import check_server_url, requests_verify
 

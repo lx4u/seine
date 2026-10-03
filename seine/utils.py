@@ -13,6 +13,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+import time
 from urllib.parse import urlsplit
 
 # Debian arch of the machine seine runs on. Anything else is a cross build.
@@ -855,3 +856,26 @@ def display_path(path, start=None):
         return path
 
 
+def format_size(size_bytes):
+    """Return a byte count as 'B', 'KB', 'MB', 'GB' or 'TB'; junk reads as 0 B."""
+    try:
+        val = float(size_bytes or 0)
+    except (TypeError, ValueError):
+        return "0 B"
+    if val < 1024:
+        return f"{int(val)} B"
+    for unit in ("KB", "MB", "GB", "TB"):
+        val /= 1024.0
+        if val < 1024.0 or unit == "TB":
+            return f"{val:.1f} {unit}"
+    return f"{val:.1f} TB"
+
+
+def format_timestamp(ts, date_only=False):
+    """Return a Unix time as local 'YYYY-MM-DD HH:MM', or '--' when unset or invalid."""
+    if not ts:
+        return "--"
+    try:
+        return time.strftime("%Y-%m-%d" if date_only else "%Y-%m-%d %H:%M", time.localtime(ts))
+    except (TypeError, ValueError, OverflowError, OSError):
+        return "--"

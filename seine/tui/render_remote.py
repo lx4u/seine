@@ -5,6 +5,7 @@ import time
 from typing import Any, Optional
 
 from seine.progress import elapsed
+from seine.utils import format_size, format_timestamp
 
 def _status_mark(status: str) -> tuple[str, str]:
     st = (status or "").lower()
@@ -117,19 +118,6 @@ def render_remote_workers(workers: list[dict[str, Any]], selected_index: int = 0
     lines.append(" [p] Pause/Resume Worker   [r] Deregister Worker   [↑/↓] Select")
     return "\n".join(lines)
 
-def _format_size(size_bytes: Any) -> str:
-    try:
-        val = float(size_bytes or 0)
-    except (TypeError, ValueError):
-        return "0 B"
-    if val < 1024:
-        return f"{int(val)} B"
-    for unit in ("KB", "MB", "GB", "TB"):
-        val /= 1024.0
-        if val < 1024.0 or unit == "TB":
-            return f"{val:.1f} {unit}"
-    return f"{val:.1f} TB"
-
 def _download_label(item: Optional[dict[str, Any]]) -> str:
     if not item:
         return ""
@@ -141,7 +129,7 @@ def _download_label(item: Optional[dict[str, Any]]) -> str:
         return "queued"
     if item["total"]:
         return f"{min(100, item['read'] * 100 // item['total'])}%"
-    return _format_size(item["read"])
+    return format_size(item["read"])
 
 
 def render_remote_artifacts(
@@ -170,7 +158,7 @@ def render_remote_artifacts(
         prefix = " ▸ " if i == selected_index else "   "
         name = str(a.get("name") or "")
         short_name = name[:24] + ".." if len(name) > 26 else name
-        size_str = "-" if a.get("expired") else _format_size(a.get("size", 0))
+        size_str = "-" if a.get("expired") else format_size(a.get("size", 0))
         build_id = str(a.get("build_id") or "")
         short_id = build_id[:12] if len(build_id) > 12 else build_id
         project = str(a.get("project") or "")
@@ -224,14 +212,7 @@ def render_remote_users(
         role_str = "admin" if u.get("is_admin") else "member"
         pat_count = str(token_counts.get(uid, 0))
 
-        created = u.get("created_at")
-        if created:
-            try:
-                date_str = time.strftime("%Y-%m-%d", time.localtime(created))
-            except Exception:
-                date_str = "--"
-        else:
-            date_str = "--"
+        date_str = format_timestamp(u.get("created_at"), date_only=True)
 
         lines.append(
             f"{prefix}{status_str:<10} {short_uid:<20} {role_str:<12} {pat_count:<6} {date_str}"
@@ -272,14 +253,7 @@ def render_remote_projects(
         prod = str(p.get("prod_bucket") or "-")
         short_prod = prod[:22] if len(prod) > 22 else prod
 
-        created = p.get("created_at")
-        if created:
-            try:
-                date_str = time.strftime("%Y-%m-%d", time.localtime(created))
-            except Exception:
-                date_str = "--"
-        else:
-            date_str = "--"
+        date_str = format_timestamp(p.get("created_at"), date_only=True)
 
         lines.append(
             f"{prefix}{short_pname:<18} {short_dev:<24} {short_prod:<24} {date_str}"
