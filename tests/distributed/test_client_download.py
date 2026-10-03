@@ -131,11 +131,64 @@ class TestClientArtifactDownload(Test):
         ret, out, _ = self._run()
         self.assertEqual(ret, 0)
 
-        expected_dest = os.path.join(self.tmp_dir, "deploy", "bookworm", "pc-image.raw")
+        expected_dest = os.path.join(self.tmp_dir, "build", "deploy", "bookworm", "pc-image.raw")
         with open(expected_dest, "rb") as f:
             self.assertEqual(f.read(), b"binary-raw-image-bytes")
         self.assertIn("Downloading pc-image.raw", out)
         self.assertIn("Downloaded 1 of 1 artifact(s)", out)
+
+    def test_download_honors_deploy_dir_override(self):
+        deploy = os.path.join(self.tmp_dir, "elsewhere")
+        self._complete({"pc-image.raw": b"binary-raw-image-bytes"})
+        with mock.patch.dict(os.environ, {"SEINE_DEPLOY_DIR": deploy}):
+            ret, _, _ = self._run()
+        self.assertEqual(ret, 0)
+        self.assertTrue(os.path.exists(os.path.join(deploy, "bookworm", "pc-image.raw")))
+
+    def test_the_worker_says_where_artifacts_go_below_the_deploy_directory(self):
+        self._complete({"disk.img": b"disk-content"},
+                       manifest=[{"name": "disk.img", "size": 12, "sha256": sha(b"disk-content"),
+                                  "subdir": "trixie"}])
+        ret, _, _ = self._run()
+        self.assertEqual(ret, 0)
+        self.assertTrue(os.path.isfile(os.path.join(self.tmp_dir, "build", "deploy", "trixie", "disk.img")))
+
+    def test_the_worker_can_say_the_deploy_directory_itself(self):
+        self._complete({"disk.img": b"disk-content"},
+                       manifest=[{"name": "disk.img", "size": 12, "sha256": sha(b"disk-content"),
+                                  "subdir": ""}])
+        ret, _, _ = self._run()
+        self.assertEqual(ret, 0)
+        self.assertTrue(os.path.isfile(os.path.join(self.tmp_dir, "build", "deploy", "disk.img")))
+
+    def test_the_subdirectory_follows_the_local_deploy_directory_setting(self):
+        deploy = os.path.join(self.tmp_dir, "elsewhere")
+        self._complete({"disk.img": b"disk-content"},
+                       manifest=[{"name": "disk.img", "size": 12, "sha256": sha(b"disk-content"),
+                                  "subdir": "trixie"}])
+        with mock.patch.dict(os.environ, {"SEINE_DEPLOY_DIR": deploy}):
+            ret, _, _ = self._run()
+        self.assertEqual(ret, 0)
+        self.assertTrue(os.path.isfile(os.path.join(deploy, "trixie", "disk.img")))
+
+    def test_dest_dir_wins_over_the_workers_subdirectory(self):
+        out_dir = os.path.join(self.tmp_dir, "out")
+        self._complete({"disk.img": b"disk-content"},
+                       manifest=[{"name": "disk.img", "size": 12, "sha256": sha(b"disk-content"),
+                                  "subdir": "trixie"}])
+        ret, _, _ = self._run({"dest_dir": out_dir})
+        self.assertEqual(ret, 0)
+        self.assertTrue(os.path.isfile(os.path.join(out_dir, "disk.img")))
+
+    def test_a_subdirectory_leaving_the_deploy_directory_is_refused(self):
+        for bad in ("../up", "/abs", "a/../../up"):
+            self._complete({"disk.img": b"disk-content"},
+                           manifest=[{"name": "disk.img", "size": 12, "sha256": sha(b"disk-content"),
+                                      "subdir": bad}])
+            ret, _, err = self._run()
+            self.assertNotEqual(ret, 0, bad)
+            self.assertIn("refusing artifact directory", err)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp_dir, "up")))
 
     def test_success_renames_the_part_file_into_place(self):
         self._complete({"disk.raw": b"disk-content"})
@@ -377,7 +430,7 @@ class TestClientArtifactDownload(Test):
         ret, out, _ = self._run({"no_download": True})
         self.assertEqual(ret, 0)
         self.assertEqual(self.storage_gets, [])
-        self.assertFalse(os.path.exists(os.path.join(self.tmp_dir, "deploy")))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp_dir, "build", "deploy")))
         self.assertIn("artifacts/demo/bld-test1/pc-image.raw", out)
 
     def test_expired_artifacts_are_reported_not_downloaded(self):

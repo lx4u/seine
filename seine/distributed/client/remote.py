@@ -146,6 +146,7 @@ class DownloadError(Exception):
 def _release_dir(spec_path: str) -> str:
     """Return the default download directory for a specification."""
     import yaml
+    from seine.container import ContainerEngine
 
     release = None
     try:
@@ -160,7 +161,7 @@ def _release_dir(spec_path: str) -> str:
         elif isinstance(distro, str):
             release = distro
         release = release or doc.get("release")
-    return os.path.join(".", "deploy", str(release)) if release else os.path.join(".", "deploy")
+    return ContainerEngine.deploy_dir(release)
 
 
 def artifact_dir(root: str, subdir: str) -> str:

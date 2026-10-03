@@ -810,11 +810,12 @@ download URL for each artifact, and fetches them directly from S3:
 [client] Build bld-1a2b3c4d finished with status: COMPLETED
 [client] Downloading pc-image.img... done (<size>, sha256 verified)
 [client] Downloading pc-image.img.digest... done (<size>, sha256 verified)
-[client] Downloaded 2 of 2 artifact(s) to ./deploy/trixie
+[client] Downloaded 2 of 2 artifact(s) to /path/to/build/deploy/trixie
 ```
 
-Deliverables are saved to `./deploy/<release>/` by default, matching local build
-behavior.
+Deliverables are saved to `build/deploy/<release>/` by default, matching local
+build behavior. `$SEINE_BUILD_DIR` and `$SEINE_DEPLOY_DIR` apply as they do for
+local builds.
 
 Each artifact is checked against the manifest, which the worker reported and
 the server stored: name, size and SHA-256.

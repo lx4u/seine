@@ -13,6 +13,8 @@ from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.widgets import Static
 
+from seine.container import ContainerEngine
+from seine.distributed.client.remote import DownloadError, artifact_dir
 from seine.distributed.common.models import expired_text, format_expiry_reason
 from seine.distributed.common.transport import check_server_url
 from seine.tui.download import DownloadState, redraw
@@ -596,7 +598,7 @@ class RemoteScreen(BaseScreen):
             return
 
         short_id = build_id[:12]
-        target_dir = getattr(self.app, "download_dir", None) or "./deploy"
+        chosen_dir = getattr(self.app, "download_dir", None)
 
         def _worker():
             try:
@@ -637,7 +639,12 @@ class RemoteScreen(BaseScreen):
                 if isinstance(a, dict) and "name" in a
             }
 
-            os.makedirs(target_dir, exist_ok=True)
+            def target_for(name):
+                subdir = (manifest.get(name) or {}).get("subdir")
+                found = chosen_dir or artifact_dir(ContainerEngine.deploy_root(), subdir or "")
+                os.makedirs(found, exist_ok=True)
+                return found
+
             count = len(download_urls)
             done = 0
             errors = []
@@ -649,7 +656,13 @@ class RemoteScreen(BaseScreen):
 
             for name, url in download_urls.items():
                 expected = manifest.get(name) or {}
-                dest = os.path.join(target_dir, name)
+                try:
+                    dest = os.path.join(target_for(name), name)
+                except DownloadError as e:
+                    errors.append(f"{name}: {e}")
+                    if progress:
+                        progress.finish(build_id, name, failed=True)
+                    continue
                 part = f"{dest}.part"
                 if progress:
                     progress.start(build_id, name)
@@ -708,7 +721,8 @@ class RemoteScreen(BaseScreen):
                 self._notify_say(msg, error=True)
             else:
                 art_label = f"artifact '{artifact_name}'" if artifact_name else f"{done} artifact(s)"
-                self._notify_say(f"downloaded {art_label} to {target_dir}", error=False)
+                where = chosen_dir or ContainerEngine.deploy_root()
+                self._notify_say(f"downloaded {art_label} to {where}", error=False)
 
         if getattr(self.app, "is_running", False) is True and hasattr(self.app, "run_worker"):
             self.app.run_worker(_worker, thread=True)

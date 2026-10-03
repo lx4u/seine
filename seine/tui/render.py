@@ -521,7 +521,7 @@ def render_artifacts(context):
     sections = []
     for build in context.builds:
         release = build.spec["distribution"]["release"]
-        root = os.path.join(ContainerEngine.deploy_root(), release)
+        root = ContainerEngine.deploy_dir(release)
         lines = ["%s/" % root]
         entries = sorted(os.listdir(root)) if os.path.isdir(root) else []
         if len(entries) == 0:
