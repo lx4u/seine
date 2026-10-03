@@ -163,7 +163,8 @@ def _start_remote_build(app, session, build, no_download, project):
     from seine.tui.build import start_remote_build
     try:
         start_remote_build(app, app.build_state, build.options["files"][0],
-                           session, no_download=no_download, project=project)
+                           session, no_download=no_download, project=project,
+                           build=build)
     except RuntimeError as e:
         app.say(str(e), error=True)
         return
@@ -264,7 +265,8 @@ def _build(app, argv):
                 _ask_project_for_build(app, session, build, no_download)
                 return
             start_remote_build(app, app.build_state, build.options["files"][0],
-                               session, no_download=no_download, project=project)
+                               session, no_download=no_download, project=project,
+                               build=build)
         else:
             start_build(app, app.build_state, build)
     except RuntimeError as e:
