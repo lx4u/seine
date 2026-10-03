@@ -387,7 +387,7 @@ def record_remote_build(state, build, started, ok):
 # RemoteBuild packs and uploads the worktree, submits it, and its log
 # stream lands under state.logs for BuildScreen to tail.
 def start_remote_build(app, state, spec_files, session, no_download=False, project=None,
-                       build=None):
+                       build=None, is_release=False):
     from seine.distributed.client.remote import DownloadError, RemoteBuild
     from seine.tui.credentials import tui_prompt
     if state.running:
@@ -449,7 +449,8 @@ def start_remote_build(app, state, spec_files, session, no_download=False, proje
         token=session.token,
         out=write, err=write, prompt=tui_prompt(app), on_download=on_download,
         on_event=lambda event: app.call_from_thread(on_event, event), log_dir=log_dir,
-        spec_digest=analyze.spec_digest(build.spec) if build is not None else "")
+        spec_digest=analyze.spec_digest(build.spec) if build is not None else "",
+        is_release=is_release)
     state.reset_remote(host, job, log_dir)
     if build is not None:
         state.package_paths = _package_paths(build)

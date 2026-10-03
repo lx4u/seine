@@ -29,6 +29,7 @@ class RemoteBuildTuiTest(avocado.Test):
     def setUp(self):
         # Remote builds allocate their log directory under logs_root().
         os.environ["SEINE_LOG_DIR"] = self.workdir
+        os.environ["XDG_CONFIG_HOME"] = self.workdir
         os.environ["SEINE_BUILD_DIR"] = os.path.join(self.workdir, "build")
         with _tui_required(self):
             from seine.tui import build, commands
@@ -92,6 +93,53 @@ class RemoteBuildTuiTest(avocado.Test):
             local, remote = self._dispatch(self._app(connected), line)
             remote.assert_not_called()
             local.assert_called_once()
+
+    def _policy(self, policy, arch, line="/build", connected=True):
+        from seine import settings
+        current = settings.load()
+        current["remote_build"] = policy
+        settings.save(current)
+        app = self._app(connected)
+        app.context.builds[0].spec = {"image": {}, "distribution": {"architecture": arch}}
+        local, remote = self._dispatch(app, line)
+        return app, local, remote
+
+    def assertSide(self, policy, arch, side, line="/build"):
+        app, local, remote = self._policy(policy, arch, line)
+        self.assertEqual(remote.called, side == "remote")
+        self.assertEqual(local.called, side == "local")
+        return app
+
+    def test_policy_never_keeps_builds_local(self):
+        app = self.assertSide("never", "arm64", "local")
+        self.assertIn("policy is 'never'", app.say.call_args.args[0])
+
+    def test_policy_foreign_arch_offloads_only_a_foreign_target(self):
+        from seine.utils import HOST_ARCH
+        foreign = "arm64" if HOST_ARCH != "arm64" else "amd64"
+        self.assertSide("foreign-arch", foreign, "remote")
+        self.assertSide("foreign-arch", HOST_ARCH, "local")
+
+    def test_policy_production_only_offloads_a_release(self):
+        self.assertSide("production-only", "amd64", "local")
+        _, _, remote = self._policy("production-only", "amd64", "/build --release")
+        self.assertTrue(remote.call_args.kwargs["is_release"])
+
+    def test_remote_flag_overrides_never(self):
+        self.assertSide("never", "amd64", "remote", "/build --remote")
+
+    def test_local_flag_overrides_always(self):
+        self.assertSide("always", "amd64", "local", "/build --local")
+
+    def test_local_excludes_remote_and_release(self):
+        for line in ("/build --local --remote", "/build --local --release"):
+            with self.assertRaises(self.commands.CommandError):
+                self._dispatch(self._app(True), line)
+
+    def test_remote_and_release_need_a_connection(self):
+        for line in ("/build --remote", "/build --release"):
+            with self.assertRaises(self.commands.CommandError):
+                self._dispatch(self._app(False), line)
 
     def test_no_download_is_passed_on(self):
         _, remote = self._dispatch(self._app(True), "/build --no-download")

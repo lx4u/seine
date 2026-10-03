@@ -160,19 +160,19 @@ def _packages(app, argv):
 # Only -j/--jobs= and --reproducible today, not the whole of
 # BuildCmd.LONG_OPTIONS: the rest either means something else here or
 # isn't wired up yet.
-def _start_remote_build(app, session, build, no_download, project):
+def _start_remote_build(app, session, build, no_download, project, release=False):
     from seine.tui.build import start_remote_build
     try:
         start_remote_build(app, app.build_state, build.options["files"],
                            session, no_download=no_download, project=project,
-                           build=build)
+                           build=build, is_release=release)
     except RuntimeError as e:
         app.say(str(e), error=True)
         return
     app.show("build")
 
 # No project decided: ask first, then start the build the user asked for.
-def _ask_project_for_build(app, session, build, no_download):
+def _ask_project_for_build(app, session, build, no_download, release):
     def chosen(result):
         if result is None:
             app.say("build: no project chosen, not started", warning=True)
@@ -182,7 +182,7 @@ def _ask_project_for_build(app, session, build, no_download):
         def go():
             _apply_project(app, session, name, keep)
             _run_on_app(app, lambda: _start_remote_build(
-                app, session, build, no_download, name))
+                app, session, build, no_download, name, release))
         _background(app, go)
 
     def ask():
@@ -205,13 +205,15 @@ def _build(app, argv):
     """
     try:
         opts, args = getopt.getopt(
-            argv, "j:", ["jobs=", "reproducible", "local", "no-download", "project=",
-                   "shared-cache", "no-shared-cache"])
+            argv, "j:", ["jobs=", "reproducible", "local", "remote", "release",
+                   "no-download", "project=", "shared-cache", "no-shared-cache"])
     except getopt.GetoptError as e:
         raise CommandError(str(e))
     jobs = None
     reproducible = None
     local = False
+    remote = False
+    release = False
     no_download = False
     project = None
     shared_cache = None
@@ -228,6 +230,10 @@ def _build(app, argv):
             reproducible = True
         elif o == "--local":
             local = True
+        elif o == "--remote":
+            remote = True
+        elif o == "--release":
+            release = True
         elif o == "--no-download":
             no_download = True
         elif o == "--project":
@@ -236,6 +242,8 @@ def _build(app, argv):
             shared_cache = True
         elif o == "--no-shared-cache":
             shared_cache = False
+    if local and (remote or release):
+        raise CommandError("--local excludes --remote and --release")
     if len(args) > 0:
         _use(app, args)
     if not app.context.active:
@@ -267,14 +275,26 @@ def _build(app, argv):
     from seine.tui.build import start_build, start_remote_build
     try:
         session = app.remote_session
-        if session.connected and not local:
+        if (remote or release) and not session.connected:
+            raise CommandError("--remote and --release need a server -- '/remote' first")
+        if session.connected:
+            from seine.settings import load, resolve_build_target
+            from seine.utils import HOST_ARCH
+            arch = build.spec.get("distribution", {}).get("architecture")
+            side, why = resolve_build_target(
+                arch, HOST_ARCH, release, load()["remote_build"],
+                force_remote=remote, force_local=local)
+            app.say(f"[build] {why} -> {side} build")
+        else:
+            side = "local"
+        if side == "remote":
             project = project or session.active_project
             if project is None:
-                _ask_project_for_build(app, session, build, no_download)
+                _ask_project_for_build(app, session, build, no_download, release)
                 return
             start_remote_build(app, app.build_state, build.options["files"],
                                session, no_download=no_download, project=project,
-                               build=build)
+                               build=build, is_release=release)
         else:
             start_build(app, app.build_state, build)
     except RuntimeError as e:
@@ -287,7 +307,11 @@ _build_options = (
     ("--reproducible", "Normalize disk image partitions so two builds of "
      "the same spec give a byte-identical image. Slower."),
     ("--local", "Build on this machine even when connected to a remote "
-     "server."),
+     "server, whatever the 'remote_build' setting says."),
+    ("--remote", "Build on the server even when the 'remote_build' setting "
+     "keeps this build local."),
+    ("--release", "Remote release build: signed and published by the "
+     "server (needs the releaser or admin role)."),
     ("--no-download", "Remote build only: leave the artifacts on the server."),
     ("--project NAME", "Remote build only: build in this project, this once."),
     ("--shared-cache, --no-shared-cache", "Use or skip the shared network "
@@ -1093,7 +1117,7 @@ REGISTRY["q"] = REGISTRY["quit"]
 # offers what _build() actually parses.
 OPTIONS = {
     "plan":  BuildCmd.LONG_OPTIONS,
-    "build": ["jobs=", "reproducible", "local", "no-download", "project="],
+    "build": ["jobs=", "reproducible", "local", "remote", "release", "no-download", "project="],
     "remote": ["disconnect", "status", "screen", "insecure", "ca-cert="],
     "project": ["default"],
     "cache": ["explain", "why"],

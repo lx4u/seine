@@ -158,9 +158,12 @@ uses the shared network cache; see [building.md](building.md).
 `/remote [URL]` (or `seine tui --remote[=URL]`) connects the TUI to a
 `seine-server` (see [distributed-build.md](distributed-build.md)); `URL`
 defaults to the `default_remote` setting. Connected, `/build` runs on the
-server's workers and its log streams into the Build screen -- `--local`
-builds on this machine anyway, `--no-download` skips fetching the
-artifacts. The task pane shows the worker's planned tasks, cached ones and
+server's workers and its log streams into the Build screen, unless the
+`remote_build` setting keeps it local (see below) -- `--local` builds on
+this machine anyway, `--remote` builds on the server anyway, `--release`
+asks for a release build there (it needs the releaser or admin role),
+`--no-download` skips fetching the artifacts. `/build` says which side it
+chose and why. The task pane shows the worker's planned tasks, cached ones and
 one timer per task running in parallel, as for a local build. The output
 pane follows the running task and the spec tree lights up its package and
 Ansible nodes, as for a local build. The log is kept on this machine, one
@@ -198,8 +201,14 @@ Five settings (`/settings`, or `/set KEY VALUE`) shape the connection:
 | `remote_ca_cert` | CA bundle verifying the server's TLS certificate (else `$SEINE_CA_CERT`), for a private CA or a self-signed server |
 | `remote_build` | Which builds go to the server while connected: `always` (default), `foreign-arch` (only a target that is not this machine's architecture), `never` or `production-only` (only `--release` builds) |
 
+`remote_build` is picked from a list in `/settings`. `foreign-arch` keeps
+builds for this machine's architecture local and sends the others to the
+server, whose workers run them natively rather than under emulation.
+`production-only` keeps development builds local. `--local`, `--remote`
+and `--release` always win over the setting.
+
 `/remote --insecure` and `/remote --ca-cert=PATH` (also `seine tui
---insecure --ca-cert=PATH`) override the last two for one connection. A host
+--insecure --ca-cert=PATH`) override the two TLS settings for one connection. A host
 given without a scheme is reached over `https://`, except a loopback one
 (`http://`). Plain `http://` to a remote host is refused unless
 `remote_insecure` allows it, and then the token travels unencrypted: `/remote`
