@@ -634,9 +634,10 @@ class DatabaseHousekeepingRepoTest(Test):
         self.assertTrue(self.db.builds.mark_artifacts_expired("b1", "ttl", now=500.0))
         build = self.db.builds.get("b1")
         self.assertEqual(build["artifact_urls"], [])
-        self.assertEqual(build["artifact_meta"], [])
+        self.assertEqual(build["artifact_meta"], [{"name": "x"}])
         self.assertEqual(build["artifacts_expired_at"], 500.0)
         self.assertEqual(build["artifacts_expired_reason"], "ttl")
+        self.assertEqual(self.db.builds.evictable_builds("core", 1000.0), [])
         self.assertFalse(self.db.builds.mark_artifacts_expired("ghost", "ttl"))
         with self.assertRaises(ValueError):
             self.db.builds.mark_artifacts_expired("b1", "because")
