@@ -10,6 +10,7 @@ import requests
 
 from seine import settings
 from seine.credentials import CredentialNotFound, token_source
+from seine.distributed.client.events import EventFollower
 from seine.distributed.common.transport import (
     MAX_TOKEN_REJECTIONS,
     check_server_url,
@@ -45,6 +46,7 @@ class RemoteSession:
         # Set by /remote --insecure and --ca-cert; unset, the settings apply as they are now.
         self._insecure: Optional[bool] = None
         self._ca_cert: Optional[str] = None
+        self._follower: Optional[EventFollower] = None
 
     @property
     def insecure(self) -> bool:
@@ -186,6 +188,7 @@ class RemoteSession:
         self.ping()
         self.notify_indicators()
         self.sync_matches()
+        self.follow()
         return True
 
     def _decided_project(self) -> Optional[str]:
@@ -212,6 +215,7 @@ class RemoteSession:
         self.active_project = name
         self.notify_indicators()
         self.sync_matches()
+        self.follow()
 
     def set_default_project(self, name: Optional[str]) -> Optional[str]:
         """Save the default project on the server (None clears it); return an error or None."""
@@ -243,6 +247,7 @@ class RemoteSession:
         self._ca_cert = None
         self.notify_indicators()
         self.sync_matches()
+        self.follow()
 
     def ping(self) -> Optional[float]:
         """Perform light latency probe; updates self.ping_ms."""
@@ -285,6 +290,20 @@ class RemoteSession:
             except Exception:
                 pass
         self._on_ui(_refresh)
+
+    def follow(self) -> None:
+        """Follow the active project's build events, or stop following."""
+        if self._follower:
+            self._follower.stop()
+            self._follower = None
+        if not (self.app and self.connected and self.active_project and self.token):
+            return
+        from seine.tui import remote_match
+        self._follower = EventFollower(
+            self.url, self.active_project, self.token,
+            lambda event: self._on_ui(lambda: remote_match.on_event(self.app, event)),
+            ca_cert=self.ca_cert)
+        self._follower.start()
 
     def sync_matches(self) -> None:
         """Ask the server what it holds for the active specification."""

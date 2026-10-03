@@ -49,7 +49,11 @@ every argument each one takes):
 
  * **Overview** -- the active specification, once `/use` has set one. When
    connected to a `seine-server`, it also says when the server's project last
-   built this exact specification, whoever submitted it.
+   built this exact specification, whoever submitted it. The line follows the
+   project live: the TUI listens for build events and asks the server again when
+   one concerns the active specification, so a teammate's or CI's build shows up
+   without a refresh. After a dropped connection it reconnects with a growing
+   delay and asks again.
  * **Doctor** -- whether this machine has what a build needs: podman,
    crun, passt, guestfs, kvm, a hypervisor per architecture,
    ansible-playbook, gnupg, free space, and S3 remote cache reachability

@@ -358,6 +358,16 @@ class RemoteBuildTuiTest(avocado.Test):
         remote_match.refresh(app)
         self.assertEqual(remote_match.MATCHES, {})
 
+    def test_events_for_the_active_spec_or_a_new_connection_refresh(self):
+        from seine import analyze
+        app, remote_match = self._matching_app(200)
+        digest = analyze.spec_digest(self._build_cmd().spec)
+        for event, calls in (({"type": "build_status", "spec_digest": "other"}, 0),
+                             ({"type": "build_status", "spec_digest": digest}, 1),
+                             ({"type": "subscribed"}, 2)):
+            remote_match.on_event(app, event)
+            self.assertEqual(app.remote_session.request.call_count, calls)
+
     def test_overview_names_the_remote_build(self):
         from seine.tui import render
         line = render._remote_line({"status": "completed", "created_at": 1.0,

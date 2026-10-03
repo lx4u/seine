@@ -53,6 +53,11 @@ class RemoteSessionTest(avocado.Test):
         self._start(mock.patch("seine.credentials._resolve_keyring",
                                side_effect=CredentialNotFound("none")))
         self._start(mock.patch("seine.credentials._keyring_reachable", return_value=False))
+        # No real connection to a server that is not there.
+        self.followers = []
+        self._start(mock.patch("seine.tui.remote_session.EventFollower",
+                               side_effect=lambda *args, **kw: self.followers.append(
+                                   mock.Mock(args=args)) or self.followers[-1]))
 
     # avocado never runs addCleanup callbacks: stop everything in tearDown.
     def _start(self, patch):
@@ -424,6 +429,31 @@ class RemoteSessionTest(avocado.Test):
         session.use_project("web")
         self.assertEqual(session.active_project, "web")
         session.app.refresh_indicators.assert_called()
+
+    @mock.patch("requests.get")
+    def test_events_are_followed_for_the_active_project_only(self, mock_get):
+        session = self._connect_as(mock_get, {"projects": {"core": "developer", "web": "developer"}})
+        self.assertEqual(self.followers, [])
+        session.use_project("web")
+        self.assertEqual(self.followers[0].args[:3], ("https://srv", "web", "t"))
+        self.followers[0].start.assert_called_once_with()
+        session.use_project("core")
+        self.followers[0].stop.assert_called_once_with()
+        self.assertEqual(self.followers[1].args[1], "core")
+
+    @mock.patch("requests.get")
+    def test_disconnect_stops_following(self, mock_get):
+        session = self._connect_as(mock_get, {"projects": {"core": "developer"}})
+        session.disconnect()
+        self.followers[0].stop.assert_called_once_with()
+        self.assertEqual(len(self.followers), 1)
+
+    @mock.patch("requests.get")
+    def test_a_pushed_event_is_handled_on_the_ui_thread(self, mock_get):
+        session = self._connect_as(mock_get, {"projects": {"core": "developer"}})
+        with mock.patch("seine.tui.remote_match.on_event") as handle:
+            self.followers[0].args[3]({"type": "build_status"})
+        handle.assert_called_once_with(session.app, {"type": "build_status"})
 
     def test_indicator_text_formatting(self):
         indicator = self.RemoteIndicator()

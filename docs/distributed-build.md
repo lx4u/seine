@@ -887,7 +887,8 @@ artifacts to housekeeping:
 ```
 
 A follower that falls far behind loses messages. It should ask the match
-endpoint again after it reconnects.
+endpoint again after it reconnects. `seine tui` does this: it follows the
+project it builds in and reconnects with a delay that grows up to 30 seconds.
 
 ---
 

@@ -19,16 +19,28 @@ def _lookup(session, digest, arch):
     except Exception:
         return None
 
+def _wanted(app):
+    try:
+        return [(analyze.spec_digest(b.spec), b.spec["distribution"]["architecture"])
+                for b in app.context.builds]
+    except (TypeError, KeyError):
+        return []
+
+# A pushed event: ask again only when it is about an active spec, or when
+# the connection was just (re)established and events may have been missed.
+def on_event(app, event):
+    if event.get("type") == "subscribed" or \
+            event.get("spec_digest") in [digest for digest, _ in _wanted(app)]:
+        refresh(app)
+
 # Asks for every active group in a thread, then redraws the screen.
 def refresh(app):
     session = app.remote_session
     if not (session.connected and session.active_project):
         MATCHES.clear()
         return
-    try:
-        wanted = [(analyze.spec_digest(b.spec), b.spec["distribution"]["architecture"])
-                  for b in app.context.builds]
-    except (TypeError, KeyError):
+    wanted = _wanted(app)
+    if not wanted:
         return
 
     def work():
