@@ -2564,13 +2564,13 @@ class SettingsScreenIntegration(avocado.Test):
         _run(scenario)
 
     # 'Down' to 'theme', the second general row: a closed choice opens
-    # '#themepicker', not '#editrow' -- 'Enter' on 'dark'/'light' commits
+    # '#picker', not '#editrow' -- 'Enter' on 'dark'/'light' commits
     # straight away, there is no separate "confirm" step and no value
     # it could ever post that needs validating.
     def test_editing_theme(self):
         async def scenario():
             from seine import settings
-            from seine.tui.settings import ThemePicker
+            from seine.tui.settings import ChoicePicker
             app = self.SeineApp()
             async with app.run_test() as pilot:
                 await self._open(pilot, app)
@@ -2578,7 +2578,7 @@ class SettingsScreenIntegration(avocado.Test):
                 await pilot.press("enter")
                 await pilot.pause()
                 self.assertEqual(_content(app.screen.query_one("#editlabel")), "theme")
-                picker = app.screen.query_one(ThemePicker)
+                picker = app.screen.query_one(ChoicePicker)
                 self.assertTrue(picker.display)
                 self.assertFalse(app.screen.query_one("#editrow").display)
                 picker.highlighted = 0  # 'dark'
@@ -2593,7 +2593,7 @@ class SettingsScreenIntegration(avocado.Test):
     def test_editing_theme_highlights_the_current_value(self):
         async def scenario():
             from seine import settings
-            from seine.tui.settings import ThemePicker
+            from seine.tui.settings import ChoicePicker
             current = settings.load()
             current["theme"] = "light"
             settings.save(current)
@@ -2603,7 +2603,7 @@ class SettingsScreenIntegration(avocado.Test):
                 await pilot.press("down")
                 await pilot.press("enter")
                 await pilot.pause()
-                picker = app.screen.query_one(ThemePicker)
+                picker = app.screen.query_one(ChoicePicker)
                 self.assertEqual(str(picker.get_option_at_index(picker.highlighted).prompt),
                                  "light")
         _run(scenario)

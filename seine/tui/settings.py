@@ -4,8 +4,8 @@
 # /settings: a modal overlay, same shape as /help. Two focusable,
 # Tab-cycled lists: GeneralSettings for jobs/resources/theme, StartupCommands
 # for the command list. jobs/startup commands edit through '#editrow'
-# (empty submit clears the row); theme is a closed choice, so it uses
-# ThemePicker instead. Del clears the highlighted row on either list.
+# (empty submit clears the row); closed choices (theme) use
+# ChoicePicker instead. Del clears the highlighted row on either list.
 
 from rich.text import Text
 from textual.binding import Binding
@@ -52,15 +52,26 @@ class StartupCommands(OptionList):
     def is_placeholder(self, index):
         return index == self.option_count - 1
 
-# Reads commands.THEMES directly so /set theme and this never drift apart.
-class ThemePicker(OptionList):
-    def refresh_from(self, current_value):
-        from seine.tui.commands import THEMES
+# A closed choice: rows show the label, Enter commits the value.
+class ChoicePicker(OptionList):
+    def refresh_from(self, choices, current_value):
+        self.choices = choices
         self.clear_options()
-        names = list(THEMES)
-        for name in names:
-            self.add_option(name)
-        self.highlighted = names.index(current_value) if current_value in names else 0
+        for label, _ in choices:
+            self.add_option(label)
+        values = [value for _, value in choices]
+        self.highlighted = values.index(current_value) if current_value in values else 0
+
+    def value_at(self, index):
+        return self.choices[index][1]
+
+# Reads commands.THEMES directly so /set theme and this never drift apart.
+def theme_choices():
+    from seine.tui.commands import THEMES
+    return [(name, name) for name in THEMES]
+
+# Settings edited through ChoicePicker rather than '#editrow'.
+CHOICES = {"theme": theme_choices}
 
 # OptionList never highlights a row on its own: clear_options() leaves
 # highlighted None, so every list above sets it explicitly.
@@ -81,8 +92,8 @@ class SettingsScreen(ModalBase):
     #startup { height: 1fr; border: round $border-blurred; }
     #startup:focus { border: round $border; }
     #editlabel { text-style: bold; padding-top: 1; }
-    #themepicker { height: 4; border: round $border-blurred; }
-    #themepicker:focus { border: round $border; }
+    #picker { height: 6; border: round $border-blurred; }
+    #picker:focus { border: round $border; }
     """
 
     def __init__(self):
@@ -97,7 +108,7 @@ class SettingsScreen(ModalBase):
         yield StartupCommands(id="startup")
         yield Static(id="editlabel")
         yield Input(id="editrow")
-        yield ThemePicker(id="themepicker")
+        yield ChoicePicker(id="picker")
         yield Static(HINT, id="modalhint")
 
     def on_mount(self):
@@ -117,14 +128,14 @@ class SettingsScreen(ModalBase):
         self.query_one(StartupCommands).refresh_from(settings.load()["startup_commands"])
         self.query_one("#modalhint", Static).update(HINT)
         editing = self._editing is not None
-        theme_edit = self._editing_key() == "theme"
+        choice_edit = self._editing_key() in CHOICES
         self.query_one("#editlabel", Static).display = editing
-        self.query_one("#editrow", Input).display = editing and not theme_edit
-        self.query_one(ThemePicker).display = theme_edit
+        self.query_one("#editrow", Input).display = editing and not choice_edit
+        self.query_one(ChoicePicker).display = choice_edit
         self.query_one(GeneralSettings).display = not editing
         self.query_one(StartupCommands).display = not editing
-        if theme_edit:
-            self.query_one(ThemePicker).focus()
+        if choice_edit:
+            self.query_one(ChoicePicker).focus()
         elif editing:
             self.query_one("#editrow", Input).focus()
         elif focus == "general":
@@ -186,22 +197,21 @@ class SettingsScreen(ModalBase):
         settings.save(current)
         self._redraw(focus="startup")
 
-    # Enter on a row: 'theme' opens #themepicker; everything else opens
-    # #editrow pre-filled with its current text.
+    # Enter on a row: a closed choice opens #picker; everything else
+    # opens #editrow pre-filled with its current text.
     def on_option_list_option_selected(self, event):
-        if event.option_list.id == "themepicker":
-            from seine.tui.commands import THEMES
-            self._commit_theme(list(THEMES)[event.option_index])
+        if event.option_list.id == "picker":
+            self._commit_choice(event.option_list.value_at(event.option_index))
             return
         section = "general" if event.option_list.id == "general" else "startup"
         index = event.option_index
         if section == "general":
             key = self.query_one(GeneralSettings).key_at(index)
-            if key == "theme":
+            if key in CHOICES:
                 self._editing = (section, index)
-                current_theme = settings.load()["theme"] or "dark"
-                self.query_one(ThemePicker).refresh_from(current_theme)
-                self.query_one("#editlabel", Static).update("theme")
+                current_value = settings.load()[key]
+                self.query_one(ChoicePicker).refresh_from(CHOICES[key](), current_value)
+                self.query_one("#editlabel", Static).update(key)
                 self._redraw()
                 return
             if settings.is_bool(key):
@@ -235,7 +245,7 @@ class SettingsScreen(ModalBase):
         else:
             self._commit_startup(index, value)
 
-    # 'theme' is picked, not typed, so never reaches this. 'jobs' and
+    # Closed choices (theme) are picked, not typed, so never reaches this. 'jobs' and
     # 'resources', remote_insecure and remote_ca_cert are validated;
     # llm_model/llm_api_base are free text,
     # litellm's to judge.
@@ -279,12 +289,14 @@ class SettingsScreen(ModalBase):
         self._editing = None
         self._redraw(focus="general")
 
-    def _commit_theme(self, value):
-        from seine.tui.commands import THEMES
+    def _commit_choice(self, value):
+        key = self._editing_key()
         current = settings.load()
-        current["theme"] = value
+        current[key] = value
         settings.save(current)
-        self.app.theme = THEMES[value]
+        if key == "theme":
+            from seine.tui.commands import THEMES
+            self.app.theme = THEMES[value]
         self._editing = None
         self._redraw(focus="general")
 
