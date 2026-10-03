@@ -606,6 +606,10 @@ the server stored: name, size and SHA-256.
 - The download URLs follow the `https://` rule of `--remote`: a storage
   endpoint on plain `http://` needs `--insecure`, and one with a private
   certificate needs `--ca-cert`.
+- Artifacts that the server evicted (age or storage pressure) have no download
+  URLs: `GET /api/v1/builds/{id}` returns `artifacts_expired_at` and
+  `artifacts_expired_reason` (`ttl` or `pressure`), and the client says so and
+  exits 1.
 
 #### Controlling artifact downloads
 

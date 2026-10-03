@@ -13,6 +13,7 @@ from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.widgets import Static
 
+from seine.distributed.common.models import expired_text
 from seine.distributed.common.transport import check_server_url
 from seine.tui.download import DownloadState, redraw
 from seine.tui.base import BaseScreen, StaticPane
@@ -240,6 +241,14 @@ class RemoteScreen(BaseScreen):
                             b_id = str(b.get("id") or b.get("build_id") or "")
                             proj = str(b.get("project") or "")
                             arch = str(b.get("target_arch") or b.get("architecture") or "")
+                            if b.get("artifacts_expired_at"):
+                                arts.append({
+                                    "name": expired_text(b.get("artifacts_expired_reason")),
+                                    "expired": True,
+                                    "build_id": b_id,
+                                    "project": proj,
+                                    "target_arch": arch,
+                                })
                             for m in (b.get("artifact_meta") or []):
                                 if isinstance(m, dict):
                                     arts.append({
@@ -597,6 +606,11 @@ class RemoteScreen(BaseScreen):
             if info.get("status") != "completed":
                 st = info.get("status", "unknown")
                 self._notify_say(f"build {short_id} has no artifacts (status: {st})", warning=True)
+                return
+
+            if info.get("artifacts_expired_at"):
+                why = expired_text(info.get("artifacts_expired_reason"))
+                self._notify_say(f"artifacts of build {short_id} {why}; rebuild to get them again", warning=True)
                 return
 
             download_urls = info.get("download_urls") or {}

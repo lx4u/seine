@@ -356,6 +356,13 @@ class RemoteViewsTest(avocado.Test):
         self.assertIn("No artifacts found in remote builds.", rendered)
         self.assertIn("[Enter] Download Artifact", rendered)
 
+    def test_render_artifacts_shows_expired_builds(self):
+        rendered = self.render_remote_artifacts([
+            {"name": "expired (age)", "expired": True, "build_id": "b1", "project": "demo"},
+        ])
+        self.assertIn("expired (age)", rendered)
+        self.assertNotIn("0 B", rendered)
+
     def test_render_artifacts_populated_and_selection(self):
         artifacts = [
             {

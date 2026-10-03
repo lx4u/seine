@@ -54,10 +54,21 @@ class ArtifactMeta(BaseModel):
     sha256: str
 
 
+EXPIRY_REASONS = {"ttl": "age", "pressure": "storage pressure"}
+
+
+def expired_text(reason: str | None) -> str:
+    """Words for an artifacts_expired_reason code, e.g. 'expired (age)'."""
+    return f"expired ({EXPIRY_REASONS.get(reason or '', reason or 'unknown')})"
+
+
 class BuildResponse(BuildModel):
     """Detailed build response including artifact download URLs."""
     download_urls: dict[str, str] = Field(default_factory=dict)
     artifacts: list[ArtifactMeta] = Field(default_factory=list)
+    # Set once housekeeping evicted the artifacts; the build row stays.
+    artifacts_expired_at: float | None = None
+    artifacts_expired_reason: str | None = None
 
 
 class JobModel(BaseModel):

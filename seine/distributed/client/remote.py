@@ -19,6 +19,7 @@ from seine.distributed.common.models import (
     BUILD_OPTION_KEYS,
     BuildSubmitRequest,
     BuildSubmitResponse,
+    expired_text,
 )
 from seine.distributed.common.transport import (
     MAX_TOKEN_REJECTIONS,
@@ -146,6 +147,10 @@ def _stderr(text: str) -> None:
 class DownloadError(Exception):
     """An artifact that could not be downloaded or did not verify."""
 
+    def __init__(self, message: str, status: Optional[int] = None):
+        super().__init__(message)
+        self.status = status
+
 
 def _release_dir(spec_path: str) -> str:
     """Return the default download directory for a specification."""
@@ -219,7 +224,8 @@ def _download_artifact(
         )
         try:
             if resp.status_code != 200:
-                raise DownloadError(f"{name}: storage answered HTTP {resp.status_code}")
+                raise DownloadError(
+                    f"{name}: storage answered HTTP {resp.status_code}", resp.status_code)
             with open(part, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=65536):
                     f.write(chunk)
@@ -707,8 +713,26 @@ class RemoteBuild:
         _print_artifacts(info.get("artifact_urls"), self._say)
         return EXIT_FAILED
 
+    def _report_expired(self, info: dict[str, Any]) -> None:
+        self._err(
+            f"[client] ERROR: artifacts of build {info.get('id')} "
+            f"{expired_text(info.get('artifacts_expired_reason'))}; "
+            "rebuild to get them again\n"
+        )
+
+    def _evicted_meanwhile(self, build_id: str) -> Optional[dict[str, Any]]:
+        """Return the build record if its artifacts expired during the download."""
+        try:
+            info = self._get_build(build_id)
+        except (_PollFailure, RemoteError):
+            return None
+        return info if info.get("artifacts_expired_at") else None
+
     def _deliver(self, info: dict[str, Any]) -> int:
         """Download and verify the artifacts of a completed build; return the exit code."""
+        if info.get("artifacts_expired_at") and not self.options.get("no_download"):
+            self._report_expired(info)
+            return EXIT_FAILED
         download_urls = info.get("download_urls") or {}
         if self.options.get("no_download") or not download_urls:
             _print_artifacts(info.get("artifact_urls"), self._say)
@@ -745,6 +769,9 @@ class RemoteBuild:
             except DownloadError as e:
                 event("failed", name)
                 self._out("failed\n")
+                if e.status == 404 and (expired := self._evicted_meanwhile(build_id)):
+                    self._report_expired(expired)
+                    return EXIT_FAILED
                 self._err(f"[client] ERROR: {e}\n")
                 continue
             event("done", name)
