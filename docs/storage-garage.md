@@ -236,7 +236,36 @@ hands it to their workers, and the `prod` pair only for `--release` builds.
 Garage will not let a key create buckets, so create them yourself rather than
 with `--provision-buckets` (which then only checks they exist).
 
-## 7. What seine relies on
+## 7. Quota backstop
+
+`seine-server` keeps a project's dev bucket below its own `high_water` by
+deleting old artifacts (see
+[Storage housekeeping](distributed-build.md#storage-housekeeping)). Garage
+has a quota of its own, and it is only a hard stop: when a bucket is full,
+Garage rejects every upload, which fails a build in the middle of its run.
+Never rely on it as the primary mechanism.
+
+Set it about 10% above `high_water`, so that housekeeping acts first. With
+a `high_water` of 80G, for example:
+
+```
+podman exec seine-garage garage bucket set-quotas seine-my-project-dev \
+  --max-size 88GiB
+```
+
+The same can be done through the Garage admin API (`quotas.maxSize` on
+`PUT /v1/bucket`). Check the command against your Garage version
+(`garage bucket --help`).
+
+- **Key permissions.** Read and write on the bucket, as in
+  [Per-project keys](#6-per-project-keys), is enough for everything the server
+  does, including installing lifecycle rules and deleting objects. The key
+  does not need the `owner` permission (checked on Garage v1.1.0).
+- **Deleting a project.** `project delete --purge-storage` empties the
+  buckets but never deletes them or their keys. Delete the buckets and keys
+  on Garage yourself once you no longer need them.
+
+## 8. What seine relies on
 
 - **Client.** seine talks to S3 through `boto3` (a dependency of the `seine`
   packages as `python3-boto3`), signing with SigV4 and using path-style
@@ -258,7 +287,7 @@ with `--provision-buckets` (which then only checks they exist).
   bucket from it. A client downloads artifacts from Garage with pre-signed
   URLs, so port 3900 must be reachable from developers as well.
 
-## 8. Where to go from here
+## 9. Where to go from here
 
 - **TLS encryption**: In production, place a reverse proxy (such as
   Caddy or Nginx) in front of port 3900 to provide HTTPS and valid TLS
@@ -267,8 +296,9 @@ with `--provision-buckets` (which then only checks they exist).
 - **Multi-node clustering**: Garage can replicate data across multiple
   servers or data centers by adding nodes and updating the layout with
   `replication_factor = 2` or `3`.
-- **Space management**: Use `<key>.touch` timestamps to implement LRU
-  eviction, or configure bucket lifecycle rules to expire stale objects.
+- **Space management**: `seine-server` expires old worktrees, artifacts and
+  cache objects itself when `retention:` is configured (see
+  [Storage housekeeping](distributed-build.md#storage-housekeeping)).
 - **Firewalling**: Restrict port 3900 to trusted build machines and CI
   runners, and keep RPC port 3901 strictly internal between Garage
   nodes.

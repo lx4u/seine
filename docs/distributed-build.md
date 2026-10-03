@@ -118,53 +118,8 @@ an error.
 | `storage.projects`, `storage.default` | | | none, file only |
 | `retention` | | | none, file only |
 
-- **Retention.** Without a `retention:` section nothing is ever deleted.
-  With one, omitted keys take the values below. A sweep runs every
-  `interval` seconds, and again for a project each time one of its builds
-  ends.
-
-      retention:
-        interval: 3600        # seconds between sweeps
-        dev:
-          worktrees: 3d
-          artifacts: 14d
-          cache: 30d
-          high_water: 80%     # start evicting above this ...
-          low_water: 60%      # ... and stop below this
-          min_age: 1h         # never evict anything younger
-        prod:
-          worktrees: 14d
-          artifacts: never
-          cache: 90d
-          high_water: 85%     # prod only warns, it is never evicted
-
-  Durations are `<n>s`, `<n>m`, `<n>h` or `<n>d` (above zero), or `never`
-  for no expiry. `interval` is a number of seconds or a duration.
-  `high_water` and `low_water` are either `<n>%` (above 0, up to 100) of the
-  project quota, or a size `<n>M`, `<n>G` or `<n>T` in binary units (1G is
-  1024 MiB). `low_water` must be below `high_water`, and the two must use the
-  same kind: a percentage cannot be compared with a size. Unknown keys are an
-  error.
-
-  Each sweep installs up to three lifecycle rules on the dev and prod bucket
-  of every project: `seine-abort-multipart` aborts incomplete multipart
-  uploads after 1 day, `seine-worktrees-expiry` expires `worktrees/` after
-  the `worktrees` age, and `seine-cache-expiry` expires `cache/` after the
-  `cache` age. Ages are rounded up to whole days (at least 1); with `never`
-  the matching rule is removed.
-  Other rules on the bucket are kept, and nothing is sent when the bucket
-  already has the right ones. Garage evaluates lifecycle rules once a day.
-  Submitting a build restarts the age of its worktree, so a digest that is
-  still in use does not expire. The sweep itself also deletes worktrees older
-  than the `worktrees` age, which covers lifecycle rules that have not run
-  yet, but never one that a queued or running build of the project uses.
-  A bucket whose rules cannot be installed is logged and reported, and the
-  rest of the sweep goes on.
-
-  An expired cache object is simply rebuilt and pushed again on the next
-  miss. Its age counts from the last write, not the last use, and the
-  `.touch` files rewritten on every hit may outlive their entry as tiny
-  orphans.
+- **Retention.** Optional; without it nothing is ever deleted. See
+  [Storage housekeeping](#storage-housekeeping).
 - **Enrollment token.** There is no default: the server refuses to start
   without one. Generate it with `openssl rand -hex 32`. Workers present it
   once to register and receive a worker token of their own; registering an
@@ -212,7 +167,7 @@ an error.
 Garage has no temporary credentials (STS), so isolation between projects and
 between development and production rests on static keys, one pair per bucket,
 that you create on Garage (see
-[Per-project keys](storage-garage.md#per-project-keys)) and give to the server.
+[Per-project keys](storage-garage.md#6-per-project-keys)) and give to the server.
 They live in the `storage:` section of `/etc/seine/server.yaml` and nowhere
 else: the environment and the command line only carry the endpoint and the
 region, and the keys are never stored in the database or written to the logs.
@@ -242,6 +197,181 @@ storage:
   server's own environment: staging a worktree answers HTTP 409, and a job
   that is claimed fails with the reason in its `error_message`, which the
   client prints.
+
+### Storage housekeeping
+
+Without a `retention:` section nothing is ever deleted: the feature is opt-in.
+With one, the server deletes what has aged out and keeps the dev bucket of
+each project below a size limit.
+
+#### What is kept, and what may be deleted
+
+Each project has a `dev` and a `prod` bucket (see
+[Shared storage layout](#4-shared-storage-layout)). Each holds three prefixes:
+
+| Prefix | Dev bucket | Prod bucket |
+|--------|------------|-------------|
+| `artifacts/` | deleted by age (`artifacts`) and, oldest first, when the bucket is over `high_water` | never deleted; above `high_water` the server only logs a warning |
+| `worktrees/` | deleted by age (`worktrees`) | deleted by age |
+| `cache/` | deleted by age (`cache`) | deleted by age |
+
+Artifacts of a `--release` build are never deleted, and neither are those of
+a build that has not finished.
+
+#### Configuration
+
+`retention` is a key of `server.yaml` only (no environment variable or flag).
+Omitted keys take the values below.
+
+```yaml
+retention:
+  interval: 3600        # seconds between sweeps
+  dev:
+    worktrees: 3d
+    artifacts: 14d      # counted from the end of the build
+    cache: 30d
+    high_water: 80%     # start evicting artifacts above this ...
+    low_water: 60%      # ... and stop below this
+    min_age: 1h         # pressure eviction only: skip builds younger than this
+  prod:
+    worktrees: 14d
+    artifacts: never
+    cache: 90d
+    high_water: 85%     # prod only warns, it is never evicted
+```
+
+- **Durations** are `<n>s`, `<n>m`, `<n>h` or `<n>d` (above zero), or `never`
+  for no expiry. `min_age` cannot be `never`. `interval` is a number of
+  seconds or a duration.
+- **Thresholds.** `high_water` and `low_water` are either `<n>%` (above 0, up
+  to 100) of the project quota, or a size `<n>M`, `<n>G` or `<n>T` in binary
+  units (1G is 1024 MiB). `low_water` must be below `high_water`.
+- **Quota.** A percentage is relative to the quota of the project, which you
+  set with `seine admin project update NAME --quota-gb N` (see
+  [Users, roles and tokens](#users-roles-and-tokens)). A project with a
+  percentage and no quota gets no pressure eviction, and a warning is logged:
+  seine does not guess a size.
+- **Percentages or sizes, not both.** Mixing them in one environment is an
+  error at start-up, because they cannot be compared. If you give a size for
+  one of `high_water` and `low_water`, give a size for the other too: the
+  defaults are percentages.
+- Unknown keys are an error.
+
+#### Pressure eviction
+
+When the dev bucket of a project holds `high_water` or more, the server
+deletes the artifacts of builds until it holds `low_water` or less. The gap
+between the two stops it from running again after every build.
+
+- Oldest build first, by the time it finished.
+- Only builds that finished (completed, failed or cancelled), are not release
+  builds, still hold artifacts and ended at least `min_age` ago. `min_age`
+  applies to pressure eviction only (the age limit uses `artifacts`), and
+  matters: a client downloads the artifacts right after the build, and an
+  image larger than the free space would otherwise evict itself.
+- The usage is the sum of the sizes of the objects in the bucket, which the
+  server counts itself.
+- `min_age` must be longer than the slowest client download: a build older
+  than `min_age` can be evicted while its client is still downloading, and the
+  client then reports the build as expired.
+- Housekeeping logs one INFO line per evicted build to the server log (the
+  journal).
+- If nothing is left to evict and the bucket is still above `high_water`, an
+  error is logged and the sweep stops. The `cache/` prefix is not touched by
+  this path.
+
+#### When it runs
+
+- every `interval` seconds, for every project;
+- after each build that finishes, for the project of that build only (one
+  image can take a large part of the quota, so an hourly pass alone would
+  overshoot);
+- on demand, with `seine admin storage gc`.
+
+One run at a time: a second request while a run is in progress gets HTTP 409.
+Failures are logged and never stop the
+server.
+
+```bash
+seine admin storage gc --dry-run
+seine admin storage gc --project demo
+```
+
+The command is for system administrators and takes the same `--server`,
+`--token`, `--ca-cert` (or `$SEINE_CA_CERT`) and `--insecure` as the other
+`seine admin` commands. `--dry-run` deletes nothing
+and reports what it would. It prints one line per project, one per build, and
+one for the worktrees:
+
+```text
+demo: usage 41.2 GB -> 23.8 GB, evicted 2 builds (17.4 GB)
+  build bld-1a2b3c4d  pressure  9.1 GB
+  build bld-5e6f7a8b  ttl  8.3 GB
+  worktrees: 3 expired (420.0 MB)
+```
+
+A project that could not be processed is shown as `NAME: skipped, REASON`
+(for example a percentage without a quota, or no dev storage configured). It
+prints `retention is not configured on this server` when there is no
+`retention:` section, and exits non-zero if the objects of some build could
+not be deleted. Over the API this is `POST /api/v1/storage/gc` with
+`{"project": "demo", "dry_run": true}`; system administrators only. An unknown
+project gives 404.
+
+The warning for a prod bucket above `high_water` appears only in the server
+log, not in the output of the command.
+
+#### What users see
+
+The build stays in the database. When its artifacts have been evicted,
+`GET /api/v1/builds/{id}` still answers 200 and carries `artifacts_expired_at`
+and `artifacts_expired_reason` (`ttl` for age, `pressure` for the size
+limit), with empty `artifacts` and `download_urls`. It is not an HTTP 410.
+The client prints a message such as `artifacts of build bld-1a2b3c4d expired
+(storage pressure); rebuild to get them again` and exits 1 (nothing is checked
+with `--no-download`), and the TUI shows an `expired (...)` row in the
+artifacts tab.
+
+#### Lifecycle rules on the buckets
+
+Each non-dry sweep installs up to three lifecycle rules on the dev and prod
+bucket of every project, so Garage also expires objects when the server is not
+looking:
+
+- `seine-abort-multipart` aborts incomplete multipart uploads after 1 day;
+- `seine-worktrees-expiry` expires `worktrees/` after the `worktrees` age;
+- `seine-cache-expiry` expires `cache/` after the `cache` age.
+
+Ages are rounded up to whole days (at least 1); with `never` the matching rule
+is removed. Other rules on the bucket are kept, and nothing is sent when the
+bucket already has the right ones. A bucket whose rules cannot be installed
+is logged and reported, and the rest of the sweep goes on. Garage evaluates
+lifecycle rules about once a day, so an expiry is not visible at once, and the
+key needs no more than read and write (see
+[Quota backstop](storage-garage.md#7-quota-backstop)).
+
+Lifecycle rules look at the age of the object only, not at the build table.
+So the server adds two things:
+
+- **Worktrees.** Submitting a build restarts the age of its worktree, so a
+  digest that is still in use does not expire. The sweep also deletes the
+  worktrees older than the `worktrees` age, which covers lifecycle rules that
+  have not run yet, but never one that a queued or running build of the
+  project uses. Known limits: the lifecycle rule does not know about queued
+  builds, so a build that waits longer than the `worktrees` age (3 days by
+  default for dev) may find its worktree gone; and uploading a worktree that is
+  already staged does not refresh it, only submitting a build does.
+- **Cache.** An expired cache object is simply rebuilt and pushed again on the
+  next miss. Its age counts from the last write, not the last use, and the
+  `.touch` files rewritten on every hit may outlive their entry as tiny
+  orphans.
+
+#### Deleting a project
+
+`project delete NAME --purge-storage` empties the dev and prod buckets of a
+project before deleting it (see
+[Users, roles and tokens](#users-roles-and-tokens)). The buckets and their
+keys stay on the storage server.
 
 ### Service configuration
 
@@ -305,15 +435,8 @@ $admin token issue bob
   failure answers 502 and keeps the project, so the command can be retried.
   The buckets and keys themselves stay on the storage server: delete them
   there. Over the API this is `DELETE /api/v1/projects/<name>?purge_storage=true`.
-- `storage gc [--project P] [--dry-run]` runs storage housekeeping now: it
-  evicts expired and over-quota dev artifacts and expired worktrees, and
-  prints one line per project, one per evicted build and one for the
-  worktrees. `--dry-run` reports without deleting. It prints
-  `retention is not configured on this server` when `server.yaml` has no
-  `retention:` section, and exits non-zero if some build could not be
-  evicted. A second request while one runs gets 409. Over the API this is
-  `POST /api/v1/storage/gc` with `{"project": P, "dry_run": true}`; system
-  administrators only.
+- `storage gc [--project P] [--dry-run]` runs storage housekeeping now; see
+  [Storage housekeeping](#storage-housekeeping).
 
 #### Projects for new users
 
@@ -644,7 +767,8 @@ the server stored: name, size and SHA-256.
 - The download URLs follow the `https://` rule of `--remote`: a storage
   endpoint on plain `http://` needs `--insecure`, and one with a private
   certificate needs `--ca-cert`.
-- Artifacts that the server evicted (age or storage pressure) have no download
+- Artifacts that the server evicted (see
+  [Storage housekeeping](#storage-housekeeping)) have no download
   URLs: `GET /api/v1/builds/{id}` returns `artifacts_expired_at` and
   `artifacts_expired_reason` (`ttl` or `pressure`), and the client says so and
   exits 1.
