@@ -764,6 +764,9 @@ def render_settings():
     insecure_default = insecure == settings.DEFAULTS.get("remote_insecure")
     remote_insecure = format_bool_toggle(insecure, is_default=insecure_default)
     remote_ca_cert = current.get("remote_ca_cert") or "(unset)"
+    remote_build = current.get("remote_build") or settings.DEFAULTS["remote_build"]
+    if remote_build == settings.DEFAULTS["remote_build"]:
+        remote_build += " (default)"
     # Order matches GeneralSettings.KEYS (seine/tui/settings.py):
     # 'resources' last so 'theme' stays one 'down' press from the top.
     return "\n".join(
@@ -771,7 +774,8 @@ def render_settings():
         [("jobs", jobs), ("theme", theme), ("llm_model", llm_model),
          ("llm_api_base", llm_api_base), ("default_remote", default_remote),
          ("remote_insecure", remote_insecure),
-         ("remote_ca_cert", remote_ca_cert), ("resources", resources)]
+         ("remote_ca_cert", remote_ca_cert), ("remote_build", remote_build),
+         ("resources", resources)]
     ) + "\n"
 
 # Same "exactly one active group" restriction ai.py's tools apply to a

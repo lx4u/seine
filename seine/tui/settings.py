@@ -25,7 +25,7 @@ class GeneralSettings(OptionList):
     # Keep 'resources' last, not right after 'jobs': existing tests and
     # navigation both expect 'theme' one 'down' press from the top.
     KEYS = ["jobs", "theme", "llm_model", "llm_api_base", "default_remote",
-            "remote_insecure", "remote_ca_cert", "resources"]
+            "remote_insecure", "remote_ca_cert", "remote_build", "resources"]
 
     def refresh_from(self):
         from seine.tui.render import render_settings
@@ -71,7 +71,8 @@ def theme_choices():
     return [(name, name) for name in THEMES]
 
 # Settings edited through ChoicePicker rather than '#editrow'.
-CHOICES = {"theme": theme_choices}
+CHOICES = {"theme": theme_choices,
+           "remote_build": lambda: settings.REMOTE_BUILD_CHOICES}
 
 # OptionList never highlights a row on its own: clear_options() leaves
 # highlighted None, so every list above sets it explicitly.
@@ -86,7 +87,7 @@ class SettingsScreen(ModalBase):
 
     DEFAULT_CSS = """
     #generallabel { text-style: bold; }
-    #general { height: 10; border: round $border-blurred; }
+    #general { height: 11; border: round $border-blurred; }
     #general:focus { border: round $border; }
     #startuplabel { text-style: bold; padding-top: 1; }
     #startup { height: 1fr; border: round $border-blurred; }

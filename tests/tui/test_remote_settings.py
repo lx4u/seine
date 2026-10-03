@@ -217,6 +217,47 @@ class RemoteSettingsTest(avocado.Test):
                 screen._clear_general(index)
                 self.assertIsNone(self.settings.load()["default_remote"])
 
+    def test_render_settings_shows_remote_build(self):
+        self.assertIn("remote_build     always (default)", self.render_settings())
+        current = self.settings.load()
+        current["remote_build"] = "never"
+        self.settings.save(current)
+        self.assertIn("remote_build     never\n", self.render_settings())
+
+    def test_settings_screen_picks_remote_build_from_a_list(self):
+        class DummyApp(self.App):
+            def __init__(self, screen):
+                super().__init__()
+                self._test_screen = screen
+
+            def on_mount(self):
+                self.push_screen(self._test_screen)
+
+        screen = self.SettingsScreen()
+        app = DummyApp(screen)
+
+        async def scenario():
+            from seine.tui.settings import ChoicePicker
+            async with app.run_test() as pilot:
+                general = screen.query_one(self.GeneralSettings)
+                general.highlighted = self.GeneralSettings.KEYS.index("remote_build")
+                await pilot.press("enter")
+                picker = screen.query_one(ChoicePicker)
+                self.assertTrue(picker.display)
+                self.assertFalse(screen.query_one("#editrow").display)
+                self.assertEqual(picker.highlighted, 0)
+                await pilot.press("down", "enter")
+                self.assertEqual(self.settings.load()["remote_build"], "foreign-arch")
+                self.assertTrue(screen.query_one(self.GeneralSettings).has_focus)
+                await pilot.press("enter")
+                self.assertEqual(screen.query_one(ChoicePicker).highlighted, 1)
+                await pilot.press("escape")
+                self.assertEqual(self.settings.load()["remote_build"], "foreign-arch")
+                await pilot.press("delete")
+                self.assertEqual(self.settings.load()["remote_build"], "always")
+
+        asyncio.run(scenario())
+
     def test_settings_screen_in_pilot(self):
         class DummyApp(self.App):
             def __init__(self, screen):
