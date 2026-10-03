@@ -38,8 +38,11 @@ from seine.distributed.server.admin import (
     user_list,
     user_update,
 )
+from seine.distributed.server import housekeeping
 from seine.distributed.server.api import create_app
 from seine.distributed.server.db import Database
+from seine.distributed.server.housekeeping import HousekeepingBusy, ProjectReport
+from seine.distributed.server.settings import EnvRetention, Retention, Settings
 
 
 class ServerAdminLocalCLITest(Test):
@@ -409,6 +412,82 @@ class AdminRESTAPITest(Test):
             self.assertEqual(resp.status_code, 403)
         self.assertIsNone(self.db.projects.get("proj-a")["quota_gb"])
 
+    def _gc(self, token, body=None):
+        return self.client.post(
+            "/api/v1/storage/gc", json=body or {}, headers={"Authorization": f"Bearer {token}"}
+        )
+
+    def test_storage_gc_needs_a_system_administrator(self):
+        with mock.patch("seine.distributed.server.api.run_housekeeping") as run:
+            for token in (self.dev_token, self.alice_token):
+                self.assertEqual(self._gc(token).status_code, 403)
+            run.assert_not_called()
+
+    def test_storage_gc_without_retention_is_not_an_error(self):
+        resp = self._gc(self.admin_token)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"retention_enabled": False, "reports": []})
+
+    def test_storage_gc_serialises_the_reports(self):
+        report = ProjectReport(
+            project="proj-a", dry_run=True, evicted=[("b1", "ttl", 5)], failures=[("b2", "boom")],
+            usage_before=9, usage_after=4, high_water_bytes=8, low_water_bytes=3,
+        )
+        app = create_app(db=self.db, settings=Settings(retention=Retention(interval=60, dev=None, prod=None)))
+        with mock.patch("seine.distributed.server.api.run_housekeeping", return_value=[report]) as run:
+            resp = TestClient(app).post(
+                "/api/v1/storage/gc", json={"project": "proj-a", "dry_run": True},
+                headers={"Authorization": f"Bearer {self.admin_token}"},
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(run.call_args.kwargs, {"project": "proj-a", "dry_run": True})
+        self.assertEqual(resp.json(), {"retention_enabled": True, "reports": [{
+            "project": "proj-a", "dry_run": True,
+            "evicted": [{"build": "b1", "reason": "ttl", "bytes": 5}],
+            "failures": [{"build": "b2", "error": "boom"}],
+            "usage_before": 9, "usage_after": 4, "high_water_bytes": 8, "low_water_bytes": 3,
+            "skipped_reason": None,
+        }]})
+
+    def test_storage_gc_defaults_to_a_real_run_on_every_project(self):
+        with mock.patch("seine.distributed.server.api.run_housekeeping", return_value=[]) as run:
+            self.assertEqual(self._gc(self.admin_token).status_code, 200)
+        self.assertEqual(run.call_args.kwargs, {"project": None, "dry_run": False})
+
+    def test_storage_gc_maps_busy_to_409_and_unknown_project_to_404(self):
+        with mock.patch("seine.distributed.server.api.run_housekeeping", side_effect=HousekeepingBusy("housekeeping is already running")):
+            resp = self._gc(self.admin_token)
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.json()["detail"], "housekeeping is already running")
+        with mock.patch("seine.distributed.server.api.run_housekeeping", side_effect=ValueError("unknown project: x")):
+            self.assertEqual(self._gc(self.admin_token, {"project": "x"}).status_code, 404)
+
+    def test_storage_gc_end_to_end_dry_run_deletes_nothing(self):
+        objects = {"artifacts/proj-a/old/a": 100}
+
+        class Provider:
+            def usage(self, prefix=""):
+                return sum(objects.values())
+
+            def delete_prefix(self, prefix):
+                objects.clear()
+                return 1, 100
+
+        env = EnvRetention(worktrees=None, artifacts=3600, cache=None, high_water=None, low_water=None, min_age=0)
+        app = create_app(db=self.db, settings=Settings(retention=Retention(interval=60, dev=env, prod=env)))
+        self.db.builds.create("old", "proj-a", artifact_urls=["s3://b/old/a"])
+        self.db.builds.update_status("old", "completed", finished_at=1.0, artifact_meta=[{"name": "a", "size": 100}])
+        gc = TestClient(app)
+        headers = {"Authorization": f"Bearer {self.admin_token}"}
+        with mock.patch.object(housekeeping, "provider_for", lambda *a: Provider()):
+            resp = gc.post("/api/v1/storage/gc", json={"project": "proj-a", "dry_run": True}, headers=headers)
+            self.assertEqual(resp.json()["reports"][0]["evicted"], [{"build": "old", "reason": "ttl", "bytes": 100}])
+            self.assertEqual(len(objects), 1)
+            self.assertIsNone(self.db.builds.get("old")["artifacts_expired_reason"])
+            gc.post("/api/v1/storage/gc", json={"project": "proj-a"}, headers=headers)
+        self.assertEqual(objects, {})
+        self.assertEqual(self.db.builds.get("old")["artifacts_expired_reason"], "ttl")
+
     def test_projects_api_with_provision_buckets(self):
         mock_provider = mock.MagicMock()
         self.app.state.storage_provider = mock_provider
@@ -629,6 +708,86 @@ class RemoteClientAdminTest(Test):
             with mock.patch("sys.stderr", io.StringIO()):
                 self.assertEqual(run_client_admin(argv), 1)
             patch.assert_not_called()
+
+    def _gc_cli(self, result, *args):
+        argv = ["--server", self.server_url, "--token", self.admin_tok, "storage", "gc", *args]
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr", err), mock.patch("requests.Session.post") as post:
+            post.return_value.json.return_value = result
+            code = run_client_admin(argv)
+        return code, out.getvalue(), err.getvalue(), post
+
+    def _gc_report(self, **kw):
+        report = {
+            "project": "test", "dry_run": False, "evicted": [], "failures": [], "usage_before": None,
+            "usage_after": None, "high_water_bytes": None, "low_water_bytes": None, "skipped_reason": None,
+        }
+        report.update(kw)
+        return {"retention_enabled": True, "reports": [report]}
+
+    def test_storage_gc_cli_prints_a_real_run(self):
+        gb = 1024**3
+        result = self._gc_report(
+            usage_before=4 * gb, usage_after=2 * gb,
+            evicted=[{"build": "b1", "reason": "ttl", "bytes": gb}, {"build": "b2", "reason": "pressure", "bytes": gb}],
+        )
+        code, out, _, post = self._gc_cli(result, "--project", "test")
+        self.assertEqual(code, 0)
+        self.assertEqual(post.call_args.args[0], f"{self.server_url}/api/v1/storage/gc")
+        self.assertEqual(post.call_args.kwargs["json"], {"project": "test", "dry_run": False})
+        self.assertEqual(out.splitlines(), [
+            "test: usage 4.0 GB -> 2.0 GB, evicted 2 builds (2.0 GB)",
+            "  build b1  ttl  1.0 GB",
+            "  build b2  pressure  1.0 GB",
+        ])
+
+    def test_storage_gc_cli_says_one_build_not_one_builds(self):
+        evicted = [{"build": "b1", "reason": "ttl", "bytes": 1}]
+        _, out, _, _ = self._gc_cli(self._gc_report(evicted=evicted))
+        self.assertIn("test: evicted 1 build (1 B)", out.splitlines())
+        _, out, _, _ = self._gc_cli(self._gc_report())
+        self.assertIn("test: evicted 0 builds (0 B)", out.splitlines())
+
+    def test_storage_gc_cli_dry_run_says_would(self):
+        result = self._gc_report(dry_run=True, evicted=[{"build": "b1", "reason": "ttl", "bytes": 10}])
+        code, out, _, post = self._gc_cli(result, "--dry-run")
+        self.assertEqual(code, 0)
+        self.assertEqual(post.call_args.kwargs["json"], {"project": None, "dry_run": True})
+        self.assertIn("test: would evict 1 build (10 B)", out)
+
+    def test_storage_gc_cli_reports_failures_and_skips(self):
+        result = self._gc_report(failures=[{"build": "b9", "error": "boom"}])
+        code, out, _, _ = self._gc_cli(result)
+        self.assertEqual(code, 1)
+        self.assertIn("  failed b9: boom", out)
+        code, out, _, _ = self._gc_cli(self._gc_report(skipped_reason="no quota set"))
+        self.assertEqual(code, 0)
+        self.assertIn("test: skipped, no quota set", out)
+
+    def test_storage_gc_cli_without_retention(self):
+        code, out, _, _ = self._gc_cli({"retention_enabled": False, "reports": []})
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), "retention is not configured on this server")
+
+    def test_storage_gc_cli_shows_server_errors_on_one_line(self):
+        for token, detail in (("bad", "Admin privileges required"), (self.admin_tok, "housekeeping is already running")):
+            argv = ["--server", self.server_url, "--token", token, "storage", "gc"]
+            err = io.StringIO()
+            with mock.patch("sys.stderr", err), mock.patch("sys.stdout", io.StringIO()):
+                with mock.patch.object(AdminClient, "storage_gc", side_effect=self._http_error(detail)):
+                    self.assertEqual(run_client_admin(argv), 1)
+            self.assertEqual(err.getvalue(), f"error: {detail}\n")
+
+    def _http_error(self, detail):
+        import requests
+        resp = requests.Response()
+        resp.status_code = 409
+        resp.json = lambda: {"detail": detail}
+        return requests.HTTPError("409", response=resp)
+
+    def test_client_storage_gc_against_the_server(self):
+        client = AdminClient(server_url=self.server_url, token=self.admin_tok)
+        self.assertEqual(client.storage_gc(dry_run=True), {"retention_enabled": False, "reports": []})
 
     def test_client_project_list_shows_the_quota(self):
         self.db.projects.create("p-listed")

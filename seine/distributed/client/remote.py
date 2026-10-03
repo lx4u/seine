@@ -117,7 +117,7 @@ def upload_worktree(
     return resp.json()
 
 
-def _format_size(size_bytes: int) -> str:
+def format_size(size_bytes: int) -> str:
     if size_bytes < 1024:
         return f"{size_bytes} B"
     num = float(size_bytes)
@@ -775,7 +775,7 @@ class RemoteBuild:
                 self._err(f"[client] ERROR: {e}\n")
                 continue
             event("done", name)
-            self._say(f"done ({_format_size(expected['size'])}, sha256 verified)")
+            self._say(f"done ({format_size(expected['size'])}, sha256 verified)")
             done += 1
 
         self._say(f"[client] Downloaded {done} of {len(download_urls)} artifact(s) to {target_dir}")

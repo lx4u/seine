@@ -236,6 +236,12 @@ class ProjectUpdateRequest(BaseModel):
     quota_gb: float | None = Field(default=None, gt=0)
 
 
+class StorageGcRequest(BaseModel):
+    """Housekeeping request; without a project every project is processed."""
+    project: str | None = None
+    dry_run: bool = False
+
+
 class MemberAddRequest(BaseModel):
     """Project member assignment payload."""
     user_id: str
