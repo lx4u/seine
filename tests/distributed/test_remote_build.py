@@ -273,6 +273,27 @@ class RemoteBuildTest(Test):
             self.assertIn(text, err, code)
             self.assertEqual(ret, 0, code)
 
+    def test_events_go_to_on_event_and_logs_to_out(self):
+        events = []
+        self.ws.items = [
+            json.dumps({"type": "task_plan", "tasks": [{"name": "a", "needs": []}]}),
+            log("hello\n"),
+            json.dumps({"type": "task_started", "task": "a"}),
+            "not json",
+            json.dumps([1]),
+        ]
+        ret, out, _ = self.run_build(on_event=events.append)
+        self.assertEqual(ret, 0)
+        self.assertEqual([e["type"] for e in events], ["task_plan", "task_started"])
+        self.assertIn("hello", out)
+        self.assertNotIn("task_plan", out)
+
+    def test_events_are_ignored_without_on_event(self):
+        self.ws.items = [json.dumps({"type": "say", "text": "x"}), log("hello\n")]
+        ret, out, _ = self.run_build()
+        self.assertEqual(ret, 0)
+        self.assertIn("hello", out)
+
     def test_stream_unreachable_still_follows_build(self):
         self.ws.connect.side_effect = OSError("connection refused")
         ret, _, err = self.run_build()
