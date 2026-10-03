@@ -20,7 +20,9 @@ sys.path.insert(0, path_to_sources)
 from seine.distributed.client.remote import upload_worktree
 from seine.distributed.client.worktree import (
     DEFAULT_EXCLUDES,
+    OutsideRootError,
     PathTraversalError,
+    pack_sparse_worktree,
     pack_worktree,
     unpack_worktree,
 )
@@ -620,3 +622,126 @@ class TestRemoteClientUpload(avocado.Test):
         self.assertEqual(headers.get("Content-Type"), "application/octet-stream")
         self.assertNotIn("files", mock_post.call_args[1])
         self.assertIn("data", mock_post.call_args[1])
+
+
+class TestSparseWorktree(avocado.Test):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = os.path.join(self.temp_dir.name, "src")
+        for name in ("main.yaml", "README.md", "pkg/debian/control",
+                     "pkg/debian/id_rsa", "other/x.yaml"):
+            full = os.path.join(self.root, name)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "w") as f:
+                f.write(name)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _pack(self, names):
+        out = os.path.join(self.temp_dir.name, "w.tar.zst")
+        paths = [os.path.join(self.root, n) for n in names]
+        _, digest = pack_sparse_worktree(self.root, paths, out_path=out)
+        with _zstd_reader(out) as reader, tarfile.open(fileobj=reader, mode="r|*") as tar:
+            return digest, sorted(m.name for m in tar if m.isfile())
+
+    def test_only_the_named_files_and_trees_are_packed(self):
+        _, files = self._pack(["main.yaml", "pkg"])
+        self.assertEqual(files, ["main.yaml", "pkg/debian/control"])
+
+    def test_unrelated_edits_keep_the_digest(self):
+        before, _ = self._pack(["main.yaml"])
+        with open(os.path.join(self.root, "README.md"), "w") as f:
+            f.write("changed")
+        self.assertEqual(self._pack(["main.yaml"])[0], before)
+
+    def test_a_path_outside_the_root_is_refused(self):
+        with self.assertRaises(ValueError):
+            pack_sparse_worktree(self.root, ["/etc/hostname"])
+
+    def test_a_staged_file_travels_under_its_archive_name(self):
+        outside = os.path.join(self.temp_dir.name, "gist.yaml")
+        with open(outside, "w") as f:
+            f.write("a: 1\n")
+        out = os.path.join(self.temp_dir.name, "w.tar.zst")
+        pack_sparse_worktree(
+            self.root, [os.path.join(self.root, "main.yaml"), outside], out_path=out,
+            staged={".seine-sideload/0-gist.yaml": outside})
+        dest = os.path.join(self.temp_dir.name, "dest")
+        unpack_worktree(out, dest)
+        with open(os.path.join(dest, ".seine-sideload/0-gist.yaml")) as f:
+            self.assertEqual(f.read(), "a: 1\n")
+        self.assertTrue(os.path.isfile(os.path.join(dest, "main.yaml")))
+
+    def test_the_full_bundle_carries_staged_files_too(self):
+        outside = os.path.join(self.temp_dir.name, "gist.yaml")
+        with open(outside, "w") as f:
+            f.write("a: 1\n")
+        out = os.path.join(self.temp_dir.name, "w.tar.zst")
+        pack_worktree(self.root, out_path=out, staged={".seine-sideload/0-gist.yaml": outside})
+        with _zstd_reader(out) as reader, tarfile.open(fileobj=reader, mode="r|*") as tar:
+            self.assertIn(".seine-sideload/0-gist.yaml", [m.name for m in tar])
+
+    def test_the_bundle_unpacks(self):
+        out = os.path.join(self.temp_dir.name, "w.tar.zst")
+        pack_sparse_worktree(self.root, [os.path.join(self.root, "pkg")], out_path=out)
+        dest = os.path.join(self.temp_dir.name, "dest")
+        unpack_worktree(out, dest)
+        self.assertTrue(os.path.isfile(os.path.join(dest, "pkg/debian/control")))
+
+    def test_a_symlink_is_kept_with_its_target(self):
+        os.makedirs(os.path.join(self.root, "shared"))
+        with open(os.path.join(self.root, "shared/a.patch"), "w") as f:
+            f.write("p")
+        os.makedirs(os.path.join(self.root, "patches"))
+        os.symlink("../shared/a.patch", os.path.join(self.root, "patches/a.patch"))
+        digest, files = self._pack(["patches/a.patch"])
+        self.assertEqual(files, ["shared/a.patch"])
+        out = os.path.join(self.temp_dir.name, "w.tar.zst")
+        with _zstd_reader(out) as reader, tarfile.open(fileobj=reader, mode="r|*") as tar:
+            self.assertIn("patches/a.patch", [m.name for m in tar if m.issym()])
+
+    def test_a_file_below_a_symlinked_directory_is_kept_with_its_target(self):
+        os.makedirs(os.path.join(self.root, "real/examples"))
+        with open(os.path.join(self.root, "real/examples/main.yaml"), "w") as f:
+            f.write("a: 1\n")
+        os.symlink("real/examples", os.path.join(self.root, "examples"))
+        _, files = self._pack(["examples/main.yaml"])
+        self.assertEqual(files, ["real/examples/main.yaml"])
+        out = os.path.join(self.temp_dir.name, "w.tar.zst")
+        dest = os.path.join(self.temp_dir.name, "dest")
+        unpack_worktree(out, dest)
+        self.assertTrue(os.path.isfile(os.path.join(dest, "examples/main.yaml")))
+
+    def test_a_symlinked_directory_in_a_tree_is_kept(self):
+        os.symlink("debian", os.path.join(self.root, "pkg/alias"))
+        out = os.path.join(self.temp_dir.name, "w.tar.zst")
+        pack_sparse_worktree(self.root, [os.path.join(self.root, "pkg")], out_path=out)
+        with _zstd_reader(out) as reader, tarfile.open(fileobj=reader, mode="r|*") as tar:
+            self.assertIn("pkg/alias", [m.name for m in tar if m.issym()])
+
+    def test_a_dir_mtime_does_not_change_the_digest(self):
+        before, _ = self._pack(["pkg"])
+        os.utime(os.path.join(self.root, "pkg/debian"), (1, 1))
+        os.utime(os.path.join(self.root, "pkg"), (2, 2))
+        self.assertEqual(self._pack(["pkg"])[0], before)
+
+    def test_the_root_can_be_a_tree(self):
+        _, files = self._pack(["."])
+        self.assertIn("main.yaml", files)
+        self.assertNotIn("./main.yaml", files)
+
+    def test_a_missing_path_is_refused(self):
+        with self.assertRaises(ValueError):
+            pack_sparse_worktree(self.root, [os.path.join(self.root, "nope")])
+
+    def test_outside_the_root_has_its_own_error(self):
+        with self.assertRaises(OutsideRootError):
+            pack_sparse_worktree(self.root, ["/etc/hostname"])
+
+    def test_secret_looking_names_are_warned_about(self):
+        with open(os.path.join(self.root, "pkg/token.txt"), "w") as f:
+            f.write("t")
+        with mock.patch("sys.stderr", io.StringIO()) as err:
+            self._pack(["pkg"])
+        self.assertIn("token.txt", err.getvalue())
