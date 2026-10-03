@@ -209,6 +209,20 @@ class ServerAdminLocalCLITest(Test):
         self.assertEqual(run_server_admin(db + ["user", "update", "bob", "--no-is-admin"]), 0)
         self.assertEqual(run_server_admin(db + ["user", "update", "alice", "--no-is-admin"]), 1)
 
+    def test_user_cli_delete_needs_purge(self):
+        db = ["--db-path", self.db_path]
+        run_server_admin(db + ["user", "create", "bob"])
+        err, out = io.StringIO(), io.StringIO()
+        with mock.patch("sys.stderr", err), mock.patch("sys.stdout", out):
+            self.assertEqual(run_server_admin(db + ["user", "delete", "bob"]), 1)
+            self.assertIsNotNone(self.db.users.get("bob"))
+            self.assertIn("requires --purge", err.getvalue())
+            self.assertEqual(run_server_admin(db + ["user", "delete", "bob", "--purge"]), 0)
+        self.assertIsNone(self.db.users.get("bob"))
+        self.assertIn("Purged user: bob (uid: ", out.getvalue())
+        with mock.patch("sys.stderr", err):
+            self.assertEqual(run_server_admin(db + ["user", "delete", "bob", "--purge"]), 1)
+
     def test_project_update_sets_and_clears_the_quota(self):
         project_create(self.db, "quota-p")
         self.assertEqual(project_update(self.db, "quota-p", quota_gb=50)["quota_gb"], 50)
@@ -809,6 +823,22 @@ class RemoteClientAdminTest(Test):
         with mock.patch("sys.stderr", err):
             self.assertEqual(run_client_admin(argv[:-1] + ["p-cli4", "--purge-storage"]), 1)
         self.assertIn("could not empty bucket 'bk4'", err.getvalue())
+
+    def test_cli_user_delete(self):
+        self.db.users.create("zed")
+        self.db.tokens.issue("zed")
+        argv = ["--server", self.server_url, "--token", self.admin_tok, "user", "delete", "zed"]
+        err, out = io.StringIO(), io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
+            self.assertEqual(run_client_admin(argv), 1)
+            self.assertIn("requires --purge", err.getvalue())
+            self.assertIsNotNone(self.db.users.get("zed"))
+            self.assertEqual(run_client_admin(argv + ["--purge", "--anonymize"]), 0)
+        self.assertIn("deleted 1 tokens", out.getvalue())
+        self.assertIsNone(self.db.users.get("zed"))
+        with mock.patch("sys.stderr", err):
+            self.assertEqual(run_client_admin(argv + ["--purge"]), 1)
+        self.assertIn("not found", err.getvalue())
 
     def test_client_project_update(self):
         client = AdminClient(server_url=self.server_url, token=self.admin_tok)

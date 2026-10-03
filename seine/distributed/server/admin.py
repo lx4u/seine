@@ -86,6 +86,16 @@ def user_update(
     return user
 
 
+def user_purge(
+    db: Database, user_id: str, anonymize: bool = False, delete_home: bool = False
+) -> dict[str, Any]:
+    """Erase a user; the buckets of a deleted home project are left alone."""
+    res = db.purge_user(user_id, anonymize=anonymize, delete_home=delete_home)
+    if res is None:
+        raise ValueError(f"user '{user_id}' not found")
+    return res
+
+
 def member_add(db: Database, project: str, user_id: str, role: str) -> dict[str, Any]:
     _require_user(db, user_id)
     return db.projects.add_member(project, user_id, role)
@@ -178,6 +188,12 @@ def setup_admin_subparsers(admin_parser: argparse.ArgumentParser) -> None:
     u_update.add_argument("user_id", help="User ID")
     u_update.add_argument("--active", action=argparse.BooleanOptionalAction, default=None, help="Enable or disable the user")
     u_update.add_argument("--is-admin", action=argparse.BooleanOptionalAction, default=None, help="Grant or revoke system administration")
+
+    u_delete = u_sub.add_parser("delete", help="Delete a user for good")
+    u_delete.add_argument("user_id", help="User ID")
+    u_delete.add_argument("--purge", action="store_true", help="Confirm the permanent erasure")
+    u_delete.add_argument("--anonymize", action="store_true", help='Rename the user on their builds to "deleted-user"')
+    u_delete.add_argument("--delete-home", action="store_true", help="Also delete their home project and its bucket")
 
     t_parser = admin_sub.add_parser("token", help="Token operations")
     t_sub = t_parser.add_subparsers(dest="token_action")
@@ -292,8 +308,17 @@ def handle_admin_command(args: argparse.Namespace, db: Optional[Database] = None
                 user = user_update(db, args.user_id, is_admin=args.is_admin, active=args.active)
                 print(f"Updated user: {user['id']} (admin={int(user['is_admin'])}, active={int(user['active'])})")
                 return 0
+            elif act == "delete":
+                if not args.purge:
+                    sys.stderr.write("error: user deletion requires --purge (use 'user update --no-active' to disable an account)\n")
+                    return 1
+                u = user_purge(db, args.user_id, anonymize=args.anonymize, delete_home=args.delete_home)
+                print(f"Purged user: {u['id']} (uid: {u['uid']}, deleted {u['deleted_tokens']} tokens, removed {u['removed_memberships']} memberships)")
+                if u["deleted_home"]:
+                    print(f"Project {u['deleted_home']} deleted; its bucket was not emptied")
+                return 0
             else:
-                sys.stderr.write("error: missing or invalid user action (create, list, update)\n")
+                sys.stderr.write("error: missing or invalid user action (create, list, update, delete)\n")
                 return 1
 
         elif cmd == "token":

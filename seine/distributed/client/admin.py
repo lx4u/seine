@@ -137,6 +137,15 @@ class AdminClient:
         resp.raise_for_status()
         return resp.json()
 
+    def user_delete(
+        self, user_id: str, anonymize: bool = False, delete_home: bool = False
+    ) -> dict[str, Any]:
+        url = f"{self.server_url}/api/v1/users/{user_id}"
+        params = {"purge": "true", "anonymize": str(anonymize).lower(), "delete_home": str(delete_home).lower()}
+        resp = self.session.delete(url, params=params, headers=self._headers(), timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()
+
     def token_issue(
         self,
         user_id: str,
@@ -300,6 +309,12 @@ def run_client_admin(argv: list[str]) -> int:
     u_update.add_argument("--active", action=argparse.BooleanOptionalAction, default=None, help="Enable or disable the user")
     u_update.add_argument("--is-admin", action=argparse.BooleanOptionalAction, default=None, help="Grant or revoke system administration")
 
+    u_delete = u_sub.add_parser("delete", help="Delete a user for good")
+    u_delete.add_argument("user_id", help="User ID")
+    u_delete.add_argument("--purge", action="store_true", help="Confirm the permanent erasure")
+    u_delete.add_argument("--anonymize", action="store_true", help='Rename the user on their builds to "deleted-user"')
+    u_delete.add_argument("--delete-home", action="store_true", help="Also delete their home project and its bucket")
+
     t_parser = subparsers.add_parser("token", help="Token operations")
     t_sub = t_parser.add_subparsers(dest="action")
 
@@ -409,8 +424,15 @@ def run_client_admin(argv: list[str]) -> int:
                 user = client.user_update(args.user_id, is_admin=args.is_admin, active=args.active)
                 print(f"Updated user: {user['id']} (admin={int(user['is_admin'])}, active={int(user['active'])})")
                 return 0
+            elif args.action == "delete":
+                if not args.purge:
+                    sys.stderr.write("error: user deletion requires --purge (use 'user update --no-active' to disable an account)\n")
+                    return 1
+                u = client.user_delete(args.user_id, anonymize=args.anonymize, delete_home=args.delete_home)
+                print(f"Purged user: {u['id']} (uid: {u['uid']}, deleted {u['deleted_tokens']} tokens, removed {u['removed_memberships']} memberships)")
+                return 0
             else:
-                sys.stderr.write("error: missing or invalid user action (create, list, update)\n")
+                sys.stderr.write("error: missing or invalid user action (create, list, update, delete)\n")
                 return 1
 
         elif args.command == "token":

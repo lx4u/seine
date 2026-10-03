@@ -292,6 +292,7 @@ Usage:
   seine admin member add <project> <user_id> <role>
   seine admin member remove <project> <user_id>
   seine admin member list <project>
+  seine admin user delete <user_id> --purge [--anonymize] [--delete-home]
   seine admin token issue <user_id> [--kind user|worker] [--days N]
   seine admin token revoke <token>
   seine admin token list
