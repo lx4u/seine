@@ -738,6 +738,10 @@ class LastAdminError(ValueError):
     """Raised when a change would leave no active system administrator."""
 
 
+class UserBusyError(ValueError):
+    """Raised when a user cannot be purged because their builds are still running."""
+
+
 class UserRepo:
     """Repository managing user accounts."""
 
@@ -1012,6 +1016,72 @@ class Database:
                 "UPDATE users SET default_project = ? WHERE id = ?", (project_id, user_id)
             )
         return self.users.get(user_id)  # type: ignore[return-value]
+
+    def home_project(self, user_id: str) -> Optional[dict[str, Any]]:
+        """Return the personal project provisioned for the user, if they still own one."""
+        user = self.users.get(user_id)
+        project = self.projects.get(user["default_project"]) if user and user["default_project"] else None
+        if not project or not project["id"].startswith(HOME_PREFIX) or not project["dev_only"]:
+            return None
+        members = {m["user_id"] for m in self.projects.list_members(project["id"])}
+        return project if members <= {user["id"]} else None
+
+    def purge_user(
+        self, user_id: str, anonymize: bool = False, delete_home: bool = False
+    ) -> Optional[dict[str, Any]]:
+        """Erase a user for good; return a summary, or None if unknown.
+
+        Tokens and memberships go, builds stay with the name of their submitter
+        (or "deleted-user" when anonymize is set). The name can then be reused.
+        """
+        # BEGIN IMMEDIATE so the guards below still hold when the rows are deleted.
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            user = self.users.get(user_id)
+            if user is None:
+                self.conn.rollback()
+                return None
+            uid, name = user["uid"], user["id"]
+            if user["is_admin"] and user["active"]:
+                admins = self.conn.execute(
+                    "SELECT COUNT(*) FROM users WHERE is_admin = 1 AND active = 1"
+                ).fetchone()[0]
+                if admins <= 1:
+                    raise LastAdminError("Cannot delete the last active administrator")
+            if self.conn.execute(
+                "SELECT 1 FROM builds WHERE user_uid = ? "
+                "AND status NOT IN ('completed', 'failed', 'cancelled') LIMIT 1",
+                (uid,),
+            ).fetchone():
+                raise UserBusyError(f"User '{name}' still has builds in progress")
+            home = self.home_project(name) if delete_home else None
+            # Rows that named the user before they had a uid are theirs too.
+            owned = "(user_uid = ? OR (user_uid IS NULL AND user_id = ?))"
+            tokens = self.conn.execute(
+                f"DELETE FROM tokens WHERE {owned}", (uid, name)
+            ).rowcount
+            members = self.conn.execute(
+                f"DELETE FROM project_members WHERE {owned}", (uid, name)
+            ).rowcount
+            if home:
+                self.conn.execute("DELETE FROM projects WHERE id = ?", (home["id"],))
+            if anonymize:
+                self.conn.execute(
+                    "UPDATE builds SET user_id = 'deleted-user' WHERE user_uid = ?", (uid,)
+                )
+            self.conn.execute("DELETE FROM users WHERE uid = ?", (uid,))
+            self.conn.commit()
+        except BaseException:
+            self.conn.rollback()
+            raise
+        return {
+            "purged": True,
+            "uid": uid,
+            "id": name,
+            "deleted_tokens": tokens,
+            "removed_memberships": members,
+            "deleted_home": home["id"] if home else None,
+        }
 
     def _free_home_name(self, user_id: str) -> str:
         slug = re.sub(r"[^a-z0-9]+", "-", user_id.lower()).strip("-")[:30] or "user"

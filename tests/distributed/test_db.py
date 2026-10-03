@@ -13,8 +13,10 @@ from avocado import Test
 from seine.distributed.server.db import (
     BuildRepo,
     Database,
+    LastAdminError,
     ProjectRepo,
     TokenRepo,
+    UserBusyError,
     WorkerRepo,
     connect_db,
     hash_secret,
@@ -1000,3 +1002,97 @@ class BuildOwnerTest(Test):
             self.db.conn.execute("UPDATE builds SET user_uid = NULL")
         init_db(self.db.conn)
         self.assertEqual(self.db.get_build("b1")["user_uid"], alice["uid"])
+
+
+class PurgeUserTest(Test):
+    """Test Database.purge_user."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-purge-")
+        self.db = Database(os.path.join(self.tmp_dir, "purge.db"))
+        self.db.users.create("root", is_admin=True)
+        self.db.projects.ensure("demo")
+
+    def tearDown(self):
+        self.db.close()
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_unknown_user_is_none(self):
+        self.assertIsNone(self.db.purge_user("ghost"))
+
+    def test_purge_removes_tokens_memberships_and_the_user(self):
+        alice = self.db.users.create("alice")
+        tok = self.db.tokens.issue("alice")
+        self.db.projects.add_member("demo", "alice")
+        res = self.db.purge_user("alice")
+        self.assertEqual(
+            res,
+            {"purged": True, "uid": alice["uid"], "id": "alice", "deleted_tokens": 1,
+             "removed_memberships": 1, "deleted_home": None},
+        )
+        self.assertIsNone(self.db.users.get("alice"))
+        self.assertIsNone(self.db.tokens.validate(tok["token"]))
+        self.assertEqual(self.db.projects.list_members("demo"), [])
+
+    def test_recreated_username_inherits_nothing(self):
+        self.db.users.create("alice")
+        self.db.tokens.issue("alice")
+        self.db.projects.add_member("demo", "alice")
+        self.db.create_build("b1", "demo", "amd64", "d1", user_id="alice")
+        self.db.update_job_status("job-b1-img", "completed")
+        self.db.builds.update_status("b1", "completed")
+        self.db.purge_user("alice")
+        again = self.db.users.create("alice")
+        self.assertEqual(self.db.tokens.list(user_id="alice"), [])
+        self.assertIsNone(self.db.projects.get_member("demo", "alice"))
+        build = self.db.get_build("b1")
+        self.assertIsNone(build["user_uid"])
+        self.assertNotEqual(build["user_uid"], again["uid"])
+
+    def test_orphan_rows_that_name_the_user_go_too(self):
+        self.db.tokens.issue("alice")
+        self.db.projects.add_member("demo", "alice")
+        self.db.users.create("alice")
+        self.db.conn.execute("UPDATE tokens SET user_uid = NULL")
+        self.db.conn.commit()
+        res = self.db.purge_user("alice")
+        self.assertEqual((res["deleted_tokens"], res["removed_memberships"]), (1, 1))
+
+    def test_builds_keep_the_name_unless_anonymized(self):
+        for name in ("alice", "bob"):
+            self.db.users.create(name)
+            self.db.create_build(f"b-{name}", "demo", "amd64", "d", user_id=name)
+            self.db.builds.update_status(f"b-{name}", "completed")
+        self.db.purge_user("alice")
+        self.db.purge_user("bob", anonymize=True)
+        self.assertEqual(self.db.get_build("b-alice")["user_id"], "alice")
+        self.assertEqual(self.db.get_build("b-bob")["user_id"], "deleted-user")
+
+    def test_active_builds_block_the_purge(self):
+        self.db.users.create("alice")
+        self.db.create_build("b1", "demo", "amd64", "d1", user_id="alice")
+        with self.assertRaises(UserBusyError):
+            self.db.purge_user("alice")
+        self.assertIsNotNone(self.db.users.get("alice"))
+
+    def test_last_active_admin_is_kept(self):
+        with self.assertRaises(LastAdminError):
+            self.db.purge_user("root")
+        self.db.users.create("root2", is_admin=True)
+        self.assertIsNotNone(self.db.purge_user("root"))
+
+    def test_home_project_is_deleted_only_on_request(self):
+        self.db.provision_new_user("alice", mode="auto")
+        self.db.provision_new_user("bob", mode="auto")
+        home = self.db.home_project("alice")
+        self.assertEqual(home["id"], "home-alice")
+        self.assertEqual(self.db.purge_user("bob")["deleted_home"], None)
+        self.assertIsNotNone(self.db.projects.get("home-bob"))
+        self.assertEqual(self.db.purge_user("alice", delete_home=True)["deleted_home"], "home-alice")
+        self.assertIsNone(self.db.projects.get("home-alice"))
+
+    def test_shared_default_project_is_not_a_home(self):
+        self.db.provision_new_user("alice", mode="demo")
+        self.assertIsNone(self.db.home_project("alice"))
+        self.assertIsNone(self.db.purge_user("alice", delete_home=True)["deleted_home"])
+        self.assertIsNotNone(self.db.projects.get("demo"))
