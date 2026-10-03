@@ -291,6 +291,14 @@ $admin token issue bob
 - `project update <name> --quota-gb N` sets a project's storage quota in GB;
   `--no-quota` removes it. `project list` shows it. Over the API this is
   `PATCH /api/v1/projects/<name>` with `{"quota_gb": N}` or `null`.
+- `project delete <name> [--purge-storage]` removes the project from the
+  server. Its buckets and objects remain unless `--purge-storage` is given:
+  that empties the dev and prod buckets (objects and incomplete multipart
+  uploads) first, then deletes the project; it is irreversible, needs a system
+  administrator and is refused while a build is in progress (409). A storage
+  failure answers 502 and keeps the project, so the command can be retried.
+  The buckets and keys themselves stay on the storage server: delete them
+  there. Over the API this is `DELETE /api/v1/projects/<name>?purge_storage=true`.
 - `storage gc [--project P] [--dry-run]` runs storage housekeeping now: it
   evicts expired and over-quota dev artifacts and expired worktrees, and
   prints one line per project, one per evicted build and one for the

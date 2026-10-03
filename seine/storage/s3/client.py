@@ -167,6 +167,26 @@ class S3Client:
                 f"{first.get('Code', '')} {first.get('Message', '')}".strip(),
                 error_code=first.get("Code"))
 
+    def list_multipart_uploads(self, bucket):
+        """Yield (key, upload_id) of every incomplete multipart upload."""
+        args = {"Bucket": bucket}
+        while True:
+            resp = self._call(f"list uploads of {bucket}",
+                              self._s3.list_multipart_uploads, **args)
+            for u in resp.get("Uploads", []):
+                yield u["Key"], u["UploadId"]
+            if not resp.get("IsTruncated"):
+                break
+            args["KeyMarker"] = resp.get("NextKeyMarker")
+            args["UploadIdMarker"] = resp.get("NextUploadIdMarker")
+
+    def abort_multipart_upload(self, bucket, key, upload_id):
+        try:
+            self._call(f"abort upload of {bucket}/{key}", self._s3.abort_multipart_upload,
+                       Bucket=bucket, Key=key, UploadId=upload_id)
+        except S3NotFoundError:
+            pass
+
     def refresh_object(self, bucket, key):
         """Restart an object's age by copying it onto itself; False if it is missing.
 

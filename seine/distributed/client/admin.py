@@ -71,9 +71,12 @@ class AdminClient:
         resp.raise_for_status()
         return resp.json()
 
-    def project_delete(self, name: str) -> dict[str, Any]:
+    def project_delete(self, name: str, purge_storage: bool = False) -> dict[str, Any]:
         url = f"{self.server_url}/api/v1/projects/{name}"
-        resp = self.session.delete(url, headers=self._headers(), timeout=self.timeout)
+        params = {"purge_storage": "true"} if purge_storage else None
+        # emptying large buckets can take a while
+        timeout = None if purge_storage else self.timeout
+        resp = self.session.delete(url, params=params, headers=self._headers(), timeout=timeout)
         resp.raise_for_status()
         return resp.json()
 
@@ -258,6 +261,8 @@ def run_client_admin(argv: list[str]) -> int:
 
     p_del = p_sub.add_parser("delete", help="Delete project")
     p_del.add_argument("name", help="Project name")
+    p_del.add_argument("--purge-storage", action="store_true",
+                       help="Also empty the dev and prod buckets (irreversible)")
 
     s_parser = subparsers.add_parser("storage", help="Storage operations")
     s_sub = s_parser.add_subparsers(dest="action")
@@ -346,8 +351,15 @@ def run_client_admin(argv: list[str]) -> int:
                 print(f"Updated project: {proj['name']} (quota: {format_quota(proj)})")
                 return 0
             elif args.action == "delete":
-                client.project_delete(args.name)
+                res = client.project_delete(args.name, purge_storage=args.purge_storage)
                 print(f"Deleted project: {args.name}")
+                if args.purge_storage:
+                    for p in res.get("purged", []):
+                        print(f"  {p['bucket']}: {p['objects']} objects ({format_size(p['bytes'])}) deleted")
+                    if res.get("purged"):
+                        print("  the buckets were emptied, delete them on the storage server if no longer needed")
+                else:
+                    print("  its buckets and their objects remain (use --purge-storage to empty them)")
                 return 0
             else:
                 sys.stderr.write("error: missing or invalid project action (create, list, update, delete)\n")

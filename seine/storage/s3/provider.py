@@ -326,6 +326,14 @@ class S3StorageProvider(StorageProvider):
         self.client.delete_objects(self.bucket, [o["key"] for o in objects])
         return len(objects), sum(o["size"] for o in objects)
 
+    def purge(self):
+        """Empty the bucket: every object and incomplete upload; return (count, bytes)."""
+        objects = list(self.client.list_all_objects(self.bucket))
+        self.client.delete_objects(self.bucket, [o["key"] for o in objects])
+        for key, upload_id in list(self.client.list_multipart_uploads(self.bucket)):
+            self.client.abort_multipart_upload(self.bucket, key, upload_id)
+        return len(objects), sum(o["size"] for o in objects)
+
     def list_objects(self, prefix=""):
         """Return every object (key, size, last_modified, ...) under a bucket key prefix."""
         return list(self.client.list_all_objects(self.bucket, prefix))

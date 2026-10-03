@@ -118,6 +118,12 @@ class FakeS3:
         self.refreshed = key
         return key in self.objects
 
+    def list_multipart_uploads(self, bucket):
+        yield from getattr(self, "uploads_open", [])
+
+    def abort_multipart_upload(self, bucket, key, upload_id):
+        self.aborted.append((key, upload_id))
+
     def delete_objects(self, bucket, keys):
         self.deleted = list(keys)
         for key in self.deleted:
@@ -307,6 +313,13 @@ class S3ProviderHousekeeping(avocado.Test):
         self.assertTrue(self.provider.refresh_worktree("p", "d1"))
         self.assertEqual(self.client.refreshed, "worktrees/p/d1.tar.zst")
         self.assertFalse(self.provider.refresh_worktree("p", "d2"))
+
+    def test_purge_empties_the_bucket_and_aborts_uploads(self):
+        self.client.uploads_open = [("artifacts/p/9/big.img", "u1"), ("k2", "u2")]
+        self.client.aborted = []
+        self.assertEqual(self.provider.purge(), (6, 169))
+        self.assertEqual(self.client.objects, {})
+        self.assertEqual(self.client.aborted, [("artifacts/p/9/big.img", "u1"), ("k2", "u2")])
 
     def test_delete_prefix_refuses_an_empty_prefix(self):
         with self.assertRaises(ValueError):
