@@ -554,6 +554,8 @@ class AdminRESTAPITest(Test):
                 objects.clear()
                 return 1, 100
 
+            prefix = "cache"
+
             def lifecycle_rules(self):
                 return []
 
