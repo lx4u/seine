@@ -138,6 +138,33 @@ class BuildState:
     def remote_output(self, text):
         self.remote_text.append(text)
 
+    # The worker announced its task list: replace the placeholder row.
+    def apply_plan(self, plan):
+        steps = [tasks.Task(t["name"], None, t.get("needs")) for t in plan]
+        try:
+            steps = tasks.ordered(steps)
+        except ValueError:
+            pass
+        cached = {t["name"] for t in plan if t.get("cached")}
+        self.order = [t.name for t in steps]
+        self.rows = {t.name: new_row(t.needs, "cached" if t.name in cached else "pending")
+                     for t in steps}
+        self.current = None
+
+    # An event relayed from the worker, on the UI thread.
+    def remote_event(self, event):
+        kind = event.get("type")
+        if kind == "task_plan":
+            self.apply_plan(event.get("tasks") or [])
+        elif kind == "task_started":
+            self.task_started(event["task"])
+        elif kind == "task_finished":
+            self.task_finished(event["task"], event.get("failed", False))
+        elif kind == "say":
+            self.say(event["text"])
+        elif kind == "sampled":
+            self.sampled(event["sample"])
+
     def reset(self, build):
         self.remote = None
         self.remote_job = None
@@ -173,7 +200,7 @@ class BuildState:
         # Clear leftovers from a previous rootfs run (retry after failure).
         self.play = None
         self.ansible_task = None
-        if self.on_task_started:
+        if self.on_task_started and not self.remote:
             self.on_task_started(name)
 
     def task_finished(self, name, failed=False):
@@ -183,7 +210,7 @@ class BuildState:
             row["elapsed"] = time.time() - row["started"]
         if self.current == name:
             self.current = None
-        if self.on_task_finished:
+        if self.on_task_finished and not self.remote:
             self.on_task_finished(name, failed)
 
     def say(self, text):
@@ -194,20 +221,23 @@ class BuildState:
                         % (sample.get("load") or 0.0,
                            round((sample.get("cpu") or 0.0) * 100)))
 
-    def _stop_remote_row(self, failed):
-        # The worker's steps never reach the reporter, so nothing else ends this row.
-        if self.remote and self.rows["remote build"]["state"] == "running":
-            self.task_finished("remote build", failed=failed)
+    def _stop_remote_rows(self, failed):
+        # A task the worker never reported finished (cancel, crash) ends with the build.
+        if not self.remote:
+            return
+        for name, row in list(self.rows.items()):
+            if row["state"] == "running":
+                self.task_finished(name, failed=failed)
 
     def finished_ok(self):
-        self._stop_remote_row(failed=False)
+        self._stop_remote_rows(failed=False)
         self.done = True
         self.message = "build finished"
         if self.on_finished:
             self.on_finished()
 
     def finished_failed(self, text):
-        self._stop_remote_row(failed=True)
+        self._stop_remote_rows(failed=True)
         self.done = True
         self.error = True
         self.message = text
@@ -329,7 +359,8 @@ def start_remote_build(app, state, spec_file, session, no_download=False, projec
         session.url, project, spec_file,
         options={"no_download": no_download, "insecure": session.insecure,
                  "ca_cert": session.ca_cert}, token=session.token,
-        out=write, err=write, prompt=tui_prompt(app), on_download=on_download)
+        out=write, err=write, prompt=tui_prompt(app), on_download=on_download,
+        on_event=lambda event: app.call_from_thread(state.remote_event, event))
     state.reset_remote(host, job)
 
     def run():
