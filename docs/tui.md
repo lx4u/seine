@@ -136,8 +136,11 @@ artifacts. `/remote` again opens the cockpit: builds, workers and
 artifacts, plus users, projects and server settings for an
 administrator. `ctrl-1` to `ctrl-6` switch the cockpit's tabs, even while you
 type in the prompt (the terminal has to report ctrl-digit, as kitty, WezTerm
-and foot do; clicking the sidebar always works). `/remote status` and
-`/remote disconnect` do what they say.
+and foot do; clicking the sidebar always works). The cockpit's top-right
+pane shows the full details of the selected row (IDs, checksums, timestamps,
+settings), which the table has to truncate; the connection status and the
+tab list sit below it. `/remote status` and `/remote disconnect` do what
+they say.
 
 `/project` chooses the project remote builds go to. With no argument it
 lists the projects you can use with your role in each, and a box to make the
