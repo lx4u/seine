@@ -360,7 +360,7 @@ class RemoteLogIndex:
 # Same as start_build(), but the build runs on a seine-server worker:
 # RemoteBuild packs and uploads the worktree, submits it, and its log
 # stream lands under state.logs for BuildScreen to tail.
-def start_remote_build(app, state, spec_file, session, no_download=False, project=None,
+def start_remote_build(app, state, spec_files, session, no_download=False, project=None,
                        build=None):
     from seine.distributed.client.remote import DownloadError, RemoteBuild
     from seine.tui.credentials import tui_prompt
@@ -390,7 +390,8 @@ def start_remote_build(app, state, spec_file, session, no_download=False, projec
             app.call_from_thread(redraw, app)
 
     # The stream is kept under the local logs, one file per task.
-    log_dir = logindex.allocate_log_dir([spec_file] if build is None else build.options["files"])
+    spec_files = [spec_files] if isinstance(spec_files, str) else spec_files
+    log_dir = logindex.allocate_log_dir(spec_files if build is None else build.options["files"])
 
     # What the client says itself (upload, download...) joins the worker's own output.
     def write(text):
@@ -412,7 +413,7 @@ def start_remote_build(app, state, spec_file, session, no_download=False, projec
             state.finished_failed(error)
 
     job = RemoteBuild(
-        session.url, project, spec_file,
+        session.url, project, spec_files,
         options={"no_download": no_download, "verbose": True, "insecure": session.insecure,
                  "ca_cert": session.ca_cert}, token=session.token,
         out=write, err=write, prompt=tui_prompt(app), on_download=on_download,

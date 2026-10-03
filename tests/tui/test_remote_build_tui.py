@@ -61,9 +61,30 @@ class RemoteBuildTuiTest(avocado.Test):
         app = self._app(True)
         local, remote = self._dispatch(app, "/build")
         local.assert_not_called()
-        self.assertEqual(remote.call_args.args[2], "/w/main.yaml")
+        self.assertEqual(remote.call_args.args[2], ["/w/main.yaml"])
         self.assertFalse(remote.call_args.kwargs["no_download"])
         app.show.assert_called_once_with("build")
+
+    def test_side_loaded_fragments_are_sent_with_the_build(self):
+        app = self._app(True)
+        app.context.builds[0].options = {"files": ["/w/main.yaml", "/w/frag.yaml"]}
+        _, remote = self._dispatch(app, "/build")
+        self.assertEqual(remote.call_args.args[2], ["/w/main.yaml", "/w/frag.yaml"])
+
+    def test_remote_build_gets_every_spec_file(self):
+        app = mock.Mock()
+        app.run_worker = lambda fn, **kw: fn() or mock.Mock()
+        session = self.RemoteSession(app=app)
+        session.url, session.token = "http://127.0.0.1:8000", "t"
+        state = self.build.BuildState()
+        build = self._build_cmd()
+        build.options = {"files": ["/w/main.yaml", "/w/frag.yaml"]}
+        with mock.patch("seine.distributed.client.remote.RemoteBuild") as rb, \
+                mock.patch("seine.tui.credentials.tui_prompt"):
+            rb.return_value.run.return_value = 0
+            self.build.start_remote_build(
+                app, state, build.options["files"], session, project="demo", build=build)
+        self.assertEqual(rb.call_args.args[2], ["/w/main.yaml", "/w/frag.yaml"])
 
     def test_build_local_flag_and_disconnected_stay_local(self):
         for connected, line in ((True, "/build --local"), (False, "/build")):
