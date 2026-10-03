@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import json
 import os
 import shutil
 import tempfile
@@ -161,6 +162,41 @@ class LogStreamerTest(Test):
         self.assertEqual(payload["source"], "stdout")
         self.assertEqual(payload["text"], "hello world")
         self.assertIn("timestamp", payload)
+
+    def test_send_event_keeps_the_event_fields(self):
+        from seine.distributed.agent.stream import LogStreamer
+
+        streamer = LogStreamer("http://localhost:8000", "bld-ev", "wtok")
+        sent = []
+        streamer._ws = mock.MagicMock(send=sent.append)
+
+        streamer.send_event({"type": "task_started", "task": "rootfs"})
+
+        payload = json.loads(sent[0])
+        self.assertEqual(payload["build_id"], "bld-ev")
+        self.assertEqual(payload["type"], "task_started")
+        self.assertEqual(payload["task"], "rootfs")
+        self.assertNotIn("text", payload)
+
+    def test_send_event_redacts_say_text(self):
+        from seine import vault
+        from seine.distributed.agent.stream import LogStreamer
+
+        vault.record_secret("s3cr3t-value")
+        streamer = LogStreamer("http://localhost:8000", "bld-ev", "wtok")
+        sent = []
+        streamer._ws = mock.MagicMock(send=sent.append)
+
+        streamer.send_event({"type": "say", "text": "using s3cr3t-value"})
+
+        self.assertEqual(json.loads(sent[0])["text"], "using <redacted>")
+
+    def test_send_event_is_noop_when_not_connected(self):
+        from seine.distributed.agent.stream import LogStreamer
+
+        streamer = LogStreamer("ws://127.0.0.1:19999", "bld-ev", "wtok")
+        streamer._retry_at = float("inf")
+        streamer.send_event({"type": "say", "text": "dropped"})
 
     def test_send_is_noop_when_not_connected(self):
         from seine.distributed.agent.stream import LogStreamer

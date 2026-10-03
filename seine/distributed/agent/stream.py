@@ -33,12 +33,17 @@ def split_text(text: str, limit: int = MAX_CHUNK) -> list[str]:
     return parts
 
 
+def redact(text: str) -> str:
+    """Replace known secret values in text."""
+    for secret in vault.secrets():
+        text = text.replace(secret, "<redacted>")
+    return text
+
+
 def redacting(send):
     """Wrap a log sender so known secret values never leave the agent."""
     def redacted(source: str, text: str) -> None:
-        for secret in vault.secrets():
-            text = text.replace(secret, "<redacted>")
-        send(source, text)
+        send(source, redact(text))
     return redacted
 
 
@@ -81,16 +86,20 @@ class LogStreamer:
             self._send_chunk(source, part)
 
     def _send_chunk(self, source: str, text: str) -> None:
+        self._send_payload({"build_id": self._build_id, "source": source, "text": text,
+                            "timestamp": time.time()})
+
+    def send_event(self, event: dict) -> None:
+        """Send a structured build event (task plan, task started...); dropped while down."""
+        if event.get("type") == "say" and isinstance(event.get("text"), str):
+            event = {**event, "text": redact(event["text"])}
+        self._send_payload({"build_id": self._build_id, "timestamp": time.time(), **event})
+
+    def _send_payload(self, payload: dict) -> None:
         if self._ws is None and time.monotonic() >= self._retry_at:
             self.connect()
         if self._ws is None:
             return
-        payload = {
-            "build_id": self._build_id,
-            "source": source,
-            "text": text,
-            "timestamp": time.time(),
-        }
         try:
             self._ws.send(json.dumps(payload, ensure_ascii=False))
         except Exception:

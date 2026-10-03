@@ -7,6 +7,7 @@ import os
 import platform
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -16,9 +17,11 @@ from unittest import mock
 
 from avocado import Test
 
+from seine.distributed.agent.events import EventListener
 from seine.distributed.agent.detect import detect_capabilities, detect_native_arch, ARCH_MAP
 from seine.distributed.agent.executor import SubprocessExecutor, child_env, find_seine_binary
 from seine.distributed.common.models import JobManifest, JobS3
+from seine.reporter import SOCKET_ENV
 from seine.distributed.common.transport import (
     check_server_url,
     is_loopback,
@@ -150,6 +153,16 @@ class SubprocessExecutorTest(Test):
             ret = ex.execute_job(manifest, on_log=lambda s, t: logs.append(t))
         return ret, popen, logs
 
+    def test_child_gets_a_reporter_socket_only_when_events_are_wanted(self):
+        _, popen, _ = self._execute()
+        self.assertNotIn(SOCKET_ENV, popen.call_args.kwargs["env"])
+        ex = SubprocessExecutor(self.tmp_dir)
+        ex.on_event = lambda event: None
+        _, popen, _ = self._execute(ex=ex)
+        self.assertIn(SOCKET_ENV, popen.call_args.kwargs["env"])
+        # The listener is gone once the job is.
+        self.assertFalse(os.path.exists(popen.call_args.kwargs["env"][SOCKET_ENV]))
+
     def test_child_gets_pythonunbuffered_and_build_vars(self):
         _, popen, _ = self._execute()
         env = popen.call_args.kwargs["env"]
@@ -274,6 +287,37 @@ class SubprocessExecutorTest(Test):
                 if name.endswith(".py"):
                     with open(os.path.join(folder, name), encoding="utf-8") as f:
                         self.assertNotIn("for_build(", f.read(), name)
+
+
+class EventListenerTest(Test):
+    """Tests for the socket a build's reporter writes its events to."""
+
+    def setUp(self):
+        self.events = []
+        self.listener = EventListener(self.events.append)
+
+    def tearDown(self):
+        self.listener.close()
+
+    def _send(self, data: bytes) -> None:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(self.listener.path)
+            sock.sendall(data)
+
+    def test_json_lines_become_events(self):
+        self._send(b'{"type": "task_started", "task": "a"}\n{"type": "say", "text": "hi"}\n')
+        self.listener.close()
+        self.assertEqual([e["type"] for e in self.events], ["task_started", "say"])
+
+    def test_bad_lines_are_skipped(self):
+        self._send(b'not json\n[1]\n{"no": "type"}\n{"type": "say", "text": "ok"}\n')
+        self.listener.close()
+        self.assertEqual(len(self.events), 1)
+
+    def test_close_removes_the_socket(self):
+        path = self.listener.path
+        self.listener.close()
+        self.assertFalse(os.path.exists(path))
 
 
 class ChildEnvTest(Test):
@@ -1037,6 +1081,22 @@ class JobLifecycleTest(Test):
                 self.agent.run_job(self.manifest)
         self.assertIn(JOB_S3.secret_key, vault.secrets())
         self.assertEqual(sent[0], "denied for <redacted> / <redacted>\n")
+
+    def test_events_flow_to_the_streamer_during_a_job_only(self):
+        seen = []
+
+        def execute(manifest, on_log):
+            seen.append(self.agent.executor.on_event)
+            return 1
+
+        with mock.patch("seine.distributed.agent.daemon.LogStreamer") as streamer:
+            streamer.return_value.__enter__.return_value.send_event = "sink"
+            with mock.patch.object(self.agent.executor, "execute_job", side_effect=execute), \
+                    mock.patch.object(self.agent, "update_job_status"):
+                self.manifest = JobManifest(job_id="job-1", build_id="bld-1", project="p")
+                self.agent.run_job(self.manifest)
+        self.assertEqual(seen, ["sink"])
+        self.assertIsNone(self.agent.executor.on_event)
 
     def test_success_uploads_then_wipes(self):
         order = []

@@ -251,6 +251,7 @@ class WorkerAgent:
                 self.server_url, manifest.build_id, self.worker_token or "", ca_cert=self.ca_cert
             ) as streamer:
                 send = redacting(streamer.send)
+                self.executor.on_event = streamer.send_event
                 try:
                     status, err, artifacts = self._execute(manifest, send)
                 finally:
@@ -262,6 +263,7 @@ class WorkerAgent:
             print(f"[agent] Error running job {manifest.job_id}: {e}")
             status, err, artifacts = "failed", str(e), []
         finally:
+            self.executor.on_event = None
             self._current_job_id = None
         self.update_job_status(
             manifest.job_id, manifest.build_id, status, err=err, artifacts=artifacts
