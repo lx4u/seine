@@ -42,8 +42,11 @@ def redact(text: str) -> str:
 
 def redacting(send):
     """Wrap a log sender so known secret values never leave the agent."""
-    def redacted(source: str, text: str) -> None:
-        send(source, redact(text))
+    def redacted(source: str, text: str, task: Optional[str] = None) -> None:
+        if task is None:
+            send(source, redact(text))
+        else:
+            send(source, redact(text), task=task)
     return redacted
 
 
@@ -80,14 +83,17 @@ class LogStreamer:
         self._retry_at = time.monotonic() + self._backoff
         self._backoff = min(self._backoff * 2, BACKOFF_MAX)
 
-    def send(self, source: str, text: str) -> None:
+    def send(self, source: str, text: str, task: Optional[str] = None) -> None:
         """Send log text in chunks; drop it while the connection is down."""
         for part in split_text(text):
-            self._send_chunk(source, part)
+            self._send_chunk(source, part, task)
 
-    def _send_chunk(self, source: str, text: str) -> None:
-        self._send_payload({"build_id": self._build_id, "source": source, "text": text,
-                            "timestamp": time.time()})
+    def _send_chunk(self, source: str, text: str, task: Optional[str] = None) -> None:
+        payload = {"build_id": self._build_id, "source": source, "text": text,
+                   "timestamp": time.time()}
+        if task is not None:
+            payload["task"] = task
+        self._send_payload(payload)
 
     def send_event(self, event: dict) -> None:
         """Send a structured build event (task plan, task started...); dropped while down."""

@@ -613,7 +613,11 @@ class RemoteBuildTest(Test):
         self.run_build(options={"packages_only": True, "s3_cache": True, "verbose": True,
                                 "sign_key": "k", "project": "demo", "build": True})
         options = self.submitted()["json"]["options"]
-        self.assertEqual(options, {"packages_only": True, "s3_cache": True})
+        self.assertEqual(options, {"packages_only": True, "s3_cache": True, "verbose": True})
+
+    def test_verbose_off_is_not_sent(self):
+        self.run_build(options={"verbose": False})
+        self.assertEqual(self.submitted()["json"]["options"], {})
 
     def test_failed_build_exits_one_and_lists_artifacts(self):
         self.statuses = ["running", "failed"]

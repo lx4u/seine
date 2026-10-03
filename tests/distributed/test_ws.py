@@ -252,6 +252,31 @@ class LogStreamerTest(Test):
         self.assertEqual(payload["text"], "hello world")
         self.assertIn("timestamp", payload)
 
+    def test_send_carries_the_task_only_when_there_is_one(self):
+        from seine.distributed.agent.stream import LogStreamer
+
+        streamer = LogStreamer("http://localhost:8000", "bld-t", "wtok")
+        sent = []
+        streamer._ws = mock.MagicMock(send=sent.append)
+
+        streamer.send("stdout", "a\n", task="package:amd64:busybox")
+        streamer.send("stdout", "b\n")
+
+        self.assertEqual(json.loads(sent[0])["task"], "package:amd64:busybox")
+        self.assertNotIn("task", json.loads(sent[1]))
+
+    def test_redacting_keeps_the_task(self):
+        from seine import vault
+        from seine.distributed.agent.stream import redacting
+
+        vault.record_secret("s3cr3t-value")
+        sent = []
+        send = redacting(lambda *args, **kw: sent.append((args, kw)))
+        send("stdout", "x s3cr3t-value", task="rootfs")
+        send("stdout", "y")
+        self.assertEqual(sent[0], (("stdout", "x <redacted>"), {"task": "rootfs"}))
+        self.assertEqual(sent[1], (("stdout", "y"), {}))
+
     def test_send_event_keeps_the_event_fields(self):
         from seine.distributed.agent.stream import LogStreamer
 

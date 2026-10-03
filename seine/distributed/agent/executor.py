@@ -38,6 +38,18 @@ _ENV_PREFIXES = ("LC_", "XDG_", "CONTAINERS_")
 # SEINE_* names holding secrets or keys (the agent's tokens, signing keys...).
 _SECRET_MARKERS = ("TOKEN", "PASSWORD", "SECRET", "KEY")
 
+# What 'seine build --verbose' puts in front of each task line.
+_TASK_LINE = re.compile(r"^\[(?P<task>[^\]]+?)\+\d+(?:\.\d+)?s\] (?P<text>.*\n?)$", re.DOTALL)
+
+
+def split_task_line(line: str) -> tuple[Optional[str], str]:
+    """Return (task, text without its prefix), or (None, line) for any other line."""
+    match = _TASK_LINE.match(line)
+    if match is None:
+        return None, line
+    return match.group("task"), match.group("text")
+
+
 _JOB_DIR_NAME = re.compile(r"^bld-[\w-]+$")
 # Rootless podman keeps its overlay mounts in the user namespace: unmount them there first.
 _UNMOUNT_AND_REMOVE = (
@@ -361,6 +373,8 @@ class SubprocessExecutor:
         env = child_env(manifest, build_dir, feedauth_file=self.write_feed_secrets(manifest))
 
         cmd = [find_seine_binary(), "build"]
+        if manifest.options.get("verbose"):
+            cmd.append("--verbose")
         if manifest.options.get("packages_only"):
             cmd.append("--packages-only")
         if manifest.options.get("s3_cache"):
@@ -399,7 +413,11 @@ class SubprocessExecutor:
         def stream_output(pipe, source):
             try:
                 for line in iter(pipe.readline, ""):
-                    on_log(source, line)
+                    task, text = split_task_line(line)
+                    if task is None:
+                        on_log(source, line)
+                    else:
+                        on_log(source, text, task=task)
             finally:
                 pipe.close()
 
