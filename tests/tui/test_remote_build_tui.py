@@ -126,6 +126,92 @@ class RemoteBuildTuiTest(avocado.Test):
             state.finished_ok()
         self.assertEqual(state.rows["remote build"]["elapsed"], 10.0)
 
+    PLAN = {"type": "task_plan", "tasks": [
+        {"name": "rootfs", "needs": ["chroot", "package:amd64:busybox"]},
+        {"name": "chroot", "needs": []},
+        {"name": "package:amd64:busybox", "needs": [], "cached": True},
+        {"name": "disk", "needs": ["rootfs"]}]}
+
+    def _planned(self):
+        state = self.build.BuildState()
+        state.reset_remote("host", mock.Mock())
+        state.remote_event(self.PLAN)
+        return state
+
+    def test_plan_replaces_the_placeholder_row(self):
+        state = self._planned()
+        self.assertNotIn("remote build", state.rows)
+        self.assertEqual(state.order,
+                         ["chroot", "package:amd64:busybox", "rootfs", "disk"])
+        self.assertEqual(state.rows["package:amd64:busybox"]["state"], "cached")
+        self.assertEqual(state.rows["rootfs"]["needs"],
+                         ["chroot", "package:amd64:busybox"])
+        text = state.render()
+        self.assertIn("[BUILD: REMOTE @ host]", text)
+        self.assertIn("\U0001F680 package:amd64:busybox", text)
+        self.assertIn("○ disk", text)
+
+    def test_parallel_tasks_run_with_their_own_timers(self):
+        state = self._planned()
+        with mock.patch("time.time", return_value=1000.0):
+            state.remote_event({"type": "task_started", "task": "chroot"})
+        with mock.patch("time.time", return_value=1030.0):
+            state.remote_event({"type": "task_started", "task": "disk"})
+        with mock.patch("time.time", return_value=1065.0):
+            text = state.render()
+            state.remote_event({"type": "task_finished", "task": "chroot", "failed": False})
+        self.assertIn("● chroot  1m05s", text)
+        self.assertIn("● disk  35s", text)
+        self.assertEqual(state.rows["chroot"]["state"], "done")
+        self.assertEqual(state.rows["disk"]["state"], "running")
+
+    def test_say_and_sampled_events_set_the_message(self):
+        state = self._planned()
+        state.remote_event({"type": "say", "text": "interrupted"})
+        self.assertEqual(state.message, "interrupted")
+        state.remote_event({"type": "sampled", "sample": {"load": 1.5, "cpu": 0.5}})
+        self.assertEqual(state.message, "load 1.50, 50% busy")
+
+    def test_remote_tasks_do_not_fire_the_local_screen_hooks(self):
+        state = self._planned()
+        state.on_task_started = mock.Mock()
+        state.on_task_finished = mock.Mock()
+        state.remote_event({"type": "task_started", "task": "chroot"})
+        state.remote_event({"type": "task_finished", "task": "chroot"})
+        state.on_task_started.assert_not_called()
+        state.on_task_finished.assert_not_called()
+
+    def test_running_tasks_end_with_the_build(self):
+        for finish, expected in ((lambda s: s.finished_ok(), "done"),
+                                 (lambda s: s.finished_failed("x"), "failed")):
+            state = self._planned()
+            state.remote_event({"type": "task_started", "task": "chroot"})
+            finish(state)
+            self.assertEqual(state.rows["chroot"]["state"], expected)
+            self.assertEqual(state.rows["disk"]["state"], "pending")
+
+    def test_running_remote_tasks_highlight_the_spec_tree(self):
+        from seine.tui.spectree import highlight_active
+        state = self._planned()
+        state.remote_event({"type": "task_started", "task": "rootfs"})
+        tree = mock.Mock()
+        tree.active_keys.return_value = []
+        self.assertEqual(highlight_active(tree, state), {"rootfs"})
+
+    def test_start_remote_build_feeds_events_to_the_state(self):
+        app = mock.Mock()
+        app.run_worker = lambda fn, **kw: fn() or mock.Mock()
+        app.call_from_thread = lambda fn, *a: fn(*a)
+        session = self.RemoteSession(app=app)
+        session.url, session.token = "http://127.0.0.1:8000", "t"
+        state = self.build.BuildState()
+        with mock.patch("seine.distributed.client.remote.RemoteBuild") as rb, \
+                mock.patch("seine.tui.credentials.tui_prompt"):
+            rb.return_value.run.return_value = 0
+            self.build.start_remote_build(app, state, "main.yaml", session, project="demo")
+        rb.call_args.kwargs["on_event"](self.PLAN)
+        self.assertIn("disk", state.rows)
+
     def test_start_remote_build_reports_exit_code(self):
         app = mock.Mock()
         app.run_worker = lambda fn, **kw: fn() or mock.Mock()
