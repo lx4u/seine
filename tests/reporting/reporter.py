@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 
 import avocado
+import json
+import shutil
+import socket
+import tempfile
+import threading
 import os
 import sys
 import time
@@ -13,6 +18,8 @@ from seine import analyze
 from seine import tasks
 from seine.build import BuildCmd
 from seine.progress import Display
+from seine.reporter import SOCKET_ENV, SocketReporter
+from seine.tasks import Task
 
 MINIMAL = """
 image:
@@ -145,6 +152,96 @@ class ImageBuildTakesAReporter(avocado.Test):
     # neither 'Display' nor a minimal Reporter has to implement it.
     def test_no_sampled_on_the_reporter_is_fine(self):
         self.build.image.build(reporter=FakeReporter())
+
+    # The agent's socket wraps whatever display there is, so it sees the plan.
+    def test_the_reporter_socket_gets_the_plan(self):
+        sockdir = tempfile.mkdtemp(dir="/var/tmp")
+        path = os.path.join(sockdir, "r.sock")
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(path)
+        server.listen(1)
+        os.environ[SOCKET_ENV] = path
+        try:
+            self.build.image.build(reporter=FakeReporter())
+            peer, _ = server.accept()
+            peer.settimeout(5)
+            first = json.loads(peer.recv(65536).splitlines()[0])
+            peer.close()
+        finally:
+            del os.environ[SOCKET_ENV]
+            server.close()
+            shutil.rmtree(sockdir)
+        self.assertEqual(first["type"], "task_plan")
+        self.assertIsInstance(self.calls[-1]["display"], SocketReporter)
+
+
+# A listening Unix socket stands in for the worker agent.
+class SocketReporterSendsJsonLines(avocado.Test):
+    def setUp(self):
+        self.sockdir = tempfile.mkdtemp(dir="/var/tmp")
+        self.path = os.path.join(self.sockdir, "r.sock")
+        self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.server.bind(self.path)
+        self.server.listen(1)
+        self.reporter = SocketReporter(self.path, FakeReporter())
+        self.peer, _ = self.server.accept()
+
+    def tearDown(self):
+        self.reporter.close()
+        self.peer.close()
+        self.server.close()
+        shutil.rmtree(self.sockdir)
+
+    def events(self):
+        data = b""
+        while True:
+            chunk = self.peer.recv(65536)
+            if not chunk:
+                break
+            data += chunk
+        return [json.loads(line) for line in data.splitlines()]
+
+    def test_events_have_type_and_timestamp(self):
+        self.reporter.plan([Task("a", lambda: None),
+                            Task("b", lambda: None, needs=["a"])], ["cached"])
+        self.reporter.started("a")
+        self.reporter.finished("a", failed=True)
+        self.reporter.say("hello")
+        self.reporter.sampled({"load": 1.0})
+        self.reporter.close()
+        events = self.events()
+        self.assertEqual([e["type"] for e in events],
+                         ["task_plan", "task_started", "task_finished",
+                          "say", "sampled"])
+        self.assertEqual(events[0]["tasks"][1], {"name": "b", "needs": ["a"]})
+        self.assertEqual(events[0]["tasks"][2],
+                         {"name": "cached", "needs": [], "cached": True})
+        self.assertTrue(events[2]["failed"])
+        self.assertTrue(all("timestamp" in e for e in events))
+
+    def test_calls_reach_the_inner_reporter(self):
+        self.reporter.started("a")
+        self.assertEqual(self.reporter.inner.started_names, ["a"])
+
+    def test_parallel_calls_keep_lines_whole(self):
+        def burst(prefix):
+            for i in range(200):
+                self.reporter.started("%s-%d" % (prefix, i))
+        received = []
+        reader = threading.Thread(target=lambda: received.extend(self.events()))
+        reader.start()
+        threads = [threading.Thread(target=burst, args=(p,)) for p in "abcd"]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.reporter.close()
+        reader.join()
+        self.assertEqual(len(received), 800)
+
+    def test_a_missing_socket_is_not_fatal(self):
+        reporter = SocketReporter(os.path.join(self.workdir, "none"))
+        reporter.started("a")
 
 # The digest-timing regression test that used to live here moved to
 # tests/build/build.py, alongside the fix itself (fix(build): take a

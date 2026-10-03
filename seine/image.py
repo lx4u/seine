@@ -17,6 +17,7 @@ from seine               import containers
 from seine               import logindex
 from seine               import packages
 from seine               import progress
+from seine.reporter       import SocketReporter
 from seine               import tasks
 from seine               import utils
 from seine.utils          import INPUTS_LABEL
@@ -1045,10 +1046,17 @@ class Image:
                 display = progress.Display(total=len(steps),
                                            environment=os.environ)
                 ticker = display
+            # A worker agent listening on a socket also gets the events.
+            display = SocketReporter.from_env(display)
+            plan = getattr(display, "plan", None)
+            if plan is not None:
+                cached = (self._builder.cached_task_entries()
+                          if self._builder is not None else [])
+                plan(steps, [entry["name"] for entry in cached])
             ok = False
             # 'sampled' is optional on a Reporter -- Display has none, so
             # the machine is still watched and recorded, just not pushed live.
-            machine = analyze.watching(callback=getattr(reporter, "sampled", None))
+            machine = analyze.watching(callback=getattr(display, "sampled", None))
             # Announced before tasks.run() so index.json exists while the
             # build is still running, not only after it finishes --
             # record() below rewrites this same entry with the outcomes.
