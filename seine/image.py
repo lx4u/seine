@@ -107,7 +107,7 @@ class Image:
             # Relative path goes under deploy/<release>, same as other
             # output, so two releases don't overwrite each other's image.
             if os.path.isabs(filename) == False:
-                deploy = os.path.join(ContainerEngine.deploy_root(), distro["release"])
+                deploy = ContainerEngine.deploy_dir(distro["release"])
                 os.makedirs(deploy, exist_ok=True)
                 filename = os.path.join(deploy, filename)
             self._output = filename
@@ -118,7 +118,7 @@ class Image:
                 raise ValueError("output 'filename' not specified in 'initrd' section!")
             filename = initrd["filename"]
             if os.path.isabs(filename) == False:
-                deploy = os.path.join(ContainerEngine.deploy_root(), distro["release"])
+                deploy = ContainerEngine.deploy_dir(distro["release"])
                 os.makedirs(deploy, exist_ok=True)
                 filename = os.path.join(deploy, filename)
             self._initrd_output = filename
@@ -169,7 +169,7 @@ class Image:
         files = self.options.get("files") or []
         stem = os.path.splitext(os.path.basename(files[0]))[0] \
             if len(files) > 0 else distro["release"]
-        deploy = os.path.join(ContainerEngine.deploy_root(), distro["release"])
+        deploy = ContainerEngine.deploy_dir(distro["release"])
         os.makedirs(deploy, exist_ok=True)
         return os.path.join(deploy, "%s.tar" % stem)
 

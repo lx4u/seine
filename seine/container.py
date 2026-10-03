@@ -188,6 +188,10 @@ class ContainerEngine:
     def deploy_root():
         return os.environ.get("SEINE_DEPLOY_DIR") \
                or os.path.join(ContainerEngine.build_dir(), "deploy")
+    @staticmethod
+    def deploy_dir(release=None):
+        root = ContainerEngine.deploy_root()
+        return os.path.join(root, str(release)) if release else root
     # Fetched vendor .debs (seine/vendor's deploy_repository()) are a
     # shared, machine-independent input, unlike the rest of deploy_root()
     # which is per-build output -- so it gets its own override to point

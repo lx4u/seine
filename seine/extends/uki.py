@@ -68,7 +68,7 @@ def parse(package, extends):
 def initrd_path(distro, filename):
     if os.path.isabs(filename):
         return filename
-    return os.path.join(ContainerEngine.deploy_root(), distro["release"], filename)
+    return os.path.join(ContainerEngine.deploy_dir(distro["release"]), filename)
 
 def _require_initrd(package, distro):
     settings = package.ext["uki"]
