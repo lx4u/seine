@@ -151,6 +151,32 @@ class TestBuildArtifactDownloadUrlsAPI(Test):
         self.assertEqual(data["artifacts"], [])
         self.mock_storage.generate_download_url.assert_not_called()
 
+    def test_normal_build_has_no_expiry_fields(self):
+        build_id = "bld-test-normal"
+        self.db.builds.create(id=build_id, project="demo", target_arch="amd64")
+        self._complete(build_id, "pc-image.img")
+
+        data = self.client.get(f"/api/v1/builds/{build_id}", headers=self.headers).json()
+        self.assertIsNone(data["artifacts_expired_at"])
+        self.assertIsNone(data["artifacts_expired_reason"])
+
+    def test_evicted_build_reports_why_its_artifacts_are_gone(self):
+        for reason in ("ttl", "pressure"):
+            build_id = f"bld-test-{reason}"
+            self.db.builds.create(id=build_id, project="demo", target_arch="amd64")
+            self._complete(build_id, "pc-image.img")
+            self.db.builds.mark_artifacts_expired(build_id, reason, now=1234.0)
+
+            resp = self.client.get(f"/api/v1/builds/{build_id}", headers=self.headers)
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["status"], "completed")
+            self.assertEqual(data["artifacts_expired_at"], 1234.0)
+            self.assertEqual(data["artifacts_expired_reason"], reason)
+            self.assertEqual(data["download_urls"], {})
+            self.assertEqual(data["artifacts"], [])
+        self.mock_storage.generate_download_url.assert_not_called()
+
     def test_queued_build_returns_empty_download_urls(self):
         build_id = "bld-test-queued"
         self.db.builds.create(id=build_id, project="demo", target_arch="amd64")

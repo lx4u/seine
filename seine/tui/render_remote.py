@@ -170,7 +170,7 @@ def render_remote_artifacts(
         prefix = " ▸ " if i == selected_index else "   "
         name = str(a.get("name") or "")
         short_name = name[:24] + ".." if len(name) > 26 else name
-        size_str = _format_size(a.get("size", 0))
+        size_str = "-" if a.get("expired") else _format_size(a.get("size", 0))
         build_id = str(a.get("build_id") or "")
         short_id = build_id[:12] if len(build_id) > 12 else build_id
         project = str(a.get("project") or "")

@@ -380,6 +380,60 @@ class TestClientArtifactDownload(Test):
         self.assertFalse(os.path.exists(os.path.join(self.tmp_dir, "deploy")))
         self.assertIn("artifacts/demo/bld-test1/pc-image.raw", out)
 
+    def test_expired_artifacts_are_reported_not_downloaded(self):
+        self._complete({"disk.raw": b"disk-content"})
+        self.build.update(
+            download_urls={}, artifacts=[], artifact_urls=[],
+            artifacts_expired_at=1234.0, artifacts_expired_reason="pressure",
+        )
+        ret, _, err = self._run()
+        self.assertEqual(ret, 1)
+        self.assertIn(
+            "artifacts of build bld-test1 expired (storage pressure); "
+            "rebuild to get them again", err)
+        self.assertNotIn("Traceback", err)
+        self.assertEqual(self.storage_gets, [])
+
+    def _evict_during_download(self, **expired):
+        self._complete({"a.img": b"aaaaaaaa", "b.img": b"bbbbbbbb"})
+        listing = dict(self.build)
+        self.failures = {"a.img": 404, "b.img": 404}
+        calls = []
+
+        def get(url, **kwargs):
+            if "/api/v1/builds/" in url:
+                calls.append(url)
+                if len(calls) == 1:
+                    return self._json(listing)
+                if expired.get("raises"):
+                    raise requests.ConnectionError("down")
+                return self._json({**listing, **{k: v for k, v in expired.items() if k != "raises"}})
+            return self._http_get(url, **kwargs)
+
+        self.get.side_effect = get
+
+    def test_eviction_during_download_reports_expiry_once(self):
+        self._evict_during_download(
+            artifacts_expired_at=1234.0, artifacts_expired_reason="pressure")
+        ret, _, err = self._run()
+        self.assertEqual(ret, 1)
+        self.assertEqual(err.count("artifacts of build bld-test1 expired (storage pressure)"), 1)
+        self.assertNotIn("storage answered", err)
+        self.assertEqual(len(self.storage_gets), 1)
+
+    def test_not_found_on_a_live_build_keeps_failing_per_artifact(self):
+        self._evict_during_download()
+        ret, _, err = self._run()
+        self.assertEqual(ret, 1)
+        self.assertEqual(err.count("storage answered HTTP 404"), 2)
+        self.assertEqual(len(self.storage_gets), 2)
+
+    def test_failing_build_reread_falls_back_to_the_download_error(self):
+        self._evict_during_download(raises=True)
+        ret, _, err = self._run()
+        self.assertEqual(ret, 1)
+        self.assertEqual(err.count("storage answered HTTP 404"), 2)
+
     def test_failed_build_downloads_nothing(self):
         self._complete({"disk.raw": b"disk-content"})
         self.build["status"] = "failed"
