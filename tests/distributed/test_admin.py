@@ -1140,6 +1140,72 @@ class AdminAuthzTest(Test):
         self.db.users.update("sysadmin2", active=False)
         self.assertEqual(self.client.get("/api/v1/users", headers=headers).status_code, 401)
 
+    def _delete_user(self, user, headers=None, **params):
+        return self.client.delete(
+            f"/api/v1/users/{user}", params=params, headers=headers or self.sys_h
+        )
+
+    def test_delete_user_needs_purge_and_a_system_admin(self):
+        self.assertEqual(self._delete_user("bob").status_code, 400)
+        self.assertEqual(self._delete_user("bob", self.alice_h, purge="true").status_code, 403)
+        self.assertIsNotNone(self.db.users.get("bob"))
+
+    def test_delete_user_unknown_is_404(self):
+        self.assertEqual(self._delete_user("ghost", purge="true").status_code, 404)
+
+    def test_delete_user_purges_and_keeps_the_builds(self):
+        self.db.builds.update_status("bld-b", "completed")
+        resp = self._delete_user("bob", purge="true")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual((body["id"], body["removed_memberships"]), ("bob", 2))
+        self.assertIsNone(self.db.users.get("bob"))
+        self.assertEqual(self.db.get_build("bld-b")["user_id"], "bob")
+
+    def test_delete_user_anonymizes_on_request(self):
+        self.db.builds.update_status("bld-b", "completed")
+        self._delete_user("bob", purge="true", anonymize="true")
+        self.assertEqual(self.db.get_build("bld-b")["user_id"], "deleted-user")
+
+    def test_delete_user_refuses_yourself_and_the_last_admin(self):
+        self.assertEqual(self._delete_user("sysadmin", purge="true").status_code, 403)
+        self.db.users.create("sysadmin2", is_admin=True)
+        other = self.headers("sysadmin2")
+        self.assertEqual(self._delete_user("sysadmin", other, purge="true").status_code, 200)
+        self.assertEqual(self._delete_user("sysadmin2", purge="true").status_code, 401)
+
+    def test_delete_user_with_running_builds_is_409(self):
+        resp = self._delete_user("alice", purge="true")
+        self.assertEqual(resp.status_code, 409)
+        self.assertIsNotNone(self.db.users.get("alice"))
+
+    def test_delete_user_empties_the_home_bucket_first(self):
+        self.db.provision_new_user("carol", mode="auto")
+        buckets = []
+
+        class Provider:
+            def __init__(self, bucket):
+                self.bucket = bucket
+
+            def purge(self):
+                buckets.append(self.bucket)
+                return 0, 0
+
+        with mock.patch(
+            "seine.distributed.server.api.provider_for", lambda s, p, b, e: Provider(b)
+        ):
+            resp = self._delete_user("carol", purge="true", delete_home="true")
+        self.assertEqual(resp.json()["deleted_home"], "home-carol")
+        self.assertEqual(buckets, ["seine-home-carol-dev"])
+        self.assertIsNone(self.db.projects.get("home-carol"))
+
+    def test_me_and_users_expose_the_uid(self):
+        uid = self.db.users.get("alice")["uid"]
+        me = self.client.get("/api/v1/me", headers=self.alice_h).json()
+        self.assertEqual(me["uid"], uid)
+        listed = self.client.get("/api/v1/users", headers=self.sys_h).json()
+        self.assertEqual({u["id"]: u["uid"] for u in listed}["alice"], uid)
+
     def test_issue_token_for_unknown_user_is_404(self):
         resp = self.client.post("/api/v1/tokens", json={"user_id": "ghost"}, headers=self.sys_h)
         self.assertEqual(resp.status_code, 404)

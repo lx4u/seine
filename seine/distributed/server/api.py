@@ -64,7 +64,7 @@ from seine.distributed.server.auth import (
     require_system_admin,
     require_worker_id,
 )
-from seine.distributed.server.db import Database
+from seine.distributed.server.db import Database, LastAdminError, UserBusyError
 from seine.distributed.server.housekeeping import HousekeepingBusy, run_housekeeping
 from seine.distributed.server.reaper import Reaper
 from seine.distributed.server.settings import S3_ENVIRONMENTS, Settings
@@ -866,6 +866,49 @@ def create_app(
             )
         return user
 
+    @app.delete("/api/v1/users/{user_id}")
+    def delete_user(
+        user_id: str,
+        request: Request,
+        purge: bool = False,
+        anonymize: bool = False,
+        delete_home: bool = False,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_system_admin(app_db, tok)
+        if not purge:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Deletion requires purge=true (deactivate the user to keep their history)",
+            )
+        user = app_db.users.get(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{user_id}' not found"
+            )
+        if user["id"] == tok["user_id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="You cannot delete your own account"
+            )
+        home = app_db.home_project(user["id"]) if delete_home else None
+        if home:
+            if app_db.builds.has_active_builds(home["id"]):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Project '{home['id']}' still has builds in progress",
+                )
+            _purge_project_storage(request.app.state.settings, home)
+        try:
+            res = app_db.purge_user(user["id"], anonymize=anonymize, delete_home=delete_home)
+        except (LastAdminError, UserBusyError) as e:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        if res is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{user_id}' not found"
+            )
+        return res
+
     def _profile(db: Database, user_token: dict[str, Any]) -> UserProfileResponse:
         user_id = user_token["user_id"]
         is_admin = is_system_admin(db, user_token)
@@ -880,7 +923,11 @@ def create_app(
         if default and not (is_admin or default in projects):
             default = None
         return UserProfileResponse(
-            id=user_id, is_admin=is_admin, projects=projects, default_project=default
+            id=user_id,
+            uid=user["uid"] if user else "",
+            is_admin=is_admin,
+            projects=projects,
+            default_project=default,
         )
 
     @app.get("/api/v1/me", response_model=UserProfileResponse)

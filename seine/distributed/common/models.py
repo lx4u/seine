@@ -284,6 +284,7 @@ class UserUpdateRequest(BaseModel):
 class UserProfileResponse(BaseModel):
     """User profile and project role map for client capability negotiation."""
     id: str
+    uid: str = ""
     is_admin: bool
     projects: dict[str, str] = Field(default_factory=dict)
     default_project: str | None = None
