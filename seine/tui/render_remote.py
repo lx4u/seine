@@ -134,13 +134,17 @@ def _download_label(item: Optional[dict[str, Any]]) -> str:
 
 
 def extract_remote_artifacts(builds: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Flatten the deliverables of the builds into one row each."""
+    """Flatten the deliverables of the builds into one row each, newest first."""
     arts: list[dict[str, Any]] = []
     for b in builds:
+        timestamp = float(b.get("finished_at") or b.get("created_at") or 0.0)
         origin = {
             "build_id": str(b.get("id") or b.get("build_id") or ""),
             "project": str(b.get("project") or ""),
             "target_arch": str(b.get("target_arch") or b.get("architecture") or ""),
+            "timestamp": timestamp,
+            "created_at": b.get("created_at"),
+            "finished_at": b.get("finished_at"),
         }
         if b.get("artifacts_expired_at"):
             origin.update(expired=True, expired_at=b["artifacts_expired_at"],
@@ -157,6 +161,7 @@ def extract_remote_artifacts(builds: list[dict[str, Any]]) -> list[dict[str, Any
                 "key": m.get("key", ""),
                 **origin,
             })
+    arts.sort(key=lambda a: a.get("timestamp", 0.0), reverse=True)
     return arts
 
 
@@ -425,6 +430,8 @@ def render_artifact_detail(a: dict[str, Any], progress: Optional[dict[str, Any]]
             ("Build", a.get("build_id")),
             ("Project", a.get("project")),
             ("Arch", a.get("target_arch") or a.get("architecture")),
+            ("Created", format_timestamp(a.get("created_at")) if a.get("created_at") else None),
+            ("Finished", format_timestamp(a.get("finished_at")) if a.get("finished_at") else None),
         ]),
         _section("STATUS", [
             ("State", "expired" if expired else "available"),

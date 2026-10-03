@@ -475,6 +475,21 @@ class RemoteViewsTest(avocado.Test):
         self.assertEqual((arts[0]["name"], arts[0]["size"], arts[0]["key"]), ("a.img", 5, "k"))
         self.assertEqual((arts[0]["build_id"], arts[0]["target_arch"]), ("b1", "arm64"))
 
+    def test_extract_remote_artifacts_sorted_by_recent_timestamp(self):
+        builds = [
+            {"id": "b1", "created_at": 100.0, "finished_at": 120.0,
+             "artifact_meta": [{"name": "old.img", "size": 10}]},
+            {"id": "b2", "created_at": 200.0, "finished_at": 250.0,
+             "artifact_meta": [{"name": "new.img", "size": 20}]},
+            {"id": "b3", "created_at": 150.0,
+             "artifact_meta": [{"name": "mid.img", "size": 15}]},
+        ]
+        arts = self.extract_remote_artifacts(builds)
+        self.assertEqual([a["name"] for a in arts], ["new.img", "mid.img", "old.img"])
+        self.assertEqual(arts[0]["timestamp"], 250.0)
+        self.assertEqual(arts[1]["timestamp"], 150.0)
+        self.assertEqual(arts[2]["timestamp"], 120.0)
+
     def test_extract_remote_artifacts_expired(self):
         expired = {"artifacts_expired_at": 99, "artifacts_expired_reason": "pressure"}
         builds = [
