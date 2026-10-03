@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # User settings for the TUI (seine/tui/settings.py) and CLI job
-# defaults (seine/build.py). Flat JSON file under XDG config dir.
+# defaults (seine/build/cli.py). Flat JSON file under XDG config dir.
 
 import json
 import os

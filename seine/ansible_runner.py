@@ -232,7 +232,7 @@ class AnsibleContainerRunner:
             cmd.insert(1, "-v")
 
         # A fragment's own 'library/' directories, collected while the
-        # specification loaded -- see build.py. ANSIBLE_LIBRARY is a search
+        # specification loaded -- see build/spec.py. ANSIBLE_LIBRARY is a search
         # path, colon-joined, same as PATH.
         env = os.environ.copy()
         library = self.options.get("ansible_library")

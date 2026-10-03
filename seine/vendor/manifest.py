@@ -261,7 +261,7 @@ def save_manifest(suite, manifest):
 
 # ---------------------------------------------------------------------
 # The committed lock file: 'vendor:' as {suite: {digest, sources}} rather
-# than a list -- see build.py's '_merge_vendor()', which folds a loaded
+# than a list -- see build/merger.py's '_merge_vendor()', which folds a loaded
 # '<spec>.lock.yaml' into spec['_vendor_lock']. Same shape as the cache
 # manifest, just checked into git.
 # ---------------------------------------------------------------------
