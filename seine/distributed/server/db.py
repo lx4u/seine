@@ -235,12 +235,12 @@ class ProjectRepo:
         with self.conn:
             self.conn.execute(
                 """
-                INSERT INTO project_members (project_id, user_id, role, created_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO project_members (project_id, user_id, user_uid, role, created_at)
+                VALUES (?, ?, (SELECT uid FROM users WHERE id = ?), ?, ?)
                 ON CONFLICT(project_id, user_id) DO UPDATE SET
                     role = excluded.role
                 """,
-                (resolved_id, user_id, role, now),
+                (resolved_id, user_id, user_id, role, now),
             )
         return {
             "project_id": resolved_id,
@@ -752,13 +752,17 @@ class UserRepo:
     def create(self, id: str, is_admin: bool = False) -> dict[str, Any]:
         with self.conn:
             self.conn.execute(
-                "INSERT INTO users (id, is_admin, active, created_at) VALUES (?, ?, 1, ?)",
-                (id, 1 if is_admin else 0, time.time()),
+                "INSERT INTO users (id, uid, is_admin, active, created_at) VALUES (?, ?, ?, 1, ?)",
+                (id, str(uuid.uuid4()), 1 if is_admin else 0, time.time()),
             )
         return self.get(id)  # type: ignore
 
     def get(self, user_id: str) -> Optional[dict[str, Any]]:
-        row = self.conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        """Look a user up by username, or by immutable uid."""
+        row = self.conn.execute(
+            "SELECT * FROM users WHERE id = ? OR uid = ? ORDER BY id = ? DESC LIMIT 1",
+            (user_id, user_id, user_id),
+        ).fetchone()
         return self._to_dict(row) if row else None
 
     def list(self) -> list[dict[str, Any]]:
@@ -845,10 +849,10 @@ class TokenRepo:
         with self.conn:
             self.conn.execute(
                 """
-                INSERT INTO tokens (id, token_hash, user_id, kind, created_at, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO tokens (id, token_hash, user_id, user_uid, kind, created_at, expires_at)
+                VALUES (?, ?, ?, (SELECT uid FROM users WHERE id = ?), ?, ?, ?)
                 """,
-                (tok_id, hash_secret(tok), user_id, kind, now, expires_at),
+                (tok_id, hash_secret(tok), user_id, user_id, kind, now, expires_at),
             )
         return {
             "id": tok_id,
@@ -980,8 +984,8 @@ class Database:
         now = time.time()
         with self.conn:
             self.conn.execute(
-                "INSERT INTO users (id, is_admin, active, created_at) VALUES (?, 0, 1, ?)",
-                (user_id, now),
+                "INSERT INTO users (id, uid, is_admin, active, created_at) VALUES (?, ?, 0, 1, ?)",
+                (user_id, str(uuid.uuid4()), now),
             )
             if mode == "auto":
                 project_id = self._free_home_name(user_id)
@@ -998,9 +1002,9 @@ class Database:
                     raise ValueError(f"new_user_project '{mode}' is not an existing project")
                 project_id = row["id"]
             self.conn.execute(
-                "INSERT INTO project_members (project_id, user_id, role, created_at) "
-                "VALUES (?, ?, 'developer', ?)",
-                (project_id, user_id, now),
+                "INSERT INTO project_members (project_id, user_id, user_uid, role, created_at) "
+                "VALUES (?, ?, (SELECT uid FROM users WHERE id = ?), 'developer', ?)",
+                (project_id, user_id, user_id, now),
             )
             self.conn.execute(
                 "UPDATE users SET default_project = ? WHERE id = ?", (project_id, user_id)

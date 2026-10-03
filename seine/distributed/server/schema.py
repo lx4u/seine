@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import sqlite3
+import uuid
 
 
 def init_db(conn: sqlite3.Connection) -> None:
@@ -139,3 +140,41 @@ def init_db(conn: sqlite3.Connection) -> None:
             "CREATE INDEX IF NOT EXISTS idx_builds_project_spec_digest "
             "ON builds(project, spec_digest, created_at DESC)"
         )
+        _add_user_uid(conn)
+
+
+def _add_user_uid(conn: sqlite3.Connection) -> None:
+    """Give users an immutable uid and link tokens and memberships to it."""
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN uid TEXT")
+    except sqlite3.OperationalError:
+        pass
+    for (user_id,) in conn.execute("SELECT id FROM users WHERE uid IS NULL").fetchall():
+        conn.execute("UPDATE users SET uid = ? WHERE id = ?", (str(uuid.uuid4()), user_id))
+    # The parent index must exist before a column can reference it.
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_uid ON users(uid)")
+    # The links stay nullable: SQLite cannot add NOT NULL columns, and
+    # a token or membership may name a user that has no account row.
+    for stmt in (
+        "ALTER TABLE tokens ADD COLUMN user_uid TEXT REFERENCES users(uid) ON DELETE CASCADE",
+        "ALTER TABLE project_members ADD COLUMN user_uid "
+        "TEXT REFERENCES users(uid) ON DELETE CASCADE",
+    ):
+        try:
+            conn.execute(stmt)
+        except sqlite3.OperationalError:
+            pass
+    for table in ("tokens", "project_members"):
+        if conn.execute(
+            f"SELECT 1 FROM {table} WHERE user_uid IS NULL "
+            f"AND user_id IN (SELECT id FROM users) LIMIT 1"
+        ).fetchone():
+            conn.execute(
+                f"UPDATE {table} SET user_uid = "
+                f"(SELECT uid FROM users WHERE users.id = {table}.user_id) WHERE user_uid IS NULL"
+            )
+        conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_user_uid ON {table}(user_uid)")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_project_members_project_uid "
+        "ON project_members(project_id, user_uid)"
+    )

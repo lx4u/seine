@@ -884,3 +884,83 @@ class DatabaseConstraintsAndIntegrationTest(Test):
         self.assertEqual(claimed_rel["build_id"], "bld-rel-1")
         self.assertEqual(claimed_rel["target_arch"], "amd64")
         self.assertEqual(claimed_rel["s3_bucket"], "s3-prod")
+
+
+class UserUidTest(Test):
+    """Test the immutable user uid and the links that follow it."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-uid-")
+        self.db = Database(os.path.join(self.tmp_dir, "uid.db"))
+
+    def tearDown(self):
+        self.db.close()
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_users_get_distinct_uids_and_resolve_by_either(self):
+        alice = self.db.users.create("alice")
+        bob = self.db.users.create("bob")
+        self.assertNotEqual(alice["uid"], bob["uid"])
+        self.assertEqual(self.db.users.get(alice["uid"])["id"], "alice")
+        self.assertEqual(self.db.users.get("alice")["uid"], alice["uid"])
+
+    def test_tokens_and_memberships_carry_the_uid(self):
+        alice = self.db.users.create("alice")
+        self.db.projects.ensure("demo")
+        tok = self.db.tokens.issue("alice")
+        member = self.db.projects.get_member(
+            self.db.projects.add_member("demo", "alice")["project_id"], "alice"
+        )
+        stored = self.db.conn.execute(
+            "SELECT user_uid FROM tokens WHERE id = ?", (tok["id"],)
+        ).fetchone()
+        self.assertEqual(stored["user_uid"], alice["uid"])
+        self.assertEqual(member["user_uid"], alice["uid"])
+
+    def test_deleting_a_user_cascades_to_tokens_and_memberships(self):
+        alice = self.db.users.create("alice")
+        self.db.projects.ensure("demo")
+        tok = self.db.tokens.issue("alice")
+        self.db.projects.add_member("demo", "alice")
+        with self.db.conn:
+            self.db.conn.execute("DELETE FROM users WHERE uid = ?", (alice["uid"],))
+        self.assertIsNone(self.db.tokens.get(tok["id"]))
+        self.assertEqual(self.db.projects.list_members("demo"), [])
+
+    def test_a_recreated_username_gets_a_new_uid(self):
+        first = self.db.users.create("alice")
+        with self.db.conn:
+            self.db.conn.execute("DELETE FROM users WHERE id = 'alice'")
+        self.assertNotEqual(self.db.users.create("alice")["uid"], first["uid"])
+
+    def test_uid_must_be_unique(self):
+        alice = self.db.users.create("alice")
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.conn.execute(
+                "INSERT INTO users (id, uid, created_at) VALUES ('bob', ?, 1.0)", (alice["uid"],)
+            )
+
+    def test_old_database_is_backfilled(self):
+        conn = connect_db(os.path.join(self.tmp_dir, "old.db"))
+        with conn:
+            conn.execute(
+                "CREATE TABLE users (id TEXT PRIMARY KEY, is_admin INTEGER NOT NULL "
+                "DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, created_at REAL)"
+            )
+            conn.execute("INSERT INTO users (id, created_at) VALUES ('alice', 1.0)")
+            conn.execute("INSERT INTO users (id, created_at) VALUES ('bob', 1.0)")
+            conn.execute(
+                "CREATE TABLE tokens (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, "
+                "user_id TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'pat', "
+                "created_at REAL NOT NULL, expires_at REAL)"
+            )
+            conn.execute("INSERT INTO tokens VALUES ('t1', 'h1', 'alice', 'pat', 1.0, NULL)")
+            conn.execute("INSERT INTO tokens VALUES ('t2', 'h2', 'ghost', 'pat', 1.0, NULL)")
+        init_db(conn)
+        init_db(conn)  # running it again is harmless
+        uids = {r["id"]: r["uid"] for r in conn.execute("SELECT id, uid FROM users")}
+        self.assertEqual(len(set(uids.values())), 2)
+        self.assertNotIn(None, uids.values())
+        links = {r["id"]: r["user_uid"] for r in conn.execute("SELECT id, user_uid FROM tokens")}
+        self.assertEqual(links, {"t1": uids["alice"], "t2": None})
+        conn.close()
