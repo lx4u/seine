@@ -61,7 +61,26 @@ class RemoteScreenTest(avocado.Test):
             main_horiz = widgets[0]
             child_ids = [getattr(c, "id", None) for c in getattr(main_horiz, "_pending_children", [])]
             self.assertIn("remotemain", child_ids)
-            self.assertIn("remotesidebar", child_ids)
+            self.assertIn("remoteside", child_ids)
+            side = main_horiz._pending_children[child_ids.index("remoteside")]
+            side_ids = [getattr(c, "id", None) for c in side._pending_children]
+            self.assertEqual(side_ids, ["remotedetailpane", "remotesidebar"])
+
+    def test_detail_follows_the_cursor(self):
+        mock_app = mock.Mock()
+        session = self.RemoteSession(app=mock_app)
+        mock_app.remote_session = session
+        screen = self.RemoteScreen()
+        screen.remote_workers = [{"id": "w-one", "hostname": "h1"}, {"id": "w-two", "hostname": "h2"}]
+        screen.active_tab = 2
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            self.assertIn("No active server connection", screen._render_detail())
+            session.connected = True
+            self.assertIn("w-one", screen._render_detail())
+            screen.action_cursor_down()
+            self.assertIn("w-two", screen._render_detail())
+            screen.remote_workers = []
+            self.assertIn("Select an item", screen._render_detail())
 
     def test_sidebar_rendering_disconnected(self):
         mock_app = mock.Mock()
@@ -373,6 +392,7 @@ class RemoteScreenTest(avocado.Test):
                 remotesidebar = app.screen.query_one("#remotesidebar")
                 self.assertIsNotNone(remotemain)
                 self.assertIsNotNone(remotesidebar)
+                self.assertIsNotNone(app.screen.query_one("#remotedetail"))
 
                 # Focus a remote pane so numeric hotkeys are handled by the screen.
                 remotemain.focus()
