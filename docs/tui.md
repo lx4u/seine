@@ -42,6 +42,25 @@ or the Issues matrix (arrows move, `Enter` opens a count's details).
 from, a command's own detail page to the list, Help itself to whatever
 screen was open before it.
 
+## Navigation bar
+
+A one-cell column of icons runs down the left edge of every screen.
+Click an icon to switch to that screen. The current screen is orange,
+and a screen that cannot open yet (no active specification, no `image:`
+section, AI not configured, target or remote not connected) is greyed.
+Clicking a greyed icon says why in the status line. Hover for the
+screen name and its `/command`.
+
+| Icon | Screen | Icon | Screen | Icon | Screen |
+| :-: | :-- | :-: | :-- | :-: | :-- |
+| ⌂ | overview | ▤ | filesystem | ⌖ | target |
+| ≡ | plan | ▦ | packages | ✓ | test |
+| ⚙ | build | ◔ | analyze | ⬡ | vendor |
+| ▣ | artifacts | ▥ | cache | ◎ | remote |
+| ✚ | doctor | ⚑ | issues | ✉ | chat |
+
+`/diff` has no icon: it needs two SBOM files, which a click cannot give.
+
 ## Screens
 
 Reached with the matching `/command` (`/help` gives the full list, with

@@ -7,12 +7,13 @@
 
 from textual.app import Screen
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.suggester import Suggester
 from textual.widgets import Input, OptionList, Static
 
 from seine.tui import commands, spectree
+from seine.tui.navbar import NavBar
 from seine.tui.paths import complete
 from seine.tui.spectree import SpecTree
 
@@ -413,7 +414,11 @@ class BaseScreen(Screen):
         self.app.exit()
 
     def compose(self):
-        yield from self.compose_content()
+        yield Horizontal(
+            NavBar(id="navbar"),
+            Vertical(*self.compose_content(), id="screen-content"),
+            id="screen-body",
+        )
         yield from self.footer()
 
     # Spec tree on the left, screen content on the right. Screens

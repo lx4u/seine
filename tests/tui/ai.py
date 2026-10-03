@@ -5,6 +5,7 @@ import avocado
 import contextlib
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -794,7 +795,10 @@ class TheLoop(avocado.Test):
                 app.show("chat")
                 await pilot.pause()
                 svg = app.export_screenshot()
-                self.assertNotIn('fill="#000000"', svg)
+                # The nav bar's column (x=0) is black on purpose.
+                stray = [x for x in re.findall(
+                    r'<rect fill="#000000" x="([0-9.]+)"', svg) if x != "0"]
+                self.assertEqual(stray, [])
         _run(scenario)
 
     # Clicking a collapsed tool row expands it in place -- the same

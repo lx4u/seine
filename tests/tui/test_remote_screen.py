@@ -57,7 +57,7 @@ class RemoteScreenTest(avocado.Test):
         mock_app.history.entries.return_value = []
         screen = self.RemoteScreen()
         with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
-            widgets = list(screen.compose())
+            widgets = list(screen.compose_content())
             main_horiz = widgets[0]
             child_ids = [getattr(c, "id", None) for c in getattr(main_horiz, "_pending_children", [])]
             self.assertIn("remotemain", child_ids)

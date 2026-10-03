@@ -511,6 +511,14 @@ class SeineApp(App):
     COMMANDS = App.COMMANDS | {RegistryProvider}
     CSS = """
     #main, #buildrow { height: 1fr; }
+    #screen-body { height: 1fr; }
+    #screen-content { width: 1fr; height: 100%; }
+    /* One cell wide, black like #castpane. */
+    #navbar { width: 1; height: 100%; background: black; }
+    .nav-icon { width: 1; height: 1; color: $foreground 70%; }
+    .nav-icon:hover { color: $accent; }
+    .nav-icon.nav-active { color: #ff8700; text-style: bold; }
+    .nav-icon.nav-disabled { color: $text-muted; }
     /* 'round', not Input's default 'tall': 'tall' uses eighth-block
        glyphs some terminal fonts lack, breaking the border. */
     #spectree, #tail, #logviewer, #castpane { width: 2fr; height: 100%; }
