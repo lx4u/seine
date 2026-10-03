@@ -172,5 +172,43 @@ class Cli(avocado.Test):
                 GistCmd().main(["frobnicate"])
         self.assertEqual(caught.exception.code, 1)
 
+class Resolve(avocado.Test):
+    def test_a_gist_reference_becomes_its_path(self):
+        path = gists.create("extra", "d", "a: 1\n", directory=self.workdir)
+        self.assertEqual(gists.resolve("gist:extra", self.workdir), path)
+
+    def test_a_plain_file_is_left_alone(self):
+        self.assertEqual(gists.resolve("main.yaml", self.workdir), "main.yaml")
+
+    def test_a_missing_gist_is_an_error(self):
+        with self.assertRaises(ValueError):
+            gists.resolve("gist:nope", self.workdir)
+
+    def test_the_cli_builds_from_a_gist(self):
+        from seine.build import BuildCmd
+        os.environ["SEINE_GISTS_DIR"] = self.workdir
+        gists.create("spec", "d", "distribution:\n    release: trixie\n"
+                     "    architecture: amd64\n", directory=self.workdir)
+        out = io.StringIO()
+        try:
+            with self.assertRaises(SystemExit) as caught, contextlib.redirect_stdout(out):
+                BuildCmd().main(["--dump", "gist:spec"])
+            self.assertEqual(caught.exception.code, 0)
+        finally:
+            os.environ.pop("SEINE_GISTS_DIR", None)
+        self.assertIn("trixie", out.getvalue())
+
+    def test_the_cli_refuses_a_missing_gist(self):
+        from seine.build import BuildCmd
+        os.environ["SEINE_GISTS_DIR"] = self.workdir
+        try:
+            with self.assertRaises(SystemExit) as caught:
+                with contextlib.redirect_stderr(io.StringIO()) as err:
+                    BuildCmd().main(["gist:nope"])
+        finally:
+            os.environ.pop("SEINE_GISTS_DIR", None)
+        self.assertEqual(caught.exception.code, 1)
+        self.assertIn("no such gist", err.getvalue())
+
 if __name__ == "__main__":
     avocado.main()

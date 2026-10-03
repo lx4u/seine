@@ -47,6 +47,37 @@ def _write_two_group_spec(workdir):
         "        - %s\n"
         % (main, recovery)), main, recovery
 
+class SideLoadAcceptsAGist(avocado.Test):
+    """
+    :avocado: tags=tui
+    """
+    def setUp(self):
+        with _tui_required(self):
+            from seine.tui.context import Context
+        self.Context = Context
+        os.environ["SEINE_CACHE_DIR"] = self.workdir
+        os.environ["XDG_CONFIG_HOME"] = self.workdir
+        os.environ["SEINE_GISTS_DIR"] = os.path.join(self.workdir, "gists")
+        os.makedirs(os.environ["SEINE_GISTS_DIR"])
+        self.gist = _write(os.environ["SEINE_GISTS_DIR"], "extra.yaml",
+                           "# extra\nplaybook:\n    - name: p\n      tasks: []\n")
+
+    def tearDown(self):
+        os.environ.pop("SEINE_GISTS_DIR", None)
+
+    def test_side_load_and_unload_by_gist_name(self):
+        context = self.Context()
+        context.use([_write_group(self.workdir, "main")])
+        context.side_load("gist:extra")
+        self.assertEqual(context.groups[0][-1], self.gist)
+        context.side_unload("gist:extra")
+        self.assertNotIn(self.gist, context.groups[0])
+
+    def test_use_accepts_a_gist(self):
+        context = self.Context()
+        context.use([_write_group(self.workdir, "main"), "gist:extra"])
+        self.assertEqual(context.groups[0][-1], self.gist)
+
 class SideLoadTargetsANamedGroup(avocado.Test):
     """
     :avocado: tags=tui

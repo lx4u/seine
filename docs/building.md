@@ -348,6 +348,29 @@ seine issues --sbom=image-sbom.spdx.json --min-urgency=high
 Use `--rescan` to ignore a cached scan. `--filter=PKG` narrows results to
 matching package names.
 
+## Gists
+
+A gist is a spec fragment saved outside any project, in
+`~/.local/share/seine/gists/` (or `$SEINE_GISTS_DIR`), so that several
+projects can reuse it. It is a plain `.yaml` file whose first line is a
+`# description` comment. Any `.yaml` file dropped into that directory is a
+gist named after itself.
+
+```
+seine gist ls            # names and descriptions
+seine gist show NAME
+seine gist rm NAME
+```
+
+Write `gist:NAME` wherever a specification file is expected:
+
+```
+seine build main.yaml gist:debug-tools
+```
+
+In `seine tui`, `/use`, `/side-load` and `/side-unload` take it too. A remote
+build sends the gist along with the other files.
+
 ## Related documentation
 
 | Topic | Documentation |
