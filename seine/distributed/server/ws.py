@@ -20,6 +20,7 @@ AUTH_TIMEOUT = 5.0
 MAX_TEXT_BYTES = 64 * 1024
 MAX_HISTORY_CHUNKS = 10000
 MAX_BUILDS = 200
+MAX_PLAN_TASKS = 5000
 
 CLOSE_BAD_DATA = 1007
 CLOSE_TOO_BIG = 1009
@@ -44,6 +45,8 @@ class BroadcastHub:
         self._lock = threading.Lock()
         self._listeners: dict[str, set[WebSocket]] = {}
         self._history: OrderedDict[str, deque[dict[str, Any]]] = OrderedDict()
+        # Kept apart from the history so a chatty log never pushes it out.
+        self._plans: dict[str, dict[str, Any]] = {}
 
     def _touch(self, build_id: str) -> deque[dict[str, Any]]:
         """Return the build's history, marking it most recently used (lock held)."""
@@ -51,7 +54,8 @@ class BroadcastHub:
         if history is None:
             history = self._history[build_id] = deque(maxlen=self._max_chunks)
             while len(self._history) > self._max_builds:
-                self._history.popitem(last=False)
+                evicted, _ = self._history.popitem(last=False)
+                self._plans.pop(evicted, None)
         else:
             self._history.move_to_end(build_id)
         return history
@@ -61,6 +65,9 @@ class BroadcastHub:
         with self._lock:
             self._listeners.setdefault(build_id, set()).add(websocket)
             replay = list(self._touch(build_id))
+            plan = self._plans.get(build_id)
+            if plan is not None:
+                replay.insert(0, plan)
 
         for chunk in replay:
             try:
@@ -84,11 +91,16 @@ class BroadcastHub:
         """Drop the history and listeners of a build."""
         with self._lock:
             self._history.pop(build_id, None)
+            self._plans.pop(build_id, None)
             self._listeners.pop(build_id, None)
 
     async def broadcast(self, build_id: str, message: dict[str, Any]) -> None:
         with self._lock:
-            self._touch(build_id).append(message)
+            history = self._touch(build_id)
+            if message.get("type") == "task_plan":
+                self._plans[build_id] = message
+            else:
+                history.append(message)
             listeners = list(self._listeners.get(build_id, ()))
 
         for ws in listeners:
@@ -133,12 +145,60 @@ def stream_role(db: Database, token: Any, build_id: str) -> tuple[Optional[str],
     return None, CLOSE_UNAUTHENTICATED
 
 
+def _is_name(value: Any) -> bool:
+    return isinstance(value, str) and 0 < len(value) <= 512
+
+
+def parse_event(data: dict[str, Any], build_id: str) -> Optional[dict[str, Any]]:
+    """Return a clean copy of a structured build event, or None when it is malformed."""
+    kind = data.get("type")
+    event: dict[str, Any] = {"build_id": build_id, "type": kind, "timestamp": time.time()}
+    if kind == "task_plan":
+        tasks = data.get("tasks")
+        if not isinstance(tasks, list) or len(tasks) > MAX_PLAN_TASKS:
+            return None
+        clean = []
+        for task in tasks:
+            if not isinstance(task, dict) or not _is_name(task.get("name")):
+                return None
+            needs = task.get("needs", [])
+            if not isinstance(needs, list) or not all(_is_name(n) for n in needs):
+                return None
+            entry: dict[str, Any] = {"name": task["name"], "needs": needs}
+            if task.get("cached") is True:
+                entry["cached"] = True
+            clean.append(entry)
+        event["tasks"] = clean
+    elif kind in ("task_started", "task_finished"):
+        if not _is_name(data.get("task")):
+            return None
+        event["task"] = data["task"]
+        if kind == "task_finished":
+            event["failed"] = data.get("failed") is True
+    elif kind == "sampled":
+        sample = data.get("sample")
+        if not isinstance(sample, dict):
+            return None
+        event["sample"] = {k: v for k, v in sample.items()
+                           if isinstance(k, str) and isinstance(v, (int, float))}
+    elif kind == "say":
+        if not isinstance(data.get("text"), str) or len(data["text"].encode()) > MAX_TEXT_BYTES:
+            return None
+        event["text"] = data["text"]
+    else:
+        return None
+    return event
+
+
 def parse_chunk(raw: str, build_id: str) -> tuple[Optional[dict[str, Any]], int]:
-    """Validate a sender message and return (chunk, 0) or (None, close code)."""
+    """Validate a sender message and return (chunk or event, 0) or (None, close code)."""
     try:
         data = json.loads(raw)
     except ValueError:
         return None, CLOSE_BAD_DATA
+    if isinstance(data, dict) and "type" in data:
+        event = parse_event(data, build_id)
+        return (event, 0) if event else (None, CLOSE_BAD_DATA)
     if not isinstance(data, dict) or not isinstance(data.get("text"), str):
         return None, CLOSE_BAD_DATA
     source = data.get("source", "stdout")

@@ -134,6 +134,95 @@ class BroadcastHubTest(Test):
         self.assertFalse(self.hub.has_listeners("bld-f"))
         self.hub.forget("bld-unknown")
 
+    def test_plan_is_replayed_first_and_never_evicted_by_logs(self):
+        hub = BroadcastHub(max_chunks=3)
+        plan = {"type": "task_plan", "tasks": [{"name": "a", "needs": []}]}
+        self._run(hub.broadcast("bld-p", plan))
+        for i in range(10):
+            self._run(hub.broadcast("bld-p", {"text": str(i)}))
+        ws = self._make_ws()
+        self._run(hub.connect("bld-p", ws))
+        self.assertEqual(ws.sent[0], plan)
+        self.assertEqual([m["text"] for m in ws.sent[1:]], ["7", "8", "9"])
+
+    def test_a_new_plan_replaces_the_old_one(self):
+        self._run(self.hub.broadcast("bld-p", {"type": "task_plan", "tasks": [], "n": 1}))
+        self._run(self.hub.broadcast("bld-p", {"type": "task_plan", "tasks": [], "n": 2}))
+        ws = self._make_ws()
+        self._run(self.hub.connect("bld-p", ws))
+        self.assertEqual([m["n"] for m in ws.sent], [2])
+
+    def test_plan_goes_with_forget_and_eviction(self):
+        hub = BroadcastHub(max_builds=1)
+        self._run(hub.broadcast("b1", {"type": "task_plan", "tasks": []}))
+        self._run(hub.broadcast("b2", {"text": "x"}))
+        self.assertNotIn("b1", hub._plans)
+        self._run(hub.broadcast("b2", {"type": "task_plan", "tasks": []}))
+        hub.forget("b2")
+        self.assertEqual(hub._plans, {})
+
+    def test_events_are_broadcast_and_replayed_in_order(self):
+        ws = self._make_ws()
+        self._run(self.hub.connect("bld-e", ws))
+        started = {"type": "task_started", "task": "a"}
+        finished = {"type": "task_finished", "task": "a", "failed": False}
+        self._run(self.hub.broadcast("bld-e", started))
+        self._run(self.hub.broadcast("bld-e", {"text": "log"}))
+        self._run(self.hub.broadcast("bld-e", finished))
+        late = self._make_ws()
+        self._run(self.hub.connect("bld-e", late))
+        self.assertEqual(ws.sent, late.sent)
+        self.assertEqual(late.sent[0], started)
+
+
+class ParseChunkTest(Test):
+    """parse_chunk(): log chunks and structured events from the worker."""
+
+    def parse(self, message):
+        from seine.distributed.server.ws import parse_chunk
+        return parse_chunk(json.dumps(message), "bld-1")
+
+    def test_log_chunk_is_unchanged(self):
+        chunk, code = self.parse({"text": "hi", "source": "stderr"})
+        self.assertEqual((chunk["text"], chunk["source"], code), ("hi", "stderr", 0))
+
+    def test_task_plan_is_cleaned(self):
+        event, code = self.parse({"type": "task_plan", "tasks": [
+            {"name": "a", "needs": [], "junk": 1},
+            {"name": "b", "needs": ["a"], "cached": True}]})
+        self.assertEqual(code, 0)
+        self.assertEqual(event["build_id"], "bld-1")
+        self.assertEqual(event["tasks"], [{"name": "a", "needs": []},
+                                          {"name": "b", "needs": ["a"], "cached": True}])
+
+    def test_task_events(self):
+        event, _ = self.parse({"type": "task_finished", "task": "a", "failed": True})
+        self.assertEqual((event["task"], event["failed"]), ("a", True))
+        event, _ = self.parse({"type": "task_started", "task": "a"})
+        self.assertNotIn("failed", event)
+
+    def test_sampled_keeps_numbers_only(self):
+        event, _ = self.parse({"type": "sampled", "sample": {"load": 1.5, "cpu": "x"}})
+        self.assertEqual(event["sample"], {"load": 1.5})
+
+    def test_say(self):
+        event, _ = self.parse({"type": "say", "text": "interrupted"})
+        self.assertEqual(event["text"], "interrupted")
+
+    def test_malformed_events_are_refused(self):
+        from seine.distributed.server.ws import CLOSE_BAD_DATA, MAX_PLAN_TASKS
+        for bad in (
+            {"type": "nope"},
+            {"type": "task_plan"},
+            {"type": "task_plan", "tasks": [{"needs": []}]},
+            {"type": "task_plan", "tasks": [{"name": "a", "needs": [1]}]},
+            {"type": "task_plan", "tasks": [{"name": "a"}] * (MAX_PLAN_TASKS + 1)},
+            {"type": "task_started"},
+            {"type": "sampled", "sample": []},
+            {"type": "say", "text": 1},
+        ):
+            self.assertEqual(self.parse(bad), (None, CLOSE_BAD_DATA), bad)
+
 
 class LogStreamerTest(Test):
     """Tests for LogStreamer: instantiation, send payload shape, error handling."""
