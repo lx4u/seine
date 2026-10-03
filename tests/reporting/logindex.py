@@ -120,3 +120,27 @@ class LogIndexRecording(avocado.Test):
             logindex.begin(["a.yaml"], "trixie", "amd64", None, []))
         self.assertEqual(logindex.entries(), [])
         self.assertFalse(os.path.exists(os.path.join(self.workdir, logindex.INDEX_FILE)))
+
+class LogDirAllocation(avocado.Test):
+    """
+    :avocado: tags=reporting
+    """
+    def setUp(self):
+        os.environ["SEINE_LOG_DIR"] = self.workdir
+
+    def test_runs_of_one_spec_sit_under_its_digest(self):
+        from seine.utils import digest
+        path = logindex.allocate_log_dir(["a.yaml"])
+        self.assertEqual(os.path.dirname(path),
+                         os.path.join(self.workdir, digest(["a.yaml"], 8)))
+        self.assertTrue(os.path.isdir(path))
+
+    def test_two_runs_in_one_second_get_distinct_directories(self):
+        first = logindex.allocate_log_dir(["a.yaml"])
+        second = logindex.allocate_log_dir(["a.yaml"])
+        self.assertNotEqual(first, second)
+        self.assertTrue(os.path.isdir(second))
+
+    def test_no_files_gets_a_directory_under_the_root(self):
+        path = logindex.allocate_log_dir(None)
+        self.assertEqual(os.path.dirname(path), self.workdir)
