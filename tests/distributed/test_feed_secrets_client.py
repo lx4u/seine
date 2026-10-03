@@ -94,7 +94,7 @@ class ClientTest(Test):
         prompt = mock.Mock(return_value={"login": "bob", "password": "typed"})
         env = {k: v for k, v in os.environ.items() if not k.startswith("FEED_")}
         with mock.patch.dict(os.environ, env, clear=True), \
-                mock.patch("seine.build._default_prompt", return_value=prompt):
+                mock.patch("seine.build.credentials._default_prompt", return_value=prompt):
             self.run_build()
         prompt.assert_called_once()
         self.assertEqual(self.sent()["transient_secrets"]["feeds"]["https://corp.example/apt"],
@@ -109,7 +109,7 @@ class ClientTest(Test):
     def test_a_rejected_credential_aborts_before_anything_is_sent(self):
         prompt = mock.Mock(return_value={"login": "a", "password": "b"})
         with mock.patch("seine.credentials.probe", return_value=False), \
-                mock.patch("seine.build._default_prompt", return_value=prompt):
+                mock.patch("seine.build.credentials._default_prompt", return_value=prompt):
             code, err = self.run_build()
         self.assertEqual(code, 3)
         self.assertEqual(self.posts, [])
@@ -125,7 +125,7 @@ class ClientTest(Test):
     def test_a_missing_credential_without_a_prompt_aborts(self):
         env = {k: v for k, v in os.environ.items() if not k.startswith("FEED_")}
         with mock.patch.dict(os.environ, env, clear=True), \
-                mock.patch("seine.build._default_prompt", return_value=None):
+                mock.patch("seine.build.credentials._default_prompt", return_value=None):
             code, _ = self.run_build()
         self.assertEqual(code, 3)
         self.assertEqual(self.posts, [])
