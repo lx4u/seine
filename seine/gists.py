@@ -47,6 +47,18 @@ def list_gists(directory=None):
     return [(name, _description(os.path.join(directory, "%s.yaml" % name)))
            for name in names]
 
+PREFIX = "gist:"
+
+# 'gist:NAME' names a gist where a spec file is expected; anything else
+# is a file and stays as it is.
+def resolve(arg, directory=None):
+    if not arg.startswith(PREFIX):
+        return arg
+    path = path_for(arg[len(PREFIX):], directory)
+    if not os.path.isfile(path):
+        raise ValueError("no such gist '%s'" % arg[len(PREFIX):])
+    return path
+
 def read(name, directory=None):
     with open(path_for(name, directory)) as f:
         return f.read()
