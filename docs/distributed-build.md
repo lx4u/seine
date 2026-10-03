@@ -276,6 +276,14 @@ $admin token issue bob
 - `project update <name> --quota-gb N` sets a project's storage quota in GB;
   `--no-quota` removes it. `project list` shows it. Over the API this is
   `PATCH /api/v1/projects/<name>` with `{"quota_gb": N}` or `null`.
+- `storage gc [--project P] [--dry-run]` runs storage housekeeping now: it
+  evicts expired and over-quota dev artifacts and prints one line per project
+  and one per evicted build. `--dry-run` reports without deleting. It prints
+  `retention is not configured on this server` when `server.yaml` has no
+  `retention:` section, and exits non-zero if some build could not be
+  evicted. A second request while one runs gets 409. Over the API this is
+  `POST /api/v1/storage/gc` with `{"project": P, "dry_run": true}`; system
+  administrators only.
 
 #### Projects for new users
 

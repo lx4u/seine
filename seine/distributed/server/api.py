@@ -40,6 +40,7 @@ from seine.distributed.common.models import (
     ProjectUpdateRequest,
     RegisterWorkerRequest,
     RegisterWorkerResponse,
+    StorageGcRequest,
     TokenIssueRequest,
     UserCreateRequest,
     UserPreferencesRequest,
@@ -64,6 +65,7 @@ from seine.distributed.server.auth import (
     require_worker_id,
 )
 from seine.distributed.server.db import Database
+from seine.distributed.server.housekeeping import HousekeepingBusy, run_housekeeping
 from seine.distributed.server.reaper import Reaper
 from seine.distributed.server.settings import S3_ENVIRONMENTS, Settings
 from seine.distributed.server.storage import StorageCredentialsError, env_name, job_s3, provider_for
@@ -584,6 +586,39 @@ def create_app(
                 detail=f"Project '{project}' not found",
             )
         return proj
+
+    @app.post("/api/v1/storage/gc")
+    def storage_gc(
+        req: StorageGcRequest,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_system_admin(app_db, tok)
+        app_settings = request.app.state.settings
+        try:
+            reports = run_housekeeping(app_db, app_settings, project=req.project, dry_run=req.dry_run)
+        except HousekeepingBusy as e:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        return {
+            "retention_enabled": app_settings.retention is not None,
+            "reports": [
+                {
+                    "project": r.project,
+                    "dry_run": r.dry_run,
+                    "evicted": [{"build": b, "reason": why, "bytes": n} for b, why, n in r.evicted],
+                    "failures": [{"build": b, "error": err} for b, err in r.failures],
+                    "usage_before": r.usage_before,
+                    "usage_after": r.usage_after,
+                    "high_water_bytes": r.high_water_bytes,
+                    "low_water_bytes": r.low_water_bytes,
+                    "skipped_reason": r.skipped_reason,
+                }
+                for r in reports
+            ],
+        }
 
     @app.delete("/api/v1/projects/{project}")
     def delete_project(

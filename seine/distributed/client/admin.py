@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 import requests
 
+from seine.distributed.client.remote import format_size
 from seine.distributed.common.models import format_quota
 from seine.distributed.common.transport import check_server_url, requests_verify
 
@@ -73,6 +74,14 @@ class AdminClient:
     def project_delete(self, name: str) -> dict[str, Any]:
         url = f"{self.server_url}/api/v1/projects/{name}"
         resp = self.session.delete(url, headers=self._headers(), timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()
+
+    def storage_gc(self, project: Optional[str] = None, dry_run: bool = False) -> dict[str, Any]:
+        """Run housekeeping now; it can take a while, so there is no short timeout."""
+        url = f"{self.server_url}/api/v1/storage/gc"
+        payload = {"project": project, "dry_run": dry_run}
+        resp = self.session.post(url, json=payload, headers=self._headers(), timeout=None)
         resp.raise_for_status()
         return resp.json()
 
@@ -192,6 +201,26 @@ class AdminClient:
         return bool(resp.json().get("ok"))
 
 
+def _print_gc_report(report: dict[str, Any]) -> None:
+    """Print one project's housekeeping outcome."""
+    name = report["project"]
+    if report.get("skipped_reason"):
+        print(f"{name}: skipped, {report['skipped_reason']}")
+        return
+    evicted = report["evicted"]
+    freed = sum(e["bytes"] for e in evicted)
+    verb = "would evict" if report["dry_run"] else "evicted"
+    usage = ""
+    if report.get("usage_before") is not None and report.get("usage_after") is not None:
+        usage = f"usage {format_size(report['usage_before'])} -> {format_size(report['usage_after'])}, "
+    noun = "build" if len(evicted) == 1 else "builds"
+    print(f"{name}: {usage}{verb} {len(evicted)} {noun} ({format_size(freed)})")
+    for e in evicted:
+        print(f"  build {e['build']}  {e['reason']}  {format_size(e['bytes'])}")
+    for f in report["failures"]:
+        print(f"  failed {f['build']}: {f['error']}")
+
+
 def run_client_admin(argv: list[str]) -> int:
     """Parse client CLI arguments and invoke remote administration API."""
     parser = argparse.ArgumentParser(prog="seine admin", description="Remote administration CLI")
@@ -223,6 +252,13 @@ def run_client_admin(argv: list[str]) -> int:
 
     p_del = p_sub.add_parser("delete", help="Delete project")
     p_del.add_argument("name", help="Project name")
+
+    s_parser = subparsers.add_parser("storage", help="Storage operations")
+    s_sub = s_parser.add_subparsers(dest="action")
+
+    s_gc = s_sub.add_parser("gc", help="Evict expired and over-quota artifacts now")
+    s_gc.add_argument("--project", default=None, help="Only this project (default: all)")
+    s_gc.add_argument("--dry-run", action="store_true", help="Report what would be evicted, delete nothing")
 
     m_parser = subparsers.add_parser("member", help="Member operations")
     m_sub = m_parser.add_subparsers(dest="action")
@@ -311,6 +347,19 @@ def run_client_admin(argv: list[str]) -> int:
                 sys.stderr.write("error: missing or invalid project action (create, list, update, delete)\n")
                 return 1
 
+        elif args.command == "storage":
+            if args.action == "gc":
+                result = client.storage_gc(project=args.project, dry_run=args.dry_run)
+                if not result["retention_enabled"]:
+                    print("retention is not configured on this server")
+                    return 0
+                for report in result["reports"]:
+                    _print_gc_report(report)
+                return 1 if any(r["failures"] for r in result["reports"]) else 0
+            else:
+                sys.stderr.write("error: missing or invalid storage action (gc)\n")
+                return 1
+
         elif args.command == "member":
             if args.action == "add":
                 mem = client.member_add(args.project, args.user_id, args.role)
@@ -368,7 +417,7 @@ def run_client_admin(argv: list[str]) -> int:
                 return 1
 
         else:
-            sys.stderr.write("error: missing or invalid admin command (project, member, user, token)\n")
+            sys.stderr.write("error: missing or invalid admin command (project, storage, member, user, token)\n")
             return 1
 
     except requests.HTTPError as err:
