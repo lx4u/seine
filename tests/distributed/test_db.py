@@ -696,6 +696,51 @@ class DatabaseHousekeepingRepoTest(Test):
         self.assertEqual(found[0]["artifact_urls"], ["s3://b/x"])
 
 
+class SpecDigestLookupTest(Test):
+    """Test finding the newest build that carries a spec digest."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-digest-")
+        self.db = Database(os.path.join(self.tmp_dir, "digest.db"))
+        self.db.projects.create("alpha")
+
+    def tearDown(self):
+        self.db.close()
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _build(self, build_id, digest, arch="amd64"):
+        self.db.create_build(build_id=build_id, project="alpha", target_arch=arch,
+                             worktree_digest="t", spec_digest=digest)
+
+    def test_the_newest_build_with_the_digest_wins(self):
+        self._build("old", "d1")
+        time.sleep(0.01)
+        self._build("new", "d1")
+        self._build("other", "d2")
+        self.assertEqual(self.db.find_build_by_spec("alpha", "d1")["id"], "new")
+
+    def test_target_arch_narrows_the_match(self):
+        self._build("a", "d1", "amd64")
+        self._build("b", "d1", "arm64")
+        self.assertEqual(self.db.find_build_by_spec("alpha", "d1", "amd64")["id"], "a")
+
+    def test_no_match_and_empty_digest_find_nothing(self):
+        self._build("a", "")
+        self.assertIsNone(self.db.find_build_by_spec("alpha", "d9"))
+        self.assertIsNone(self.db.find_build_by_spec("alpha", ""))
+
+    def test_a_database_without_the_column_is_migrated(self):
+        self.db.close()
+        conn = sqlite3.connect(os.path.join(self.tmp_dir, "digest.db"))
+        conn.execute("DROP INDEX idx_builds_project_spec_digest")
+        conn.execute("ALTER TABLE builds DROP COLUMN spec_digest")
+        conn.commit()
+        conn.close()
+        self.db = Database(os.path.join(self.tmp_dir, "digest.db"))
+        self._build("a", "d1")
+        self.assertEqual(self.db.find_build_by_spec("alpha", "d1")["id"], "a")
+
+
 class DatabaseConstraintsAndIntegrationTest(Test):
     """Test foreign key enforcement, cascading, multi-engine config, and job scheduling."""
 

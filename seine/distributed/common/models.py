@@ -40,6 +40,7 @@ class BuildModel(BaseModel):
     spec_file: str = "spec.yaml"
     # Every spec file as on the command line, "--" between multiconfig groups.
     spec_files: list[str] = Field(default_factory=list)
+    spec_digest: str = ""
     options: dict[str, Any] = Field(default_factory=dict)
     created_at: float
     started_at: float | None = None
@@ -214,6 +215,8 @@ class BuildSubmitRequest(BaseModel):
     spec_file: str = "spec.yaml"
     # Every spec file as on the command line, "--" between multiconfig groups.
     spec_files: list[str] = Field(default_factory=list)
+    # analyze.spec_digest() of the spec, so the build can be found again.
+    spec_digest: str = ""
     options: dict[str, Any] = Field(default_factory=dict)
     transient_secrets: dict[str, Any] = Field(default_factory=dict, repr=False)
 

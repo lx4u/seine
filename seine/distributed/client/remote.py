@@ -404,9 +404,11 @@ class RemoteBuild:
         on_download: Optional[Callable[[str, str, str, int], None]] = None,
         on_event: Optional[Callable[[dict[str, Any]], None]] = None,
         log_dir: Optional[str] = None,
+        spec_digest: str = "",
     ):
         # With log_dir, the streamed log goes there, one file per task, not to out.
         self.log_dir = log_dir
+        self.spec_digest = spec_digest
         # out/err/prompt let the TUI take over what would go to the terminal.
         self._out = out
         self._err = err
@@ -726,6 +728,7 @@ class RemoteBuild:
             is_release=self.is_release,
             spec_file=self.spec_file,
             spec_files=self.spec_files,
+            spec_digest=self.spec_digest,
             options=options,
             transient_secrets=secrets or {},
         )

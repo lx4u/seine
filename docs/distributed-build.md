@@ -853,6 +853,19 @@ the server stored: name, size and SHA-256.
       examples/pc-image/main.yaml
   ```
 
+#### Finding a build by its specification
+
+A submission carries the digest of its specification (`spec_digest`), which the
+server stores with the build. Any project member can ask for the newest build
+that carries a given digest, optionally for one architecture:
+
+```text
+GET /api/v1/projects/<project>/builds/match?spec_digest=<digest>&target_arch=arm64
+```
+
+The answer is the build, as for `GET /api/v1/builds/<id>`, or 404 when no build
+carries the digest. Builds submitted by older clients carry no digest.
+
 ---
 
 ## 4. Shared storage layout

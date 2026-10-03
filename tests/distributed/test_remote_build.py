@@ -860,6 +860,10 @@ class RemoteBuildTest(Test):
         self.run_build()
         self.assertEqual(self.submitted()["json"]["spec_files"], ["main.yaml"])
 
+    def test_the_spec_digest_is_submitted(self):
+        self.run_build(spec_digest="abc123")
+        self.assertEqual(self.submitted()["json"]["spec_digest"], "abc123")
+
     def test_build_remote_entry_point(self):
         with mock.patch("sys.stdout", io.StringIO()):
             code = build_remote(

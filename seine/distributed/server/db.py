@@ -131,6 +131,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             worktree_digest TEXT NOT NULL DEFAULT '',
             spec_file TEXT NOT NULL DEFAULT 'spec.yaml',
             spec_files TEXT NOT NULL DEFAULT '[]',
+            spec_digest TEXT NOT NULL DEFAULT '',
             options TEXT NOT NULL DEFAULT '{}',
             created_at REAL NOT NULL,
             started_at REAL,
@@ -220,11 +221,16 @@ def init_db(conn: sqlite3.Connection) -> None:
             "ALTER TABLE builds ADD COLUMN artifacts_expired_at REAL",
             "ALTER TABLE builds ADD COLUMN artifacts_expired_reason TEXT",
             "ALTER TABLE builds ADD COLUMN spec_files TEXT NOT NULL DEFAULT '[]'",
+            "ALTER TABLE builds ADD COLUMN spec_digest TEXT NOT NULL DEFAULT ''",
         ):
             try:
                 conn.execute(stmt)
             except sqlite3.OperationalError:
                 pass
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_builds_project_spec_digest "
+            "ON builds(project, spec_digest, created_at DESC)"
+        )
 
 
 class ProjectRepo:
@@ -422,6 +428,7 @@ class BuildRepo:
         worktree_digest: str = "",
         spec_file: str = "spec.yaml",
         spec_files: Optional[list[str]] = None,
+        spec_digest: str = "",
         options: Optional[dict[str, Any]] = None,
         status: str = "queued",
         artifact_urls: Optional[list[str]] = None,
@@ -435,10 +442,10 @@ class BuildRepo:
                 """
                 INSERT INTO builds (
                     id, project, target_arch, is_release, status,
-                    worktree_digest, spec_file, spec_files, options, created_at,
-                    artifact_urls, user_id
+                    worktree_digest, spec_file, spec_files, spec_digest, options,
+                    created_at, artifact_urls, user_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     id,
@@ -449,6 +456,7 @@ class BuildRepo:
                     worktree_digest,
                     spec_file,
                     json.dumps(spec_files or [spec_file]),
+                    spec_digest,
                     opts_json,
                     now,
                     urls_json,
@@ -466,6 +474,20 @@ class BuildRepo:
         res["artifact_urls"] = json.loads(res["artifact_urls"]) if res.get("artifact_urls") else []
         res["artifact_meta"] = json.loads(res["artifact_meta"]) if res.get("artifact_meta") else []
         return res
+
+    def latest_for_spec(
+        self, project: str, spec_digest: str, target_arch: Optional[str] = None,
+    ) -> Optional[dict[str, Any]]:
+        """Return the newest build of a project that carries this spec digest."""
+        if not spec_digest:
+            return None
+        sql = "SELECT * FROM builds WHERE project = ? AND spec_digest = ?"
+        args: list[Any] = [project, spec_digest]
+        if target_arch:
+            sql += " AND target_arch = ?"
+            args.append(target_arch)
+        row = self.conn.execute(sql + " ORDER BY created_at DESC LIMIT 1", args).fetchone()
+        return self._decode(row) if row else None
 
     def get(self, build_id: str) -> Optional[dict[str, Any]]:
         cur = self.conn.execute("SELECT * FROM builds WHERE id = ?", (build_id,))
@@ -1150,6 +1172,7 @@ class Database:
         options: Optional[dict[str, Any]] = None,
         user_id: Optional[str] = None,
         spec_files: Optional[list[str]] = None,
+        spec_digest: str = "",
     ) -> str:
         self.ensure_project(project)
         self.builds.create(
@@ -1160,6 +1183,7 @@ class Database:
             worktree_digest=worktree_digest,
             spec_file=spec_file,
             spec_files=spec_files,
+            spec_digest=spec_digest,
             options=options,
             user_id=user_id,
         )
@@ -1185,6 +1209,7 @@ class Database:
         cached_packages: Optional[Union[set[str], list[str], Callable[[str, str], bool]]] = None,
         user_id: Optional[str] = None,
         spec_files: Optional[list[str]] = None,
+        spec_digest: str = "",
     ) -> str:
         self.ensure_project(project)
         self.builds.create(
@@ -1195,6 +1220,7 @@ class Database:
             worktree_digest=worktree_digest,
             spec_file=spec_file,
             spec_files=spec_files,
+            spec_digest=spec_digest,
             options=options,
             user_id=user_id,
         )
@@ -1208,6 +1234,11 @@ class Database:
 
     def get_build(self, build_id: str) -> Optional[dict[str, Any]]:
         return self.builds.get(build_id)
+
+    def find_build_by_spec(
+        self, project: str, spec_digest: str, target_arch: Optional[str] = None,
+    ) -> Optional[dict[str, Any]]:
+        return self.builds.latest_for_spec(project, spec_digest, target_arch)
 
     def claim_next_job(self, worker_id: str) -> Optional[dict[str, Any]]:
         return self.scheduler.claim_job(worker_id)

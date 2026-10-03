@@ -446,6 +446,7 @@ def create_app(
             worktree_digest=req.worktree_digest,
             spec_file=(req.spec_files or [req.spec_file])[0],
             spec_files=req.spec_files or [req.spec_file],
+            spec_digest=req.spec_digest,
             is_release=req.is_release,
             options=req.options,
             user_id=user_id,
@@ -462,19 +463,8 @@ def create_app(
             target_arch=req.target_arch,
         )
 
-    @app.get("/api/v1/builds/{build_id}", response_model=BuildResponse)
-    def get_build_status(
-        build_id: str,
-        request: Request,
-        token_record: dict[str, Any] = Depends(current_user),
-    ):
+    def build_response(request: Request, build: dict[str, Any]) -> BuildResponse:
         app_db = get_db(request)
-        build = app_db.get_build(build_id)
-        if not build:
-            raise HTTPException(status_code=404, detail="Build not found")
-
-        require_member(app_db, token_record, build["project"])
-
         download_urls: dict[str, str] = {}
         manifest = build.get("artifact_meta") or []
         expired = bool(build.get("artifacts_expired_at"))
@@ -513,6 +503,35 @@ def create_app(
              "subdir": m.get("subdir")} for m in manifest
         ]
         return BuildResponse(**build_data)
+
+    @app.get("/api/v1/builds/{build_id}", response_model=BuildResponse)
+    def get_build_status(
+        build_id: str,
+        request: Request,
+        token_record: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        build = app_db.get_build(build_id)
+        if not build:
+            raise HTTPException(status_code=404, detail="Build not found")
+        require_member(app_db, token_record, build["project"])
+        return build_response(request, build)
+
+    @app.get("/api/v1/projects/{project}/builds/match", response_model=BuildResponse)
+    def match_build(
+        project: str,
+        spec_digest: str,
+        request: Request,
+        target_arch: Optional[str] = None,
+        token_record: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        load_project(app_db, project)
+        require_member(app_db, token_record, project)
+        build = app_db.find_build_by_spec(project, spec_digest, target_arch)
+        if not build:
+            raise HTTPException(status_code=404, detail="No build matches this spec")
+        return build_response(request, build)
 
     @app.get("/api/v1/builds")
     def list_builds(

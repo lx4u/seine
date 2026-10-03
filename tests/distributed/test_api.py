@@ -312,6 +312,31 @@ class WorktreeStagingCheckTest(Test):
         self.assertEqual(build["spec_files"], files)
         self.assertEqual(build["spec_file"], "a.yaml")
 
+    def test_spec_digest_is_stored_and_found_by_match(self):
+        provider = mock.MagicMock()
+        provider.has_worktree.return_value = True
+        req = BuildSubmitRequest(project="alpha", worktree_digest="d1", spec_digest="abc123")
+        with mock.patch("seine.distributed.server.api.provider_for", lambda *a: provider):
+            build_id = self.client.post(
+                "/api/v1/builds", json=req.model_dump(), headers=self.headers).json()["build_id"]
+        resp = self.client.get("/api/v1/projects/alpha/builds/match",
+                               params={"spec_digest": "abc123"}, headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["id"], build_id)
+        self.assertEqual(resp.json()["spec_digest"], "abc123")
+
+    def test_match_without_a_build_is_404(self):
+        resp = self.client.get("/api/v1/projects/alpha/builds/match",
+                               params={"spec_digest": "nope"}, headers=self.headers)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_match_needs_membership(self):
+        self.db.users.create("eve")
+        eve = {"Authorization": f"Bearer {self.db.tokens.issue(user_id='eve', kind='pat')['token']}"}
+        resp = self.client.get("/api/v1/projects/alpha/builds/match",
+                               params={"spec_digest": "abc123"}, headers=eve)
+        self.assertEqual(resp.status_code, 403)
+
     def test_dev_build_with_dev_staged_digest_is_accepted(self):
         self.staged["dev"].add("d1")
         self.assertEqual(self._submit("d1", False).status_code, 200)
