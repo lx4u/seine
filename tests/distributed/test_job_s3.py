@@ -66,13 +66,29 @@ class JobS3Test(Test):
             headers={"Authorization": f"Bearer {token}"},
         )
 
-    def _build(self, project="alpha", is_release=False, build_id=None):
+    def _build(self, project="alpha", is_release=False, build_id=None, options=None):
         build_id = build_id or f"bld-{project}-{int(is_release)}"
         self.db.create_build(
             build_id=build_id, project=project, target_arch="amd64",
-            worktree_digest="tree", is_release=is_release,
+            worktree_digest="tree", is_release=is_release, options=options,
         )
         return build_id
+
+    def _shared_cache(self, is_release, options=None):
+        self._build(is_release=is_release, options=options)
+        return self._claim().json()["options"]["shared_cache"]
+
+    def test_shared_cache_defaults_on_for_dev_and_off_for_release(self):
+        self.assertTrue(self._shared_cache(False))
+
+    def test_release_build_defaults_to_a_clean_build(self):
+        self.assertFalse(self._shared_cache(True))
+
+    def test_explicit_shared_cache_flag_wins_over_the_default(self):
+        self.assertFalse(self._shared_cache(False, {"shared_cache": False}))
+
+    def test_explicit_shared_cache_on_a_release_build(self):
+        self.assertTrue(self._shared_cache(True, {"shared_cache": True}))
 
     def test_dev_build_gets_the_dev_key_and_bucket_only(self):
         self._build()

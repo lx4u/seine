@@ -97,6 +97,28 @@ class RemoteBuildTuiTest(avocado.Test):
         _, remote = self._dispatch(self._app(True), "/build --no-download")
         self.assertTrue(remote.call_args.kwargs["no_download"])
 
+    def test_shared_cache_flags_set_the_build_option(self):
+        for line, expected in (("/build", None), ("/build --shared-cache", True),
+                               ("/build --no-shared-cache", False)):
+            app = self._app(True)
+            self._dispatch(app, line)
+            self.assertIs(app.context.builds[0].options["shared_cache"], expected)
+
+    def test_remote_build_sends_the_shared_cache_option(self):
+        app = mock.Mock()
+        app.run_worker = lambda fn, **kw: fn() or mock.Mock()
+        session = self.RemoteSession(app=app)
+        session.url, session.token = "http://127.0.0.1:8000", "t"
+        build = self._build_cmd()
+        build.options = {"files": ["/w/main.yaml"], "shared_cache": False}
+        with mock.patch("seine.distributed.client.remote.RemoteBuild") as rb, \
+                mock.patch("seine.tui.credentials.tui_prompt"):
+            rb.return_value.run.return_value = 0
+            self.build.start_remote_build(
+                app, self.build.BuildState(), build.options["files"], session,
+                project="demo", build=build)
+        self.assertIs(rb.call_args.kwargs["options"]["shared_cache"], False)
+
     def test_cancel_stops_the_remote_job_not_the_local_scheduler(self):
         app = self._app(True)
         app.build_state.running = True

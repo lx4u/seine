@@ -126,10 +126,13 @@ target's own playbook runs:
 
 ![Build screen: the spec tree live-tracking a running Ansible task, matching the log tail](images/tui-build.gif)
 
-When an active specification or `--s3-cache` enables remote object storage but
+When an active specification or `--shared-cache` enables remote object storage but
 credentials are not yet saved or are rejected, a modal dialog prompts for the
 access key and secret key (masked with a reveal toggle) before building starts.
 Valid credentials are saved to writable backends (keyring or settings).
+
+`/build --shared-cache` and `/build --no-shared-cache` pick whether the build
+uses the shared network cache; see [building.md](building.md).
 
 ## Remote server
 

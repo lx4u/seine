@@ -444,7 +444,9 @@ def start_remote_build(app, state, spec_files, session, no_download=False, proje
     job = RemoteBuild(
         session.url, project, spec_files,
         options={"no_download": no_download, "verbose": True, "insecure": session.insecure,
-                 "ca_cert": session.ca_cert}, token=session.token,
+                 "ca_cert": session.ca_cert,
+                 "shared_cache": build.options.get("shared_cache") if build is not None else None},
+        token=session.token,
         out=write, err=write, prompt=tui_prompt(app), on_download=on_download,
         on_event=lambda event: app.call_from_thread(on_event, event), log_dir=log_dir,
         spec_digest=analyze.spec_digest(build.spec) if build is not None else "")

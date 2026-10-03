@@ -572,7 +572,7 @@ host is a loopback one or `--insecure` is given; use that for testing only.
   `CONTAINERS_*`, the proxy variables and the `SEINE_*` variables whose name
   holds no `TOKEN`, `PASSWORD`, `SECRET` or `KEY`. The agent's tokens never
   reach it. The agent holds no S3 keys and drops any `AWS_*`, `SEINE_S3_*`
-  and `SEINE_CREDENTIALS_FILE` it inherits. A job submitted with `--s3-cache`
+  and `SEINE_CREDENTIALS_FILE` it inherits. A job submitted with `--shared-cache`
   gets the access to its own bucket from the server instead: the key pair in
   `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, the endpoint, bucket and
   region as `--s3-*` flags. The keys are never on the command line and are
@@ -686,10 +686,15 @@ one is available and otherwise in `credentials.json`. A saved token the
 server rejects (revoked, expired) is asked for again; after 3 rejected tokens
 the client gives up with exit status 2.
 
-`--packages-only`, `--s3-cache`, `--require-native` and `--min-arch-score` are
-also sent to the server. It accepts no other build option, and rejects any
+`--packages-only`, `--shared-cache`, `--no-shared-cache`, `--require-native` and
+`--min-arch-score` are also sent to the server. It accepts no other build option, and rejects any
 whose name looks like a secret (`token`, `secret`, `password`, `key`,
 `credential`).
+
+The shared cache is on by default for a development build, which uses the
+project's `dev` bucket, and off for a `--release` build, which starts clean.
+`--shared-cache` or `--no-shared-cache` overrides either default. A local
+build uses the shared cache only with `--shared-cache` or `storage.s3`.
 
 ### Choosing a project
 
@@ -962,7 +967,7 @@ download images from S3 without proxying them through the API server.
   the job assignment sent over TLS to the worker that owns it, the key pair of
   its bucket only: the project's `dev` pair for a development build and the
   `prod` pair for a `--release` build, never both. The pair is not stored and
-  not logged. A build submitted with `--s3-cache` can use its own project's
+  not logged. A build submitted with `--shared-cache` can use its own project's
   key while it runs, so whoever may submit builds to a project can reach that
   project's bucket for the duration of the build, and no other.
 - **Not protected yet.** A signing proxy for production keys is planned;

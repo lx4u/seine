@@ -9,6 +9,8 @@ import logging
 import time
 from typing import Any, Callable, Optional, Union
 
+from seine.storage.base import resolve_shared_cache_policy
+
 NATIVE_ARCH_SCORE = 1.0
 CROSS_ARCH_SCORE = 0.7
 EMULATION_ARCH_SCORE = 0.3
@@ -496,6 +498,7 @@ class BuildScheduler:
             )
             p_row = cur_proj.fetchone()
             is_rel = bool(b_dict.get("is_release", False))
+            options["shared_cache"] = resolve_shared_cache_policy(is_rel, options.get("shared_cache"))
             if p_row:
                 p_dict = dict(p_row)
                 s3_bkt = p_dict["prod_bucket"] if is_rel else p_dict["dev_bucket"]

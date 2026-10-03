@@ -205,7 +205,8 @@ def _build(app, argv):
     """
     try:
         opts, args = getopt.getopt(
-            argv, "j:", ["jobs=", "reproducible", "local", "no-download", "project="])
+            argv, "j:", ["jobs=", "reproducible", "local", "no-download", "project=",
+                   "shared-cache", "no-shared-cache"])
     except getopt.GetoptError as e:
         raise CommandError(str(e))
     jobs = None
@@ -213,6 +214,7 @@ def _build(app, argv):
     local = False
     no_download = False
     project = None
+    shared_cache = None
     for o, a in opts:
         if o in ("-j", "--jobs"):
             # Same validation BuildCmd.main() applies to '-j'/'--jobs' on the CLI.
@@ -230,6 +232,10 @@ def _build(app, argv):
             no_download = True
         elif o == "--project":
             project = a
+        elif o == "--shared-cache":
+            shared_cache = True
+        elif o == "--no-shared-cache":
+            shared_cache = False
     if len(args) > 0:
         _use(app, args)
     if not app.context.active:
@@ -252,6 +258,7 @@ def _build(app, argv):
         build.options["jobs"] = jobs
     if reproducible is not None:
         build.options["reproducible"] = reproducible
+    build.options["shared_cache"] = shared_cache
     # TUI builds always write an SBOM: ai.py's packages/installed-packages
     # tools need one to read.
     build.options["sbom"] = True
@@ -283,6 +290,8 @@ _build_options = (
      "server."),
     ("--no-download", "Remote build only: leave the artifacts on the server."),
     ("--project NAME", "Remote build only: build in this project, this once."),
+    ("--shared-cache, --no-shared-cache", "Use or skip the shared network "
+     "cache. Unset, a remote dev build uses it and a release build does not."),
 )
 
 def _vendor(app, argv):
