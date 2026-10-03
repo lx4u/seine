@@ -866,6 +866,29 @@ GET /api/v1/projects/<project>/builds/match?spec_digest=<digest>&target_arch=arm
 The answer is the build, as for `GET /api/v1/builds/<id>`, or 404 when no build
 carries the digest. Builds submitted by older clients carry no digest.
 
+#### Following a project's builds
+
+Members can follow every build of a project over a WebSocket, without polling:
+
+```text
+/api/v1/projects/<project>/events
+```
+
+The first message is `{"auth": "<token>"}`; worker tokens are refused. The
+server answers `{"type": "subscribed"}`, after which nothing is missed, then
+sends one `build_status` message each time a build starts, ends or loses its
+artifacts to housekeeping:
+
+```json
+{"type": "build_status", "build_id": "bld-1a2b3c4d", "project": "demo",
+ "spec_digest": "4a7f9b2c1e0d", "target_arch": "arm64", "status": "completed",
+ "duration": 48.5, "finished_at": 1727971200.0, "artifacts_expired": false,
+ "artifacts": [{"name": "rpi4-image.img", "size": 157286400, "sha256": "..."}]}
+```
+
+A follower that falls far behind loses messages. It should ask the match
+endpoint again after it reconnects.
+
 ---
 
 ## 4. Shared storage layout

@@ -486,6 +486,7 @@ class BuildScheduler:
                 "UPDATE builds SET status = 'running', started_at = ? WHERE id = ?",
                 (now, j["build_id"]),
             )
+            self.db.builds.changed(j["build_id"])
 
             b_dict = dict(b_row) if b_row else {}
             proj_name = b_dict.get("project", "")

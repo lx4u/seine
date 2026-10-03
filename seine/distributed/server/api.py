@@ -70,6 +70,7 @@ from seine.distributed.server.reaper import Reaper
 from seine.distributed.server.settings import S3_ENVIRONMENTS, Settings
 from seine.distributed.server.storage import StorageCredentialsError, env_name, job_s3, provider_for
 from seine.distributed.server.transient import TransientSecrets
+from seine.distributed.server.events import ProjectEvents, build_event, serve_events
 from seine.distributed.server.ws import BroadcastHub, forget_finished_build, serve_stream
 from seine.storage.s3.client import S3ClientError
 
@@ -175,6 +176,9 @@ def create_app(
     app.state.max_upload_bytes = max_upload_bytes if max_upload_bytes is not None else settings.max_upload_bytes
     app.state.transient_secrets = TransientSecrets(settings.secret_ttl)
     app.state.hub = BroadcastHub()
+    app.state.events = ProjectEvents()
+    db.builds.listeners.append(
+        lambda build: app.state.events.publish(build["project"], build_event(build)))
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc: RequestValidationError):
@@ -568,6 +572,10 @@ def create_app(
         if finished and finished["status"] in _TERMINAL_STATES:
             _get_transient_secrets(request).pop(build_id)
         return {"status": "cancelling", "build_id": build_id}
+
+    @app.websocket("/api/v1/projects/{project}/events")
+    async def websocket_events(websocket: WebSocket, project: str):
+        await serve_events(websocket, websocket.app.state.events, websocket.app.state.db, project)
 
     @app.websocket("/api/v1/builds/{build_id}/stream")
     async def websocket_stream(websocket: WebSocket, build_id: str):

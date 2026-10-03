@@ -6,13 +6,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import secrets
 import sqlite3
 import threading
 import time
 import uuid
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
+
+logger = logging.getLogger(__name__)
 
 
 PROJECT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
@@ -418,6 +421,16 @@ class BuildRepo:
 
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
+        # Called with the build row after its state or artifacts changed.
+        self.listeners: list[Callable[[dict[str, Any]], None]] = []
+
+    def changed(self, build_id: str) -> None:
+        build = self.get(build_id)
+        for listener in self.listeners if build else ():
+            try:
+                listener(build)
+            except Exception:
+                logger.exception("build listener failed for %s", build_id)
 
     def create(
         self,
@@ -555,6 +568,7 @@ class BuildRepo:
                 f"UPDATE builds SET {', '.join(updates)} WHERE id = ?",
                 tuple(params),
             )
+        self.changed(build_id)
         return self.get(build_id)
 
     def mark_artifacts_expired(
@@ -576,7 +590,10 @@ class BuildRepo:
                 """,
                 (time.time() if now is None else now, reason, build_id),
             )
-            return cur.rowcount > 0
+            expired = cur.rowcount > 0
+        if expired:
+            self.changed(build_id)
+        return expired
 
     def evictable_builds(self, project: str, older_than: float) -> list[dict[str, Any]]:
         """Finished non-release builds of a project that still hold artifacts.
