@@ -78,6 +78,41 @@ class SavingRoundTrips(ASettingsFile):
         mode = stat.S_IMODE(os.stat(self.path()).st_mode)
         self.assertEqual(mode, 0o600)
 
+class RemoteBuildPolicy(avocado.Test):
+    def test_defaults_to_always(self):
+        self.assertEqual(settings.DEFAULTS["remote_build"], "always")
+
+    def test_parse_normalizes_case_and_separators(self):
+        self.assertEqual(settings.parse_remote_build(" Foreign_Arch "), "foreign-arch")
+        self.assertEqual(settings.parse_remote_build("never"), "never")
+
+    def test_parse_refuses_the_unknown_and_lists_the_choices(self):
+        with self.assertRaises(ValueError) as caught:
+            settings.parse_remote_build("prod")
+        self.assertIn("production-only", str(caught.exception))
+
+    def target(self, policy, arch="amd64", release=False, **flags):
+        return settings.resolve_build_target(arch, "amd64", release, policy, **flags)[0]
+
+    def test_always_and_never(self):
+        self.assertEqual(self.target("always"), "remote")
+        self.assertEqual(self.target("never", arch="arm64"), "local")
+
+    def test_foreign_arch_only_offloads_a_foreign_target(self):
+        self.assertEqual(self.target("foreign-arch", arch="arm64"), "remote")
+        self.assertEqual(self.target("foreign-arch", arch="amd64"), "local")
+        self.assertEqual(self.target("foreign-arch", arch=None), "local")
+
+    def test_production_only_offloads_a_release(self):
+        self.assertEqual(self.target("production-only"), "local")
+        self.assertEqual(self.target("production-only", release=True), "remote")
+
+    def test_flags_win_over_the_policy(self):
+        self.assertEqual(self.target("never", force_remote=True), "remote")
+        self.assertEqual(self.target("never", release=True), "remote")
+        self.assertEqual(self.target("always", force_local=True), "local")
+        self.assertEqual(self.target("always", release=True, force_local=True), "local")
+
 class DefaultPath(avocado.Test):
     def test_honours_xdg_config_home(self):
         real = os.environ.get("XDG_CONFIG_HOME")

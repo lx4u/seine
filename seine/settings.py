@@ -14,7 +14,17 @@ DEFAULTS = {"jobs": None, "resources": None, "theme": None,
            "startup_commands": [], "llm_model": None, "llm_api_base": None,
            "sbom2cve_program": None, "history_pruning": None,
            "default_remote": None, "auto_connect_remote": False,
-           "remote_insecure": False, "remote_ca_cert": None}
+           "remote_insecure": False, "remote_ca_cert": None,
+           "remote_build": "always"}
+
+# (label, key) pairs: the /settings picker shows the label, files and
+# /set use the key.
+REMOTE_BUILD_CHOICES = [
+    ("Always (when connected)", "always"),
+    ("Foreign architecture only", "foreign-arch"),
+    ("Never (local builds only)", "never"),
+    ("Production builds only (--release)", "production-only"),
+]
 
 def is_bool(key):
     return key in ("auto_connect_remote", "remote_insecure") or isinstance(DEFAULTS.get(key), bool)
@@ -28,6 +38,31 @@ def parse_bool(text):
     if value in ("false", "0", "no", "off"):
         return False
     raise ValueError("expects 'true' or 'false', not '%s'" % text)
+
+def parse_remote_build(text):
+    value = text.strip().lower().replace("_", "-")
+    keys = [key for _, key in REMOTE_BUILD_CHOICES]
+    if value not in keys:
+        raise ValueError("expects one of %s, not '%s'" % (", ".join(keys), text))
+    return value
+
+# Which side a '/build' runs on while connected to a server: ("remote" or
+# "local", why). Flags win over the policy.
+def resolve_build_target(spec_arch, host_arch, is_release, policy,
+                         force_remote=False, force_local=False):
+    if force_local:
+        return "local", "--local given"
+    if force_remote or is_release:
+        return "remote", "--remote given" if force_remote else "release build"
+    if policy == "foreign-arch":
+        if spec_arch and spec_arch != host_arch:
+            return "remote", "foreign architecture '%s' on host '%s'" % (spec_arch, host_arch)
+        return "local", "native architecture '%s'" % (spec_arch or host_arch)
+    if policy == "never":
+        return "local", "policy is 'never'"
+    if policy == "production-only":
+        return "local", "development build"
+    return "remote", "policy is 'always'"
 
 def check_ca_cert(path):
     expanded = os.path.expanduser(path)

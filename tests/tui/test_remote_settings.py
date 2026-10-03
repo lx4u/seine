@@ -120,6 +120,15 @@ class RemoteSettingsTest(avocado.Test):
         with self.assertRaises(self.commands.CommandError):
             self.commands.dispatch(mock_app, "/set remote_insecure maybe")
 
+    def test_set_command_remote_build(self):
+        mock_app = mock.Mock()
+        self.commands.dispatch(mock_app, "/set remote_build Foreign_Arch")
+        self.assertEqual(self.settings.load()["remote_build"], "foreign-arch")
+        mock_app.say.assert_called_once_with("remote_build = foreign-arch")
+        with self.assertRaises(self.commands.CommandError):
+            self.commands.dispatch(mock_app, "/set remote_build sometimes")
+        self.assertEqual(self.settings.load()["remote_build"], "foreign-arch")
+
     def test_set_command_remote_ca_cert(self):
         mock_app = mock.Mock()
         cert = os.path.join(self.tmp_dir, "ca.pem")

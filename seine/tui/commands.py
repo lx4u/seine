@@ -515,6 +515,8 @@ def _set(app, argv):
     server that is not on this machine -- same as 'seine build --insecure'),
     'remote_ca_cert' (a CA bundle file to verify the remote server's TLS
     certificate with, or 'none'),
+    'remote_build' (which '/build's go to the server while connected:
+    'always', 'foreign-arch', 'never' or 'production-only'),
     'sbom2cve_program' (a program run as 'PROGRAM SBOM_PATH' by '/issues'
     and 'seine issues' in place of debsbom's own container, expected to
     write the same JSON-lines shape 'debsbom sec-scan -f json' does), or
@@ -560,6 +562,11 @@ def _set(app, argv):
                             else settings.check_ca_cert(value))
         except ValueError as e:
             raise CommandError("%s %s" % (key, e))
+    elif key == "remote_build":
+        try:
+            value = current[key] = settings.parse_remote_build(value)
+        except ValueError as e:
+            raise CommandError("%s %s" % (key, e))
     elif key == "sbom2cve_program":
         current["sbom2cve_program"] = value
     elif key == "history_pruning":
@@ -573,7 +580,7 @@ def _set(app, argv):
         raise CommandError(
             "unknown setting '%s' -- jobs, resources, theme, "
             "default_remote, auto_connect_remote, remote_insecure, "
-            "remote_ca_cert, sbom2cve_program, "
+            "remote_ca_cert, remote_build, sbom2cve_program, "
             "or history_pruning" % key)
     settings.save(current)
     app.say("%s = %s" % (key, value))

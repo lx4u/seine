@@ -188,7 +188,7 @@ belong to. If there is neither (an administrator, or a member of several
 projects) none is set, the infobar reads `[remote: no project]`, and
 `/build` asks before it starts.
 
-Four settings (`/settings`, or `/set KEY VALUE`) shape the connection:
+Five settings (`/settings`, or `/set KEY VALUE`) shape the connection:
 
 | Setting | Meaning |
 |---------|---------|
@@ -196,6 +196,7 @@ Four settings (`/settings`, or `/set KEY VALUE`) shape the connection:
 | `auto_connect_remote` | Connect to `default_remote` when the TUI starts |
 | `remote_insecure` | Allow plain `http://` to a server that is not on this machine, like `seine build --insecure`. Off by default |
 | `remote_ca_cert` | CA bundle verifying the server's TLS certificate (else `$SEINE_CA_CERT`), for a private CA or a self-signed server |
+| `remote_build` | Which builds go to the server while connected: `always` (default), `foreign-arch` (only a target that is not this machine's architecture), `never` or `production-only` (only `--release` builds) |
 
 `/remote --insecure` and `/remote --ca-cert=PATH` (also `seine tui
 --insecure --ca-cert=PATH`) override the last two for one connection. A host
