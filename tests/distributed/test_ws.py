@@ -186,6 +186,16 @@ class ParseChunkTest(Test):
         chunk, code = self.parse({"text": "hi", "source": "stderr"})
         self.assertEqual((chunk["text"], chunk["source"], code), ("hi", "stderr", 0))
 
+    def test_log_chunk_keeps_a_valid_task(self):
+        chunk, _ = self.parse({"text": "hi", "task": "rootfs"})
+        self.assertEqual(chunk["task"], "rootfs")
+
+    def test_log_chunk_drops_a_bad_task(self):
+        for task in (None, "", 7, "x" * 513):
+            chunk, code = self.parse({"text": "hi", "task": task})
+            self.assertEqual(code, 0)
+            self.assertNotIn("task", chunk)
+
     def test_task_plan_is_cleaned(self):
         event, code = self.parse({"type": "task_plan", "tasks": [
             {"name": "a", "needs": [], "junk": 1},

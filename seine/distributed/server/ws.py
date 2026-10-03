@@ -212,6 +212,9 @@ def parse_chunk(raw: str, build_id: str) -> tuple[Optional[dict[str, Any]], int]
         "text": data["text"],
         "timestamp": time.time(),
     }
+    task = data.get("task")
+    if _is_name(task):
+        chunk["task"] = task
     return chunk, 0
 
 
