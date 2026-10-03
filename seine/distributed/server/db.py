@@ -571,6 +571,17 @@ class BuildRepo:
         )
         return [self.get(r["id"]) for r in cur.fetchall()]  # type: ignore
 
+    def active_worktree_digests(self, project: str) -> set[str]:
+        """Worktree digests of the project's builds that have not finished."""
+        cur = self.conn.execute(
+            """
+            SELECT DISTINCT worktree_digest FROM builds
+            WHERE project = ? AND status NOT IN ('completed', 'failed', 'cancelled')
+            """,
+            (project,),
+        )
+        return {r["worktree_digest"] for r in cur.fetchall()}
+
     def create_job(
         self,
         id: str,

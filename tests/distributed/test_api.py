@@ -94,6 +94,20 @@ class WorktreeRelayTest(Test):
         self.assertEqual(staged["content"], dummy_content)
         self.assertFalse(os.path.exists(staged["path"]))
 
+    def test_worktree_upload_refreshes_the_staged_bundle(self):
+        provider = mock.MagicMock()
+        self.app.state.storage_provider = provider
+        digest = self._upload().json()["digest"]
+        provider.refresh_worktree.assert_called_once_with("alpha", digest)
+
+    def test_worktree_upload_survives_a_failed_refresh(self):
+        provider = mock.MagicMock()
+        provider.refresh_worktree.side_effect = RuntimeError("s3 hiccup")
+        self.app.state.storage_provider = provider
+        with self.assertLogs("seine.server.api", "WARNING"):
+            resp = self._upload()
+        self.assertEqual(resp.status_code, 200)
+
     def test_dev_only_project_takes_no_prod_worktree(self):
         self.db.projects.create("home-rita", dev_only=True)
         self.db.users.create("rita")
@@ -301,6 +315,32 @@ class WorktreeStagingCheckTest(Test):
         resp = self._submit("d1", False)
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.json()["detail"], "worktree d1 is not staged for dev builds")
+
+    def test_submit_refreshes_the_staged_worktree_in_its_bucket(self):
+        providers = {}
+
+        def provider_for(settings, project, bucket, env):
+            providers[env] = mock.MagicMock()
+            return providers[env]
+
+        for is_release, env in ((False, "dev"), (True, "prod")):
+            req = BuildSubmitRequest(project="alpha", worktree_digest="d1", is_release=is_release)
+            with mock.patch("seine.distributed.server.api.provider_for", provider_for):
+                self.assertEqual(self.client.post("/api/v1/builds", json=req.model_dump(), headers=self.headers).status_code, 200)
+            providers[env].refresh_worktree.assert_called_once_with("alpha", "d1")
+
+    def test_submit_survives_a_failed_refresh(self):
+        provider = mock.MagicMock()
+        provider.refresh_worktree.side_effect = RuntimeError("s3 hiccup")
+        with mock.patch("seine.distributed.server.api.provider_for", return_value=provider):
+            req = BuildSubmitRequest(project="alpha", worktree_digest="d1")
+            with self.assertLogs("seine.server.api", "WARNING"):
+                resp = self.client.post("/api/v1/builds", json=req.model_dump(), headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(self.db.builds.list()), 1)
+
+    def test_missing_worktree_is_not_refreshed(self):
+        self.assertEqual(self._submit("d1", False).status_code, 400)
 
     def test_storage_failure_is_502(self):
         provider = mock.MagicMock()

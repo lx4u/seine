@@ -431,6 +431,7 @@ class AdminRESTAPITest(Test):
     def test_storage_gc_serialises_the_reports(self):
         report = ProjectReport(
             project="proj-a", dry_run=True, evicted=[("b1", "ttl", 5)], failures=[("b2", "boom")],
+            worktrees=[("d1", 7)], lifecycle=["dev: denied"],
             usage_before=9, usage_after=4, high_water_bytes=8, low_water_bytes=3,
         )
         app = create_app(db=self.db, settings=Settings(retention=Retention(interval=60, dev=None, prod=None)))
@@ -445,6 +446,7 @@ class AdminRESTAPITest(Test):
             "project": "proj-a", "dry_run": True,
             "evicted": [{"build": "b1", "reason": "ttl", "bytes": 5}],
             "failures": [{"build": "b2", "error": "boom"}],
+            "worktrees": [{"digest": "d1", "bytes": 7}], "lifecycle": ["dev: denied"],
             "usage_before": 9, "usage_after": 4, "high_water_bytes": 8, "low_water_bytes": 3,
             "skipped_reason": None,
         }]})
@@ -472,6 +474,15 @@ class AdminRESTAPITest(Test):
             def delete_prefix(self, prefix):
                 objects.clear()
                 return 1, 100
+
+            def lifecycle_rules(self):
+                return []
+
+            def set_lifecycle_rules(self, rules):
+                pass
+
+            def list_objects(self, prefix=""):
+                return []
 
         env = EnvRetention(worktrees=None, artifacts=3600, cache=None, high_water=None, low_water=None, min_age=0)
         app = create_app(db=self.db, settings=Settings(retention=Retention(interval=60, dev=env, prod=env)))
@@ -719,7 +730,7 @@ class RemoteClientAdminTest(Test):
 
     def _gc_report(self, **kw):
         report = {
-            "project": "test", "dry_run": False, "evicted": [], "failures": [], "usage_before": None,
+            "project": "test", "dry_run": False, "evicted": [], "failures": [], "worktrees": [], "lifecycle": [], "usage_before": None,
             "usage_after": None, "high_water_bytes": None, "low_water_bytes": None, "skipped_reason": None,
         }
         report.update(kw)
@@ -740,6 +751,24 @@ class RemoteClientAdminTest(Test):
             "  build b1  ttl  1.0 GB",
             "  build b2  pressure  1.0 GB",
         ])
+
+    def test_storage_gc_cli_prints_worktrees_of_a_skipped_project(self):
+        result = self._gc_report(skipped_reason="no quota set", worktrees=[{"digest": "d1", "bytes": 10}])
+        _, out, _, _ = self._gc_cli(result)
+        self.assertEqual(out.splitlines(), ["test: skipped, no quota set", "  worktrees: 1 expired (10 B)"])
+
+    def test_storage_gc_cli_prints_expired_worktrees_only_when_there_are_some(self):
+        result = self._gc_report(worktrees=[{"digest": "d1", "bytes": 10}, {"digest": "d2", "bytes": 5}])
+        _, out, _, _ = self._gc_cli(result)
+        self.assertIn("  worktrees: 2 expired (15 B)", out.splitlines())
+        _, out, _, _ = self._gc_cli(self._gc_report(), "--dry-run")
+        self.assertNotIn("worktrees", out)
+        _, out, _, _ = self._gc_cli(self._gc_report(dry_run=True, worktrees=[{"digest": "d1", "bytes": 1}]))
+        self.assertIn("  worktrees: 1 would expire (1 B)", out)
+
+    def test_storage_gc_cli_shows_lifecycle_problems(self):
+        _, out, _, _ = self._gc_cli(self._gc_report(lifecycle=["dev: denied"]))
+        self.assertIn("  lifecycle rules not installed, dev: denied", out)
 
     def test_storage_gc_cli_says_one_build_not_one_builds(self):
         evicted = [{"build": "b1", "reason": "ttl", "bytes": 1}]

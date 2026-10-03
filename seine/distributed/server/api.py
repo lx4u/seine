@@ -319,6 +319,13 @@ def create_app(
         refuse_prod_for_dev_only(project_row, env == "prod")
         return project_row, env
 
+    def refresh_worktree(provider: Any, project: str, digest: str) -> None:
+        """Restart the expiry age of a staged worktree; a failure is logged, never raised."""
+        try:
+            provider.refresh_worktree(project, digest)
+        except Exception as e:
+            logger.warning("Could not refresh worktree %s of %s: %s", digest, project, e)
+
     def stage_worktree(
         request: Request, project: str, target: tuple[dict[str, Any], str],
         temp_path: str, total_bytes: int, digest: str,
@@ -345,6 +352,7 @@ def create_app(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Storage refused the worktree bundle",
             )
+        refresh_worktree(provider, project, digest)
         return {"digest": digest, "bytes": total_bytes, "status": "staged"}
 
     @app.post("/api/v1/projects/{project}/worktrees")
@@ -409,6 +417,7 @@ def create_app(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"worktree {req.worktree_digest} is not staged for {env} builds",
             )
+        refresh_worktree(provider, req.project, req.worktree_digest)
 
         build_id = f"bld-{uuid.uuid4().hex[:8]}"
         app_db.create_build(
@@ -614,6 +623,8 @@ def create_app(
                     "dry_run": r.dry_run,
                     "evicted": [{"build": b, "reason": why, "bytes": n} for b, why, n in r.evicted],
                     "failures": [{"build": b, "error": err} for b, err in r.failures],
+                    "worktrees": [{"digest": d, "bytes": n} for d, n in r.worktrees],
+                    "lifecycle": r.lifecycle,
                     "usage_before": r.usage_before,
                     "usage_after": r.usage_after,
                     "high_water_bytes": r.high_water_bytes,

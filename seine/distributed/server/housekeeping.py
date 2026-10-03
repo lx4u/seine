@@ -1,12 +1,14 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
-"""Delete expired and over-quota dev artifacts according to the 'retention:' settings."""
+"""Delete expired worktrees and expired or over-quota dev artifacts per the 'retention:' settings."""
 
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
+from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -38,6 +40,10 @@ class ProjectReport:
     evicted: list[tuple[str, str, int]] = field(default_factory=list)
     # (build id, error) per build whose objects could not be deleted
     failures: list[tuple[str, str]] = field(default_factory=list)
+    # (digest, bytes) per expired worktree, dev and prod buckets together
+    worktrees: list[tuple[str, int]] = field(default_factory=list)
+    # one message per bucket whose lifecycle rules could not be installed
+    lifecycle: list[str] = field(default_factory=list)
     usage_before: Optional[int] = None
     usage_after: Optional[int] = None
     high_water_bytes: Optional[int] = None
@@ -84,6 +90,8 @@ def run_housekeeping(
             report = ProjectReport(project=row["name"], dry_run=dry_run)
             reports.append(report)
             try:
+                report.usage_before = _dev_usage(settings, row)
+                _housekeep_worktrees(db, settings, row, report, now)
                 _prod_check(settings, row, report)
                 _housekeep_dev(db, settings, row, report, now)
             except S3ClientError as e:
@@ -93,6 +101,108 @@ def run_housekeeping(
         return reports
     finally:
         _lock.release()
+
+
+_ABORT_RULE = "seine-abort-multipart"
+_WORKTREES_RULE = "seine-worktrees-expiry"
+
+
+def _lifecycle_rules(worktrees_ttl: Optional[float]) -> list[dict[str, Any]]:
+    """The rules seine owns on a bucket; whole days, at least one."""
+    rules: list[dict[str, Any]] = [{
+        "ID": _ABORT_RULE, "Status": "Enabled", "Filter": {"Prefix": ""},
+        "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 1},
+    }]
+    if worktrees_ttl is not None:
+        rules.append({
+            "ID": _WORKTREES_RULE, "Status": "Enabled", "Filter": {"Prefix": "worktrees/"},
+            "Expiration": {"Days": max(math.ceil(worktrees_ttl / 86400), 1)},
+        })
+    return rules
+
+
+def _rule_key(rule: dict[str, Any]) -> tuple:
+    """The parts of a rule seine sets, so a reply from the server compares equal."""
+    prefix = rule.get("Filter", {}).get("Prefix", rule.get("Prefix", ""))
+    return (
+        rule.get("ID"), rule.get("Status", "Enabled"), prefix,
+        rule.get("Expiration", {}).get("Days"),
+        rule.get("AbortIncompleteMultipartUpload", {}).get("DaysAfterInitiation"),
+    )
+
+
+def merge_lifecycle(existing: list[dict[str, Any]], worktrees_ttl: Optional[float]) -> Optional[list[dict[str, Any]]]:
+    """Return the rules to put, or None when the bucket already has seine's rules."""
+    own = (_ABORT_RULE, _WORKTREES_RULE)
+    mine = _lifecycle_rules(worktrees_ttl)
+    current = [r for r in existing if r.get("ID") in own]
+    if sorted(map(_rule_key, current)) == sorted(map(_rule_key, mine)):
+        return None
+    return [r for r in existing if r.get("ID") not in own] + mine
+
+
+def _age_of(obj: dict[str, Any]) -> Optional[float]:
+    """Epoch seconds of an object's last_modified; None when it has none."""
+    stamp = obj.get("last_modified")
+    return datetime.fromisoformat(stamp).timestamp() if stamp else None
+
+
+def _housekeep_worktrees(
+    db: Database, settings: Settings, row: dict[str, Any], report: ProjectReport, now: float
+) -> None:
+    """Install the lifecycle rules and sweep aged worktrees in the dev and prod buckets."""
+    name = row["name"]
+    for env_name in ("dev", "prod"):
+        bucket = row.get(f"{env_name}_bucket")
+        if not bucket:
+            continue
+        ttl = getattr(settings.retention, env_name).worktrees
+        try:
+            provider = provider_for(settings, name, bucket, env_name)
+        except StorageCredentialsError as e:
+            logger.debug("No %s storage for %s: %s", env_name, name, e)
+            continue
+        if not report.dry_run:
+            try:
+                rules = merge_lifecycle(provider.lifecycle_rules(), ttl)
+                if rules is not None:
+                    provider.set_lifecycle_rules(rules)
+                    logger.info("Installed lifecycle rules on the %s bucket of %s", env_name, name)
+            except S3ClientError as e:
+                logger.warning("Lifecycle rules of the %s bucket of %s not installed: %s", env_name, name, e)
+                report.lifecycle.append(f"{env_name}: {e}")
+        if ttl is None:
+            continue
+        try:
+            _sweep_worktrees(db, provider, name, ttl, report, now)
+        except S3ClientError as e:
+            logger.error("Listing worktrees of the %s bucket of %s failed: %s", env_name, name, e)
+            report.failures.append((f"worktrees ({env_name})", str(e)))
+
+
+def _sweep_worktrees(
+    db: Database, provider: Any, project: str, ttl: float, report: ProjectReport, now: float
+) -> None:
+    """Delete worktrees older than ttl that no unfinished build of the project uses."""
+    active = db.builds.active_worktree_digests(project)
+    prefix = f"worktrees/{project}/"
+    for obj in provider.list_objects(prefix):
+        age = _age_of(obj)
+        digest = obj["key"][len(prefix):].removesuffix(".tar.zst")
+        if age is None or age >= now - ttl or digest in active:
+            continue
+        if not report.dry_run:
+            try:
+                provider.delete_prefix(obj["key"])
+            except S3ClientError as e:
+                logger.error("Deleting worktree %s of %s failed: %s", digest, project, e)
+                report.failures.append((f"worktree {digest}", str(e)))
+                continue
+        report.worktrees.append((digest, obj["size"]))
+        logger.info(
+            "Expired worktree %s of %s: %d bytes%s",
+            digest, project, obj["size"], " (dry run)" if report.dry_run else "",
+        )
 
 
 def _prod_check(settings: Settings, row: dict[str, Any], report: ProjectReport) -> None:
@@ -178,6 +288,14 @@ class _DevPass:
         return None
 
 
+def _dev_usage(settings: Settings, row: dict[str, Any]) -> Optional[int]:
+    """Bytes held by the dev bucket, None when it has no storage configured."""
+    try:
+        return provider_for(settings, row["name"], row["dev_bucket"], "dev").usage()
+    except StorageCredentialsError:
+        return None
+
+
 def _housekeep_dev(
     db: Database, settings: Settings, row: dict[str, Any], report: ProjectReport, now: float
 ) -> None:
@@ -189,7 +307,7 @@ def _housekeep_dev(
         logger.debug("Skipping %s: %s", row["name"], e)
         return
     run = _DevPass(db, provider, row, report, now)
-    report.usage_before = run.usage = provider.usage()
+    run.usage = provider.usage()
     if rules.artifacts is not None:
         run.expire_old(rules.artifacts)
     report.skipped_reason = run.relieve_pressure(rules)
@@ -198,8 +316,8 @@ def _housekeep_dev(
 
 def _log_summary(report: ProjectReport) -> None:
     logger.info(
-        "Housekeeping %s: %d evicted, %d failed, usage %s -> %s%s",
-        report.project, len(report.evicted), len(report.failures),
+        "Housekeeping %s: %d evicted, %d worktrees expired, %d failed, usage %s -> %s%s",
+        report.project, len(report.evicted), len(report.worktrees), len(report.failures),
         report.usage_before, report.usage_after,
         f", skipped: {report.skipped_reason}" if report.skipped_reason else "",
     )

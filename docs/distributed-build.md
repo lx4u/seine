@@ -145,6 +145,20 @@ an error.
   1024 MiB). `low_water` must be below `high_water`, and the two must use the
   same kind: a percentage cannot be compared with a size. Unknown keys are an
   error.
+
+  Worktrees are expired in two ways. Each sweep installs two lifecycle rules
+  on the dev and prod bucket of every project: `seine-abort-multipart`
+  aborts incomplete multipart uploads after 1 day, and
+  `seine-worktrees-expiry` expires `worktrees/` after the `worktrees` age,
+  rounded up to whole days (at least 1); with `never` that rule is removed.
+  Other rules on the bucket are kept, and nothing is sent when the bucket
+  already has the right ones. Garage evaluates lifecycle rules once a day.
+  Submitting a build restarts the age of its worktree, so a digest that is
+  still in use does not expire. The sweep itself also deletes worktrees older
+  than the `worktrees` age, which covers lifecycle rules that have not run
+  yet, but never one that a queued or running build of the project uses.
+  A bucket whose rules cannot be installed is logged and reported, and the
+  rest of the sweep goes on.
 - **Enrollment token.** There is no default: the server refuses to start
   without one. Generate it with `openssl rand -hex 32`. Workers present it
   once to register and receive a worker token of their own; registering an
@@ -278,8 +292,9 @@ $admin token issue bob
   `--no-quota` removes it. `project list` shows it. Over the API this is
   `PATCH /api/v1/projects/<name>` with `{"quota_gb": N}` or `null`.
 - `storage gc [--project P] [--dry-run]` runs storage housekeeping now: it
-  evicts expired and over-quota dev artifacts and prints one line per project
-  and one per evicted build. `--dry-run` reports without deleting. It prints
+  evicts expired and over-quota dev artifacts and expired worktrees, and
+  prints one line per project, one per evicted build and one for the
+  worktrees. `--dry-run` reports without deleting. It prints
   `retention is not configured on this server` when `server.yaml` has no
   `retention:` section, and exits non-zero if some build could not be
   evicted. A second request while one runs gets 409. Over the API this is
