@@ -1467,6 +1467,14 @@ Frequently used tasks include:
  * `apt`
  * `debconf`
 
+### Blocked lookups
+
+A build must give the same result wherever it runs. Lookups that read the
+host or run host code are refused when the specification is parsed:
+`pipe`, `lines`, `env`, `url`, `password`, `random_string` and
+`hashi_vault`. Pass values through `defaults:`, `vault:` or `credentials:`
+instead. The `file` lookup stays allowed.
+
 ### Ansible Galaxy collections
 
 `ansible-core` alone covers `apt`, `debconf`, `user` and the rest of the

@@ -197,6 +197,8 @@ class Image:
         if type(playbooks) != type([]):
             raise ValueError("'playbook' shall be a list of Ansible playbooks!")
 
+        from seine.build import playbook as playbook_rules
+        playbook_rules.check(playbooks)
         # Check provided playbooks
         index = 1
         for playbook in playbooks:
