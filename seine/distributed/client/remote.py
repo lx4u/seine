@@ -623,6 +623,9 @@ class RemoteBuild:
 
     def _submit(self, arch: str, digest: str, secrets: Optional[dict[str, Any]] = None) -> str:
         options = {k: v for k, v in self.options.items() if k in BUILD_OPTION_KEYS}
+        # Only sent when on: a server that predates the key refuses it.
+        if not options.get("verbose"):
+            options.pop("verbose", None)
         req = BuildSubmitRequest(
             project=self.project,
             worktree_digest=digest,

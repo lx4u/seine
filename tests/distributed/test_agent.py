@@ -19,7 +19,7 @@ from avocado import Test
 
 from seine.distributed.agent.events import EventListener
 from seine.distributed.agent.detect import detect_capabilities, detect_native_arch, ARCH_MAP
-from seine.distributed.agent.executor import SubprocessExecutor, child_env, find_seine_binary
+from seine.distributed.agent.executor import SubprocessExecutor, child_env, find_seine_binary, split_task_line
 from seine.distributed.common.models import JobManifest, JobS3
 from seine.reporter import SOCKET_ENV
 from seine.distributed.common.transport import (
@@ -175,6 +175,41 @@ class SubprocessExecutorTest(Test):
         self.assertEqual(popen.call_args.args[0][-2:], ["build", "main.yaml"])
         self.assertEqual(popen.call_args.kwargs["cwd"], os.path.join(self.tmp_dir, "jobs", "bld-1"))
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
+
+    def test_verbose_job_runs_a_verbose_build(self):
+        _, popen, _ = self._execute(options={"verbose": True})
+        self.assertEqual(popen.call_args.args[0][-3:], ["build", "--verbose", "main.yaml"])
+
+    def test_split_task_line(self):
+        self.assertEqual(split_task_line("[rootfs+1.20s] PLAY [x] ***\n"),
+                         ("rootfs", "PLAY [x] ***\n"))
+        self.assertEqual(split_task_line("[package:amd64:g++:1+0.5s] hi\n"),
+                         ("package:amd64:g++:1", "hi\n"))
+        self.assertEqual(split_task_line("[agent] hi\n"), (None, "[agent] hi\n"))
+        self.assertEqual(split_task_line("plain\n"), (None, "plain\n"))
+
+    def test_task_lines_are_streamed_with_their_task(self):
+        script = os.path.join(self.tmp_dir, "fake-seine")
+        with open(script, "w") as f:
+            f.write("#!/bin/sh\necho '[rootfs+0.10s] one'\necho plain\n")
+        os.chmod(script, 0o755)
+        ex = SubprocessExecutor(self.tmp_dir)
+        manifest = JobManifest(job_id="j", build_id="bld-1", project="proj",
+                               spec_file="main.yaml", worktree_digest="d", s3=JOB_S3,
+                               options={"verbose": True})
+
+        def pull(_manifest, job_dir):
+            with open(os.path.join(job_dir, "main.yaml"), "w") as f:
+                f.write("name: test\n")
+
+        chunks = []
+        with mock.patch.object(ex, "_pull_worktree", side_effect=pull), \
+                mock.patch.object(ex, "cleanup_containers"), \
+                mock.patch("seine.distributed.agent.executor.find_seine_binary",
+                           return_value=script):
+            ex.execute_job(manifest, on_log=lambda s, t, task=None: chunks.append((s, t, task)))
+        self.assertIn(("stdout", "one\n", "rootfs"), chunks)
+        self.assertIn(("stdout", "plain\n", None), chunks)
 
     def test_worktree_pull_failure_fails_the_job(self):
         ex = SubprocessExecutor(self.tmp_dir)
