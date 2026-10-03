@@ -34,9 +34,9 @@ class BuildCmdS3OptionsTest(avocado.Test):
         with mock.patch.object(cmd, "load_all"), \
              mock.patch.object(cmd, "parse", return_value={}), \
              mock.patch.object(cmd, "build", return_value=0), \
-             mock.patch("seine.build.collect_credentials"), \
-             mock.patch("seine.build.locked"), \
-             mock.patch("seine.build.remember"):
+             mock.patch("seine.build.cli.collect_credentials"), \
+             mock.patch("seine.build.cli.locked"), \
+             mock.patch("seine.build.cli.remember"):
             with self.assertRaises(SystemExit) as cm:
                 cmd.main(argv)
             self.assertEqual(cm.exception.code, 0)
