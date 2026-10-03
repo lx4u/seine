@@ -7,7 +7,7 @@ import os
 import sys
 import tarfile
 import tempfile
-from typing import Optional
+from typing import Iterable, Optional
 
 from seine.storage.base import StorageError
 from seine.storage.s3.provider import _file_sha256, _zstd_reader, _zstd_writer
@@ -113,32 +113,49 @@ def _normalise(info: tarfile.TarInfo) -> tarfile.TarInfo:
     return info
 
 
+def _ignore_filter(root_dir: str, ignore_rules: Optional[list[str]]) -> IgnoreFilter:
+    """Build the filter from the default excludes, .gitignore, .seineignore and ignore_rules."""
+    patterns = list(DEFAULT_EXCLUDES)
+    for name in (".gitignore", ".seineignore"):
+        path = os.path.join(root_dir, name)
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                patterns.extend(f.readlines())
+    patterns.extend(ignore_rules or [])
+    return IgnoreFilter(patterns)
+
+
+def _add_staged(tar: tarfile.TarFile, staged: Optional[dict[str, str]]) -> None:
+    """Add files from outside the project under the archive names given."""
+    for arcname, source in sorted((staged or {}).items()):
+        tar.add(source, arcname=arcname, recursive=False, filter=_normalise)
+
+
+def _is_suspicious(name: str) -> bool:
+    lower = os.path.basename(name).lower()
+    return any(h in lower for h in SECRET_NAME_HINTS) or lower.endswith(SECRET_NAME_SUFFIXES)
+
+
+def _warn_secrets(suspicious: list[str]) -> None:
+    if suspicious:
+        shown = ", ".join(suspicious[:5])
+        more = f" (+{len(suspicious) - 5} more)" if len(suspicious) > 5 else ""
+        print(f"warning: worktree bundle includes files that look like secrets: "
+              f"{shown}{more}; add them to .seineignore", file=sys.stderr)
+
+
 def pack_worktree(
     root_dir: str,
     ignore_rules: Optional[list[str]] = None,
     out_path: Optional[str] = None,
+    staged: Optional[dict[str, str]] = None,
 ) -> tuple[str, str]:
     """Package root_dir into a reproducible .tar.zst and return (path, sha256)."""
     root_dir = os.path.abspath(root_dir)
     if not os.path.isdir(root_dir):
         raise FileNotFoundError(f"Root directory does not exist: {root_dir}")
 
-    patterns = list(DEFAULT_EXCLUDES)
-
-    gitignore_path = os.path.join(root_dir, ".gitignore")
-    if os.path.isfile(gitignore_path):
-        with open(gitignore_path, "r", encoding="utf-8", errors="replace") as f:
-            patterns.extend(f.readlines())
-
-    seineignore_path = os.path.join(root_dir, ".seineignore")
-    if os.path.isfile(seineignore_path):
-        with open(seineignore_path, "r", encoding="utf-8", errors="replace") as f:
-            patterns.extend(f.readlines())
-
-    if ignore_rules:
-        patterns.extend(ignore_rules)
-
-    ignore_filter = IgnoreFilter(patterns)
+    ignore_filter = _ignore_filter(root_dir, ignore_rules)
 
     if out_path is None:
         fd, out_path = tempfile.mkstemp(suffix=".tar.zst", prefix="worktree-")
@@ -177,21 +194,123 @@ def pack_worktree(
                         continue
                     if not ignore_filter.is_ignored(rel_f, is_dir=False):
                         tar.add(full_f, arcname=rel_f, recursive=False, filter=_normalise)
-                        lower = f.lower()
-                        if (any(h in lower for h in SECRET_NAME_HINTS)
-                                or lower.endswith(SECRET_NAME_SUFFIXES)):
+                        if _is_suspicious(f):
                             suspicious.append(rel_f)
+            _add_staged(tar, staged)
         tree_digest = _file_sha256(out_path)
     except BaseException:
         os.unlink(out_path)
         raise
 
-    if suspicious:
-        shown = ", ".join(suspicious[:5])
-        more = f" (+{len(suspicious) - 5} more)" if len(suspicious) > 5 else ""
-        print(f"warning: worktree bundle includes files that look like secrets: "
-              f"{shown}{more}; add them to .seineignore", file=sys.stderr)
+    _warn_secrets(suspicious)
 
+    return out_path, tree_digest
+
+
+class OutsideRootError(ValueError):
+    """Raised when a file a build reads is not under the project directory."""
+
+
+def _relative(root_dir: str, path: str) -> str:
+    """Return path relative to root_dir, whether either is spelled through a symlink."""
+    for root in dict.fromkeys((os.path.abspath(root_dir), os.path.realpath(root_dir))):
+        rel = os.path.relpath(path, root)
+        if rel != ".." and not rel.startswith(".." + os.sep):
+            return rel
+    raise OutsideRootError(f"'{path}' is outside the project directory '{root_dir}'")
+
+
+def _sparse_entries(root_dir: str, paths: Iterable[str], ignore_filter: IgnoreFilter) -> list[str]:
+    """Return the sorted relative names to pack: 'paths' with trees expanded.
+
+    A symlink is kept under its own name, and so is its target when that is
+    inside the project: the spec names the link, the link needs the target.
+    """
+    entries: set[str] = set()
+
+    def add(path: str) -> None:
+        rel = os.path.normpath(_relative(root_dir, os.path.abspath(path)))
+        if rel in entries:
+            return
+        if os.path.islink(path):
+            entries.add(rel)
+            try:
+                add(os.path.realpath(path))
+            except OutsideRootError:
+                pass
+        elif os.path.isdir(path):
+            walk(path)
+        elif os.path.isfile(path):
+            entries.add(rel)
+        else:
+            raise ValueError(f"'{path}' does not exist")
+
+    def walk(tree: str) -> None:
+        for dirpath, dirnames, filenames in os.walk(tree):
+            rel_dir = os.path.normpath(_relative(root_dir, os.path.abspath(dirpath)))
+            kept = []
+            for d in dirnames:
+                full = os.path.join(dirpath, d)
+                if ignore_filter.is_ignored(os.path.join(rel_dir, d), True):
+                    continue
+                if os.path.islink(full):
+                    add(full)
+                else:
+                    kept.append(d)
+            dirnames[:] = kept
+            for f in filenames:
+                if not ignore_filter.is_ignored(os.path.join(rel_dir, f)):
+                    add(os.path.join(dirpath, f))
+
+    for path in paths:
+        add(path)
+    return sorted(e.replace(os.sep, "/") for e in entries)
+
+
+def _normalise_dir(info: tarfile.TarInfo) -> tarfile.TarInfo:
+    """Directories carry no timestamp: an edit beside a file must not change the bundle."""
+    info = _normalise(info)
+    info.mtime = 0
+    return info
+
+
+def pack_sparse_worktree(
+    root_dir: str,
+    paths: Iterable[str],
+    out_path: Optional[str] = None,
+    staged: Optional[dict[str, str]] = None,
+) -> tuple[str, str]:
+    """Package only 'paths' (files or trees under root_dir) and return (path, sha256).
+
+    'staged' maps an archive name to a file outside root_dir to pack under it.
+    """
+    root_dir = os.path.abspath(root_dir)
+    outside = {os.path.realpath(p) for p in (staged or {}).values()}
+    paths = [p for p in paths if os.path.realpath(p) not in outside]
+    entries = _sparse_entries(root_dir, paths, _ignore_filter(root_dir, None))
+    if out_path is None:
+        fd, out_path = tempfile.mkstemp(suffix=".tar.zst", prefix="worktree-")
+        os.close(fd)
+    try:
+        with _zstd_writer(out_path) as out, \
+                tarfile.open(fileobj=out, mode="w|", format=tarfile.PAX_FORMAT) as tar:
+            added = set()
+            for rel in entries:
+                parts = rel.split("/")
+                for i in range(1, len(parts)):
+                    parent = "/".join(parts[:i])
+                    if parent not in added:
+                        added.add(parent)
+                        tar.add(os.path.join(root_dir, parent), arcname=parent,
+                                recursive=False, filter=_normalise_dir)
+                tar.add(os.path.join(root_dir, rel), arcname=rel,
+                        recursive=False, filter=_normalise)
+            _add_staged(tar, staged)
+        tree_digest = _file_sha256(out_path)
+    except BaseException:
+        os.unlink(out_path)
+        raise
+    _warn_secrets([e for e in entries if _is_suspicious(e)])
     return out_path, tree_digest
 
 
