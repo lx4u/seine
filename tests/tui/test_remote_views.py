@@ -37,6 +37,7 @@ class RemoteViewsTest(avocado.Test):
             from seine.utils import format_size, format_timestamp
             from seine.tui.render_remote import (
                 render_remote_detail,
+                extract_remote_artifacts,
                 render_remote_artifacts,
                 render_remote_builds,
                 render_remote_workers,
@@ -48,6 +49,7 @@ class RemoteViewsTest(avocado.Test):
         self.render_remote_builds = render_remote_builds
         self.render_remote_workers = render_remote_workers
         self.render_remote_artifacts = render_remote_artifacts
+        self.extract_remote_artifacts = extract_remote_artifacts
         self.detail = render_remote_detail
         self._format_size = format_size
         self._format_timestamp = format_timestamp
@@ -456,6 +458,17 @@ class RemoteViewsTest(avocado.Test):
         rendered1 = self.render_remote_artifacts(artifacts, selected_index=1)
         self.assertIn("   pc-image.img", rendered1)
         self.assertIn(" ▸ pc-image.rootfs.tar", rendered1)
+
+    def test_extract_remote_artifacts(self):
+        builds = [
+            {"id": "b1", "project": "p", "target_arch": "arm64",
+             "artifact_meta": [{"name": "a.img", "size": 5, "sha256": "x", "key": "k"}, "junk"]},
+            {"id": "b2", "project": "p", "architecture": "amd64"},
+        ]
+        arts = self.extract_remote_artifacts(builds)
+        self.assertEqual(len(arts), 1)
+        self.assertEqual((arts[0]["name"], arts[0]["size"], arts[0]["key"]), ("a.img", 5, "k"))
+        self.assertEqual((arts[0]["build_id"], arts[0]["target_arch"]), ("b1", "arm64"))
 
     def test_fetch_data_artifacts(self):
         mock_app = mock.Mock()

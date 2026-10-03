@@ -18,6 +18,7 @@ from seine.distributed.common.transport import check_server_url
 from seine.tui.download import DownloadState, redraw
 from seine.tui.base import BaseScreen, StaticPane
 from seine.tui.render_remote import (
+    extract_remote_artifacts,
     render_remote_artifacts,
     render_remote_builds,
     render_remote_detail,
@@ -241,31 +242,7 @@ class RemoteScreen(BaseScreen):
                     if resp.status_code == 200:
                         data = resp.json()
                         self.remote_builds = data if isinstance(data, list) else []
-                        arts: list[dict[str, Any]] = []
-                        for b in self.remote_builds:
-                            b_id = str(b.get("id") or b.get("build_id") or "")
-                            proj = str(b.get("project") or "")
-                            arch = str(b.get("target_arch") or b.get("architecture") or "")
-                            if b.get("artifacts_expired_at"):
-                                arts.append({
-                                    "name": expired_text(b.get("artifacts_expired_reason")),
-                                    "expired": True,
-                                    "build_id": b_id,
-                                    "project": proj,
-                                    "target_arch": arch,
-                                })
-                            for m in (b.get("artifact_meta") or []):
-                                if isinstance(m, dict):
-                                    arts.append({
-                                        "name": m.get("name", "artifact"),
-                                        "size": m.get("size", 0),
-                                        "sha256": m.get("sha256", ""),
-                                        "key": m.get("key", ""),
-                                        "build_id": b_id,
-                                        "project": proj,
-                                        "target_arch": arch,
-                                    })
-                        self.remote_artifacts = arts
+                        self.remote_artifacts = extract_remote_artifacts(self.remote_builds)
                 elif self.active_tab == 2:
                     resp = session.request(
                         "get", "/api/v1/workers",

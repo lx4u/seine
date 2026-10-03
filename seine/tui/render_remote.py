@@ -133,6 +133,30 @@ def _download_label(item: Optional[dict[str, Any]]) -> str:
     return format_size(item["read"])
 
 
+def extract_remote_artifacts(builds: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten the deliverables of the builds into one row each."""
+    arts: list[dict[str, Any]] = []
+    for b in builds:
+        origin = {
+            "build_id": str(b.get("id") or b.get("build_id") or ""),
+            "project": str(b.get("project") or ""),
+            "target_arch": str(b.get("target_arch") or b.get("architecture") or ""),
+        }
+        if b.get("artifacts_expired_at"):
+            arts.append({"name": expired_text(b.get("artifacts_expired_reason")),
+                         "expired": True, **origin})
+        for m in b.get("artifact_meta") or []:
+            if isinstance(m, dict):
+                arts.append({
+                    "name": m.get("name", "artifact"),
+                    "size": m.get("size", 0),
+                    "sha256": m.get("sha256", ""),
+                    "key": m.get("key", ""),
+                    **origin,
+                })
+    return arts
+
+
 def render_remote_artifacts(
     artifacts: list[dict[str, Any]],
     selected_index: int = 0,
