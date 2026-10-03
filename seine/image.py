@@ -264,7 +264,7 @@ class Image:
             ("vendor", vendor_digest),
             ("source_date_epoch", str(self._epoch())),
         ]
-        for path in self._host_files():
+        for path in self.host_files():
             recipe.append((f"file:{path}", utils.file_digest(path)))
         return recipe
 
@@ -274,7 +274,7 @@ class Image:
 
     # Host files named by a relative 'src:'. Their content is not in the
     # spec. Absolute paths are usually target paths, so they are skipped.
-    def _host_files(self):
+    def host_files(self):
         files = self.options.get("files") or []
         spec_dir = os.path.dirname(files[0]) if len(files) > 0 else "."
         found = set()
@@ -294,7 +294,7 @@ class Image:
                                 break
                     else:
                         walk(value)
-        walk(self.spec.get("playbook") or [])
+        walk((self.spec or {}).get("playbook") or [])
         return sorted(found)
 
     def _digest_file(self):
