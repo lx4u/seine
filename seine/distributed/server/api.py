@@ -137,7 +137,8 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        reaper = Reaper(app.state.db, stale_after, reap_interval, app.state.transient_secrets)
+        reaper = Reaper(app.state.db, stale_after, reap_interval, app.state.transient_secrets, settings)
+        app.state.reaper = reaper
         reaper.start()
         try:
             yield
@@ -294,6 +295,9 @@ def create_app(
         if build and build.get("status") in _TERMINAL_STATES:
             secrets_mgr.pop(build_id, None)
             forget_finished_build(app_db, request.app.state.hub, build_id)
+            reaper = getattr(request.app.state, "reaper", None)
+            if reaper is not None:
+                reaper.request_housekeeping(build["project"])
 
         return {"status": "updated"}
 

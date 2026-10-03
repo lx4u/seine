@@ -3,12 +3,24 @@
 """Server CLI entry point."""
 
 import argparse
+import logging
 import sys
 
 import uvicorn
 
 from seine.distributed.server.api import create_app
 from seine.distributed.server.settings import Settings, SettingsError
+
+
+def configure_logging(level: str = "info") -> None:
+    """Send the seine loggers to stderr (the journal) unless logging is already set up."""
+    logger = logging.getLogger("seine")
+    logger.setLevel(level.upper())
+    if logger.handlers or logging.getLogger().handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    logger.addHandler(handler)
 
 
 def main():
@@ -28,6 +40,8 @@ def main():
     run_parser.add_argument("--stale-after", type=float, default=None, help="Seconds of silence before a worker is stale")
     run_parser.add_argument("--native-grace", type=float, default=None, help="Seconds a job waits for a better-scoring idle worker (default: 30, 0 disables)")
     run_parser.add_argument("--job-lost-grace", type=float, default=None, help="Seconds a claimed job may go unreported by its worker before it is requeued (default: 90)")
+
+    run_parser.add_argument("--log-level", default="info", choices=["debug", "info", "warning", "error"], help="Log level of the seine loggers (default: info)")
 
     admin_parser = subparsers.add_parser("admin", help="Administrative operations on local database")
     admin_parser.add_argument("--db-path", default=None, help="SQLite database path")
@@ -53,6 +67,7 @@ def main():
                 "tokens travel in clear text",
                 file=sys.stderr,
             )
+        configure_logging(getattr(args, "log_level", "info"))
         uvicorn.run(
             create_app(settings),
             host=settings.host,

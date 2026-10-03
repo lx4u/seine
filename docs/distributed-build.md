@@ -119,8 +119,9 @@ an error.
 | `retention` | | | none, file only |
 
 - **Retention.** Without a `retention:` section nothing is ever deleted.
-  With one, omitted keys take the values below. The settings are only read
-  and checked for now; nothing acts on them yet.
+  With one, omitted keys take the values below. A sweep runs every
+  `interval` seconds, and again for a project each time one of its builds
+  ends.
 
       retention:
         interval: 3600        # seconds between sweeps
