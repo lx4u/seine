@@ -133,7 +133,10 @@ defaults to the `default_remote` setting. Connected, `/build` runs on the
 server's workers and its log streams into the Build screen -- `--local`
 builds on this machine anyway, `--no-download` skips fetching the
 artifacts. The task pane shows the worker's planned tasks, cached ones and
-one timer per task running in parallel, as for a local build. `/remote` again opens the cockpit: builds, workers and
+one timer per task running in parallel, as for a local build. The output
+pane follows the running task and the spec tree lights up its package and
+Ansible nodes, as for a local build. The log is kept on this machine, one
+file per task, and the overview links it like a local build's. `/remote` again opens the cockpit: builds, workers and
 artifacts, plus users, projects and server settings for an
 administrator. `ctrl-1` to `ctrl-6` switch the cockpit's tabs, even while you
 type in the prompt (the terminal has to report ctrl-digit, as kitty, WezTerm

@@ -711,6 +711,12 @@ A viewer then receives the history of the build followed by live messages of
 the form `{"build_id", "source", "text", "timestamp"}`. The history is
 bounded, so a long build may have lost its oldest lines.
 
+A build submitted with the `verbose` option (`seine build --remote --verbose`,
+and always from the TUI) runs with `--verbose` on the worker. A chunk of task
+output then has a `task` field with the name of the task that wrote it; output
+of no task, such as the agent's own messages, has none. A client may ignore
+`task`.
+
 The stream also carries structured events, told apart by a `type` field
 instead of `text`, each with `build_id` and `timestamp`:
 
