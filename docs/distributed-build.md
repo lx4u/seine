@@ -146,11 +146,12 @@ an error.
   same kind: a percentage cannot be compared with a size. Unknown keys are an
   error.
 
-  Worktrees are expired in two ways. Each sweep installs two lifecycle rules
-  on the dev and prod bucket of every project: `seine-abort-multipart`
-  aborts incomplete multipart uploads after 1 day, and
-  `seine-worktrees-expiry` expires `worktrees/` after the `worktrees` age,
-  rounded up to whole days (at least 1); with `never` that rule is removed.
+  Each sweep installs up to three lifecycle rules on the dev and prod bucket
+  of every project: `seine-abort-multipart` aborts incomplete multipart
+  uploads after 1 day, `seine-worktrees-expiry` expires `worktrees/` after
+  the `worktrees` age, and `seine-cache-expiry` expires `cache/` after the
+  `cache` age. Ages are rounded up to whole days (at least 1); with `never`
+  the matching rule is removed.
   Other rules on the bucket are kept, and nothing is sent when the bucket
   already has the right ones. Garage evaluates lifecycle rules once a day.
   Submitting a build restarts the age of its worktree, so a digest that is
@@ -159,6 +160,11 @@ an error.
   yet, but never one that a queued or running build of the project uses.
   A bucket whose rules cannot be installed is logged and reported, and the
   rest of the sweep goes on.
+
+  An expired cache object is simply rebuilt and pushed again on the next
+  miss. Its age counts from the last write, not the last use, and the
+  `.touch` files rewritten on every hit may outlive their entry as tiny
+  orphans.
 - **Enrollment token.** There is no default: the server refuses to start
   without one. Generate it with `openssl rand -hex 32`. Workers present it
   once to register and receive a worker token of their own; registering an

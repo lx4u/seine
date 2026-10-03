@@ -30,6 +30,7 @@ class FakeProvider:
         self.failing = set()
         self.gate = None
         self.modified = {}
+        self.prefix = "cache"
         self.rules = []
         self.puts = []
         self.lifecycle_error = None
@@ -271,6 +272,40 @@ class LifecycleMergeTest(Test):
         self.assertIsNone(merge_lifecycle(rules, None))
 
 
+class CacheLifecycleTest(Test):
+    def _days(self, rules):
+        return {r["ID"]: r.get("Expiration", {}).get("Days") for r in rules}
+
+    def _cache(self, rules):
+        return [r for r in rules if r["ID"] == "seine-cache-expiry"]
+
+    def test_cache_rule_has_prefix_and_days(self):
+        rules = merge_lifecycle([], None, 30 * DAY)
+        self.assertEqual(self._cache(rules), [{
+            "ID": "seine-cache-expiry", "Status": "Enabled", "Filter": {"Prefix": "cache/"},
+            "Expiration": {"Days": 30},
+        }])
+
+    def test_cache_days_are_rounded_up_with_a_minimum_of_one(self):
+        self.assertEqual(self._days(merge_lifecycle([], None, 90 * 60))["seine-cache-expiry"], 1)
+        self.assertEqual(self._days(merge_lifecycle([], None, DAY + 1))["seine-cache-expiry"], 2)
+
+    def test_never_removes_the_cache_rule_only(self):
+        rules = merge_lifecycle([FOREIGN], 3 * DAY, 30 * DAY)
+        rules = merge_lifecycle(rules, 3 * DAY, None)
+        self.assertEqual(self._days(rules), {"other": 9, "seine-abort-multipart": None, "seine-worktrees-expiry": 3})
+
+    def test_foreign_rules_are_kept_and_no_put_when_present(self):
+        rules = merge_lifecycle([FOREIGN], 3 * DAY, 30 * DAY)
+        self.assertEqual(rules[0], FOREIGN)
+        self.assertIsNone(merge_lifecycle(rules, 3 * DAY, 30 * DAY))
+        self.assertEqual(self._days(merge_lifecycle(rules, 3 * DAY, 7 * DAY))["seine-cache-expiry"], 7)
+
+    def test_the_providers_prefix_is_used(self):
+        rules = merge_lifecycle([], None, DAY, "mycache")
+        self.assertEqual(self._cache(rules)[0]["Filter"], {"Prefix": "mycache/"})
+
+
 class WorktreeHousekeepingTest(HousekeepingTest):
     def _worktree(self, digest, age_d, provider=None, size=10):
         provider = provider or self.dev
@@ -352,6 +387,16 @@ class WorktreeHousekeepingTest(HousekeepingTest):
         self.assertIn(FOREIGN, self.dev.rules)
         days = {r["ID"]: r.get("Expiration", {}).get("Days") for r in self.prod.rules}
         self.assertEqual(days["seine-worktrees-expiry"], 14)
+
+    def test_cache_rule_follows_each_environment(self):
+        self._run(self._settings(env(cache=30 * DAY), env(cache=90 * DAY)))
+        for provider, days in ((self.dev, 30), (self.prod, 90)):
+            rule = [r for r in provider.rules if r["ID"] == "seine-cache-expiry"][0]
+            self.assertEqual((rule["Filter"]["Prefix"], rule["Expiration"]["Days"]), ("cache/", days))
+
+    def test_dry_run_installs_no_cache_rule(self):
+        self._run(self._settings(env(cache=30 * DAY), env(cache=90 * DAY)), dry_run=True)
+        self.assertEqual((self.dev.puts, self.prod.puts), ([], []))
 
     def test_lifecycle_failure_is_reported_and_the_sweep_goes_on(self):
         self.dev.lifecycle_error = S3ClientError("denied")

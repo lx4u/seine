@@ -105,9 +105,12 @@ def run_housekeeping(
 
 _ABORT_RULE = "seine-abort-multipart"
 _WORKTREES_RULE = "seine-worktrees-expiry"
+_CACHE_RULE = "seine-cache-expiry"
 
 
-def _lifecycle_rules(worktrees_ttl: Optional[float]) -> list[dict[str, Any]]:
+def _lifecycle_rules(
+    worktrees_ttl: Optional[float], cache_ttl: Optional[float], cache_prefix: str
+) -> list[dict[str, Any]]:
     """The rules seine owns on a bucket; whole days, at least one."""
     rules: list[dict[str, Any]] = [{
         "ID": _ABORT_RULE, "Status": "Enabled", "Filter": {"Prefix": ""},
@@ -117,6 +120,11 @@ def _lifecycle_rules(worktrees_ttl: Optional[float]) -> list[dict[str, Any]]:
         rules.append({
             "ID": _WORKTREES_RULE, "Status": "Enabled", "Filter": {"Prefix": "worktrees/"},
             "Expiration": {"Days": max(math.ceil(worktrees_ttl / 86400), 1)},
+        })
+    if cache_ttl is not None:
+        rules.append({
+            "ID": _CACHE_RULE, "Status": "Enabled", "Filter": {"Prefix": f"{cache_prefix}/"},
+            "Expiration": {"Days": max(math.ceil(cache_ttl / 86400), 1)},
         })
     return rules
 
@@ -131,10 +139,15 @@ def _rule_key(rule: dict[str, Any]) -> tuple:
     )
 
 
-def merge_lifecycle(existing: list[dict[str, Any]], worktrees_ttl: Optional[float]) -> Optional[list[dict[str, Any]]]:
+def merge_lifecycle(
+    existing: list[dict[str, Any]],
+    worktrees_ttl: Optional[float],
+    cache_ttl: Optional[float] = None,
+    cache_prefix: str = "cache",
+) -> Optional[list[dict[str, Any]]]:
     """Return the rules to put, or None when the bucket already has seine's rules."""
-    own = (_ABORT_RULE, _WORKTREES_RULE)
-    mine = _lifecycle_rules(worktrees_ttl)
+    own = (_ABORT_RULE, _WORKTREES_RULE, _CACHE_RULE)
+    mine = _lifecycle_rules(worktrees_ttl, cache_ttl, cache_prefix)
     current = [r for r in existing if r.get("ID") in own]
     if sorted(map(_rule_key, current)) == sorted(map(_rule_key, mine)):
         return None
@@ -156,7 +169,8 @@ def _housekeep_worktrees(
         bucket = row.get(f"{env_name}_bucket")
         if not bucket:
             continue
-        ttl = getattr(settings.retention, env_name).worktrees
+        retention = getattr(settings.retention, env_name)
+        ttl = retention.worktrees
         try:
             provider = provider_for(settings, name, bucket, env_name)
         except StorageCredentialsError as e:
@@ -164,7 +178,7 @@ def _housekeep_worktrees(
             continue
         if not report.dry_run:
             try:
-                rules = merge_lifecycle(provider.lifecycle_rules(), ttl)
+                rules = merge_lifecycle(provider.lifecycle_rules(), ttl, retention.cache, provider.prefix)
                 if rules is not None:
                     provider.set_lifecycle_rules(rules)
                     logger.info("Installed lifecycle rules on the %s bucket of %s", env_name, name)
