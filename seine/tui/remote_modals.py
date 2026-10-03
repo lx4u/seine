@@ -97,6 +97,44 @@ class TokenIssueModal(AdminModalBase):
             self.dismiss({"days": days})
 
 
+class UserDeleteModal(AdminModalBase):
+    """Ask for the username again before a user is erased for good."""
+
+    def __init__(self, user_id: str, **kwargs):
+        super().__init__(**kwargs)
+        self.user_id = user_id
+        self.anonymize = False
+        self.delete_home = False
+
+    def compose(self):
+        with Vertical(classes="modal-box"):
+            yield Static(f"Delete user '{self.user_id}' for good", classes="modal-title")
+            yield Static("Tokens and memberships are removed. Builds stay.", classes="modal-label")
+            yield Button("Anonymize builds: no", id="toggle-anonymize", classes="toggle-btn")
+            yield Button("Delete home project: no", id="toggle-home", classes="toggle-btn")
+            yield Static("Type the username to confirm:", classes="modal-label")
+            yield Input(id="confirm")
+            yield Static("", id="error-msg", classes="modal-error")
+            with Horizontal(classes="btn-row"):
+                yield Button("Cancel", id="cancel")
+                yield Button("Delete", variant="error", id="submit")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel":
+            self.dismiss(None)
+        elif event.button.id == "toggle-anonymize":
+            self.anonymize = not self.anonymize
+            event.button.label = f"Anonymize builds: {'yes' if self.anonymize else 'no'}"
+        elif event.button.id == "toggle-home":
+            self.delete_home = not self.delete_home
+            event.button.label = f"Delete home project: {'yes' if self.delete_home else 'no'}"
+        elif event.button.id == "submit":
+            if self.query_one("#confirm", Input).value.strip() != self.user_id:
+                self.query_one("#error-msg", Static).update("the username does not match")
+                return
+            self.dismiss({"anonymize": self.anonymize, "delete_home": self.delete_home})
+
+
 class TokenDisplayModal(AdminModalBase):
     def __init__(self, token: str, **kwargs):
         super().__init__(**kwargs)

@@ -225,7 +225,7 @@ def render_remote_users(
         lines.append("")
         lines.append("   No users registered.")
         lines.append("")
-        lines.append(" [n] New User   [t] Issue PAT   [a] Toggle Admin   [x] Toggle Active   [↑/↓] Select")
+        lines.append(" [n] New User   [t] Issue PAT   [a] Toggle Admin   [x] Toggle Active   [D] Delete   [↑/↓] Select")
         return "\n".join(lines)
 
     token_counts: dict[str, int] = {}
@@ -257,7 +257,7 @@ def render_remote_users(
         )
 
     lines.append("")
-    lines.append(" [n] New User   [t] Issue PAT   [a] Toggle Admin   [x] Toggle Active   [↑/↓] Select")
+    lines.append(" [n] New User   [t] Issue PAT   [a] Toggle Admin   [x] Toggle Active   [D] Delete   [↑/↓] Select")
     return "\n".join(lines)
 
 def render_remote_projects(
@@ -449,6 +449,7 @@ def render_user_detail(u: dict[str, Any], tokens: Optional[list[dict[str, Any]]]
     sections = [
         _section("USER", [
             ("ID", uid),
+            ("UID", u.get("uid")),
             ("Role", "System Administrator" if u.get("is_admin") else "Member"),
             ("State", "Active" if u.get("active", True) else "Disabled"),
         ]),

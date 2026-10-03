@@ -35,6 +35,7 @@ from seine.tui.remote_modals import (
     TokenDisplayModal,
     TokenIssueModal,
     UserCreateModal,
+    UserDeleteModal,
 )
 
 def server_host(url: str) -> str:
@@ -113,6 +114,7 @@ class RemoteScreen(BaseScreen):
         Binding("t", "admin_issue_token", "Issue PAT", show=False),
         Binding("a", "admin_toggle_admin", "Toggle Admin", show=False),
         Binding("x", "admin_toggle_active", "Toggle Active", show=False),
+        Binding("D", "admin_delete_user", "Delete User", show=False),
         Binding("m", "admin_manage_members", "Members", show=False),
         Binding("s", "switch_project", "Switch Project", show=False),
     ]
@@ -940,6 +942,43 @@ class RemoteScreen(BaseScreen):
                 return f"update failed: {e}", True
 
         self._run_admin_request(_call, "")
+
+    def action_admin_delete_user(self):
+        """Erase the selected user for good, after a confirmation (tab 4 only)."""
+        if self.active_tab != 4 or not self._require_admin():
+            return
+        session = getattr(self.app, "remote_session", None)
+        user = self._selected_item()
+        if not user:
+            self.say("no user selected", warning=True)
+            return
+        user_id = str(user.get("id") or "")
+
+        def _on_result(result):
+            if not result:
+                return
+
+            def _call():
+                try:
+                    resp = session.request(
+                        "delete", f"/api/v1/users/{user_id}",
+                        params={
+                            "purge": "true",
+                            "anonymize": str(result["anonymize"]).lower(),
+                            "delete_home": str(result["delete_home"]).lower(),
+                        },
+                        timeout=15.0,
+                    )
+                    if resp.status_code == 200:
+                        return f"user '{user_id}' deleted", False
+                    return f"delete failed ({resp.status_code}): {resp.text}", True
+                except Exception as e:
+                    return f"delete failed: {e}", True
+
+            self._run_admin_request(_call, "")
+
+        if getattr(self.app, "is_running", False) is True:
+            self.app.push_screen(UserDeleteModal(user_id=user_id), _on_result)
 
     def action_admin_manage_members(self):
         """Open member assignment modal for the selected project (tab 5 only)."""

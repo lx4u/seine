@@ -35,7 +35,9 @@ class RemoteAdminRenderTest(avocado.Test):
                 render_remote_ops,
                 render_remote_projects,
                 render_remote_users,
+                render_user_detail,
             )
+        self.render_user_detail = render_user_detail
         self.render_remote_users = render_remote_users
         self.render_remote_projects = render_remote_projects
         self.render_remote_ops = render_remote_ops
@@ -45,6 +47,11 @@ class RemoteAdminRenderTest(avocado.Test):
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_user_detail_shows_the_uid_and_the_delete_key(self):
+        user = {"id": "alice", "uid": "8a7c2b4e-0000", "is_admin": False, "active": True}
+        self.assertIn("8a7c2b4e-0000", self.render_user_detail(user))
+        self.assertIn("[D] Delete", self.render_remote_users([user]))
 
     def test_render_users_empty(self):
         rendered = self.render_remote_users([])
@@ -166,7 +173,9 @@ class RemoteAdminModalTest(avocado.Test):
                 ProjectCreateModal,
                 TokenIssueModal,
                 UserCreateModal,
+                UserDeleteModal,
             )
+        self.UserDeleteModal = UserDeleteModal
         self.UserCreateModal = UserCreateModal
         self.TokenIssueModal = TokenIssueModal
         self.ProjectCreateModal = ProjectCreateModal
@@ -233,6 +242,23 @@ class RemoteAdminModalTest(avocado.Test):
         modal.on_button_pressed(self._make_button_event("submit"))
         self.assertEqual(len(dismissed), 0)
         error_static.update.assert_called_once()
+
+    def test_user_delete_modal_needs_the_username(self):
+        modal = self.UserDeleteModal(user_id="alice")
+        dismissed = []
+        modal.dismiss = lambda r: dismissed.append(r)
+        confirm, error = mock.Mock(), mock.Mock()
+        modal.query_one = mock.Mock(side_effect=lambda sel, cls: error if "error" in sel else confirm)
+
+        confirm.value = "alic"
+        modal.on_button_pressed(self._make_button_event("submit"))
+        self.assertEqual(dismissed, [])
+        error.update.assert_called_once()
+
+        confirm.value = "alice"
+        modal.on_button_pressed(self._make_button_event("toggle-anonymize"))
+        modal.on_button_pressed(self._make_button_event("submit"))
+        self.assertEqual(dismissed, [{"anonymize": True, "delete_home": False}])
 
     def test_user_create_modal_cancel(self):
         modal = self.UserCreateModal()
@@ -489,6 +515,39 @@ class RemoteAdminActionTest(avocado.Test):
                     verify=True,
                 )
                 screen.say.assert_called_with("user 'dave' activated", error=False)
+
+    def test_delete_user_sends_the_purge_request(self):
+        screen, mock_app, session = self._make_screen()
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            screen.active_tab = 4
+            screen.remote_users = [{"id": "erin", "is_admin": False, "active": True}]
+            screen.selected_indices[4] = 0
+
+            mock_app.is_running = True
+            screen.action_admin_delete_user()
+            modal, callback = mock_app.push_screen.call_args[0]
+            self.assertEqual(modal.user_id, "erin")
+
+            mock_app.is_running = False
+            with mock.patch("requests.delete") as mock_delete:
+                mock_delete.return_value = mock.Mock(status_code=200)
+                callback({"anonymize": True, "delete_home": False})
+                mock_delete.assert_called_once_with(
+                    "http://cluster.lan:8000/api/v1/users/erin",
+                    params={"purge": "true", "anonymize": "true", "delete_home": "false"},
+                    headers={"Authorization": "Bearer admin-token"},
+                    timeout=15.0,
+                    verify=True,
+                )
+                screen.say.assert_called_with("user 'erin' deleted", error=False)
+
+    def test_delete_user_wrong_tab_noop(self):
+        screen, mock_app, session = self._make_screen()
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            screen.active_tab = 1
+            mock_app.is_running = True
+            screen.action_admin_delete_user()
+            mock_app.push_screen.assert_not_called()
 
     def test_toggle_actions_wrong_tab_noop(self):
         screen, mock_app, session = self._make_screen()
