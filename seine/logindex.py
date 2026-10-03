@@ -7,6 +7,7 @@
 
 import json
 import os
+import tempfile
 import time
 
 from seine.container import ContainerEngine
@@ -39,6 +40,23 @@ def resolve(path):
     if os.path.isabs(path):
         return path
     return os.path.join(ContainerEngine.logs_root(), path)
+
+# One directory per specification, a run of it per build: what it wrote
+# sits beside the runs before it, not under a name no one can place.
+def allocate_log_dir(files):
+    base = ContainerEngine.logs_root()
+    os.makedirs(base, exist_ok=True)
+    if not files:
+        return tempfile.mkdtemp(dir=base)
+    run = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    spec = os.path.join(base, digest(files, 8))
+    try:
+        path = os.path.join(spec, run)
+        os.makedirs(path)
+        return path
+    except FileExistsError:
+        # Two builds of one specification in the same second.
+        return tempfile.mkdtemp(dir=spec, prefix="%s-" % run)
 
 # One entry dict, shared by begin()/record() below.
 def _entry(files, release, arch, logs, tasks, ok, started):

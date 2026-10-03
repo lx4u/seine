@@ -990,24 +990,6 @@ class Image:
 
         return 0
 
-    # One directory per specification, a run of it per build: what it wrote
-    # sits beside the runs before it, not under a name no one can place.
-    def _logs(self):
-        files = self.options.get("files")
-        base = ContainerEngine.logs_root()
-        os.makedirs(base, exist_ok=True)
-        if not files:
-            return tempfile.mkdtemp(dir=base)
-        run = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
-        spec = os.path.join(base, utils.digest(files, 8))
-        try:
-            path = os.path.join(spec, run)
-            os.makedirs(path)
-            return path
-        except FileExistsError:
-            # Two builds of one specification in the same second.
-            return tempfile.mkdtemp(dir=spec, prefix="%s-" % run)
-
     # 'reporter' is a seine.reporter.Reporter -- progress.Display by
     # default, or a caller's own (e.g. the TUI's TextualReporter).
     def build(self, reporter=None):
@@ -1029,7 +1011,7 @@ class Image:
 
             # Each step always logs to its own file. '--verbose' also
             # echoes it live, unless a caller's own reporter owns the terminal.
-            self.logs = self._logs()
+            self.logs = logindex.allocate_log_dir(self.options.get("files"))
             print("output under %s" % self.logs)
             echo = verbose and reporter is None
 

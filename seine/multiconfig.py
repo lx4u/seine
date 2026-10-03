@@ -8,15 +8,12 @@
 
 import contextlib
 import os
-import tempfile
-import time
 
 from seine import analyze
 from seine import cache_index
 from seine import logindex
 from seine import progress
 from seine import tasks
-from seine import utils
 from seine.bootstrap import HostBootstrap
 from seine.build     import BuildCmd, collect_credentials
 from seine.diffing   import remember
@@ -301,17 +298,7 @@ def trust_recap(builds):
 # One log directory for the whole run, keyed by all groups' files
 # together rather than any single group's.
 def _logs(groups_files):
-    base = ContainerEngine.logs_root()
-    os.makedirs(base, exist_ok=True)
-    run = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
-    files = [f for group in groups_files for f in group]
-    spec = os.path.join(base, utils.digest(files, 8))
-    try:
-        path = os.path.join(spec, run)
-        os.makedirs(path)
-        return path
-    except FileExistsError:
-        return tempfile.mkdtemp(dir=spec, prefix="%s-" % run)
+    return logindex.allocate_log_dir([f for group in groups_files for f in group])
 
 # Multi-group version of what 'seine build'/'seine plan' does for one
 # group: parse every group, print or build the merged result, then run
