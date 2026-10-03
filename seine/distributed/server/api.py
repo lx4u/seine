@@ -37,6 +37,7 @@ from seine.distributed.common.models import (
     JobStatusUpdateRequest,
     MemberAddRequest,
     ProjectCreateRequest,
+    ProjectUpdateRequest,
     RegisterWorkerRequest,
     RegisterWorkerResponse,
     TokenIssueRequest,
@@ -559,6 +560,29 @@ def create_app(
                 provider = _get_storage_provider(request, req.name, bkt, env)
                 if hasattr(provider, "ensure_bucket"):
                     provider.ensure_bucket()
+        return proj
+
+    @app.patch("/api/v1/projects/{project}")
+    def update_project(
+        project: str,
+        req: ProjectUpdateRequest,
+        request: Request,
+        tok: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        require_system_admin(app_db, tok)
+        if "quota_gb" in req.model_fields_set:
+            if not app_db.projects.set_quota(project, req.quota_gb):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Project '{project}' not found",
+                )
+        proj = app_db.projects.get(project)
+        if not proj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project '{project}' not found",
+            )
         return proj
 
     @app.delete("/api/v1/projects/{project}")

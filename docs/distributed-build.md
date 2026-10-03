@@ -246,6 +246,9 @@ $admin token issue bob
   `token revoke <id>` (`token list` shows the ids).
 - `user update <id> --no-active` disables a user and its tokens stop working.
   The last active administrator cannot be demoted or disabled.
+- `project update <name> --quota-gb N` sets a project's storage quota in GB;
+  `--no-quota` removes it. `project list` shows it. Over the API this is
+  `PATCH /api/v1/projects/<name>` with `{"quota_gb": N}` or `null`.
 
 #### Projects for new users
 

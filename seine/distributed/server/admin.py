@@ -11,6 +11,7 @@ import sys
 import time
 from typing import Any, Optional
 
+from seine.distributed.common.models import format_quota
 from seine.distributed.server.db import Database
 from seine.distributed.server.settings import Settings
 from seine.distributed.server.storage import provider_for
@@ -40,6 +41,13 @@ def project_create(
 
 def project_list(db: Database) -> list[dict[str, Any]]:
     return db.projects.list()
+
+
+def project_update(db: Database, name: str, **fields: Any) -> Optional[dict[str, Any]]:
+    """Apply the given fields to a project; None when it does not exist."""
+    if "quota_gb" in fields:
+        db.projects.set_quota(name, fields["quota_gb"])
+    return db.projects.get(name)
 
 
 def project_delete(db: Database, name: str) -> bool:
@@ -133,6 +141,12 @@ def setup_admin_subparsers(admin_parser: argparse.ArgumentParser) -> None:
 
     p_sub.add_parser("list", help="List projects")
 
+    p_upd = p_sub.add_parser("update", help="Update project settings")
+    p_upd.add_argument("name", help="Project name")
+    quota = p_upd.add_mutually_exclusive_group()
+    quota.add_argument("--quota-gb", type=float, default=None, help="Storage quota in GB")
+    quota.add_argument("--no-quota", action="store_true", help="Remove the storage quota")
+
     p_del = p_sub.add_parser("delete", help="Delete project")
     p_del.add_argument("name", help="Project name")
 
@@ -207,7 +221,25 @@ def handle_admin_command(args: argparse.Namespace, db: Optional[Database] = None
             elif act == "list":
                 projects = project_list(db)
                 for p in projects:
-                    print(f"{p['name']}\tdev={p['dev_bucket']}\tprod={p['prod_bucket']}")
+                    print(f"{p['name']}\tdev={p['dev_bucket']}\tprod={p['prod_bucket']}\tquota={format_quota(p)}")
+                return 0
+            elif act == "update":
+                if args.no_quota:
+                    fields = {"quota_gb": None}
+                elif args.quota_gb is not None:
+                    fields = {"quota_gb": args.quota_gb}
+                else:
+                    sys.stderr.write("error: nothing to update (use --quota-gb or --no-quota)\n")
+                    return 1
+                try:
+                    proj = project_update(db, args.name, **fields)
+                except ValueError as e:
+                    sys.stderr.write(f"error: {e}\n")
+                    return 1
+                if proj is None:
+                    sys.stderr.write(f"error: project '{args.name}' not found\n")
+                    return 1
+                print(f"Updated project: {proj['name']} (quota: {format_quota(proj)})")
                 return 0
             elif act == "delete":
                 ok = project_delete(db, args.name)
@@ -218,7 +250,7 @@ def handle_admin_command(args: argparse.Namespace, db: Optional[Database] = None
                     sys.stderr.write(f"error: project '{args.name}' not found\n")
                     return 1
             else:
-                sys.stderr.write("error: missing or invalid project action (create, list, delete)\n")
+                sys.stderr.write("error: missing or invalid project action (create, list, update, delete)\n")
                 return 1
 
         elif cmd == "member":
