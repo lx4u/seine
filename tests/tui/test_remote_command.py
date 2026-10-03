@@ -104,6 +104,22 @@ class RemoteCommandTest(avocado.Test):
         self.assertFalse(session.connected)
         self.assertIsNone(session.url)
         mock_app.say.assert_called_once_with("remote: disconnected")
+        mock_app.show.assert_not_called()
+
+    def test_remote_disconnect_on_remote_screen_returns_to_overview(self):
+        from seine.tui.remote_screen import RemoteScreen
+        mock_app = mock.Mock()
+        mock_screen = mock.MagicMock(spec=RemoteScreen)
+        mock_app.screen = mock_screen
+        session = self.RemoteSession(app=mock_app)
+        session.connected = True
+        session.url = "http://10.0.0.1:8000"
+        mock_app.remote_session = session
+
+        self.commands.dispatch(mock_app, "/remote disconnect")
+        self.assertFalse(session.connected)
+        mock_app.say.assert_called_once_with("remote: disconnected")
+        mock_app.show.assert_called_once_with("overview")
 
     def test_remote_screen_registered_and_unregistered(self):
         mock_app = mock.Mock()

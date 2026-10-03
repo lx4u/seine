@@ -820,6 +820,9 @@ def _remote(app, argv):
         if session:
             session.disconnect()
         app.say("remote: disconnected")
+        from seine.tui.remote_screen import RemoteScreen
+        if isinstance(getattr(app, "screen", None), RemoteScreen):
+            app.show("overview")
     elif verb == "status":
         if rest:
             raise CommandError("/remote status takes no arguments")
