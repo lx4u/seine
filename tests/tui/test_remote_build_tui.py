@@ -84,13 +84,11 @@ class RemoteBuildTuiTest(avocado.Test):
         app.build_state.remote_job.stop_requested.set.assert_called_once_with()
         interrupt.assert_not_called()
 
-    def test_state_title_and_log_buffer(self):
+    def test_state_title_and_log_dir(self):
         state = self.build.BuildState()
         state.reset_remote("10.0.0.1:8000", mock.Mock())
         self.assertIn("[BUILD: REMOTE @ 10.0.0.1:8000]", state.render())
         self.assertEqual(state.message, "[BUILD: REMOTE @ 10.0.0.1:8000]")
-        state.remote_output("hello\n")
-        self.assertEqual(state.remote_text, ["hello\n"])
         self.assertIsNone(state.logs)
         state.reset(mock.Mock(image=mock.Mock(tasks=lambda: [], packages=[]), spec={}))
         self.assertIsNone(state.remote)
@@ -223,7 +221,7 @@ class RemoteBuildTuiTest(avocado.Test):
 
     def _build_cmd(self):
         return types.SimpleNamespace(
-            options={"files": ["/w/main.yaml"]},
+            options={"files": ["/w/main.yaml"]}, image=types.SimpleNamespace(packages=[]),
             spec={"distribution": {"release": "trixie", "architecture": "amd64"}})
 
     def _remote_with_build(self, code):
@@ -278,6 +276,55 @@ class RemoteBuildTuiTest(avocado.Test):
     def test_remote_build_asks_the_worker_for_a_verbose_build(self):
         _, rb = self._remote_with_build(0)
         self.assertTrue(rb.call_args.kwargs["options"]["verbose"])
+
+    def test_remote_build_precomputes_the_package_paths(self):
+        paths = {"package:amd64:busybox": ["packages", "busybox"]}
+        with mock.patch.object(self.build, "_package_paths", return_value=paths):
+            state, _ = self._remote_with_build(0)
+        self.assertEqual(state.package_paths, paths)
+
+    def _screen(self, state):
+        screen = mock.Mock()
+        screen.app.build_state = state
+        screen._tail = self.build.Tail()
+        screen._scan_ansible = lambda state, text: self.build.BuildScreen._scan_ansible(
+            screen, state, text)
+        return screen
+
+    def _follow(self, screen):
+        with mock.patch.object(self.build, "sanitize", side_effect=lambda t: t):
+            self.build.BuildScreen._follow(screen)
+        return screen.query_one.return_value.write
+
+    def test_remote_output_pane_follows_the_running_task(self):
+        state = self._planned()
+        state.remote_logs = self.workdir
+        for name, text in (("chroot", "chroot text\n"), ("rootfs", "rootfs text\n")):
+            with open(os.path.join(self.workdir, "%s.log" % name), "w") as f:
+                f.write(text)
+        screen = self._screen(state)
+        state.remote_event({"type": "task_started", "task": "chroot"})
+        self.assertEqual(self._follow(screen).call_args.args, ("chroot text\n",))
+        state.remote_event({"type": "task_finished", "task": "chroot"})
+        state.remote_event({"type": "task_started", "task": "rootfs"})
+        self.assertEqual(self._follow(screen).call_args.args, ("rootfs text\n",))
+
+    def test_remote_output_pane_shows_the_worker_output_before_the_plan(self):
+        state = self.build.BuildState()
+        state.reset_remote("host", mock.Mock(), self.workdir)
+        with open(os.path.join(self.workdir, "build.log"), "w") as f:
+            f.write("[client] hello\n")
+        write = self._follow(self._screen(state))
+        self.assertEqual(write.call_args.args, ("[client] hello\n",))
+
+    def test_remote_rootfs_log_drives_the_ansible_highlight(self):
+        state = self._planned()
+        state.remote_logs = self.workdir
+        with open(os.path.join(self.workdir, "rootfs.log"), "w") as f:
+            f.write("PLAY [main] ***\nTASK [Install] ***\n")
+        state.remote_event({"type": "task_started", "task": "rootfs"})
+        self._follow(self._screen(state))
+        self.assertEqual((state.play, state.ansible_task), ("main", "Install"))
 
     def test_start_remote_build_reports_exit_code(self):
         app = mock.Mock()
