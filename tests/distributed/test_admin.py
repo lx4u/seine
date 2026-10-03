@@ -15,6 +15,7 @@ import threading
 import time
 from unittest import mock
 
+import requests
 import uvicorn
 from avocado import Test
 from fastapi.testclient import TestClient
@@ -412,6 +413,84 @@ class AdminRESTAPITest(Test):
             self.assertEqual(resp.status_code, 403)
         self.assertIsNone(self.db.projects.get("proj-a")["quota_gb"])
 
+    def _delete(self, token, name, purge=True):
+        return self.client.delete(
+            f"/api/v1/projects/{name}", params={"purge_storage": "true"} if purge else None,
+            headers={"Authorization": f"Bearer {token}"})
+
+    def _purge_fixture(self, fail=None):
+        self.db.projects.create("proj-p", dev_bucket="seine-p-dev", prod_bucket="seine-p-prod")
+        calls = []
+
+        class Provider:
+            def __init__(self, bucket):
+                self.bucket = bucket
+
+            def purge(self):
+                calls.append(self.bucket)
+                if fail:
+                    raise fail
+                return 2, 300
+
+        def make(settings, project, bucket, env):
+            return Provider(bucket)
+
+        return calls, make
+
+    def test_delete_with_purge_empties_both_buckets_then_deletes_rows(self):
+        calls, make = self._purge_fixture()
+        with mock.patch("seine.distributed.server.api.provider_for", make):
+            resp = self._delete(self.admin_token, "proj-p")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(calls, ["seine-p-dev", "seine-p-prod"])
+        self.assertEqual(resp.json()["purged"], [
+            {"env": "dev", "bucket": "seine-p-dev", "objects": 2, "bytes": 300},
+            {"env": "prod", "bucket": "seine-p-prod", "objects": 2, "bytes": 300}])
+        self.assertIsNone(self.db.projects.get("proj-p"))
+
+    def test_delete_with_failed_purge_keeps_the_project(self):
+        from seine.storage.s3.client import S3ClientError
+        calls, make = self._purge_fixture(fail=S3ClientError("denied"))
+        with mock.patch("seine.distributed.server.api.provider_for", make):
+            resp = self._delete(self.admin_token, "proj-p")
+        self.assertEqual(resp.status_code, 502)
+        self.assertIn("seine-p-dev", resp.json()["detail"])
+        self.assertIsNotNone(self.db.projects.get("proj-p"))
+
+    def test_delete_with_purge_and_no_credentials_is_502(self):
+        self.db.projects.create("proj-p", dev_bucket="seine-p-dev")
+        resp = self._delete(self.admin_token, "proj-p")
+        self.assertEqual(resp.status_code, 502)
+        self.assertIsNotNone(self.db.projects.get("proj-p"))
+
+    def test_delete_with_purge_is_refused_while_a_build_runs(self):
+        calls, make = self._purge_fixture()
+        self.db.builds.create("b1", "proj-p")
+        with mock.patch("seine.distributed.server.api.provider_for", make):
+            resp = self._delete(self.admin_token, "proj-p")
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(calls, [])
+        self.assertIsNotNone(self.db.projects.get("proj-p"))
+
+    def test_delete_without_purge_never_touches_storage(self):
+        calls, make = self._purge_fixture()
+        with mock.patch("seine.distributed.server.api.provider_for") as pf:
+            resp = self._delete(self.admin_token, "proj-p", purge=False)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["purged"], [])
+        pf.assert_not_called()
+        self.assertIsNone(self.db.projects.get("proj-p"))
+
+    def test_delete_with_purge_needs_a_system_administrator(self):
+        for token in (self.dev_token, self.alice_token):
+            self.assertEqual(self._delete(token, "proj-a").status_code, 403)
+        self.assertIsNotNone(self.db.projects.get("proj-a"))
+        # a project admin may still delete without purging, as before
+        self.assertEqual(self._delete(self.alice_token, "proj-a", purge=False).status_code, 200)
+
+    def test_delete_with_purge_unknown_project_is_404(self):
+        self.assertEqual(self._delete(self.admin_token, "no-such").status_code, 404)
+
     def _gc(self, token, body=None):
         return self.client.post(
             "/api/v1/storage/gc", json=body or {}, headers={"Authorization": f"Bearer {token}"}
@@ -692,6 +771,42 @@ class RemoteClientAdminTest(Test):
 
         del_res = client.project_delete("p-remote")
         self.assertTrue(del_res["deleted"])
+
+    def test_client_project_delete_purge(self):
+        client = AdminClient(server_url=self.server_url, token=self.admin_tok)
+        client.project_create("p-purge")
+        self.db.builds.create("b1", "p-purge")
+        with self.assertRaises(requests.HTTPError) as ctx:
+            client.project_delete("p-purge", purge_storage=True)
+        self.assertEqual(ctx.exception.response.status_code, 409)
+        self.assertEqual(client.project_delete("p-purge")["purged"], [])
+
+    def test_cli_project_delete_reports_the_purge(self):
+        self.db.projects.create("p-cli2", dev_bucket="bk-dev", prod_bucket="bk-prod")
+        argv = ["--server", self.server_url, "--token", self.admin_tok, "project", "delete", "p-cli2"]
+
+        class Provider:
+            def purge(self):
+                return 3, 2048
+
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr", err), \
+                mock.patch("seine.distributed.server.api.provider_for", lambda *a: Provider()):
+            self.assertEqual(run_client_admin(argv + ["--purge-storage"]), 0)
+        self.assertIn("bk-dev: 3 objects (2.0 KB) deleted", out.getvalue())
+        self.assertIn("delete them on the storage server", out.getvalue())
+
+        self.db.projects.create("p-cli3")
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out):
+            self.assertEqual(run_client_admin(argv[:-1] + ["p-cli3"]), 0)
+        self.assertIn("buckets and their objects remain", out.getvalue())
+
+        self.db.projects.create("p-cli4", dev_bucket="bk4")
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err):
+            self.assertEqual(run_client_admin(argv[:-1] + ["p-cli4", "--purge-storage"]), 1)
+        self.assertIn("could not empty bucket 'bk4'", err.getvalue())
 
     def test_client_project_update(self):
         client = AdminClient(server_url=self.server_url, token=self.admin_tok)

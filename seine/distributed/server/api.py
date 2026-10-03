@@ -71,6 +71,7 @@ from seine.distributed.server.settings import S3_ENVIRONMENTS, Settings
 from seine.distributed.server.storage import StorageCredentialsError, env_name, job_s3, provider_for
 from seine.distributed.server.transient import TransientSecrets
 from seine.distributed.server.ws import BroadcastHub, forget_finished_build, serve_stream
+from seine.storage.s3.client import S3ClientError
 
 logger = logging.getLogger("seine.server.api")
 
@@ -102,6 +103,24 @@ def _get_storage_provider(request: Request, project: str, bucket: str, env: str)
         return provider_for(request.app.state.settings, project, bucket, env)
     except StorageCredentialsError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+
+def _purge_project_storage(settings: Settings, proj: dict[str, Any]) -> list[dict[str, Any]]:
+    """Empty the dev and prod buckets of a project; 502 on the first failure."""
+    purged = []
+    for env in S3_ENVIRONMENTS:
+        bucket = proj.get(f"{env}_bucket")
+        if not bucket:
+            continue
+        try:
+            count, size = provider_for(settings, proj["name"], bucket, env).purge()
+        except (StorageCredentialsError, S3ClientError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"could not empty bucket '{bucket}': {e}",
+            ) from e
+        purged.append({"env": env, "bucket": bucket, "objects": count, "bytes": size})
+    return purged
 
 
 def refuse_prod_for_dev_only(project_row: dict[str, Any], wants_prod: bool) -> None:
@@ -640,18 +659,30 @@ def create_app(
     def delete_project(
         project: str,
         request: Request,
+        purge_storage: bool = False,
         tok: dict[str, Any] = Depends(current_user),
     ):
         app_db = get_db(request)
-        require_project_admin(app_db, tok, project)
+        if purge_storage:
+            require_system_admin(app_db, tok)
+        else:
+            require_project_admin(app_db, tok, project)
         proj = app_db.projects.get(project)
         if not proj:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Project '{project}' not found",
             )
+        purged = []
+        if purge_storage:
+            if app_db.builds.has_active_builds(project):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Project '{project}' still has builds in progress",
+                )
+            purged = _purge_project_storage(request.app.state.settings, proj)
         app_db.projects.delete(project)
-        return {"deleted": True, "project": project}
+        return {"deleted": True, "project": project, "purged": purged}
 
     @app.get("/api/v1/projects/{project}/members")
     def list_project_members(

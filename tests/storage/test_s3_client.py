@@ -163,6 +163,25 @@ class S3ClientOperations(avocado.Test):
             {"Key": "gone", "Code": "NoSuchKey", "Message": "no"}]})
         self.client.delete_objects("b", ["gone"])
 
+    def test_list_multipart_uploads_follows_the_markers(self):
+        self.stub.add_response(
+            "list_multipart_uploads",
+            {"Uploads": [{"Key": "a", "UploadId": "u1"}], "IsTruncated": True,
+             "NextKeyMarker": "a", "NextUploadIdMarker": "u1"}, {"Bucket": "b"})
+        self.stub.add_response(
+            "list_multipart_uploads",
+            {"Uploads": [{"Key": "b", "UploadId": "u2"}]},
+            {"Bucket": "b", "KeyMarker": "a", "UploadIdMarker": "u1"})
+        self.assertEqual(list(self.client.list_multipart_uploads("b")),
+                         [("a", "u1"), ("b", "u2")])
+
+    def test_abort_multipart_upload_ignores_a_vanished_upload(self):
+        self.stub.add_response("abort_multipart_upload", {},
+                               {"Bucket": "b", "Key": "a", "UploadId": "u1"})
+        self.client.abort_multipart_upload("b", "a", "u1")
+        self.stub.add_client_error("abort_multipart_upload", "NoSuchUpload", "gone", 404)
+        self.client.abort_multipart_upload("b", "a", "u2")
+
     def test_list_all_objects_sums_sizes_across_pages(self):
         self.stub.add_response(
             "list_objects_v2",

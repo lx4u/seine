@@ -571,6 +571,15 @@ class BuildRepo:
         )
         return [self.get(r["id"]) for r in cur.fetchall()]  # type: ignore
 
+    def has_active_builds(self, project: str) -> bool:
+        """True while the project has a build that has not finished."""
+        cur = self.conn.execute(
+            "SELECT 1 FROM builds WHERE project = ? "
+            "AND status NOT IN ('completed', 'failed', 'cancelled') LIMIT 1",
+            (project,),
+        )
+        return cur.fetchone() is not None
+
     def active_worktree_digests(self, project: str) -> set[str]:
         """Worktree digests of the project's builds that have not finished."""
         cur = self.conn.execute(
