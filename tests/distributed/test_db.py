@@ -964,3 +964,39 @@ class UserUidTest(Test):
         links = {r["id"]: r["user_uid"] for r in conn.execute("SELECT id, user_uid FROM tokens")}
         self.assertEqual(links, {"t1": uids["alice"], "t2": None})
         conn.close()
+
+
+class BuildOwnerTest(Test):
+    """Test that builds follow the submitter's uid but keep the name."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-owner-")
+        self.db = Database(os.path.join(self.tmp_dir, "owner.db"))
+
+    def tearDown(self):
+        self.db.close()
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_build_records_the_submitter_uid(self):
+        alice = self.db.users.create("alice")
+        self.db.create_build("b1", "demo", "amd64", "d1", user_id="alice")
+        build = self.db.get_build("b1")
+        self.assertEqual(build["user_uid"], alice["uid"])
+        self.assertEqual(build["user_id"], "alice")
+
+    def test_deleting_the_user_keeps_the_name_and_clears_the_uid(self):
+        self.db.users.create("alice")
+        self.db.create_build("b1", "demo", "amd64", "d1", user_id="alice")
+        with self.db.conn:
+            self.db.conn.execute("DELETE FROM users WHERE id = 'alice'")
+        build = self.db.get_build("b1")
+        self.assertIsNone(build["user_uid"])
+        self.assertEqual(build["user_id"], "alice")
+
+    def test_old_builds_are_backfilled(self):
+        alice = self.db.users.create("alice")
+        self.db.create_build("b1", "demo", "amd64", "d1", user_id="alice")
+        with self.db.conn:
+            self.db.conn.execute("UPDATE builds SET user_uid = NULL")
+        init_db(self.db.conn)
+        self.assertEqual(self.db.get_build("b1")["user_uid"], alice["uid"])

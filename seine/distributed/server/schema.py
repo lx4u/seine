@@ -141,6 +141,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             "ON builds(project, spec_digest, created_at DESC)"
         )
         _add_user_uid(conn)
+        _add_build_owner(conn)
 
 
 def _add_user_uid(conn: sqlite3.Connection) -> None:
@@ -178,3 +179,22 @@ def _add_user_uid(conn: sqlite3.Connection) -> None:
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_project_members_project_uid "
         "ON project_members(project_id, user_uid)"
     )
+
+
+def _add_build_owner(conn: sqlite3.Connection) -> None:
+    """Link builds to their submitter's uid; builds.user_id keeps the name."""
+    try:
+        conn.execute(
+            "ALTER TABLE builds ADD COLUMN user_uid TEXT REFERENCES users(uid) ON DELETE SET NULL"
+        )
+    except sqlite3.OperationalError:
+        pass
+    if conn.execute(
+        "SELECT 1 FROM builds WHERE user_uid IS NULL "
+        "AND user_id IN (SELECT id FROM users) LIMIT 1"
+    ).fetchone():
+        conn.execute(
+            "UPDATE builds SET user_uid = (SELECT uid FROM users WHERE users.id = builds.user_id) "
+            "WHERE user_uid IS NULL"
+        )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_builds_user_uid ON builds(user_uid)")

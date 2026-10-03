@@ -561,7 +561,9 @@ def create_app(
         build = app_db.get_build(build_id)
         if not build:
             raise HTTPException(status_code=404, detail="Build not found")
-        if build.get("user_id") != token_record["user_id"]:
+        # Follow the uid, so a recycled username does not own the old builds.
+        submitter = app_db.users.get(token_record["user_id"])
+        if not (build.get("user_uid") and submitter and build["user_uid"] == submitter["uid"]):
             require_project_admin(app_db, token_record, build["project"])
         if not app_db.scheduler.request_cancel(build_id):
             raise HTTPException(

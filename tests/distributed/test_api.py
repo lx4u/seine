@@ -977,6 +977,18 @@ class BuildSubmissionRBACTest(Test):
             404,
         )
 
+    def test_recycled_username_does_not_own_old_builds(self):
+        build_id = self._submit(self.dev_tok).json()["build_id"]
+        with self.db.conn:
+            self.db.conn.execute("DELETE FROM users WHERE id = 'developer_bob'")
+        self.db.users.create("developer_bob")
+        self.db.projects.add_member("firmware", "developer_bob", "developer")
+        tok = self.db.tokens.issue(user_id="developer_bob")["token"]
+        resp = self.client.post(
+            f"/api/v1/builds/{build_id}/cancel", headers={"Authorization": f"Bearer {tok}"}
+        )
+        self.assertEqual(resp.status_code, 403)
+
     def test_release_build_rejected_unauthenticated(self):
         req = BuildSubmitRequest(
             project="firmware",

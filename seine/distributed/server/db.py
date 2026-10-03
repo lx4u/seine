@@ -324,9 +324,10 @@ class BuildRepo:
                 INSERT INTO builds (
                     id, project, target_arch, is_release, status,
                     worktree_digest, spec_file, spec_files, spec_digest, options,
-                    created_at, artifact_urls, user_id
+                    created_at, artifact_urls, user_id, user_uid
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        (SELECT uid FROM users WHERE id = ?))
                 """,
                 (
                     id,
@@ -341,6 +342,7 @@ class BuildRepo:
                     opts_json,
                     now,
                     urls_json,
+                    user_id,
                     user_id,
                 ),
             )
