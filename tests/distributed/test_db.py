@@ -64,6 +64,18 @@ class DatabaseRepositoryTest(Test):
         if os.path.exists(self.tmp_dir):
             shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
+    def test_a_build_keeps_its_spec_files_in_order(self):
+        self.db.projects.create("alpha", prod_bucket="p", dev_bucket="d")
+        files = ["a.yaml", "b.yaml", "--", "c.yaml"]
+        self.db.builds.create("b1", "alpha", spec_file="a.yaml", spec_files=files)
+        self.assertEqual(self.db.builds.get("b1")["spec_files"], files)
+        self.assertEqual(self.db.builds.list()[0]["spec_files"], files)
+
+    def test_a_build_without_spec_files_falls_back_to_spec_file(self):
+        self.db.projects.create("alpha", prod_bucket="p", dev_bucket="d")
+        self.db.builds.create("b1", "alpha", spec_file="main.yaml")
+        self.assertEqual(self.db.builds.get("b1")["spec_files"], ["main.yaml"])
+
     def test_project_repo_crud(self):
         repo = self.db.projects
 
@@ -594,6 +606,29 @@ class DatabaseMigrationTest(Test):
         self.assertEqual(build["artifact_urls"], '["u"]')
         self.assertIsNone(build["artifacts_expired_at"])
         self.assertIsNone(build["artifacts_expired_reason"])
+        conn.close()
+
+    def test_a_build_row_without_spec_files_reads_back_its_spec_file(self):
+        conn = connect_db(os.path.join(self.tmp_dir, "old-builds.db"))
+        with conn:
+            conn.execute(
+                "CREATE TABLE builds (id TEXT PRIMARY KEY, project TEXT NOT NULL, "
+                "target_arch TEXT NOT NULL, is_release INTEGER NOT NULL DEFAULT 0, "
+                "status TEXT NOT NULL DEFAULT 'queued', "
+                "worktree_digest TEXT NOT NULL DEFAULT '', "
+                "spec_file TEXT NOT NULL DEFAULT 'spec.yaml', "
+                "options TEXT NOT NULL DEFAULT '{}', created_at REAL NOT NULL, "
+                "started_at REAL, finished_at REAL, "
+                "artifact_urls TEXT NOT NULL DEFAULT '[]', "
+                "artifact_meta TEXT NOT NULL DEFAULT '[]', error_message TEXT, user_id TEXT)"
+            )
+            conn.execute(
+                "INSERT INTO builds (id, project, target_arch, spec_file, created_at) "
+                "VALUES ('b1', 'core', 'amd64', 'main.yaml', 1.0)"
+            )
+        init_db(conn)
+        from seine.distributed.server.db import BuildRepo
+        self.assertEqual(BuildRepo(conn).get("b1")["spec_files"], ["main.yaml"])
         conn.close()
 
 

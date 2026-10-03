@@ -365,7 +365,8 @@ class SubprocessExecutor:
             return 1
 
         try:
-            rel_spec = resolve_spec(job_dir, manifest.spec_file)
+            rel_specs = [entry if entry == "--" else resolve_spec(job_dir, entry)
+                         for entry in manifest.spec_files or [manifest.spec_file]]
         except SpecPathError as e:
             on_log("system", f"[agent] Refusing job {manifest.build_id}: {e}\n")
             return 1
@@ -384,7 +385,7 @@ class SubprocessExecutor:
                 f"--s3-bucket={manifest.s3.bucket}",
                 f"--s3-region={manifest.s3.region}",
             ]
-        cmd.append(rel_spec)
+        cmd += rel_specs
 
         listener = None
         if self.on_event is not None:

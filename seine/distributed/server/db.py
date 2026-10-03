@@ -130,6 +130,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             status TEXT NOT NULL DEFAULT 'queued',
             worktree_digest TEXT NOT NULL DEFAULT '',
             spec_file TEXT NOT NULL DEFAULT 'spec.yaml',
+            spec_files TEXT NOT NULL DEFAULT '[]',
             options TEXT NOT NULL DEFAULT '{}',
             created_at REAL NOT NULL,
             started_at REAL,
@@ -218,6 +219,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             "ALTER TABLE projects ADD COLUMN quota_gb REAL",
             "ALTER TABLE builds ADD COLUMN artifacts_expired_at REAL",
             "ALTER TABLE builds ADD COLUMN artifacts_expired_reason TEXT",
+            "ALTER TABLE builds ADD COLUMN spec_files TEXT NOT NULL DEFAULT '[]'",
         ):
             try:
                 conn.execute(stmt)
@@ -419,6 +421,7 @@ class BuildRepo:
         is_release: bool = False,
         worktree_digest: str = "",
         spec_file: str = "spec.yaml",
+        spec_files: Optional[list[str]] = None,
         options: Optional[dict[str, Any]] = None,
         status: str = "queued",
         artifact_urls: Optional[list[str]] = None,
@@ -432,10 +435,10 @@ class BuildRepo:
                 """
                 INSERT INTO builds (
                     id, project, target_arch, is_release, status,
-                    worktree_digest, spec_file, options, created_at, artifact_urls,
-                    user_id
+                    worktree_digest, spec_file, spec_files, options, created_at,
+                    artifact_urls, user_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     id,
@@ -445,6 +448,7 @@ class BuildRepo:
                     status,
                     worktree_digest,
                     spec_file,
+                    json.dumps(spec_files or [spec_file]),
                     opts_json,
                     now,
                     urls_json,
@@ -453,17 +457,22 @@ class BuildRepo:
             )
         return self.get(id)  # type: ignore
 
+    @staticmethod
+    def _decode(row: sqlite3.Row) -> dict[str, Any]:
+        res = dict(row)
+        res["is_release"] = bool(res["is_release"])
+        res["options"] = json.loads(res["options"]) if res.get("options") else {}
+        res["spec_files"] = json.loads(res["spec_files"] or "[]") or [res["spec_file"]]
+        res["artifact_urls"] = json.loads(res["artifact_urls"]) if res.get("artifact_urls") else []
+        res["artifact_meta"] = json.loads(res["artifact_meta"]) if res.get("artifact_meta") else []
+        return res
+
     def get(self, build_id: str) -> Optional[dict[str, Any]]:
         cur = self.conn.execute("SELECT * FROM builds WHERE id = ?", (build_id,))
         row = cur.fetchone()
         if not row:
             return None
-        res = dict(row)
-        res["is_release"] = bool(res["is_release"])
-        res["options"] = json.loads(res["options"]) if res.get("options") else {}
-        res["artifact_urls"] = json.loads(res["artifact_urls"]) if res.get("artifact_urls") else []
-        res["artifact_meta"] = json.loads(res["artifact_meta"]) if res.get("artifact_meta") else []
-        return res
+        return self._decode(row)
 
     def list(
         self,
@@ -485,15 +494,7 @@ class BuildRepo:
             params.append(limit)
 
         cur = self.conn.execute(query, tuple(params))
-        results = []
-        for r in cur.fetchall():
-            res = dict(r)
-            res["is_release"] = bool(res["is_release"])
-            res["options"] = json.loads(res["options"]) if res.get("options") else {}
-            res["artifact_urls"] = json.loads(res["artifact_urls"]) if res.get("artifact_urls") else []
-            res["artifact_meta"] = json.loads(res["artifact_meta"]) if res.get("artifact_meta") else []
-            results.append(res)
-        return results
+        return [self._decode(r) for r in cur.fetchall()]
 
     def update_status(
         self,
@@ -1148,6 +1149,7 @@ class Database:
         is_release: bool = False,
         options: Optional[dict[str, Any]] = None,
         user_id: Optional[str] = None,
+        spec_files: Optional[list[str]] = None,
     ) -> str:
         self.ensure_project(project)
         self.builds.create(
@@ -1157,6 +1159,7 @@ class Database:
             is_release=is_release,
             worktree_digest=worktree_digest,
             spec_file=spec_file,
+            spec_files=spec_files,
             options=options,
             user_id=user_id,
         )
@@ -1181,6 +1184,7 @@ class Database:
         options: Optional[dict[str, Any]] = None,
         cached_packages: Optional[Union[set[str], list[str], Callable[[str, str], bool]]] = None,
         user_id: Optional[str] = None,
+        spec_files: Optional[list[str]] = None,
     ) -> str:
         self.ensure_project(project)
         self.builds.create(
@@ -1190,6 +1194,7 @@ class Database:
             is_release=is_release,
             worktree_digest=worktree_digest,
             spec_file=spec_file,
+            spec_files=spec_files,
             options=options,
             user_id=user_id,
         )

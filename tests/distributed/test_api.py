@@ -295,6 +295,23 @@ class WorktreeStagingCheckTest(Test):
         self.assertIn("dev-only", resp.json()["detail"])
         self.assertEqual(self.db.builds.list(), [])
 
+    def test_submitted_spec_files_are_stored_with_the_first_as_spec_file(self):
+        self.staged["dev"].add("d1")
+
+        def provider_for(settings, project, bucket, env):
+            provider = mock.MagicMock()
+            provider.has_worktree.return_value = True
+            return provider
+
+        files = ["a.yaml", "--", "b.yaml"]
+        req = BuildSubmitRequest(project="alpha", worktree_digest="d1", spec_file="a.yaml",
+                                 spec_files=files)
+        with mock.patch("seine.distributed.server.api.provider_for", provider_for):
+            resp = self.client.post("/api/v1/builds", json=req.model_dump(), headers=self.headers)
+        build = self.db.builds.get(resp.json()["build_id"])
+        self.assertEqual(build["spec_files"], files)
+        self.assertEqual(build["spec_file"], "a.yaml")
+
     def test_dev_build_with_dev_staged_digest_is_accepted(self):
         self.staged["dev"].add("d1")
         self.assertEqual(self._submit("d1", False).status_code, 200)
@@ -479,6 +496,16 @@ class WorkerClaimAndHeartbeatTest(Test):
 
         build = self.db.builds.get("bld-arm-test")
         self.assertEqual(build["status"], "running")
+
+    def test_the_claimed_job_carries_every_spec_file(self):
+        files = ["main.yaml", "--", "other.yaml"]
+        self.db.create_build(
+            build_id="bld-multi", project="testproj", target_arch="arm64",
+            worktree_digest="tree123", spec_file="main.yaml", spec_files=files)
+        headers = {"Authorization": f"Bearer {self.worker_token}"}
+        req = ClaimJobRequest(worker_id=self.worker_id)
+        resp = self.client.post("/api/v1/workers/claim", json=req.model_dump(), headers=headers)
+        self.assertEqual(resp.json()["spec_files"], files)
 
     def test_claim_unsupported_arch_returns_204(self):
         self.db.create_build(

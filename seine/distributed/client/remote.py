@@ -163,6 +163,20 @@ def _release_dir(spec_path: str) -> str:
     return os.path.join(".", "deploy", str(release)) if release else os.path.join(".", "deploy")
 
 
+def artifact_dir(root: str, subdir: str) -> str:
+    """Return subdir below root, refusing one that is not a plain relative path or leaves root."""
+    if not subdir:
+        return root
+    parts = subdir.split("/")
+    if os.path.isabs(subdir) or any(p in ("", ".", "..") or "\\" in p or "\0" in p for p in parts):
+        raise DownloadError(f"refusing artifact directory {subdir!r}")
+    real = os.path.realpath(root)
+    target = os.path.realpath(os.path.join(real, *parts))
+    if os.path.commonpath([real, target]) != real:
+        raise DownloadError(f"refusing artifact directory {subdir!r}: it would leave {root}")
+    return os.path.join(real, *parts)
+
+
 def _destination(name: Any, target_dir: str) -> str:
     """Return where artifact name goes, refusing names that leave target_dir."""
     unsafe = (
@@ -372,7 +386,7 @@ class RemoteBuild:
         self,
         server_url: str,
         project: Optional[str],
-        spec_file: str,
+        spec_file: Union[str, list[str]],
         options: Optional[dict[str, Any]] = None,
         token: Optional[str] = None,
         is_release: bool = False,
@@ -413,16 +427,39 @@ class RemoteBuild:
         self.insecure = bool(self.options.get("insecure"))
         self.is_release = is_release
         self.root_dir = os.path.abspath(root_dir or os.getcwd())
-        self.spec_file = (
-            os.path.relpath(spec_file, self.root_dir) if os.path.isabs(spec_file) else spec_file
-        )
+        self.spec_files, self.local_files, self.staged = self._stage(spec_file)
+        self.spec_file = self.spec_files[0]
         self.poll_interval = poll_interval
         self.sleep = sleep
         self.clock = clock
         self.drain_grace = drain_grace
         self.cancel_wait = cancel_wait
         self.verify = requests_verify(self.ca_cert)
-        self._build = None
+        self._builds = None
+
+    def _stage(self, spec_file: Union[str, list[str]]) -> tuple[list[str], list[str], dict[str, str]]:
+        """Return the spec files as sent, as found here, and the outside ones to stage.
+
+        Files are as on the command line, "--" between multiconfig groups. One outside
+        the project (a gist, say) travels in the bundle as .seine-sideload/<n>-<name>.
+        """
+        given = [spec_file] if isinstance(spec_file, str) else list(spec_file)
+        sent, local, staged = [], [], {}
+        for name in given:
+            if name == "--":
+                sent.append(name)
+                local.append(name)
+                continue
+            path = os.path.abspath(os.path.join(self.root_dir, name))
+            rel = os.path.relpath(path, self.root_dir)
+            if rel == ".." or rel.startswith(".." + os.sep):
+                rel = f".seine-sideload/{len(staged)}-{os.path.basename(path)}"
+                staged[rel] = path
+            elif not os.path.isabs(name):
+                rel = name
+            sent.append(rel)
+            local.append(path)
+        return sent, local, staged
 
     def _say(self, text: str) -> None:
         self._out(text + "\n")
@@ -568,7 +605,7 @@ class RemoteBuild:
         if arch:
             self._say(f"[client] Target architecture: {arch} (from the command line)")
             return arch
-        arch = spec_architecture(os.path.join(self.root_dir, self.spec_file))
+        arch = spec_architecture(self.local_files[0])
         if arch:
             self._say(f"[client] Target architecture: {arch} (from {self.spec_file})")
             return arch
@@ -580,16 +617,18 @@ class RemoteBuild:
         )
         return HOST_ARCH
 
-    def _loaded_build(self):
-        """Load and parse the spec once; the secrets and the worktree both need it."""
-        if self._build is None:
+    def _loaded_builds(self):
+        """Load and parse every group once; the secrets and the worktree both need them."""
+        if self._builds is None:
+            from seine import multiconfig
             from seine.build import BuildCmd
 
-            build = BuildCmd()
-            build.load_all([os.path.join(self.root_dir, self.spec_file)])
-            build.parse()
-            self._build = build
-        return self._build
+            options = BuildCmd().options
+            self._builds = [
+                multiconfig.load_group(group, options)
+                for group in multiconfig.split(self.local_files)
+            ]
+        return self._builds
 
     def _feed_secrets(self) -> dict[str, Any]:
         """Resolve and check the feed credentials the spec needs, as the local build does."""
@@ -600,13 +639,14 @@ class RemoteBuild:
 
         found: dict[str, dict[str, str]] = {}
         try:
-            build = self._loaded_build()
-            collect_credentials([build], prompt=self.prompt)
-            for feed in feeds(build.spec["distribution"]):
-                if feed["auth"] is not None:
-                    uri = feed["uri"].rstrip("/")
-                    login, password = credentials.resolved_for(uri)
-                    found[uri] = {"login": login, "password": password}
+            builds = self._loaded_builds()
+            collect_credentials(builds, prompt=self.prompt)
+            for build in builds:
+                for feed in feeds(build.spec["distribution"]):
+                    if feed["auth"] is not None:
+                        uri = feed["uri"].rstrip("/")
+                        login, password = credentials.resolved_for(uri)
+                        found[uri] = {"login": login, "password": password}
         except (credentials.CredentialError, ValueError, OSError, yaml.YAMLError) as e:
             raise RemoteError(f"feed credentials: {e}", EXIT_CREDENTIALS) from e
         finally:
@@ -625,22 +665,22 @@ class RemoteBuild:
 
         mode = self.options.get("worktree", "auto")
         if mode == "full":
-            return worktree.pack_worktree(self.root_dir)
+            return worktree.pack_worktree(self.root_dir, staged=self.staged)
         import yaml
         from seine.build import closure
 
         try:
-            build = self._loaded_build()
-            unmodeled = closure.unmodeled([build]) if mode == "auto" else []
+            builds = self._loaded_builds()
+            unmodeled = closure.unmodeled(builds) if mode == "auto" else []
             if unmodeled:
                 self._say(f"[client] The playbook uses {', '.join(unmodeled)}: sending the "
                           "whole directory (--worktree=sparse to send only what is listed)")
-                return worktree.pack_worktree(self.root_dir)
-            # The spec travels under the name sent to the worker, which the
-            # loaded (symlink-resolved) paths do not always carry.
-            wanted = closure.collect([build]) | {
-                os.path.join(self.root_dir, self.spec_file)}
-            return worktree.pack_sparse_worktree(self.root_dir, wanted)
+                return worktree.pack_worktree(self.root_dir, staged=self.staged)
+            # The loaded paths are symlink-resolved: add the names we send.
+            wanted = closure.collect(builds) | {
+                f for f in self.local_files if f != "--" and os.path.exists(f)}
+            return worktree.pack_sparse_worktree(
+                self.root_dir, wanted, staged=self.staged)
         except worktree.OutsideRootError as e:
             raise RemoteError(f"worktree: {e}; move it under the project directory") from e
         except (ValueError, OSError, yaml.YAMLError) as e:
@@ -680,6 +720,7 @@ class RemoteBuild:
             target_arch=arch,
             is_release=self.is_release,
             spec_file=self.spec_file,
+            spec_files=self.spec_files,
             options=options,
             transient_secrets=secrets or {},
         )
@@ -795,10 +836,27 @@ class RemoteBuild:
             a["name"]: a for a in info.get("artifacts") or []
             if isinstance(a.get("sha256"), str) and isinstance(a.get("size"), int)
         }
-        target_dir = self.options.get("dest_dir") or _release_dir(
-            os.path.join(self.root_dir, self.spec_file)
-        )
-        os.makedirs(target_dir, exist_ok=True)
+        # --dest-dir is flat; else the worker says where each goes (an old one does
+        # not, so the spec's release stands in).
+        from seine.container import ContainerEngine
+
+        flat_dir = self.options.get("dest_dir")
+        fallback_dir = None if flat_dir else _release_dir(self.local_files[0])
+        target_dirs: list[str] = []
+
+        def target_for(name: str) -> str:
+            subdir = (manifest.get(name) or {}).get("subdir")
+            if flat_dir:
+                found = flat_dir
+            elif subdir is not None:
+                found = artifact_dir(ContainerEngine.deploy_root(), subdir)
+            else:
+                found = fallback_dir
+            os.makedirs(found, exist_ok=True)
+            if found not in target_dirs:
+                target_dirs.append(found)
+            return found
+
         done = 0
         build_id = str(info.get("id") or "")
 
@@ -813,7 +871,7 @@ class RemoteBuild:
             self._out(f"[client] Downloading {name}... ")
             try:
                 event("start", name)
-                dest = _destination(name, target_dir)
+                dest = _destination(name, target_for(name))
                 if expected is None:
                     raise DownloadError(f"{name}: the server reported no checksum, not downloaded")
                 _download_artifact(
@@ -831,7 +889,8 @@ class RemoteBuild:
             self._say(f"done ({format_size(expected['size'])}, sha256 verified)")
             done += 1
 
-        self._say(f"[client] Downloaded {done} of {len(download_urls)} artifact(s) to {target_dir}")
+        self._say(f"[client] Downloaded {done} of {len(download_urls)} artifact(s) to "
+                  f"{', '.join(target_dirs) or flat_dir or fallback_dir}")
         return EXIT_OK if done == len(download_urls) else EXIT_FAILED
 
     def _cancel(self, build_id: str, follower: LogFollower) -> int:
@@ -878,6 +937,6 @@ def build_remote(
         sys.stderr.write("error: remote build expects a specification file\n")
         return EXIT_PROTOCOL
     return RemoteBuild(
-        server_url, project, spec_files[0], options=options, token=token,
+        server_url, project, spec_files, options=options, token=token,
         is_release=is_release, root_dir=root_dir,
     ).run()

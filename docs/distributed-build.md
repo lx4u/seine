@@ -68,8 +68,21 @@ and `lookup()`. When a playbook uses one, the client says so and sends the
 whole directory, minus the files that `.gitignore` and `.seineignore`
 exclude. `--worktree=sparse` or `--worktree=full` overrides that choice.
 
-A specification that reads a file outside the project directory is refused
-in every mode: the worker could not find it.
+A specification file named on the command line from outside the project
+directory, such as a `gist:NAME`, travels in the bundle as
+`.seine-sideload/<n>-<name>` and the worker is told that name. Any other file
+a build reads from outside the project directory is refused in every mode:
+the worker could not find it. That includes what a gist itself refers to, so
+a gist sent to a remote build shall be self-contained.
+
+### Several specification files
+
+`seine build --remote URL a.yaml b.yaml -- c.yaml` sends the whole list, with
+the `--` that separates multiconfig groups, and the worker runs the same
+command line. The server keeps the list next to the first file (`spec_file`).
+The bundle holds what every group reads. A worker older than this feature
+ignores the list and builds the first file only, so update the workers
+before relying on it.
 
 ---
 

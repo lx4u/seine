@@ -510,6 +510,7 @@ class BuildScheduler:
                 "worktree_digest": b_dict.get("worktree_digest", ""),
                 "s3_bucket": s3_bkt,
                 "spec_file": b_dict.get("spec_file", "spec.yaml"),
+                "spec_files": json.loads(b_dict.get("spec_files") or "[]"),
                 "options": options,
                 "package_name": j.get("package_name"),
             }

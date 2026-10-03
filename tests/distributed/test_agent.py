@@ -294,6 +294,43 @@ class SubprocessExecutorTest(Test):
             popen.assert_not_called()
             self.assertIn("Refusing job", "".join(logs))
 
+    def test_several_specs_reach_the_build_with_their_separators(self):
+        job_dir = os.path.join(self.tmp_dir, "jobs", "bld-1")
+        os.makedirs(job_dir)
+        with open(os.path.join(job_dir, "other.yaml"), "w") as f:
+            f.write("name: other\n")
+        ex = SubprocessExecutor(self.tmp_dir)
+        manifest = JobManifest(
+            job_id="job-1", build_id="bld-1", project="proj", worktree_digest="d",
+            spec_file="main.yaml", spec_files=["main.yaml", "--", "other.yaml"], s3=JOB_S3)
+
+        def pull(_manifest, path):
+            with open(os.path.join(path, "main.yaml"), "w") as f:
+                f.write("name: test\n")
+
+        with mock.patch.object(ex, "_pull_worktree", side_effect=pull), \
+                mock.patch.object(ex, "cleanup_containers"), \
+                mock.patch("subprocess.Popen", side_effect=FileNotFoundError("x")) as popen:
+            ex.execute_job(manifest, on_log=lambda s, t: None)
+        self.assertEqual(popen.call_args.args[0][-3:], ["main.yaml", "--", "other.yaml"])
+
+    def test_every_spec_is_checked_against_the_job_dir(self):
+        ex = SubprocessExecutor(self.tmp_dir)
+        manifest = JobManifest(
+            job_id="job-1", build_id="bld-1", project="proj", worktree_digest="d",
+            spec_file="main.yaml", spec_files=["main.yaml", "--", "../../x.yaml"], s3=JOB_S3)
+
+        def pull(_manifest, path):
+            with open(os.path.join(path, "main.yaml"), "w") as f:
+                f.write("name: test\n")
+
+        with mock.patch.object(ex, "_pull_worktree", side_effect=pull), \
+                mock.patch.object(ex, "cleanup_containers"), \
+                mock.patch("subprocess.Popen") as popen:
+            ret = ex.execute_job(manifest, on_log=lambda s, t: None)
+        self.assertEqual(ret, 1)
+        popen.assert_not_called()
+
     def test_spec_in_a_subdirectory_is_accepted(self):
         job_dir = os.path.join(self.tmp_dir, "jobs", "bld-1")
         os.makedirs(os.path.join(job_dir, "examples", "pc"))
