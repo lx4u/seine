@@ -38,6 +38,8 @@ class BuildModel(BaseModel):
     status: str = "queued"
     worktree_digest: str = ""
     spec_file: str = "spec.yaml"
+    # Every spec file as on the command line, "--" between multiconfig groups.
+    spec_files: list[str] = Field(default_factory=list)
     options: dict[str, Any] = Field(default_factory=dict)
     created_at: float
     started_at: float | None = None
@@ -176,6 +178,8 @@ class JobManifest(BaseModel):
     s3_bucket: str = ""
     s3: JobS3 | None = None
     spec_file: str = "spec.yaml"
+    # Every spec file as on the command line, "--" between multiconfig groups.
+    spec_files: list[str] = Field(default_factory=list)
     package_name: str | None = None
     options: dict[str, Any] = Field(default_factory=dict)
     transient_secrets: dict[str, Any] = Field(default_factory=dict, repr=False)
@@ -206,6 +210,8 @@ class BuildSubmitRequest(BaseModel):
     target_arch: str = "amd64"
     is_release: bool = False
     spec_file: str = "spec.yaml"
+    # Every spec file as on the command line, "--" between multiconfig groups.
+    spec_files: list[str] = Field(default_factory=list)
     options: dict[str, Any] = Field(default_factory=dict)
     transient_secrets: dict[str, Any] = Field(default_factory=dict, repr=False)
 

@@ -111,14 +111,15 @@ class RemoteBuildTest(Test):
         with open(self.spec, "w", encoding="utf-8") as f:
             f.write(text)
 
-    def pack(self, root):
+    def pack(self, root, staged=None):
         # Packing removes the archive after upload, so make a fresh one.
         with open(self.archive, "wb") as f:
             f.write(b"zst")
         return self.archive, "local-digest"
 
-    def pack_sparse(self, root, paths):
+    def pack_sparse(self, root, paths, staged=None):
         self.sparse_paths = set(paths)
+        self.sparse_staged = staged
         return self.pack(root)
 
     def response(self, code=200, body=None):
@@ -806,6 +807,40 @@ class RemoteBuildTest(Test):
         with mock.patch("sys.stderr", err):
             self.assertEqual(build_remote(SERVER, spec_files=[]), 2)
         self.assertEqual(self.network_calls(), 0)
+
+    def test_several_groups_are_submitted_and_packed_together(self):
+        other = os.path.join(self.tmp_dir, "other.yaml")
+        with open(other, "w") as f:
+            f.write("distribution:\n  architecture: arm64\n")
+        files = ["main.yaml", "--", "other.yaml"]
+        with mock.patch("sys.stdout", io.StringIO()):
+            code = build_remote(SERVER, project="proj", spec_files=files,
+                                token="pat-test", root_dir=self.tmp_dir)
+        self.assertEqual(code, 0)
+        body = self.submitted()["json"]
+        self.assertEqual(body["spec_files"], files)
+        self.assertEqual(body["spec_file"], "main.yaml")
+        self.assertIn(os.path.realpath(other), self.sparse_paths)
+
+    def test_a_fragment_outside_the_project_is_staged_in_the_bundle(self):
+        outside_dir = tempfile.mkdtemp(prefix="seine-test-outside-")
+        try:
+            gist = os.path.join(outside_dir, "extra.yaml")
+            with open(gist, "w") as f:
+                f.write("variables: {}\n")
+            with mock.patch("sys.stdout", io.StringIO()):
+                code = build_remote(SERVER, project="proj", spec_files=["main.yaml", gist],
+                                    token="pat-test", root_dir=self.tmp_dir)
+            self.assertEqual(code, 0)
+            sent = self.submitted()["json"]["spec_files"]
+            self.assertEqual(sent, ["main.yaml", ".seine-sideload/0-extra.yaml"])
+            self.assertEqual(self.sparse_staged, {".seine-sideload/0-extra.yaml": gist})
+        finally:
+            shutil.rmtree(outside_dir, ignore_errors=True)
+
+    def test_a_single_spec_is_submitted_as_a_list_of_one(self):
+        self.run_build()
+        self.assertEqual(self.submitted()["json"]["spec_files"], ["main.yaml"])
 
     def test_build_remote_entry_point(self):
         with mock.patch("sys.stdout", io.StringIO()):
