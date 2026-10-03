@@ -278,23 +278,13 @@ class Image:
         files = self.options.get("files") or []
         spec_dir = os.path.dirname(files[0]) if len(files) > 0 else "."
         found = set()
-
-        def walk(node):
-            if isinstance(node, list):
-                for item in node:
-                    walk(item)
-            elif isinstance(node, dict):
-                for key, value in node.items():
-                    if key == "src" and isinstance(value, str) \
-                            and not os.path.isabs(value):
-                        for base in (spec_dir, "."):
-                            path = os.path.join(base, value)
-                            if os.path.isfile(path):
-                                found.add(path)
-                                break
-                    else:
-                        walk(value)
-        walk((self.spec or {}).get("playbook") or [])
+        for key, value in utils.playbook_items((self.spec or {}).get("playbook") or []):
+            if key == "src" and isinstance(value, str) and not os.path.isabs(value):
+                for base in (spec_dir, "."):
+                    path = os.path.join(base, value)
+                    if os.path.isfile(path):
+                        found.add(path)
+                        break
         return sorted(found)
 
     def _digest_file(self):
