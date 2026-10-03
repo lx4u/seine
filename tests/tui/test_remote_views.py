@@ -36,6 +36,7 @@ class RemoteViewsTest(avocado.Test):
             from seine.tui.remote_session import RemoteSession
             from seine.utils import format_size, format_timestamp
             from seine.tui.render_remote import (
+                render_remote_detail,
                 render_remote_artifacts,
                 render_remote_builds,
                 render_remote_workers,
@@ -47,6 +48,7 @@ class RemoteViewsTest(avocado.Test):
         self.render_remote_builds = render_remote_builds
         self.render_remote_workers = render_remote_workers
         self.render_remote_artifacts = render_remote_artifacts
+        self.detail = render_remote_detail
         self._format_size = format_size
         self._format_timestamp = format_timestamp
 
@@ -350,6 +352,59 @@ class RemoteViewsTest(avocado.Test):
         self.assertEqual(self._format_size(1500000000), "1.4 GB")
         self.assertEqual(self._format_size(None), "0 B")
         self.assertEqual(self._format_size("bad"), "0 B")
+
+    def test_detail_placeholders(self):
+        self.assertIn("No active server connection", self.detail(1, {}, connected=False))
+        for tab in (1, 2, 3, 4, 5):
+            self.assertIn("Select an item", self.detail(tab, None))
+
+    def test_detail_build(self):
+        build = {
+            "id": "b" * 32, "project": "demo", "target_arch": "arm64", "status": "completed",
+            "user_id": "alice", "created_at": 1000, "started_at": 1010, "finished_at": 1100,
+            "worktree_digest": "abc123", "spec_file": "main.yaml",
+            "artifact_meta": [{"name": "disk.img", "size": 2048, "sha256": "f" * 64}],
+            "artifacts_expired_at": 2000, "artifacts_expired_reason": "ttl",
+        }
+        text = self.detail(1, build)
+        for want in ("b" * 32, "demo", "arm64", "completed", "alice", "1m30s",
+                     "abc123", "main.yaml", "disk.img", "2.0 KB", "f" * 64, "expired"):
+            self.assertIn(want, text)
+
+    def test_detail_worker(self):
+        worker = {"id": "w1", "hostname": "node", "native_arch": "amd64", "status": "paused",
+                  "arch_scores": {"arm64": 0.5}, "concurrency_slots": 4, "free_disk_gb": 12.34,
+                  "last_seen": 1}
+        text = self.detail(2, worker)
+        for want in ("w1", "node", "paused", "arm64", "0.5", "12.3 GB", "ago"):
+            self.assertIn(want, text)
+
+    def test_detail_artifact_with_progress(self):
+        art = {"name": "disk.img", "size": 1048576, "sha256": "e" * 64, "key": "k/disk.img",
+               "build_id": "b1", "project": "demo", "target_arch": "amd64"}
+        text = self.detail(3, art, progress={"state": "running", "read": 524288, "total": 1048576})
+        for want in ("1.0 MB", "e" * 64, "k/disk.img", "b1", "50%", "512.0 KB / 1.0 MB"):
+            self.assertIn(want, text)
+        self.assertIn("expired", self.detail(3, dict(art, expired=True)))
+
+    def test_detail_user_and_project(self):
+        tokens = [{"id": "t1", "user_id": "alice", "created_at": 5}, {"id": "t2", "user_id": "bob"}]
+        text = self.detail(4, {"id": "alice", "is_admin": True, "active": False}, tokens=tokens)
+        for want in ("System Administrator", "Disabled", "TOKENS (1)", "t1"):
+            self.assertIn(want, text)
+        self.assertNotIn("t2", text)
+        project = {"name": "demo", "dev_bucket": "d", "prod_bucket": "p", "quota_gb": 5.0,
+                   "members": [{"user_id": "alice", "role": "releaser"}]}
+        builds = [{"project": "demo", "status": "queued"}, {"project": "other", "status": "queued"}]
+        text = self.detail(5, project, builds=builds)
+        for want in ("dev + prod", "5 GB", "alice  releaser"):
+            self.assertIn(want, text)
+        self.assertIn("dev-only", self.detail(5, dict(project, dev_only=1)))
+
+    def test_detail_ops(self):
+        text = self.detail(6, None, settings={"url": "srv", "ping_ms": 3}, stats={"queued": 2})
+        for want in ("srv", "3 ms", "Queued"):
+            self.assertIn(want, text)
 
     def test_format_timestamp(self):
         self.assertEqual(self._format_timestamp(None), "--")
