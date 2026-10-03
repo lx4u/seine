@@ -363,5 +363,54 @@ class HighlightsNamespacedGroupTasks(avocado.Test):
                 self.assertTrue(app.build_state.done)
         _run(scenario)
 
+class ScreenRatioTest(avocado.Test):
+    """
+    :avocado: tags=tui
+    """
+    def setUp(self):
+        with _tui_required(self):
+            from seine.tui.app import (
+                AnalyzeScreen, CacheScreen, DoctorScreen,
+                FilesystemScreen, OverviewScreen, PackagesScreen,
+                PlanScreen, SeineApp
+            )
+        self.SeineApp = SeineApp
+        self.OverviewScreen = OverviewScreen
+        self.PlanScreen = PlanScreen
+        self.FilesystemScreen = FilesystemScreen
+        self.PackagesScreen = PackagesScreen
+        self.AnalyzeScreen = AnalyzeScreen
+        self.CacheScreen = CacheScreen
+        self.DoctorScreen = DoctorScreen
+
+    def test_screen_pane_ratios(self):
+        async def scenario():
+            app = self.SeineApp()
+            async with app.run_test(size=(100, 30)) as pilot:
+                # Overview has 2:1 ratio (spectree > cmd)
+                app.switch_screen(self.OverviewScreen())
+                await pilot.pause()
+                tree_w = app.screen.query_one("#spectree").size.width
+                cmd_w = app.screen.query_one("#cmd").size.width
+                self.assertGreater(tree_w, cmd_w)
+
+                # 50/50 screens have equal widths (tree_w == cmd_w within 1 cell)
+                screens_50_50 = [
+                    self.PlanScreen,
+                    self.FilesystemScreen,
+                    self.PackagesScreen,
+                    self.AnalyzeScreen,
+                    self.CacheScreen,
+                    self.DoctorScreen,
+                ]
+                for screen_cls in screens_50_50:
+                    app.switch_screen(screen_cls())
+                    await pilot.pause()
+                    tw = app.screen.query_one("#spectree").size.width
+                    cw = app.screen.query_one("#cmd").size.width
+                    self.assertAlmostEqual(tw, cw, delta=1,
+                                           msg=f"{screen_cls.__name__} spectree ({tw}) != cmd ({cw})")
+        _run(scenario)
+
 if __name__ == "__main__":
     avocado.main()

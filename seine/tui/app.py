@@ -530,6 +530,15 @@ class SeineApp(App):
        of the default placeholder, italic so it reads as status. */
     #prompt.startup > .input--placeholder { text-style: italic; }
     #cmd, #tasks { width: 1fr; height: 100%; border: round $foreground 40%; }
+    /* 50/50 ratio: equal width for main content pane and right pane(s) */
+    PlanScreen #spectree,
+    FilesystemScreen #spectree,
+    PackagesScreen #spectree,
+    AnalyzeScreen #spectree,
+    CacheScreen #spectree,
+    DoctorScreen #spectree {
+        width: 1fr;
+    }
     #body { padding: 1 2; }
     /* Timeline up top, playing row's arguments below, 2:1 -- the
        arguments pane only shows while a replay with a timeline
