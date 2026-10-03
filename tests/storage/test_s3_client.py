@@ -176,6 +176,51 @@ class S3ClientOperations(avocado.Test):
         total = sum(o["size"] for o in self.client.list_all_objects("b", "p/"))
         self.assertEqual(total, 125)
 
+    def test_refresh_object_resends_metadata_with_a_new_marker(self):
+        self.stub.add_response(
+            "head_object", {"ContentLength": 3, "ETag": '"e"', "Metadata": {"sha256": "abc", "refreshed": "old"}},
+            {"Bucket": "b", "Key": "k"})
+        sent = {}
+
+        def check(params, **kwargs):
+            sent.update(params["Metadata"])
+            self.assertEqual(params["MetadataDirective"], "REPLACE")
+            self.assertEqual(params["CopySource"], {"Bucket": "b", "Key": "k"})
+
+        self.client._s3.meta.events.register("provide-client-params.s3.CopyObject", check)
+        self.stub.add_response("copy_object", {})
+        self.assertTrue(self.client.refresh_object("b", "k"))
+        self.assertEqual(sent["sha256"], "abc")
+        self.assertNotEqual(sent["refreshed"], "old")
+        self.stub.assert_no_pending_responses()
+
+    def test_refresh_object_missing_key_returns_false(self):
+        self.stub.add_client_error("head_object", "404", "Not Found", 404)
+        self.assertFalse(self.client.refresh_object("b", "gone"))
+
+    def test_get_bucket_lifecycle(self):
+        rules = [{"ID": "r", "Status": "Enabled", "Filter": {"Prefix": "p/"}, "Expiration": {"Days": 3}}]
+        self.stub.add_response("get_bucket_lifecycle_configuration", {"Rules": rules}, {"Bucket": "b"})
+        self.assertEqual(self.client.get_bucket_lifecycle("b"), rules)
+
+    def test_get_bucket_lifecycle_without_configuration_is_empty(self):
+        self.stub.add_client_error(
+            "get_bucket_lifecycle_configuration", "NoSuchLifecycleConfiguration", "none", 404)
+        self.assertEqual(self.client.get_bucket_lifecycle("b"), [])
+
+    def test_put_bucket_lifecycle_sends_the_rules(self):
+        rules = [{"ID": "r", "Status": "Enabled", "Filter": {"Prefix": ""},
+                  "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 1}}]
+        self.stub.add_response("put_bucket_lifecycle_configuration", {}, {
+            "Bucket": "b", "LifecycleConfiguration": {"Rules": rules}})
+        self.client.put_bucket_lifecycle("b", rules)
+        self.stub.assert_no_pending_responses()
+
+    def test_put_bucket_lifecycle_without_rules_deletes_the_configuration(self):
+        self.stub.add_response("delete_bucket_lifecycle", {}, {"Bucket": "b"})
+        self.client.put_bucket_lifecycle("b", [])
+        self.stub.assert_no_pending_responses()
+
     def test_presign_get(self):
         url = self.client.presign_get("my-bucket", "artifacts/a b.bin", expires_in=120)
         parts = urlsplit(url)

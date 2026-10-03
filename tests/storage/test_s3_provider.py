@@ -114,6 +114,10 @@ class FakeS3:
             if key.startswith(prefix):
                 yield {"key": key, "size": len(self.objects[key])}
 
+    def refresh_object(self, bucket, key):
+        self.refreshed = key
+        return key in self.objects
+
     def delete_objects(self, bucket, keys):
         self.deleted = list(keys)
         for key in self.deleted:
@@ -297,6 +301,12 @@ class S3ProviderHousekeeping(avocado.Test):
                          ["artifacts/p/1/a.img", "artifacts/p/1/b.img"])
         self.assertIn("artifacts/p/2/a.img", self.client.objects)
         self.assertIn("cache/packages/k.touch", self.client.objects)
+
+    def test_refresh_worktree_targets_the_worktree_key(self):
+        self.client.objects["worktrees/p/d1.tar.zst"] = b"w"
+        self.assertTrue(self.provider.refresh_worktree("p", "d1"))
+        self.assertEqual(self.client.refreshed, "worktrees/p/d1.tar.zst")
+        self.assertFalse(self.provider.refresh_worktree("p", "d2"))
 
     def test_delete_prefix_refuses_an_empty_prefix(self):
         with self.assertRaises(ValueError):

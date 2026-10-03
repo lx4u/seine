@@ -3,6 +3,7 @@
 
 import hashlib
 import os
+import time
 
 import boto3
 import botocore.exceptions
@@ -165,6 +166,48 @@ class S3Client:
                 f"delete in {bucket} failed for {len(failed)} keys ({names}): "
                 f"{first.get('Code', '')} {first.get('Message', '')}".strip(),
                 error_code=first.get("Code"))
+
+    def refresh_object(self, bucket, key):
+        """Restart an object's age by copying it onto itself; False if it is missing.
+
+        A copy with REPLACE drops the metadata, so the old values are sent
+        again (pulls verify sha256). S3 refuses a no-op copy, hence the marker.
+        """
+        headers = self.head_object(bucket, key)
+        if headers is None:
+            return False
+        meta = {k[len("x-amz-meta-"):]: v for k, v in headers.items()
+                if k.startswith("x-amz-meta-")}
+        meta["refreshed"] = f"{time.time():.6f}"
+        try:
+            self._call(f"refresh {bucket}/{key}", self._s3.copy_object,
+                       Bucket=bucket, Key=key,
+                       CopySource={"Bucket": bucket, "Key": key},
+                       MetadataDirective="REPLACE", Metadata=meta)
+        except S3NotFoundError:
+            return False
+        return True
+
+    def get_bucket_lifecycle(self, bucket):
+        """Return the bucket's lifecycle rules, [] when it has none."""
+        try:
+            resp = self._call(f"get lifecycle of {bucket}",
+                              self._s3.get_bucket_lifecycle_configuration, Bucket=bucket)
+        except S3ClientError as e:
+            if e.error_code == "NoSuchLifecycleConfiguration":
+                return []
+            raise
+        return resp.get("Rules", [])
+
+    def put_bucket_lifecycle(self, bucket, rules):
+        """Replace the bucket's lifecycle rules; no rules removes the configuration."""
+        if not rules:
+            self._call(f"delete lifecycle of {bucket}",
+                       self._s3.delete_bucket_lifecycle, Bucket=bucket)
+            return
+        self._call(f"put lifecycle of {bucket}",
+                   self._s3.put_bucket_lifecycle_configuration,
+                   Bucket=bucket, LifecycleConfiguration={"Rules": rules})
 
     def presign_get(self, bucket, key, expires_in=3600):
         return self._s3.generate_presigned_url(
