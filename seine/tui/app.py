@@ -555,9 +555,11 @@ class SeineApp(App):
     #previewpane { height: 1fr; padding: 1 2; }
     #remotemain { width: 3fr; height: 100%; border: round $foreground 40%; }
     #remotemain:focus { border: round $border; }
-    #remotesidebar { width: 1fr; min-width: 26; height: 100%; border: round $foreground 40%; }
-    #remotesidebar:focus { border: round $border; }
-    #remotebody, #sidebarbody { padding: 1 2; }
+    #remoteside { width: 1fr; min-width: 32; height: 100%; border: round $foreground 40%; }
+    #remotedetailpane { height: 2fr; }
+    #remotesidebar { height: 1fr; min-height: 16; border-top: solid $foreground 40%; }
+    #remotesidebar:focus { border-top: solid $border; }
+    #remotebody, #remotedetail, #sidebarbody { padding: 1 2; }
     #hint { color: $text-muted; padding: 0 2; }
     #infobar { height: 1; }
     #status { padding: 0 2; height: 1; width: 1fr; }

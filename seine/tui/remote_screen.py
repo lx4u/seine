@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 import requests
 from textual._context import NoActiveAppError
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.widgets import Static
 
@@ -20,6 +20,7 @@ from seine.tui.base import BaseScreen, StaticPane
 from seine.tui.render_remote import (
     render_remote_artifacts,
     render_remote_builds,
+    render_remote_detail,
     render_remote_ops,
     render_remote_projects,
     render_remote_users,
@@ -175,7 +176,11 @@ class RemoteScreen(BaseScreen):
     def compose(self):
         yield Horizontal(
             RemotePane(RemoteBodyStatic(id="remotebody"), id="remotemain"),
-            RemotePane(SidebarStatic(id="sidebarbody"), id="remotesidebar"),
+            Vertical(
+                StaticPane(Static(id="remotedetail", markup=False), id="remotedetailpane"),
+                RemotePane(SidebarStatic(id="sidebarbody"), id="remotesidebar"),
+                id="remoteside",
+            ),
             id="main",
         )
         yield from self.footer()
@@ -431,14 +436,29 @@ class RemoteScreen(BaseScreen):
         lines.append("")
         return "\n".join(lines)
 
+    def _render_detail(self):
+        session = getattr(self.app, "remote_session", None)
+        item = self._selected_item()
+        progress = None
+        state = self._download_state()
+        if self.active_tab == 3 and item and state:
+            progress = state.snapshot().get((item.get("build_id"), item.get("name")))
+        return render_remote_detail(
+            self.active_tab, item, connected=bool(session and session.connected),
+            progress=progress, tokens=self.remote_tokens, builds=self.remote_builds,
+            settings=self.remote_ops_settings, stats=self.remote_ops_stats,
+        )
+
     def update_body(self):
         try:
             main_static = self.query_one("#remotebody", Static)
             sidebar_static = self.query_one("#sidebarbody", Static)
+            detail_static = self.query_one("#remotedetail", Static)
         except Exception:
             return
         main_static.update(self._render_main())
         sidebar_static.update(self._render_sidebar())
+        detail_static.update(self._render_detail())
 
     def action_select_tab(self, tab: int):
         session = getattr(self.app, "remote_session", None)
