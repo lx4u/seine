@@ -77,13 +77,15 @@ class RemoteBuildTest(Test):
         self.patches = [
             mock.patch("seine.distributed.client.worktree.pack_worktree",
                        side_effect=self.pack),
+            mock.patch("seine.distributed.client.worktree.pack_sparse_worktree",
+                       side_effect=self.pack_sparse),
             mock.patch.object(remote, "upload_worktree",
                               return_value={"digest": "dig-1"}),
             mock.patch("requests.get", side_effect=self.http_get),
             mock.patch("requests.post", side_effect=self.http_post),
             mock.patch.dict(os.environ, {"SEINE_TOKEN": "", "SEINE_CA_CERT": ""}),
         ]
-        (self.pack_mock, self.upload_mock, self.get_mock, self.post_mock, _) = [
+        (self.pack_mock, self.sparse_mock, self.upload_mock, self.get_mock, self.post_mock, _) = [
             p.start() for p in self.patches]
         self.ws = FakeWS()
         ws_patch = mock.patch.object(remote, "WsClient", return_value=self.ws)
@@ -114,6 +116,10 @@ class RemoteBuildTest(Test):
         with open(self.archive, "wb") as f:
             f.write(b"zst")
         return self.archive, "local-digest"
+
+    def pack_sparse(self, root, paths):
+        self.sparse_paths = set(paths)
+        return self.pack(root)
 
     def response(self, code=200, body=None):
         resp = mock.MagicMock()
@@ -164,6 +170,38 @@ class RemoteBuildTest(Test):
     def network_calls(self):
         return (self.get_mock.call_count + self.post_mock.call_count
                 + self.upload_mock.call_count + self.ws.connect.call_count)
+
+    def test_the_bundle_holds_only_what_the_spec_reads(self):
+        self.run_build()
+        self.assertIn(os.path.realpath(self.spec), self.sparse_paths)
+        self.pack_mock.assert_not_called()
+
+    def test_worktree_full_packs_the_whole_tree(self):
+        self.run_build(options={"worktree": "full"})
+        self.pack_mock.assert_called_once()
+        self.sparse_mock.assert_not_called()
+
+    def test_a_spec_reading_outside_the_root_is_refused(self):
+        from seine.distributed.client.worktree import OutsideRootError
+        self.sparse_mock.side_effect = OutsideRootError("'/x' is outside")
+        code, _, err = self.run_build()
+        self.assertEqual(code, 2)
+        self.assertIn("move it under", err)
+        self.assertNotIn("--worktree=full", err)
+        self.assertEqual(self.upload_mock.call_count, 0)
+
+    def test_a_playbook_with_roles_sends_the_whole_tree(self):
+        self.write_spec("distribution:\n  architecture: arm64\nplaybook:\n  - roles: [x]\n")
+        code, out, _ = self.run_build()
+        self.assertEqual(code, 0)
+        self.pack_mock.assert_called_once()
+        self.assertIn("roles", out)
+
+    def test_sparse_is_kept_when_asked_for_despite_roles(self):
+        self.write_spec("distribution:\n  architecture: arm64\nplaybook:\n  - roles: [x]\n")
+        self.run_build(options={"worktree": "sparse"})
+        self.pack_mock.assert_not_called()
+        self.sparse_mock.assert_called_once()
 
     def test_upload_worktree(self):
         resp = self.response(200, {"digest": "abc123"})
