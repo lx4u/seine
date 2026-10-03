@@ -182,7 +182,7 @@ def check_s3(options=None):
         or storage_spec.get("bucket")
         or os.environ.get("SEINE_S3_BUCKET")
     )
-    enabled = options.get("s3_cache") or storage_spec.get("provider") == "s3"
+    enabled = options.get("shared_cache") or storage_spec.get("provider") == "s3"
     if not endpoint and not bucket and not enabled:
         return None
     endpoint = endpoint or "http://127.0.0.1:9000"

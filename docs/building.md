@@ -29,7 +29,7 @@ Use these options for common variations:
 | `seine build --rebuild spec.yaml` | Rebuild packages even when cached results exist. |
 | `seine build --sbom spec.yaml` | Write an SPDX software bill of materials beside the image. |
 | `seine build --reproducible spec.yaml` | Normalize disk image partitions so two builds of the same spec give a byte-identical image. Slower; mainly for CI/release builds. |
-| `seine build --s3-cache spec.yaml` | Cache packages, chroots, and build artifacts to network S3/Garage storage. |
+| `seine build --shared-cache spec.yaml` | Cache packages, chroots, and build artifacts to network S3/Garage storage. |
 | `seine build --cache-rootfs spec.yaml` | Cache and share root file-system tarballs across machines. |
 | `seine build --sign-key KEY spec.yaml` | Sign rebuilt packages with your GPG key. |
 
@@ -49,7 +49,8 @@ task and what it needs. Find task names with `seine plan --tasks-only spec.yaml`
 
 ## Network caching (S3 / Garage)
 
-When `--s3-cache` is specified or configured in `storage.s3`:
+When `--shared-cache` is specified or configured in `storage.s3` (`--no-shared-cache`
+turns it off, even when the spec configures one; the default is local cache only):
 * Built packages and buildd chroots are pulled from and pushed to shared object storage.
 * Payloads are compressed with `zstd` (level 3) and verified against clean-chroot leakage gates.
 * Derivation `.recipe` sidecars are stored alongside objects for cross-machine explainability.

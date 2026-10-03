@@ -2,7 +2,7 @@
 
 seine can share build caches (custom `.deb` packages, sbuild chroots,
 container bootstraps, and root file-systems) across multiple machines
-through network object storage, via `--s3-cache` or `storage.s3` in a
+through network object storage, via `--shared-cache` or `storage.s3` in a
 spec. This page shows how to stand up a lightweight S3 cache server using
 [Garage](https://garagehq.deuxfleurs.fr/), running as a container on a
 server or NAS of your choice.
@@ -148,7 +148,7 @@ Pass the endpoint and bucket to `seine build`:
 
 ```
 seine build \
-  --s3-cache \
+  --shared-cache \
   --s3-endpoint=http://<your-host>:3900 \
   --s3-bucket=seine-cache \
   --cache-rootfs \
@@ -182,10 +182,10 @@ Make sure the file permissions are restricted to your user:
 chmod 600 ~/.config/seine/credentials.json
 ```
 
-Once saved, simply pass `--s3-cache` (or `--cache-rootfs`) to any build:
+Once saved, simply pass `--shared-cache` (or `--cache-rootfs`) to any build:
 
 ```
-seine build --s3-cache --cache-rootfs your-spec.yaml
+seine build --shared-cache --cache-rootfs your-spec.yaml
 ```
 
 ### Option C: In the specification file

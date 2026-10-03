@@ -857,7 +857,7 @@ class CacheCmd(Cmd):
             opts, args = getopt.gnu_getopt(
                 argv, "h", ["entries", "entries-matching=", "force", "help",
                             "older-than=", "replace", "spec=",
-                            "with-image-rootfs", "s3-cache", "s3-endpoint=",
+                            "with-image-rootfs", "shared-cache", "s3-endpoint=",
                             "s3-bucket=", "s3-region="])
         except getopt.GetoptError as err:
             sys.stderr.write("%s\n%s" % (err, USAGE))
@@ -902,8 +902,8 @@ class CacheCmd(Cmd):
                 specifications.append([name for name in a.split(",") if name])
             elif o in ("--with-image-rootfs"):
                 with_image_rootfs = True
-            elif o in ("--s3-cache"):
-                s3_options["s3_cache"] = True
+            elif o in ("--shared-cache"):
+                s3_options["shared_cache"] = True
             elif o in ("--s3-endpoint"):
                 s3_options["s3_endpoint"] = a
             elif o in ("--s3-bucket"):

@@ -23,7 +23,7 @@ class BuildCmdS3OptionsTest(avocado.Test):
     def test_build_cmd_s3_options_parsing(self):
         cmd = BuildCmd()
         argv = [
-            "--s3-cache",
+            "--shared-cache",
             "--s3-endpoint=http://192.168.1.100:3900",
             "--s3-bucket=my-cache",
             "--s3-region=garage",
@@ -40,12 +40,26 @@ class BuildCmdS3OptionsTest(avocado.Test):
             with self.assertRaises(SystemExit) as cm:
                 cmd.main(argv)
             self.assertEqual(cm.exception.code, 0)
-            self.assertTrue(cmd.options["s3_cache"])
+            self.assertTrue(cmd.options["shared_cache"])
             self.assertEqual(cmd.options["s3_endpoint"], "http://192.168.1.100:3900")
             self.assertEqual(cmd.options["s3_bucket"], "my-cache")
             self.assertEqual(cmd.options["s3_region"], "garage")
             self.assertEqual(cmd.options["s3_offline_mode"], "strict")
             self.assertTrue(cmd.options["cache_rootfs"])
+
+    def test_shared_cache_is_tri_state(self):
+        self.assertIsNone(BuildCmd().options["shared_cache"])
+        for flag, expected in (("--shared-cache", True), ("--no-shared-cache", False)):
+            cmd = BuildCmd()
+            with mock.patch.object(cmd, "load_all"), \
+                 mock.patch.object(cmd, "parse", return_value={}), \
+                 mock.patch.object(cmd, "build", return_value=0), \
+                 mock.patch("seine.build.cli.collect_credentials"), \
+                 mock.patch("seine.build.cli.locked"), \
+                 mock.patch("seine.build.cli.remember"):
+                with self.assertRaises(SystemExit):
+                    cmd.main([flag, "dummy.yaml"])
+            self.assertIs(cmd.options["shared_cache"], expected)
 
     def test_build_cmd_invalid_offline_mode_exits(self):
         cmd = BuildCmd()
@@ -64,7 +78,7 @@ class S3BuildIntegrationTest(avocado.Test):
         mock_package.depends = []
 
         distro = {"release": "trixie", "architecture": "amd64", "source": "debian"}
-        options = {"s3_cache": True}
+        options = {"shared_cache": True}
 
         builder = Builder(distro, options, None, storage_provider=mock_provider)
         with mock.patch.object(builder, "architectures", return_value=["amd64"]), \
@@ -84,7 +98,7 @@ class S3BuildIntegrationTest(avocado.Test):
     def test_sbuild_chroot_pull_hit(self):
         mock_provider = mock.MagicMock()
         distro = {"release": "trixie", "architecture": "amd64", "uri": "http://deb.debian.org/debian"}
-        options = {"s3_cache": True}
+        options = {"shared_cache": True}
 
         chroot = SbuildChroot(distro, options, "amd64")
         chroot.storage_provider = mock_provider
@@ -106,7 +120,7 @@ class S3BuildIntegrationTest(avocado.Test):
         mock_provider = mock.MagicMock()
         mock_provider.pull.return_value = "/tmp/fake/rootfs.tar"
 
-        options = {"cache_rootfs": True, "s3_cache": True, "verbose": False}
+        options = {"cache_rootfs": True, "shared_cache": True, "verbose": False}
         spec = {"distribution": {"release": "trixie", "architecture": "amd64"}}
 
         img = Image(None, options)
@@ -124,7 +138,7 @@ class S3BuildIntegrationTest(avocado.Test):
         from seine.image import Image
         mock_provider = mock.MagicMock()
 
-        options = {"cache_rootfs": True, "s3_cache": True, "verbose": False}
+        options = {"cache_rootfs": True, "shared_cache": True, "verbose": False}
         spec = {"distribution": {"release": "trixie", "architecture": "amd64"}}
 
         img = Image(None, options)
@@ -150,7 +164,7 @@ class S3BuildIntegrationTest(avocado.Test):
         mock_provider = mock.MagicMock()
         mock_provider.push.return_value = False
 
-        options = {"cache_rootfs": True, "s3_cache": True, "verbose": False}
+        options = {"cache_rootfs": True, "shared_cache": True, "verbose": False}
         spec = {"distribution": {"release": "trixie", "architecture": "amd64"}}
 
         img = Image(None, options)

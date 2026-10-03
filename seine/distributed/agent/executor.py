@@ -85,7 +85,7 @@ def child_env(
             env[name] = value
         elif name.startswith("SEINE_") and not any(m in name for m in _SECRET_MARKERS):
             env[name] = value
-    if manifest.s3 and manifest.options.get("s3_cache"):
+    if manifest.s3 and manifest.options.get("shared_cache"):
         env["AWS_ACCESS_KEY_ID"] = manifest.s3.access_key
         env["AWS_SECRET_ACCESS_KEY"] = manifest.s3.secret_key
         # Keep a credentials file of the agent's user out of the key lookup.
@@ -378,9 +378,9 @@ class SubprocessExecutor:
             cmd.append("--verbose")
         if manifest.options.get("packages_only"):
             cmd.append("--packages-only")
-        if manifest.options.get("s3_cache"):
+        if manifest.options.get("shared_cache"):
             cmd += [
-                "--s3-cache",
+                "--shared-cache",
                 f"--s3-endpoint={manifest.s3.endpoint}",
                 f"--s3-bucket={manifest.s3.bucket}",
                 f"--s3-region={manifest.s3.region}",

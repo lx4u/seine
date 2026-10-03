@@ -73,15 +73,22 @@ class StorageProvider:
 BaseStorageProvider = StorageProvider
 
 
+def resolve_shared_cache_policy(is_release, user_flag=None):
+    """Whether a remote build uses the shared cache: dev yes, release no."""
+    return (not is_release) if user_flag is None else bool(user_flag)
+
+
 def for_build(options=None, spec=None):
     """Instantiate the configured StorageProvider for a build."""
     options = options or {}
     spec = spec or {}
 
     s3_cfg = spec.get("storage", {}).get("s3") if isinstance(spec, dict) else None
-    use_s3 = options.get("s3_cache") or (s3_cfg is not None)
+    use_shared = options.get("shared_cache")
+    if use_shared is None:
+        use_shared = s3_cfg is not None
 
-    if not use_s3:
+    if not use_shared:
         from .local import LocalStorageProvider
         return LocalStorageProvider()
 

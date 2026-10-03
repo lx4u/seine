@@ -201,7 +201,7 @@ class JobStatusUpdateRequest(BaseModel):
 
 # The only build options the server accepts; the scheduler and agent read these.
 BUILD_OPTION_KEYS = frozenset({
-    "packages_only", "s3_cache", "verbose", "require_native", "min_arch_score",
+    "packages_only", "shared_cache", "verbose", "require_native", "min_arch_score",
     "--require-native", "--min-arch-score",
 })
 

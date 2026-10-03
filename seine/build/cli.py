@@ -44,6 +44,7 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
         "no-cache-bootstraps",
         "no-color",
         "no-download",
+        "no-shared-cache",
         "offline",
         "min-arch-score=",
         "packages-only",
@@ -59,11 +60,11 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
         "resource=",
         "rootfs-only",
         "s3-bucket=",
-        "s3-cache",
         "s3-endpoint=",
         "s3-offline-mode=",
         "s3-region=",
         "sbom",
+        "shared-cache",
         "sign-key=",
         "spec-only",
         "target=",
@@ -93,10 +94,10 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                          "require_hashes": False, "require_native": False,
                          "resources": settings.load().get("resources"),
                          "rootfs_only": False,
-                         "s3_bucket": None, "s3_cache": False,
+                         "s3_bucket": None,
                          "s3_endpoint": None, "s3_offline_mode": "fallback",
                          "s3_region": None,
-                         "sbom": False, "sign_key": None, "spec": True,
+                         "sbom": False, "shared_cache": None, "sign_key": None, "spec": True,
                          "target": None,
                          "tasks": True, "token": os.environ.get("SEINE_TOKEN"),
                          "verbose": False }
@@ -272,8 +273,10 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                 self.options["cache_bootstraps"] = False
             elif o in ("--cache-rootfs",):
                 self.options["cache_rootfs"] = True
-            elif o in ("--s3-cache",):
-                self.options["s3_cache"] = True
+            elif o in ("--shared-cache",):
+                self.options["shared_cache"] = True
+            elif o in ("--no-shared-cache",):
+                self.options["shared_cache"] = False
             elif o in ("--s3-endpoint",):
                 self.options["s3_endpoint"] = a
             elif o in ("--s3-bucket",):
@@ -519,7 +522,9 @@ Flags:
       --cache-rootfs    push and pull rootfs tarballs to and from network cache
       --no-cache-bootstraps
                         disable remote caching of bootstrap container images
-      --s3-cache        enable remote network caching backed by S3 or Garage
+      --shared-cache    use the shared network cache (S3 or Garage)
+      --no-shared-cache do not use the shared network cache, even when the
+                        specification configures one
       --s3-endpoint URL endpoint URL for S3/Garage network cache storage
       --s3-bucket NAME  bucket name for S3 cache (default: 'seine-cache')
       --s3-region NAME  region name for S3 signature (default: 'garage')

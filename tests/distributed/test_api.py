@@ -896,20 +896,20 @@ class BuildSubmissionRBACTest(Test):
         )
 
     def test_known_build_options_are_accepted(self):
-        options = {"packages_only": True, "s3_cache": True, "require_native": True,
+        options = {"packages_only": True, "shared_cache": True, "require_native": True,
                    "min_arch_score": 0.5}
         resp = self._submit_options(options)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(self.db.builds.get(resp.json()["build_id"])["options"], options)
 
     def test_unknown_build_options_are_listed_in_a_400(self):
-        resp = self._submit_options({"s3_cache": True, "zzz": 1, "aaa": 2})
+        resp = self._submit_options({"shared_cache": True, "zzz": 1, "aaa": 2})
         self.assertEqual(resp.status_code, 400)
         self.assertIn("aaa, zzz", resp.json()["detail"])
         self.assertEqual(self.db.builds.list(), [])
 
     def test_secret_looking_options_are_refused(self):
-        for key in ("token", "api_secret", "Password", "ssh_key", "credentials", "s3_cache_token"):
+        for key in ("token", "api_secret", "Password", "ssh_key", "credentials", "shared_cache_token"):
             with self.subTest(key=key):
                 resp = self._submit_options({key: "x"})
                 self.assertEqual(resp.status_code, 400)

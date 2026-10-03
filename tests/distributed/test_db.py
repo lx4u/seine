@@ -144,13 +144,13 @@ class DatabaseRepositoryTest(Test):
             target_arch="arm64",
             is_release=True,
             worktree_digest="tree123",
-            options={"s3_cache": True, "timeout": 600},
+            options={"shared_cache": True, "timeout": 600},
             artifact_urls=["https://s3/artifacts/bld-1/disk.raw"],
         )
         self.assertEqual(build["id"], "bld-1")
         self.assertEqual(build["target_arch"], "arm64")
         self.assertTrue(build["is_release"])
-        self.assertEqual(build["options"], {"s3_cache": True, "timeout": 600})
+        self.assertEqual(build["options"], {"shared_cache": True, "timeout": 600})
         self.assertEqual(build["artifact_urls"], ["https://s3/artifacts/bld-1/disk.raw"])
         self.assertEqual(build["status"], "queued")
 

@@ -51,7 +51,7 @@ class MockRemoteStorage(StorageProvider):
 class BootstrapStorageTest(avocado.Test):
     def test_bootstrap_storage_key_and_recipe(self):
         storage = MockRemoteStorage()
-        hb = HostBootstrap(DISTRO, {"s3_cache": True}, storage_provider=storage)
+        hb = HostBootstrap(DISTRO, {"shared_cache": True}, storage_provider=storage)
         dockerfile = "FROM debian:trixie\nRUN true\n"
         key = hb.storage_key(dockerfile)
         self.assertTrue(key.startswith("bootstrap/debian/trixie/online/"))
@@ -64,7 +64,7 @@ class BootstrapStorageTest(avocado.Test):
 
     def test_bootstrap_target_storage_key_includes_base(self):
         storage = MockRemoteStorage()
-        tb = TargetBootstrap(DISTRO, {"s3_cache": True}, storage_provider=storage)
+        tb = TargetBootstrap(DISTRO, {"shared_cache": True}, storage_provider=storage)
         dockerfile = "FROM scratch\nCOPY rootfs/ /\n"
         with patch("seine.container.ContainerEngine.imageLabel", return_value="base1234"):
             key = tb.storage_key(dockerfile, base="bootstrap/debian/trixie/online")
@@ -78,7 +78,7 @@ class BootstrapStorageTest(avocado.Test):
     @patch("seine.container.ContainerEngine.run")
     def test_bootstrap_pull_hits_storage_and_loads_image(self, mock_run, mock_load):
         storage = MockRemoteStorage()
-        hb = HostBootstrap(DISTRO, {"s3_cache": True}, storage_provider=storage)
+        hb = HostBootstrap(DISTRO, {"shared_cache": True}, storage_provider=storage)
         dockerfile = "FROM debian:trixie\nRUN echo hi\n"
 
         # Calls to current():
@@ -104,7 +104,7 @@ class BootstrapStorageTest(avocado.Test):
                 return None
 
         storage = EmptyStorage()
-        hb = HostBootstrap(DISTRO, {"s3_cache": True}, storage_provider=storage)
+        hb = HostBootstrap(DISTRO, {"shared_cache": True}, storage_provider=storage)
         dockerfile = "FROM debian:trixie\nRUN echo hi\n"
 
         with patch.object(HostBootstrap, "current", return_value=False):
@@ -118,7 +118,7 @@ class BootstrapStorageTest(avocado.Test):
 
     def test_bootstrap_no_cache_bootstraps_skips_remote_storage(self):
         storage = MockRemoteStorage()
-        hb = HostBootstrap(DISTRO, {"s3_cache": True, "cache_bootstraps": False},
+        hb = HostBootstrap(DISTRO, {"shared_cache": True, "cache_bootstraps": False},
                            storage_provider=storage)
         self.assertFalse(hb.is_remote())
 

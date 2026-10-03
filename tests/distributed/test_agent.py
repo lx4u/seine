@@ -258,10 +258,10 @@ class SubprocessExecutorTest(Test):
         self.assertIn(message, ex.failure_reason)
         self.assertNotIn("not found in the job directory", "".join(logs))
 
-    def test_s3_cache_job_passes_scoped_flags_and_env_not_keys_on_the_command_line(self):
-        _, popen, _ = self._execute(options={"s3_cache": True})
+    def test_shared_cache_job_passes_scoped_flags_and_env_not_keys_on_the_command_line(self):
+        _, popen, _ = self._execute(options={"shared_cache": True})
         cmd = popen.call_args.args[0]
-        self.assertIn("--s3-cache", cmd)
+        self.assertIn("--shared-cache", cmd)
         self.assertIn("--s3-endpoint=https://s3.example", cmd)
         self.assertIn("--s3-bucket=proj-dev", cmd)
         self.assertIn("--s3-region=garage", cmd)
@@ -271,7 +271,7 @@ class SubprocessExecutorTest(Test):
         self.assertEqual(env["AWS_ACCESS_KEY_ID"], JOB_S3.access_key)
         self.assertEqual(env["AWS_SECRET_ACCESS_KEY"], JOB_S3.secret_key)
 
-    def test_job_without_s3_cache_gets_no_s3_flags_or_keys(self):
+    def test_job_without_shared_cache_gets_no_s3_flags_or_keys(self):
         _, popen, _ = self._execute()
         self.assertFalse([a for a in popen.call_args.args[0] if a.startswith("--s3")])
         self.assertNotIn("AWS_ACCESS_KEY_ID", popen.call_args.kwargs["env"])
@@ -424,7 +424,7 @@ class ChildEnvTest(Test):
             self.assertEqual(env[name], self.AGENT_ENV[name], name)
 
     def test_tokens_and_unlisted_variables_never_pass(self):
-        for options in ({}, {"s3_cache": True}):
+        for options in ({}, {"shared_cache": True}):
             env = self._env(**options)
             for name in ("SEINE_ENROLLMENT_TOKEN", "SEINE_WORKER_TOKEN", "SEINE_SIGN_KEY",
                          "SEINE_VAULT_PASSWORD", "SSH_AUTH_SOCK", "GITHUB_TOKEN"):
@@ -432,16 +432,16 @@ class ChildEnvTest(Test):
             self.assertNotIn("enroll-secret", env.values())
 
     def test_inherited_s3_variables_never_pass(self):
-        for options in ({}, {"s3_cache": True}):
+        for options in ({}, {"shared_cache": True}):
             env = self._env(s3=None, **options)
             for name in self.S3_VARS:
                 self.assertNotIn(name, env, name)
             self.assertNotIn("SEINE_CREDENTIALS_FILE", env)
 
-    def test_job_keys_only_with_s3_cache(self):
+    def test_job_keys_only_with_shared_cache(self):
         env = self._env()
         self.assertNotIn("AWS_ACCESS_KEY_ID", env)
-        env = self._env(s3_cache=True)
+        env = self._env(shared_cache=True)
         self.assertEqual(env["AWS_ACCESS_KEY_ID"], JOB_S3.access_key)
         self.assertEqual(env["AWS_SECRET_ACCESS_KEY"], JOB_S3.secret_key)
         for name in ("AWS_SESSION_TOKEN", "AWS_REGION", "SEINE_S3_ACCESS_KEY", "SEINE_S3_ENDPOINT"):

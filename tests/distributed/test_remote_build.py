@@ -694,10 +694,18 @@ class RemoteBuildTest(Test):
         self.assertEqual(options, {"min_arch_score": 0.5})
 
     def test_only_options_the_server_reads_are_sent(self):
-        self.run_build(options={"packages_only": True, "s3_cache": True, "verbose": True,
+        self.run_build(options={"packages_only": True, "shared_cache": True, "verbose": True,
                                 "sign_key": "k", "project": "demo", "build": True})
         options = self.submitted()["json"]["options"]
-        self.assertEqual(options, {"packages_only": True, "s3_cache": True, "verbose": True})
+        self.assertEqual(options, {"packages_only": True, "shared_cache": True, "verbose": True})
+
+    def test_unset_shared_cache_is_not_sent(self):
+        self.run_build(options={"shared_cache": None})
+        self.assertEqual(self.submitted()["json"]["options"], {})
+
+    def test_explicit_no_shared_cache_is_sent(self):
+        self.run_build(options={"shared_cache": False})
+        self.assertEqual(self.submitted()["json"]["options"], {"shared_cache": False})
 
     def test_verbose_off_is_not_sent(self):
         self.run_build(options={"verbose": False})

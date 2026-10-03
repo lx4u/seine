@@ -16,7 +16,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.insert(0, path_to_sources)
 
 from seine import storage
-from seine.storage.base import StorageError, StorageOfflineError
+from seine.storage.base import StorageError, StorageOfflineError, resolve_shared_cache_policy
 from seine.storage.s3 import provider as s3_provider
 from seine.storage.local import LocalStorageProvider
 from seine.storage.s3 import S3StorageProvider
@@ -29,9 +29,9 @@ class StorageFactoryTest(avocado.Test):
         provider = storage.for_build()
         self.assertIsInstance(provider, LocalStorageProvider)
 
-    def test_s3_cache_option_selects_s3_provider(self):
+    def test_shared_cache_option_selects_s3_provider(self):
         options = {
-            "s3_cache": True,
+            "shared_cache": True,
             "s3_endpoint": "http://127.0.0.1:3900",
             "s3_bucket": "test-bkt",
         }
@@ -42,6 +42,18 @@ class StorageFactoryTest(avocado.Test):
             provider = storage.for_build(options)
             self.assertIsInstance(provider, S3StorageProvider)
             self.assertEqual(provider.bucket, "test-bkt")
+
+    def test_no_shared_cache_overrides_spec_storage_s3(self):
+        spec = {"storage": {"s3": {"endpoint": "http://127.0.0.1:3900"}}}
+        provider = storage.for_build({"shared_cache": False}, spec)
+        self.assertIsInstance(provider, LocalStorageProvider)
+
+    def test_shared_cache_policy_defaults_by_release_flag(self):
+        policy = resolve_shared_cache_policy
+        self.assertTrue(policy(False))
+        self.assertFalse(policy(True))
+        self.assertTrue(policy(True, True))
+        self.assertFalse(policy(False, False))
 
     def test_spec_storage_s3_selects_s3_provider(self):
         spec = {

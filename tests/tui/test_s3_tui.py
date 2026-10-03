@@ -132,7 +132,7 @@ class DoctorS3CheckTest(avocado.Test):
             self.assertIsNone(doctor.check_s3({}))
 
     def test_check_s3_credentials_missing_returns_warn(self):
-        options = {"s3_cache": True, "s3_endpoint": "http://127.0.0.1:9000"}
+        options = {"shared_cache": True, "s3_endpoint": "http://127.0.0.1:9000"}
         with mock.patch("seine.credentials.s3_credential_source") as mock_src:
             instance = mock.MagicMock()
             instance.get.side_effect = CredentialNotFound("missing")
@@ -144,7 +144,7 @@ class DoctorS3CheckTest(avocado.Test):
             self.assertIn("credentials missing", check.detail)
 
     def test_check_s3_reachable_returns_ok(self):
-        options = {"s3_cache": True, "s3_endpoint": "http://127.0.0.1:9000", "s3_bucket": "test-b"}
+        options = {"shared_cache": True, "s3_endpoint": "http://127.0.0.1:9000", "s3_bucket": "test-b"}
         with mock.patch("seine.credentials.s3_credential_source") as mock_src, \
              mock.patch("seine.credentials.probe_s3", return_value=True):
             instance = mock.MagicMock()
@@ -158,7 +158,7 @@ class DoctorS3CheckTest(avocado.Test):
             self.assertEqual(check.name, "test-b @ http://127.0.0.1:9000")
 
     def test_check_s3_unreachable_returns_warn(self):
-        options = {"s3_cache": True, "s3_endpoint": "http://127.0.0.1:9000", "s3_bucket": "test-b"}
+        options = {"shared_cache": True, "s3_endpoint": "http://127.0.0.1:9000", "s3_bucket": "test-b"}
         with mock.patch("seine.credentials.s3_credential_source") as mock_src, \
              mock.patch("seine.credentials.probe_s3", return_value=False):
             instance = mock.MagicMock()
@@ -171,7 +171,7 @@ class DoctorS3CheckTest(avocado.Test):
             self.assertIn("not reachable", check.detail)
 
     def test_doctor_run_includes_s3_when_configured(self):
-        options = {"s3_cache": True, "s3_endpoint": "http://127.0.0.1:9000", "s3_bucket": "test-b"}
+        options = {"shared_cache": True, "s3_endpoint": "http://127.0.0.1:9000", "s3_bucket": "test-b"}
         with mock.patch.object(doctor, "check_s3", return_value=doctor.Check(doctor.GROUP_S3, "s3", "ok", "reachable")):
             checks = doctor.run(options=options)
             names = [c.name for c in checks]

@@ -721,6 +721,9 @@ class RemoteBuild:
         # Only sent when on: a server that predates the key refuses it.
         if not options.get("verbose"):
             options.pop("verbose", None)
+        # Unset: the server picks by release flag.
+        if options.get("shared_cache") is None:
+            options.pop("shared_cache", None)
         req = BuildSubmitRequest(
             project=self.project,
             worktree_digest=digest,
