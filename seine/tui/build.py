@@ -74,6 +74,9 @@ TASK_RE = re.compile(r"^TASK \[(.+)\] \*+\s*$")
 # work left (_save_downloads()/_finalize()).
 PLAY_RECAP_RE = re.compile(r"^PLAY RECAP \*+\s*$")
 
+def new_row(needs=(), state="pending"):
+    return {"needs": list(needs), "state": state, "started": None, "elapsed": None}
+
 # What the Build screen renders, kept apart from the widgets so it's
 # testable without a running App.
 class BuildState:
@@ -121,8 +124,7 @@ class BuildState:
         self.remote_job = job
         self.remote_text = []
         self.order = ["remote build"]
-        self.rows = {"remote build": {"needs": [], "state": "pending",
-                                      "started": None, "elapsed": None}}
+        self.rows = {"remote build": new_row()}
         self.current = "remote build"
         self.message = "[BUILD: REMOTE @ %s]" % host
         self.error = False
@@ -142,9 +144,7 @@ class BuildState:
         self.build = build
         ordered = tasks.ordered(build.image.tasks())
         self.order = [t.name for t in ordered]
-        self.rows = {t.name: {"needs": t.needs, "state": "pending",
-                              "started": None, "elapsed": None}
-                    for t in ordered}
+        self.rows = {t.name: new_row(t.needs) for t in ordered}
         self.current = None
         self.message = None
         self.error = False
@@ -158,8 +158,7 @@ class BuildState:
         cached_names = [name for name in self.package_paths
                         if name.startswith("package:") and name not in self.rows]
         for name in cached_names:
-            self.rows[name] = {"needs": [], "state": "cached",
-                               "started": None, "elapsed": None}
+            self.rows[name] = new_row(state="cached")
         insert_at = (self.order.index("packages")
                     if "packages" in self.order else len(self.order))
         self.order[insert_at:insert_at] = cached_names
@@ -167,8 +166,7 @@ class BuildState:
     # Reporter sink: called on the UI thread (TextualReporter has already
     # crossed back from the worker thread).
     def task_started(self, name):
-        row = self.rows.setdefault(
-            name, {"needs": [], "state": "pending", "started": None, "elapsed": None})
+        row = self.rows.setdefault(name, new_row())
         row["state"] = "running"
         row["started"] = time.time()
         self.current = name
@@ -179,8 +177,7 @@ class BuildState:
             self.on_task_started(name)
 
     def task_finished(self, name, failed=False):
-        row = self.rows.setdefault(
-            name, {"needs": [], "state": "pending", "started": None, "elapsed": None})
+        row = self.rows.setdefault(name, new_row())
         row["state"] = "failed" if failed else "done"
         if row["started"] is not None:
             row["elapsed"] = time.time() - row["started"]
@@ -225,12 +222,10 @@ class BuildState:
     def render(self):
         if len(self.order) == 0:
             return "no steps -- '/use SPEC' first\n"
-        if self.remote:
-            # One row: the worker's own steps arrive as log text only.
-            row = self.rows["remote build"]
-            end = row["elapsed"] if row["elapsed"] is not None else time.time() - row["started"]
-            return "[BUILD: REMOTE @ %s]\n%s remote build  %s\n" % (
-                self.remote, MARKS[row["state"]], elapsed(end))
+        header = "[BUILD: REMOTE @ %s]\n" % self.remote if self.remote else ""
+        return header + self.render_rows()
+
+    def render_rows(self):
         # An empty 'packages' barrier is left out here, same as in
         # the plan: nothing to build, so no row for it.
         names = set(self.order)
