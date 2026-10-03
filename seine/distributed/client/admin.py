@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 import requests
 
+from seine.distributed.common.models import format_quota
 from seine.distributed.common.transport import check_server_url, requests_verify
 
 
@@ -59,6 +60,13 @@ class AdminClient:
     def project_list(self) -> list[dict[str, Any]]:
         url = f"{self.server_url}/api/v1/projects"
         resp = self.session.get(url, headers=self._headers(), timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()
+
+    def project_update(self, name: str, **fields: Any) -> dict[str, Any]:
+        """Send only the given fields; quota_gb=None removes the quota."""
+        url = f"{self.server_url}/api/v1/projects/{name}"
+        resp = self.session.patch(url, json=fields, headers=self._headers(), timeout=self.timeout)
         resp.raise_for_status()
         return resp.json()
 
@@ -207,6 +215,12 @@ def run_client_admin(argv: list[str]) -> int:
 
     p_sub.add_parser("list", help="List projects")
 
+    p_upd = p_sub.add_parser("update", help="Update project settings")
+    p_upd.add_argument("name", help="Project name")
+    quota = p_upd.add_mutually_exclusive_group()
+    quota.add_argument("--quota-gb", type=float, default=None, help="Storage quota in GB")
+    quota.add_argument("--no-quota", action="store_true", help="Remove the storage quota")
+
     p_del = p_sub.add_parser("delete", help="Delete project")
     p_del.add_argument("name", help="Project name")
 
@@ -275,15 +289,26 @@ def run_client_admin(argv: list[str]) -> int:
             elif args.action == "list":
                 projects = client.project_list()
                 for p in projects:
-                    buckets = f"\tdev={p['dev_bucket']}\tprod={p['prod_bucket']}" if "dev_bucket" in p else ""
+                    buckets = f"\tdev={p['dev_bucket']}\tprod={p['prod_bucket']}\tquota={format_quota(p)}" if "dev_bucket" in p else ""
                     print(f"{p['name']}{buckets}")
+                return 0
+            elif args.action == "update":
+                if args.no_quota:
+                    fields = {"quota_gb": None}
+                elif args.quota_gb is not None:
+                    fields = {"quota_gb": args.quota_gb}
+                else:
+                    sys.stderr.write("error: nothing to update (use --quota-gb or --no-quota)\n")
+                    return 1
+                proj = client.project_update(args.name, **fields)
+                print(f"Updated project: {proj['name']} (quota: {format_quota(proj)})")
                 return 0
             elif args.action == "delete":
                 client.project_delete(args.name)
                 print(f"Deleted project: {args.name}")
                 return 0
             else:
-                sys.stderr.write("error: missing or invalid project action (create, list, delete)\n")
+                sys.stderr.write("error: missing or invalid project action (create, list, update, delete)\n")
                 return 1
 
         elif args.command == "member":

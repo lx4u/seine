@@ -6,6 +6,12 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+def format_quota(project: dict[str, Any]) -> str:
+    """Quota of a project row as text for listings."""
+    quota = project.get("quota_gb")
+    return "none" if quota is None else f"{quota:g}GB"
+
+
 class ProjectModel(BaseModel):
     """Registered project entity."""
     id: str
@@ -212,6 +218,11 @@ class ProjectCreateRequest(BaseModel):
     dev_bucket: str | None = None
     prod_bucket: str | None = None
     provision_buckets: bool = False
+
+
+class ProjectUpdateRequest(BaseModel):
+    """Project update payload; omitted fields are left unchanged, null clears the quota."""
+    quota_gb: float | None = Field(default=None, gt=0)
 
 
 class MemberAddRequest(BaseModel):

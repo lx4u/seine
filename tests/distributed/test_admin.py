@@ -29,6 +29,7 @@ from seine.distributed.server.admin import (
     project_create,
     project_delete,
     project_list,
+    project_update,
     run_server_admin,
     token_issue,
     token_list,
@@ -204,6 +205,29 @@ class ServerAdminLocalCLITest(Test):
         self.assertEqual(run_server_admin(db + ["user", "update", "bob", "--no-is-admin"]), 0)
         self.assertEqual(run_server_admin(db + ["user", "update", "alice", "--no-is-admin"]), 1)
 
+    def test_project_update_sets_and_clears_the_quota(self):
+        project_create(self.db, "quota-p")
+        self.assertEqual(project_update(self.db, "quota-p", quota_gb=50)["quota_gb"], 50)
+        self.assertIsNone(project_update(self.db, "quota-p", quota_gb=None)["quota_gb"])
+        self.assertIsNone(project_update(self.db, "no-such", quota_gb=5))
+
+    def test_project_update_cli(self):
+        db = ["--db-path", self.db_path]
+        project_create(self.db, "quota-p")
+        err = io.StringIO()
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
+            self.assertEqual(run_server_admin(db + ["project", "update", "quota-p", "--quota-gb", "2.5"]), 0)
+            self.assertEqual(self.db.projects.get("quota-p")["quota_gb"], 2.5)
+            run_server_admin(db + ["project", "list"])
+            self.assertIn("quota=2.5GB", out.getvalue())
+            self.assertEqual(run_server_admin(db + ["project", "update", "quota-p", "--no-quota"]), 0)
+            self.assertIsNone(self.db.projects.get("quota-p")["quota_gb"])
+            self.assertEqual(run_server_admin(db + ["project", "update", "quota-p", "--quota-gb", "0"]), 1)
+            self.assertEqual(run_server_admin(db + ["project", "update", "no-such", "--quota-gb", "1"]), 1)
+            self.assertEqual(run_server_admin(db + ["project", "update", "quota-p"]), 1)
+        self.assertIn("not found", err.getvalue())
+
     def test_server_admin_cli_execution(self):
         res = run_server_admin(["--db-path", self.db_path, "user", "create", "bob"])
         self.assertEqual(res, 0)
@@ -345,6 +369,45 @@ class AdminRESTAPITest(Test):
 
         resp_del = self.client.delete("/api/v1/projects/proj-new", headers=headers)
         self.assertEqual(resp_del.status_code, 200)
+
+    def _patch_project(self, token, name, body):
+        return self.client.patch(
+            f"/api/v1/projects/{name}", json=body, headers={"Authorization": f"Bearer {token}"}
+        )
+
+    def test_project_update_sets_and_clears_the_quota(self):
+        resp = self._patch_project(self.admin_token, "proj-a", {"quota_gb": 100})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["quota_gb"], 100)
+        listed = {p["name"]: p for p in self._projects_as(self.admin_token)}
+        self.assertEqual(listed["proj-a"]["quota_gb"], 100)
+        self.assertIsNone(listed["proj-b"]["quota_gb"])
+
+        resp = self._patch_project(self.admin_token, "proj-a", {"quota_gb": None})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(self.db.projects.get("proj-a")["quota_gb"])
+
+    def test_project_update_without_fields_changes_nothing(self):
+        self.db.projects.set_quota("proj-a", 7)
+        resp = self._patch_project(self.admin_token, "proj-a", {})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["quota_gb"], 7)
+
+    def test_project_update_rejects_a_bad_quota(self):
+        for bad in (0, -1, "lots"):
+            resp = self._patch_project(self.admin_token, "proj-a", {"quota_gb": bad})
+            self.assertEqual(resp.status_code, 422, bad)
+        self.assertIsNone(self.db.projects.get("proj-a")["quota_gb"])
+
+    def test_project_update_unknown_project_is_404(self):
+        resp = self._patch_project(self.admin_token, "no-such", {"quota_gb": 5})
+        self.assertEqual(resp.status_code, 404)
+
+    def test_project_update_needs_a_system_administrator(self):
+        for token in (self.dev_token, self.alice_token):
+            resp = self._patch_project(token, "proj-a", {"quota_gb": 5})
+            self.assertEqual(resp.status_code, 403)
+        self.assertIsNone(self.db.projects.get("proj-a")["quota_gb"])
 
     def test_projects_api_with_provision_buckets(self):
         mock_provider = mock.MagicMock()
@@ -539,6 +602,42 @@ class RemoteClientAdminTest(Test):
 
         del_res = client.project_delete("p-remote")
         self.assertTrue(del_res["deleted"])
+
+    def test_client_project_update(self):
+        client = AdminClient(server_url=self.server_url, token=self.admin_tok)
+        client.project_create("p-quota")
+        self.assertEqual(client.project_update("p-quota", quota_gb=20)["quota_gb"], 20)
+        self.assertEqual(self.db.projects.get("p-quota")["quota_gb"], 20)
+        self.assertIsNone(client.project_update("p-quota", quota_gb=None)["quota_gb"])
+
+    def test_client_project_update_cli_request_shape(self):
+        argv = ["--server", self.server_url, "--token", self.admin_tok, "project", "update", "p-q"]
+        self.db.projects.create("p-q")
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("requests.Session.patch") as patch:
+            patch.return_value.json.return_value = {"name": "p-q", "quota_gb": 3.5}
+            self.assertEqual(run_client_admin(argv + ["--quota-gb", "3.5"]), 0)
+            self.assertEqual(patch.call_args.args[0], f"{self.server_url}/api/v1/projects/p-q")
+            self.assertEqual(patch.call_args.kwargs["json"], {"quota_gb": 3.5})
+            self.assertIn("quota: 3.5GB", out.getvalue())
+
+            patch.return_value.json.return_value = {"name": "p-q", "quota_gb": None}
+            self.assertEqual(run_client_admin(argv + ["--no-quota"]), 0)
+            self.assertEqual(patch.call_args.kwargs["json"], {"quota_gb": None})
+
+            patch.reset_mock()
+            with mock.patch("sys.stderr", io.StringIO()):
+                self.assertEqual(run_client_admin(argv), 1)
+            patch.assert_not_called()
+
+    def test_client_project_list_shows_the_quota(self):
+        self.db.projects.create("p-listed")
+        self.db.projects.set_quota("p-listed", 12)
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out):
+            code = run_client_admin(["--server", self.server_url, "--token", self.admin_tok, "project", "list"])
+        self.assertEqual(code, 0)
+        self.assertIn("quota=12GB", out.getvalue())
 
     def test_client_project_list_works_for_a_member_without_bucket_names(self):
         self.db.projects.create("p-member")
