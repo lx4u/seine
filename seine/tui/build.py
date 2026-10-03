@@ -12,6 +12,7 @@ from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.widgets import RichLog, Static
 
+from seine import analyze
 from seine import logindex
 from seine import tasks
 from seine.progress import elapsed
@@ -357,6 +358,31 @@ class RemoteLogIndex:
         logindex.record(self.files, self.release, self.arch, self.log_dir,
                         entries, ok, self.started)
 
+# What a local build leaves behind (an analyze record and the plan
+# baseline), rebuilt from the rows the worker reported. A build where
+# every task was cached still gets one task, so it shows as built.
+def record_remote_build(state, build, started, ok):
+    now = time.time()
+    steps = []
+    for name in state.order:
+        row = state.rows[name]
+        if row["started"] is None:
+            continue
+        step = tasks.Task(name, None, row["needs"])
+        step.started = row["started"]
+        step.ended = step.started + (row["elapsed"] if row["elapsed"] is not None
+                                     else now - step.started)
+        step.failed = row["state"] == "failed"
+        steps.append(step)
+    if not steps and ok:
+        step = tasks.Task("remote build", None)
+        step.started, step.ended = started, now
+        steps.append(step)
+    analyze.record(steps, analyze.spec_digest(build.spec), ok=ok)
+    if ok:
+        from seine.diffing import remember
+        remember(list(build.options.get("files") or []), build.dump(build.spec))
+
 # Same as start_build(), but the build runs on a seine-server worker:
 # RemoteBuild packs and uploads the worktree, submits it, and its log
 # stream lands under state.logs for BuildScreen to tail.
@@ -404,9 +430,12 @@ def start_remote_build(app, state, spec_files, session, no_download=False, proje
         if catalog is not None and event.get("type") == "task_plan":
             catalog.begin(event.get("tasks") or [])
 
+    started = time.time()
+
     def finish(error=None):
         if catalog is not None:
             catalog.record(state, error is None)
+            record_remote_build(state, build, started, error is None)
         if error is None:
             state.finished_ok()
         else:
@@ -417,7 +446,8 @@ def start_remote_build(app, state, spec_files, session, no_download=False, proje
         options={"no_download": no_download, "verbose": True, "insecure": session.insecure,
                  "ca_cert": session.ca_cert}, token=session.token,
         out=write, err=write, prompt=tui_prompt(app), on_download=on_download,
-        on_event=lambda event: app.call_from_thread(on_event, event), log_dir=log_dir)
+        on_event=lambda event: app.call_from_thread(on_event, event), log_dir=log_dir,
+        spec_digest=analyze.spec_digest(build.spec) if build is not None else "")
     state.reset_remote(host, job, log_dir)
     if build is not None:
         state.package_paths = _package_paths(build)

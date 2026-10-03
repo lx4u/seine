@@ -29,6 +29,7 @@ class RemoteBuildTuiTest(avocado.Test):
     def setUp(self):
         # Remote builds allocate their log directory under logs_root().
         os.environ["SEINE_LOG_DIR"] = self.workdir
+        os.environ["SEINE_BUILD_DIR"] = os.path.join(self.workdir, "build")
         with _tui_required(self):
             from seine.tui import build, commands
             from seine.tui.remote_session import RemoteSession
@@ -243,9 +244,10 @@ class RemoteBuildTuiTest(avocado.Test):
     def _build_cmd(self):
         return types.SimpleNamespace(
             options={"files": ["/w/main.yaml"]}, image=types.SimpleNamespace(packages=[]),
+            dump=lambda spec: "dumped",
             spec={"distribution": {"release": "trixie", "architecture": "amd64"}})
 
-    def _remote_with_build(self, code):
+    def _remote_with_build(self, code, ran=False):
         app = mock.Mock()
         app.run_worker = lambda fn, **kw: fn() or mock.Mock()
         app.call_from_thread = lambda fn, *a: fn(*a)
@@ -255,8 +257,14 @@ class RemoteBuildTuiTest(avocado.Test):
         state = self.build.BuildState()
         with mock.patch("seine.distributed.client.remote.RemoteBuild") as rb, \
                 mock.patch("seine.tui.credentials.tui_prompt"):
-            rb.return_value.run.side_effect = (
-                lambda: rb.call_args.kwargs["on_event"](self.PLAN) or code)
+            def run():
+                on_event = rb.call_args.kwargs["on_event"]
+                on_event(self.PLAN)
+                if ran:
+                    on_event({"type": "task_started", "task": "chroot"})
+                    on_event({"type": "task_finished", "task": "chroot", "failed": code != 0})
+                return code
+            rb.return_value.run.side_effect = run
             self.build.start_remote_build(
                 app, state, "/w/main.yaml", session, project="demo", build=build)
         return state, rb
@@ -278,6 +286,38 @@ class RemoteBuildTuiTest(avocado.Test):
             by_name = {t["name"]: t for t in entry["tasks"]}
             self.assertTrue(by_name["package:amd64:busybox"]["cached"])
             self.assertIsNone(by_name["package:amd64:busybox"]["log"])
+
+    def test_a_finished_remote_build_leaves_a_run_and_a_baseline(self):
+        from seine import analyze
+        from seine.diffing import recall
+        self._remote_with_build(0, ran=True)
+        runs = analyze.runs(analyze.spec_digest(self._build_cmd().spec))
+        self.assertEqual(len(runs), 1)
+        self.assertTrue(runs[0]["ok"])
+        self.assertIn("chroot", {t["name"] for t in runs[0]["tasks"]})
+        self.assertEqual(recall(["/w/main.yaml"]), "dumped")
+
+    def test_a_failed_remote_build_keeps_its_run_but_not_the_baseline(self):
+        from seine import analyze
+        from seine.diffing import recall
+        self._remote_with_build(1, ran=True)
+        runs = analyze.runs(analyze.spec_digest(self._build_cmd().spec))
+        self.assertFalse(runs[0]["ok"])
+        self.assertIsNone(recall(["/w/main.yaml"]))
+
+    def test_a_remote_build_that_ran_nothing_still_counts_as_built(self):
+        from seine import analyze
+        state = self.build.BuildState()
+        state.order, state.rows = ["a"], {"a": self.build.new_row(state="cached")}
+        self.build.record_remote_build(state, self._build_cmd(), 100.0, True)
+        run = analyze.runs(analyze.spec_digest(self._build_cmd().spec))[0]
+        self.assertEqual([t["name"] for t in run["tasks"]], ["remote build"])
+
+    def test_the_spec_digest_is_sent_with_the_build(self):
+        from seine import analyze
+        _, rb = self._remote_with_build(0)
+        self.assertEqual(rb.call_args.kwargs["spec_digest"],
+                         analyze.spec_digest(self._build_cmd().spec))
 
     def test_remote_build_without_a_plan_is_not_cataloged(self):
         from seine import logindex
