@@ -24,6 +24,10 @@ class HousekeepingBusy(RuntimeError):
     """Another housekeeping run is in progress."""
 
 
+class UnknownProject(ValueError):
+    """The project to sweep does not exist."""
+
+
 @dataclass
 class ProjectReport:
     """What one run did (or, in a dry run, would do) for one project."""
@@ -74,7 +78,7 @@ def run_housekeeping(
         if project is not None:
             projects = [p for p in projects if p["name"] == project]
             if not projects:
-                raise ValueError(f"unknown project: {project}")
+                raise UnknownProject(f"unknown project: {project}")
         reports = []
         for row in projects:
             report = ProjectReport(project=row["name"], dry_run=dry_run)
