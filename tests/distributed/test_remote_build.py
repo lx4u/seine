@@ -207,9 +207,18 @@ class RemoteBuildTest(Test):
         self.pack_mock.assert_called_once()
         self.assertIn("roles", out)
 
-    def test_sparse_is_kept_when_asked_for_despite_roles(self):
+    def test_sparse_refuses_what_it_cannot_list(self):
         self.write_spec("distribution:\n  architecture: arm64\nplaybook:\n  - roles: [x]\n")
-        self.run_build(options={"worktree": "sparse"})
+        code, _, err = self.run_build(options={"worktree": "sparse"})
+        self.assertEqual(code, 2)
+        self.assertIn("uses:", err)
+        self.pack_mock.assert_not_called()
+        self.sparse_mock.assert_not_called()
+
+    def test_uses_keeps_the_worktree_sparse(self):
+        self.write_spec("distribution:\n  architecture: arm64\nplaybook:\n"
+                        "  - roles: [x]\n    uses: [main.yaml]\n")
+        self.run_build()
         self.pack_mock.assert_not_called()
         self.sparse_mock.assert_called_once()
 

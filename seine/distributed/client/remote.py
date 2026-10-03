@@ -671,10 +671,14 @@ class RemoteBuild:
 
         try:
             builds = self._loaded_builds()
-            unmodeled = closure.unmodeled(builds) if mode == "auto" else []
+            unmodeled = closure.unmodeled(builds)
+            if unmodeled and mode == "sparse":
+                raise RemoteError(
+                    f"the playbook uses {', '.join(unmodeled)}, whose files cannot be "
+                    "listed: declare them under 'uses:' or use --worktree=full")
             if unmodeled:
                 self._say(f"[client] The playbook uses {', '.join(unmodeled)}: sending the "
-                          "whole directory (--worktree=sparse to send only what is listed)")
+                          "whole directory (declare the files under 'uses:' to send only those)")
                 return worktree.pack_worktree(self.root_dir, staged=self.staged)
             # The loaded paths are symlink-resolved: add the names we send.
             wanted = closure.collect(builds) | {

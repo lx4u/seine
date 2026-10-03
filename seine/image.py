@@ -277,9 +277,8 @@ class Image:
     # Host files the playbooks read. Their content is not in the spec.
     def host_files(self):
         from seine.build import playbook
-        files = self.options.get("files") or []
-        spec_dir = os.path.dirname(files[0]) if len(files) > 0 else "."
-        return playbook.host_files((self.spec or {}).get("playbook") or [], spec_dir)
+        return playbook.scan((self.spec or {}).get("playbook") or [],
+                             self.options.get("files"))[0]
 
     def _digest_file(self):
         return f"{self._rootfs}.digest"

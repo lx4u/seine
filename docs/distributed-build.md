@@ -62,11 +62,18 @@ group. Editing anything else in the repository leaves the bundle, and so its
 digest, unchanged: nothing is uploaded again and the workers keep their
 cached copy. Files outside the specification are never uploaded.
 
-Some playbook keys read files seine cannot list: `roles`, `include_tasks`,
-`import_tasks`, `import_playbook`, `vars_files`, `include_vars`, `script`
-and `lookup()`. When a playbook uses one, the client says so and sends the
-whole directory, minus the files that `.gitignore` and `.seineignore`
-exclude. `--worktree=sparse` or `--worktree=full` overrides that choice.
+The client also follows what a playbook names statically: `src:` and
+`script:`, `include_tasks`/`import_tasks` (and the tasks they load),
+`vars_files`, `include_vars`, `with_file`, `lookup('file', ...)`, the
+`roles/<name>/` tree of a role, and the `{% include %}` and `{% extends %}`
+of a template. The same files go into the digest of the root file-system.
+
+Some playbook keys name files seine cannot list: a role not found under
+`roles/`, `import_playbook`, `with_fileglob`, a computed path or a computed
+`lookup()`. Declare those files with `uses:` on the play. Without it, the
+client says so and sends the whole directory, minus the files that
+`.gitignore` and `.seineignore` exclude. `--worktree=full` always sends the
+whole directory. `--worktree=sparse` refuses such a playbook.
 
 A specification file named on the command line from outside the project
 directory, such as a `gist:NAME`, travels in the bundle as

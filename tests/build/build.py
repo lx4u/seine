@@ -281,6 +281,15 @@ class TheRootfsTarballIsReusedWhileItsInputsAreUnchanged(avocado.Test):
             f.write("two")
         self.assertNotEqual(self.image._rootfs_digest(None), before)
 
+    def test_a_vars_file_a_playbook_loads_changes_the_digest(self):
+        with open(os.path.join(self.workdir, "v.yaml"), "w") as f:
+            f.write("a: 1\n")
+        self.image.spec["playbook"] = [{"vars_files": ["v.yaml"], "tasks": []}]
+        before = self.image._rootfs_digest(None)
+        with open(os.path.join(self.workdir, "v.yaml"), "w") as f:
+            f.write("a: 2\n")
+        self.assertNotEqual(self.image._rootfs_digest(None), before)
+
     def test_the_vendor_lock_changes_the_digest(self):
         self.assertNotEqual(self.image._rootfs_digest("lock"), self.digest)
 

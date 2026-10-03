@@ -40,6 +40,7 @@ def unmodeled(builds):
     """Return the playbook keys of 'builds' that read files collect() cannot see."""
     keys = set()
     for build in builds:
-        keys.update(playbook.unmodeled((build.spec or {}).get("playbook") or []))
+        playbooks = (build.spec or {}).get("playbook") or []
+        keys.update(playbook.scan(playbooks, build.options.get("files"))[1])
         keys.update(unmodeled(build.subbuilds.values()))
     return sorted(keys)

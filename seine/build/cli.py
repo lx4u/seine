@@ -489,8 +489,8 @@ Flags:
       --worktree MODE   what a remote build uploads: sparse sends only the files
                         the specification reads, full sends the whole directory
                         (minus ignored files), auto (default) is sparse unless
-                        the playbook reads files seine cannot list, such as
-                        roles
+                        the playbook reads files seine cannot list and gives
+                        no 'uses:' for them
       --token TOKEN     bearer token for remote server authentication
                         ($SEINE_TOKEN says the same thing). Without one,
                         a token saved in the keyring or credentials.json is

@@ -201,6 +201,8 @@ class AnsibleContainerRunner:
         run = []
         for playbook in playbooks:
             playbook = dict(playbook)
+            # Ours, not Ansible's: the host files this play reads.
+            playbook.pop("uses", None)
             # Individual package installs skip their own initramfs regen,
             # _finalize() does one pass instead.
             playbook["environment"] = {"INITRD": "No"}

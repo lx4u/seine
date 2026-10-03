@@ -1467,6 +1467,37 @@ Frequently used tasks include:
  * `apt`
  * `debconf`
 
+### Host files a playbook reads
+
+A change to a file a playbook reads must change the root file-system, and a
+remote build must send that file. seine finds these files by reading the
+playbook: `src:` and `script:`, the tasks loaded by `include_tasks` and
+`import_tasks`, `vars_files`, `include_vars`, `with_file`,
+`lookup('file', ...)`, the `roles/<name>/` tree of each role, and the
+templates a template `{% include %}`s or `{% extends %}`. Paths are looked up
+next to the file that names them, then next to the specification, then in
+the current directory, and may not leave the project directory.
+
+It cannot follow a computed path, `with_fileglob` or `import_playbook`. Name
+the files with `uses:` on the play, as paths, directories or globs:
+
+```
+playbook:
+    - name: configure the application
+      uses:
+          - configs/*.json
+          - data/certificates/
+      tasks:
+          - copy:
+                src: "{{ item }}"
+                dest: /etc/myapp/
+            with_fileglob:
+                - configs/*.json
+```
+
+A `uses:` that matches nothing is an error. seine removes `uses:` before it
+runs the play.
+
 ### Blocked lookups
 
 A build must give the same result wherever it runs. Lookups that read the
