@@ -28,6 +28,7 @@ from seine.distributed.common.transport import (
     ws_ssl_context,
 )
 from seine.distributed.common.wsclient import WsClient, WsClosed
+from seine.utils import format_size
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -115,17 +116,6 @@ def upload_worktree(
         )
     _check_response(resp, "worktree upload")
     return resp.json()
-
-
-def format_size(size_bytes: int) -> str:
-    if size_bytes < 1024:
-        return f"{size_bytes} B"
-    num = float(size_bytes)
-    for unit in ("KB", "MB", "GB", "TB"):
-        num /= 1024.0
-        if num < 1024 or unit == "TB":
-            return f"{num:.1f} {unit}"
-    return f"{num:.1f} TB"
 
 
 def _print_artifacts(artifact_urls: Optional[list[str]], say: Callable[[str], None] = print) -> None:

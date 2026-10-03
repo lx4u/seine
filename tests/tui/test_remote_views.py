@@ -34,8 +34,8 @@ class RemoteViewsTest(avocado.Test):
             from seine.tui.app import SeineApp
             from seine.tui.remote_screen import RemoteScreen
             from seine.tui.remote_session import RemoteSession
+            from seine.utils import format_size, format_timestamp
             from seine.tui.render_remote import (
-                _format_size,
                 render_remote_artifacts,
                 render_remote_builds,
                 render_remote_workers,
@@ -47,7 +47,8 @@ class RemoteViewsTest(avocado.Test):
         self.render_remote_builds = render_remote_builds
         self.render_remote_workers = render_remote_workers
         self.render_remote_artifacts = render_remote_artifacts
-        self._format_size = _format_size
+        self._format_size = format_size
+        self._format_timestamp = format_timestamp
 
         self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-remote-views-")
         os.environ["XDG_CONFIG_HOME"] = self.tmp_dir
@@ -349,6 +350,12 @@ class RemoteViewsTest(avocado.Test):
         self.assertEqual(self._format_size(1500000000), "1.4 GB")
         self.assertEqual(self._format_size(None), "0 B")
         self.assertEqual(self._format_size("bad"), "0 B")
+
+    def test_format_timestamp(self):
+        self.assertEqual(self._format_timestamp(None), "--")
+        self.assertEqual(self._format_timestamp("bad"), "--")
+        self.assertRegex(self._format_timestamp(86400 * 365), r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+        self.assertRegex(self._format_timestamp(86400 * 365, date_only=True), r"^\d{4}-\d{2}-\d{2}$")
 
     def test_render_artifacts_empty(self):
         rendered = self.render_remote_artifacts([])
