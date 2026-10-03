@@ -556,6 +556,109 @@ class DatabaseMigrationTest(Test):
         self.assertIsNone(row["default_project"])
         conn.close()
 
+    def test_housekeeping_columns_are_added_to_an_old_database(self):
+        conn = connect_db(os.path.join(self.tmp_dir, "old-hk.db"))
+        with conn:
+            conn.execute(
+                "CREATE TABLE projects (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, "
+                "prod_bucket TEXT NOT NULL, dev_bucket TEXT NOT NULL, "
+                "dev_only INTEGER NOT NULL DEFAULT 0, created_at REAL NOT NULL)"
+            )
+            conn.execute("INSERT INTO projects VALUES ('core', 'core', 'p', 'd', 0, 1.0)")
+            conn.execute(
+                "CREATE TABLE builds (id TEXT PRIMARY KEY, project TEXT NOT NULL, "
+                "target_arch TEXT NOT NULL, is_release INTEGER NOT NULL DEFAULT 0, "
+                "status TEXT NOT NULL DEFAULT 'queued', "
+                "worktree_digest TEXT NOT NULL DEFAULT '', "
+                "spec_file TEXT NOT NULL DEFAULT 'spec.yaml', "
+                "options TEXT NOT NULL DEFAULT '{}', created_at REAL NOT NULL, "
+                "started_at REAL, finished_at REAL, "
+                "artifact_urls TEXT NOT NULL DEFAULT '[]', "
+                "artifact_meta TEXT NOT NULL DEFAULT '[]', error_message TEXT, user_id TEXT)"
+            )
+            conn.execute(
+                "INSERT INTO builds (id, project, target_arch, created_at, artifact_urls) "
+                "VALUES ('b1', 'core', 'amd64', 1.0, '[\"u\"]')"
+            )
+        init_db(conn)
+        init_db(conn)  # running it again is harmless
+        project_cols = [r["name"] for r in conn.execute("PRAGMA table_info(projects)")]
+        build_cols = [r["name"] for r in conn.execute("PRAGMA table_info(builds)")]
+        self.assertIn("quota_gb", project_cols)
+        self.assertIn("artifacts_expired_at", build_cols)
+        self.assertIn("artifacts_expired_reason", build_cols)
+        project = conn.execute("SELECT * FROM projects WHERE id = 'core'").fetchone()
+        self.assertEqual(project["prod_bucket"], "p")
+        self.assertIsNone(project["quota_gb"])
+        build = conn.execute("SELECT * FROM builds WHERE id = 'b1'").fetchone()
+        self.assertEqual(build["artifact_urls"], '["u"]')
+        self.assertIsNone(build["artifacts_expired_at"])
+        self.assertIsNone(build["artifacts_expired_reason"])
+        conn.close()
+
+
+class DatabaseHousekeepingRepoTest(Test):
+    """Quota and artifact expiry repository methods."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-hk-")
+        self.db = Database(os.path.join(self.tmp_dir, "hk.db"))
+        self.db.projects.create("core")
+        self.db.projects.create("other")
+
+    def tearDown(self):
+        self.db.close()
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _build(self, id, finished_at, status="completed", project="core", release=False,
+               urls=("s3://b/x",)):
+        self.db.builds.create(id, project, is_release=release, artifact_urls=list(urls))
+        self.db.builds.update_status(
+            id, status, finished_at=finished_at, artifact_meta=[{"name": "x"}] if urls else []
+        )
+
+    def test_set_quota(self):
+        projects = self.db.projects
+        self.assertIsNone(projects.get("core")["quota_gb"])
+        self.assertTrue(projects.set_quota("core", 50))
+        self.assertEqual(projects.get("core")["quota_gb"], 50)
+        self.assertIsNone(projects.get("other")["quota_gb"])
+        self.assertTrue(projects.set_quota("core", None))
+        self.assertIsNone(projects.get("core")["quota_gb"])
+        self.assertFalse(projects.set_quota("ghost", 1))
+        with self.assertRaises(ValueError):
+            projects.set_quota("core", 0)
+
+    def test_mark_artifacts_expired(self):
+        self._build("b1", 100.0)
+        self.assertTrue(self.db.builds.mark_artifacts_expired("b1", "ttl", now=500.0))
+        build = self.db.builds.get("b1")
+        self.assertEqual(build["artifact_urls"], [])
+        self.assertEqual(build["artifact_meta"], [])
+        self.assertEqual(build["artifacts_expired_at"], 500.0)
+        self.assertEqual(build["artifacts_expired_reason"], "ttl")
+        self.assertFalse(self.db.builds.mark_artifacts_expired("ghost", "ttl"))
+        with self.assertRaises(ValueError):
+            self.db.builds.mark_artifacts_expired("b1", "because")
+
+    def test_evictable_builds(self):
+        self._build("new", 300.0)
+        self._build("old", 100.0)
+        self._build("failed", 200.0, status="failed")
+        self._build("release", 50.0, release=True)
+        self._build("no-artifacts", 60.0, urls=())
+        self._build("other-project", 70.0, project="other")
+        self._build("expired", 80.0)
+        self.db.builds.mark_artifacts_expired("expired", "pressure")
+        self.db.builds.create("running", "core", artifact_urls=["s3://b/y"])
+        self.db.builds.update_status("running", "running", started_at=1.0)
+
+        found = self.db.builds.evictable_builds("core", older_than=1000.0)
+        self.assertEqual([b["id"] for b in found], ["old", "failed", "new"])
+        found = self.db.builds.evictable_builds("core", older_than=250.0)
+        self.assertEqual([b["id"] for b in found], ["old", "failed"])
+        self.assertEqual(found[0]["artifact_urls"], ["s3://b/x"])
+
 
 class DatabaseConstraintsAndIntegrationTest(Test):
     """Test foreign key enforcement, cascading, multi-engine config, and job scheduling."""
