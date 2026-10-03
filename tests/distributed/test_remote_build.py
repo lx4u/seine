@@ -288,6 +288,33 @@ class RemoteBuildTest(Test):
         self.assertIn("hello", out)
         self.assertNotIn("task_plan", out)
 
+    def test_log_dir_gets_one_file_per_task(self):
+        logs = os.path.join(self.tmp_dir, "logs")
+        self.ws.items = [
+            json.dumps({"text": "one\n", "task": "rootfs"}),
+            json.dumps({"text": "two\n", "task": "package:amd64:g++"}),
+            json.dumps({"text": "three\n", "task": "rootfs"}),
+            json.dumps({"text": "system\n"}),
+            json.dumps({"text": "evil\n", "task": "../escape"}),
+        ]
+        ret, out, _ = self.run_build(log_dir=logs)
+        self.assertEqual(ret, 0)
+        self.assertNotIn("one", out)
+
+        def read(name):
+            with open(os.path.join(logs, name)) as f:
+                return f.read()
+        self.assertEqual(read("rootfs.log"), "one\nthree\n")
+        self.assertEqual(read("package:amd64:g++.log"), "two\n")
+        self.assertEqual(read("build.log"), "system\n")
+        self.assertEqual(read(".._escape.log"), "evil\n")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp_dir, "escape.log")))
+
+    def test_no_log_dir_writes_no_files(self):
+        self.ws.items = [json.dumps({"text": "x\n", "task": "rootfs"})]
+        self.run_build()
+        self.assertFalse(os.path.exists(os.path.join(self.tmp_dir, "rootfs.log")))
+
     def test_events_are_ignored_without_on_event(self):
         self.ws.items = [json.dumps({"type": "say", "text": "x"}), log("hello\n")]
         ret, out, _ = self.run_build()
