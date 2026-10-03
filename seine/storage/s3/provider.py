@@ -326,6 +326,20 @@ class S3StorageProvider(StorageProvider):
         self.client.delete_objects(self.bucket, [o["key"] for o in objects])
         return len(objects), sum(o["size"] for o in objects)
 
+    def list_objects(self, prefix=""):
+        """Return every object (key, size, last_modified, ...) under a bucket key prefix."""
+        return list(self.client.list_all_objects(self.bucket, prefix))
+
+    def lifecycle_rules(self):
+        return self.client.get_bucket_lifecycle(self.bucket)
+
+    def set_lifecycle_rules(self, rules):
+        self.client.put_bucket_lifecycle(self.bucket, rules)
+
+    def refresh_worktree(self, project: str, digest: str) -> bool:
+        """Restart the age of a staged worktree; False if it is not staged."""
+        return self.client.refresh_object(self.bucket, f"worktrees/{project}/{digest}.tar.zst")
+
     def push_worktree(self, project: str, digest: str, path: str):
         """Push a staged project worktree archive to S3."""
         if not isinstance(path, (bytes, bytearray)) and not os.path.exists(path):
