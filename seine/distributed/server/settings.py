@@ -7,6 +7,7 @@ from __future__ import annotations
 import dataclasses
 import ipaddress
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
@@ -45,6 +46,46 @@ class SettingsError(ValueError):
     """Raised when the server configuration is unusable."""
 
 
+_DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+_SIZE_UNITS = {"M": 1024**2, "G": 1024**3, "T": 1024**4}
+_DURATION_RE = re.compile(r"(\d+)([smhd])")
+_THRESHOLD_RE = re.compile(r"(\d+(?:\.\d+)?)(%|[MGT])")
+
+
+@dataclass(frozen=True)
+class Threshold:
+    """A storage level: a percentage of the project quota, or a size in bytes."""
+
+    value: float
+    percent: bool
+
+    @property
+    def bytes(self) -> Optional[int]:
+        """The size in bytes, or None for a percentage."""
+        return None if self.percent else int(self.value)
+
+
+@dataclass(frozen=True)
+class EnvRetention:
+    """Retention of one environment; durations are seconds, None means never."""
+
+    worktrees: Optional[float]
+    artifacts: Optional[float]
+    cache: Optional[float]
+    high_water: Optional[Threshold]
+    low_water: Optional[Threshold]
+    min_age: float
+
+
+@dataclass(frozen=True)
+class Retention:
+    """The 'retention:' section: sweep interval (seconds) and per-environment rules."""
+
+    interval: float
+    dev: EnvRetention
+    prod: EnvRetention
+
+
 @dataclass
 class Settings:
     """Runtime settings of seine-server."""
@@ -68,6 +109,8 @@ class Settings:
     # {project: {env: {access_key, secret_key}}}; keys come from the file only.
     s3_projects: dict = field(default_factory=dict, repr=False)
     s3_default: dict = field(default_factory=dict, repr=False)
+    # None keeps today's behaviour: nothing is ever deleted.
+    retention: Optional[Retention] = None
     config_path: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -152,7 +195,7 @@ class Settings:
         }
         out: dict[str, Any] = {}
         for name, value in values.items():
-            if name in ("s3_projects", "s3_default"):
+            if name in ("s3_projects", "s3_default", "retention"):
                 out[name] = value
                 continue
             try:
@@ -217,6 +260,89 @@ def _read_storage(section: Any) -> dict[str, Any]:
     return values
 
 
+def _duration(value: Any, where: str, allow_never: bool = True) -> Optional[float]:
+    """Parse '<n>s|m|h|d' into seconds; 'never' gives None."""
+    if allow_never and value == "never":
+        return None
+    match = _DURATION_RE.fullmatch(value.strip()) if isinstance(value, str) else None
+    if not match or int(match[1]) == 0:
+        never = " or 'never'" if allow_never else ""
+        raise SettingsError(f"{where}: invalid duration {value!r}, expected <n>s, <n>m, <n>h or <n>d{never}")
+    return float(int(match[1]) * _DURATION_UNITS[match[2]])
+
+
+def _threshold(value: Any, where: str) -> Threshold:
+    """Parse '<n>%' (above 0, up to 100) or '<n>M|G|T' (binary units)."""
+    match = _THRESHOLD_RE.fullmatch(value.strip()) if isinstance(value, str) else None
+    number = float(match[1]) if match else 0.0
+    if not match or number <= 0 or (match[2] == "%" and number > 100):
+        raise SettingsError(f"{where}: invalid threshold {value!r}, expected <n>% (1 to 100) or <n>M, <n>G, <n>T")
+    if match[2] == "%":
+        return Threshold(number, True)
+    return Threshold(number * _SIZE_UNITS[match[2]], False)
+
+
+_ENV_DEFAULTS = {
+    "dev": {
+        "worktrees": "3d",
+        "artifacts": "14d",
+        "cache": "30d",
+        "high_water": "80%",
+        "low_water": "60%",
+        "min_age": "1h",
+    },
+    "prod": {
+        "worktrees": "14d",
+        "artifacts": "never",
+        "cache": "90d",
+        "high_water": "85%",
+        "low_water": None,
+        "min_age": "1h",
+    },
+}
+
+
+def _env_retention(env: str, section: Any) -> EnvRetention:
+    where = f"retention.{env}"
+    if section is None:
+        section = {}
+    if not isinstance(section, Mapping):
+        raise SettingsError(f"{where}: expected a mapping")
+    unknown = set(section) - set(_ENV_DEFAULTS[env])
+    if unknown:
+        raise SettingsError(f"{where}: unknown key(s): {', '.join(sorted(map(str, unknown)))}")
+    raw = {**_ENV_DEFAULTS[env], **section}
+    out: dict[str, Any] = {}
+    for key in ("worktrees", "artifacts", "cache"):
+        out[key] = _duration(raw[key], f"{where}.{key}")
+    out["min_age"] = _duration(raw["min_age"], f"{where}.min_age", allow_never=False)
+    for key in ("high_water", "low_water"):
+        out[key] = None if raw[key] is None else _threshold(raw[key], f"{where}.{key}")
+    high, low = out["high_water"], out["low_water"]
+    if high and low:
+        if high.percent != low.percent:
+            raise SettingsError(f"{where}: high_water and low_water must both be percentages or both sizes")
+        if low.value >= high.value:
+            raise SettingsError(f"{where}: low_water must be below high_water")
+    return EnvRetention(**out)
+
+
+def _read_retention(section: Any) -> Retention:
+    """Validate the 'retention:' section of the config file."""
+    if not isinstance(section, Mapping):
+        raise SettingsError("invalid 'retention' section: expected a mapping")
+    unknown = set(section) - {"interval", *S3_ENVIRONMENTS}
+    if unknown:
+        raise SettingsError(f"unknown retention setting(s): {', '.join(sorted(map(str, unknown)))}")
+    interval = section.get("interval", 3600)
+    if isinstance(interval, str):
+        interval = _duration(interval, "retention.interval", allow_never=False)
+    elif isinstance(interval, bool) or not isinstance(interval, (int, float)) or interval <= 0:
+        raise SettingsError(f"retention.interval: invalid value {interval!r}, expected seconds above zero")
+    envs = {env: _env_retention(env, section.get(env)) for env in S3_ENVIRONMENTS}
+    return Retention(interval=float(interval), **envs)
+
+
 def _read_config(path: str) -> dict[str, Any]:
     """Read a server config file; keys are flat or under 'server:'."""
     try:
@@ -231,7 +357,11 @@ def _read_config(path: str) -> dict[str, Any]:
     section = data.pop("server", None) or {}
     database = data.pop("database", None) or section.pop("database", None)
     storage = data.pop("storage", None) or section.pop("storage", None)
+    has_retention = "retention" in data or "retention" in section
+    retention = data.pop("retention", None) or section.pop("retention", None) or {}
     values = {**data, **section}
+    if has_retention:
+        values["retention"] = _read_retention(retention)
     if storage is not None:
         values.update(_read_storage(storage))
     if database:
