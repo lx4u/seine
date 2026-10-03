@@ -70,7 +70,8 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
         "target-arch=",
         "tasks-only",
         "token=",
-        "verbose"
+        "verbose",
+        "worktree="
     ]
 
     def __init__(self):
@@ -296,6 +297,11 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                     sys.exit(1)
             elif o in ("--remote",):
                 self.options["remote"] = a
+            elif o in ("--worktree",):
+                if a not in ("auto", "sparse", "full"):
+                    sys.stderr.write("error: --worktree expects auto, sparse or full\n")
+                    sys.exit(1)
+                self.options["worktree"] = a
             elif o in ("--ca-cert",):
                 self.options["ca_cert"] = a
             elif o in ("--insecure",):
@@ -474,6 +480,11 @@ Flags:
       --remote URL      dispatch build to a remote seine-server. Ctrl+C asks the
                         server to cancel the build (exit status 130). Exit
                         status: 0 completed, 1 failed, 2 usage or server error
+      --worktree MODE   what a remote build uploads: sparse sends only the files
+                        the specification reads, full sends the whole directory
+                        (minus ignored files), auto (default) is sparse unless
+                        the playbook reads files seine cannot list, such as
+                        roles
       --token TOKEN     bearer token for remote server authentication
                         ($SEINE_TOKEN says the same thing). Without one,
                         a token saved in the keyring or credentials.json is

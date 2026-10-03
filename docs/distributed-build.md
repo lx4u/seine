@@ -52,6 +52,25 @@ This guide walks through setting up:
    deliverables directly from S3, without relaying large disk images through
    the server, and checks each one against the manifest.
 
+### What the bundle holds
+
+By default the client sends only the files the specification reads: the
+specification files and their lock files, patches, kernel fragments, text
+files, local `source: file://` trees, `library/` directories and the host
+files a playbook names with a relative `src:`, for every `multiconfig:`
+group. Editing anything else in the repository leaves the bundle, and so its
+digest, unchanged: nothing is uploaded again and the workers keep their
+cached copy. Files outside the specification are never uploaded.
+
+Some playbook keys read files seine cannot list: `roles`, `include_tasks`,
+`import_tasks`, `import_playbook`, `vars_files`, `include_vars`, `script`
+and `lookup()`. When a playbook uses one, the client says so and sends the
+whole directory, minus the files that `.gitignore` and `.seineignore`
+exclude. `--worktree=sparse` or `--worktree=full` overrides that choice.
+
+A specification that reads a file outside the project directory is refused
+in every mode: the worker could not find it.
+
 ---
 
 ## Prerequisites

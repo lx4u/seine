@@ -422,6 +422,7 @@ class RemoteBuild:
         self.drain_grace = drain_grace
         self.cancel_wait = cancel_wait
         self.verify = requests_verify(self.ca_cert)
+        self._build = None
 
     def _say(self, text: str) -> None:
         self._out(text + "\n")
@@ -579,18 +580,27 @@ class RemoteBuild:
         )
         return HOST_ARCH
 
+    def _loaded_build(self):
+        """Load and parse the spec once; the secrets and the worktree both need it."""
+        if self._build is None:
+            from seine.build import BuildCmd
+
+            build = BuildCmd()
+            build.load_all([os.path.join(self.root_dir, self.spec_file)])
+            build.parse()
+            self._build = build
+        return self._build
+
     def _feed_secrets(self) -> dict[str, Any]:
         """Resolve and check the feed credentials the spec needs, as the local build does."""
         import yaml
         from seine import credentials
-        from seine.build import BuildCmd, collect_credentials
+        from seine.build import collect_credentials
         from seine.utils import feeds
 
-        build = BuildCmd()
         found: dict[str, dict[str, str]] = {}
         try:
-            build.load_all([os.path.join(self.root_dir, self.spec_file)])
-            build.parse()
+            build = self._loaded_build()
             collect_credentials([build], prompt=self.prompt)
             for feed in feeds(build.spec["distribution"]):
                 if feed["auth"] is not None:
@@ -609,11 +619,36 @@ class RemoteBuild:
             raise RemoteError(f"refusing to send feed credentials: {e}") from e
         return {"feeds": found}
 
-    def _upload(self) -> str:
-        from seine.distributed.client.worktree import pack_worktree
+    def _pack(self) -> tuple[str, str]:
+        """Pack what the spec reads; the whole tree on worktree=full, or on auto if it must."""
+        from seine.distributed.client import worktree
 
+        mode = self.options.get("worktree", "auto")
+        if mode == "full":
+            return worktree.pack_worktree(self.root_dir)
+        import yaml
+        from seine.build import closure
+
+        try:
+            build = self._loaded_build()
+            unmodeled = closure.unmodeled([build]) if mode == "auto" else []
+            if unmodeled:
+                self._say(f"[client] The playbook uses {', '.join(unmodeled)}: sending the "
+                          "whole directory (--worktree=sparse to send only what is listed)")
+                return worktree.pack_worktree(self.root_dir)
+            # The spec travels under the name sent to the worker, which the
+            # loaded (symlink-resolved) paths do not always carry.
+            wanted = closure.collect([build]) | {
+                os.path.join(self.root_dir, self.spec_file)}
+            return worktree.pack_sparse_worktree(self.root_dir, wanted)
+        except worktree.OutsideRootError as e:
+            raise RemoteError(f"worktree: {e}; move it under the project directory") from e
+        except (ValueError, OSError, yaml.YAMLError) as e:
+            raise RemoteError(f"worktree: {e} (--worktree=full packs the whole tree)") from e
+
+    def _upload(self) -> str:
         self._say(f"[client] Packaging worktree at {self.root_dir}...")
-        archive_path, local_digest = pack_worktree(self.root_dir)
+        archive_path, local_digest = self._pack()
         try:
             self._say(f"[client] Uploading worktree bundle ({local_digest})...")
             try:
