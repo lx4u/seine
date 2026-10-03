@@ -15,6 +15,7 @@ import requests
 from websockets.exceptions import WebSocketException
 
 from seine.credentials import CredentialNotFound, token_source
+from seine.distributed.client.demux import LogDemux
 from seine.distributed.common.models import (
     BUILD_OPTION_KEYS,
     BuildSubmitRequest,
@@ -269,11 +270,13 @@ class LogFollower(threading.Thread):
         out: Callable[[str], None] = _stdout,
         err: Callable[[str], None] = _stderr,
         on_event: Optional[Callable[[dict[str, Any]], None]] = None,
+        demux: Optional[LogDemux] = None,
     ):
         super().__init__(daemon=True)
         self._write = out
         self._warn = err
         self._on_event = on_event
+        self._demux = demux
         self.url = url
         self.token = token
         self.ssl_context = ssl_context
@@ -305,6 +308,8 @@ class LogFollower(threading.Thread):
             self._fail(f"cannot open the log stream: {e}")
         finally:
             ws.close()
+            if self._demux is not None:
+                self._demux.close()
 
     def _emit(self, raw: Union[str, bytes]) -> None:
         try:
@@ -317,7 +322,12 @@ class LogFollower(threading.Thread):
             if self._on_event is not None:
                 self._on_event(message)
             return
-        self._write(message.get("text", ""))
+        text = message.get("text", "")
+        # With a demux the log is read back from its files, not echoed.
+        if self._demux is not None:
+            self._demux.write(text, message.get("task"))
+        else:
+            self._write(text)
 
     def _fail(self, reason: str) -> None:
         self.failure = reason
@@ -378,7 +388,10 @@ class RemoteBuild:
         ask_project: Optional[Callable[[dict[str, str]], tuple[str, bool]]] = None,
         on_download: Optional[Callable[[str, str, str, int], None]] = None,
         on_event: Optional[Callable[[dict[str, Any]], None]] = None,
+        log_dir: Optional[str] = None,
     ):
+        # With log_dir, the streamed log goes there, one file per task, not to out.
+        self.log_dir = log_dir
         # out/err/prompt let the TUI take over what would go to the terminal.
         self._out = out
         self._err = err
@@ -656,6 +669,7 @@ class RemoteBuild:
         follower = LogFollower(
             stream_url, self.token, ws_ssl_context(stream_url, self.ca_cert),
             out=self._out, err=self._err, on_event=self.on_event,
+            demux=LogDemux(self.log_dir) if self.log_dir else None,
         )
         follower.start()
         return follower
