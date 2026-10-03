@@ -89,7 +89,7 @@ class IssuesScreen(BaseScreen):
     # OverviewScreen's own 'escape' -> action_close_log.
     BINDINGS = BaseScreen.BINDINGS + [Binding("escape", "close_detail", show=False)]
 
-    def compose(self):
+    def compose_content(self):
         yield Horizontal(
             Vertical(
                 Static(LEGEND, id="issuelegend", markup=False),
@@ -100,7 +100,6 @@ class IssuesScreen(BaseScreen):
             StaticPane(Static(id="issuesstats", markup=False), id="issuesstats-pane"),
             id="main",
         )
-        yield from self.footer()
 
     def on_mount(self):
         # Set before super().on_mount(): it calls refresh_data() right

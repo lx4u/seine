@@ -139,13 +139,12 @@ class TargetScreen(BaseScreen):
         super().__init__(*args, **kwargs)
         self._spinner_frame = 0
 
-    def compose(self):
+    def compose_content(self):
         yield Horizontal(
             ConsolePane(Static(id="console", markup=False), id="console-pane"),
             StaticPane(TargetStatusStatic(id="targetstatus", markup=False), id="targetstatus-pane"),
             id="main",
         )
-        yield from self.footer()
 
     def on_mount(self):
         super().on_mount()

@@ -176,7 +176,7 @@ class RemoteScreen(BaseScreen):
     def artifacts(self, value: list[dict[str, Any]]):
         self.remote_artifacts = value
 
-    def compose(self):
+    def compose_content(self):
         yield Horizontal(
             RemotePane(RemoteBodyStatic(id="remotebody"), id="remotemain"),
             Vertical(
@@ -186,7 +186,6 @@ class RemoteScreen(BaseScreen):
             ),
             id="main",
         )
-        yield from self.footer()
 
     def on_mount(self):
         super().on_mount()

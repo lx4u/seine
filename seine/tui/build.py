@@ -500,7 +500,7 @@ class BuildScreen(BaseScreen):
 
     # Only screen with a BUILD OUTPUT/TASKS row: spec tree + #cmd on top,
     # then a second row split the same 2/3 : 1/3 way.
-    def compose(self):
+    def compose_content(self):
         yield Horizontal(
             SpecTree(id="spectree", classes="spectree"),
             StaticPane(Static(id="body", markup=False), id="cmd"),
@@ -514,7 +514,6 @@ class BuildScreen(BaseScreen):
             StaticPane(Static(id="tasklist", markup=False), id="tasks"),
             id="buildrow",
         )
-        yield from self.footer()
 
     def on_mount(self):
         self._tail = Tail()

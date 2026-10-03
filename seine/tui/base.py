@@ -412,9 +412,13 @@ class BaseScreen(Screen):
     def action_quit_app(self):
         self.app.exit()
 
-    # Spec tree on the left, screen content on the right. BuildScreen
-    # overrides compose() for its own layout.
     def compose(self):
+        yield from self.compose_content()
+        yield from self.footer()
+
+    # Spec tree on the left, screen content on the right. Screens
+    # override this for their own layout, the footer comes after.
+    def compose_content(self):
         yield Horizontal(
             SpecTree(id="spectree", classes="spectree"),
             # markup=False: a YAML list like 'partitions: [a, b]' would
@@ -422,7 +426,6 @@ class BaseScreen(Screen):
             StaticPane(Static(id="body", markup=False), id="cmd"),
             id="main",
         )
-        yield from self.footer()
 
     # Completions pane, prompt, status/indicators/hint in that order,
     # status under the prompt like a shell's own line.

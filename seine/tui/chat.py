@@ -59,7 +59,7 @@ class ChatScreen(BaseScreen):
     #contextstats { color: $text-muted; height: auto; }
     """
 
-    def compose(self):
+    def compose_content(self):
         yield Horizontal(
             SpecTree(id="spectree", classes="spectree"),
             StaticPane(Static(id="body", markup=False), id="cmd"),
@@ -81,7 +81,6 @@ class ChatScreen(BaseScreen):
             ),
             id="chatrow",
         )
-        yield from self.footer()
 
     def on_mount(self):
         super().on_mount()

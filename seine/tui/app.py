@@ -112,7 +112,7 @@ class OverviewScreen(BaseScreen):
     # The right side is a vertical split: timeline (or node content)
     # up top, playing row's call arguments below -- the arguments
     # pane only shows while a replay with a timeline runs.
-    def compose(self):
+    def compose_content(self):
         yield Horizontal(
             SpecTree(id="spectree", classes="spectree"),
             LogViewer(id="logviewer"),
@@ -124,7 +124,6 @@ class OverviewScreen(BaseScreen):
             ),
             id="main",
         )
-        yield from self.footer()
 
     # Not reported from SeineApp.on_mount(): the status bar isn't
     # mounted yet at that point.
@@ -429,7 +428,7 @@ class DiffScreen(BaseScreen):
 # output pane. Reuses BuildScreen's #tail/#buildrow ids -- safe since
 # only one screen is mounted at a time.
 class TestScreen(BaseScreen):
-    def compose(self):
+    def compose_content(self):
         yield Horizontal(
             SpecTree(id="spectree", classes="spectree"),
             StaticPane(Static(id="body", markup=False), id="cmd"),
@@ -437,7 +436,6 @@ class TestScreen(BaseScreen):
         )
         yield Horizontal(RichLog(id="tail", markup=False, wrap=True, max_lines=4000),
                          id="buildrow")
-        yield from self.footer()
 
     def on_mount(self):
         super().on_mount()

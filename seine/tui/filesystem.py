@@ -240,7 +240,7 @@ class FilesystemScreen(BaseScreen):
     BINDINGS = BaseScreen.BINDINGS + [Binding("escape", "close_preview", show=False)]
 
     # #previewpane shares the body slot with #fslist while previewing.
-    def compose(self):
+    def compose_content(self):
         yield Horizontal(
             SpecTree(id="spectree", classes="spectree"),
             Vertical(
@@ -251,7 +251,6 @@ class FilesystemScreen(BaseScreen):
             ),
             id="main",
         )
-        yield from self.footer()
 
     def on_mount(self):
         # Tracks which pane update_body() last showed, so focus follows

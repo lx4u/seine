@@ -236,7 +236,7 @@ class VendorScreen(BaseScreen):
     # Same split as BuildScreen but 50/50 (own ids/CSS, not '#spectree'
     # etc which are 2:1): the stats panel and task list matter here as
     # much as the tree/log.
-    def compose(self):
+    def compose_content(self):
         yield Horizontal(
             SpecTree(id="vendorspectree", classes="spectree"),
             StaticPane(Static(id="vendorstats", markup=False), id="vendorstatspane"),
@@ -248,7 +248,6 @@ class VendorScreen(BaseScreen):
             StaticPane(Static(id="vendortasks", markup=False), id="vendortaskspane"),
             id="vendorrow",
         )
-        yield from self.footer()
 
     def on_mount(self):
         self._tail = Tail()
