@@ -6,13 +6,14 @@ import os
 import shutil
 import tempfile
 import threading
+from datetime import datetime, timezone
 from unittest import mock
 
 from avocado import Test
 
 from seine.distributed.server import housekeeping
 from seine.distributed.server.db import Database
-from seine.distributed.server.housekeeping import HousekeepingBusy, run_housekeeping
+from seine.distributed.server.housekeeping import HousekeepingBusy, merge_lifecycle, run_housekeeping
 from seine.distributed.server.settings import EnvRetention, Retention, Settings, Threshold
 from seine.storage.s3.client import S3ClientError
 
@@ -28,6 +29,23 @@ class FakeProvider:
         self.objects = {}
         self.failing = set()
         self.gate = None
+        self.modified = {}
+        self.rules = []
+        self.puts = []
+        self.lifecycle_error = None
+
+    def list_objects(self, prefix=""):
+        stamp = lambda k: datetime.fromtimestamp(self.modified[k], timezone.utc).isoformat() if k in self.modified else None
+        return [{"key": k, "size": s, "last_modified": stamp(k)} for k, s in sorted(self.objects.items()) if k.startswith(prefix)]
+
+    def lifecycle_rules(self):
+        if self.lifecycle_error:
+            raise self.lifecycle_error
+        return list(self.rules)
+
+    def set_lifecycle_rules(self, rules):
+        self.puts.append(rules)
+        self.rules = rules
 
     def usage(self, prefix=""):
         if self.gate:
@@ -35,6 +53,8 @@ class FakeProvider:
         return sum(s for k, s in self.objects.items() if k.startswith(prefix))
 
     def delete_prefix(self, prefix):
+        if prefix in self.failing:
+            raise S3ClientError("boom")
         if any(prefix == f"artifacts/core/{b}/" for b in self.failing):
             raise S3ClientError("boom")
         gone = {k: s for k, s in self.objects.items() if k.startswith(prefix)}
@@ -208,3 +228,136 @@ class HousekeepingTest(Test):
             self.dev.gate.set()
             thread.join()
         self.assertFalse(housekeeping._lock.locked())
+
+
+DAY = 24 * HOUR
+FOREIGN = {"ID": "other", "Status": "Enabled", "Filter": {"Prefix": "x/"}, "Expiration": {"Days": 9}}
+
+
+class LifecycleMergeTest(Test):
+    def _days(self, rules):
+        return {r["ID"]: r.get("Expiration", {}).get("Days") for r in rules}
+
+    def test_empty_bucket_gets_both_rules(self):
+        rules = merge_lifecycle([], 3 * DAY)
+        self.assertEqual(self._days(rules), {"seine-abort-multipart": None, "seine-worktrees-expiry": 3})
+        abort = rules[0]["AbortIncompleteMultipartUpload"]["DaysAfterInitiation"]
+        self.assertEqual(abort, 1)
+
+    def test_days_are_rounded_up_with_a_minimum_of_one(self):
+        self.assertEqual(self._days(merge_lifecycle([], 90 * 60))["seine-worktrees-expiry"], 1)
+        self.assertEqual(self._days(merge_lifecycle([], DAY + 1))["seine-worktrees-expiry"], 2)
+        self.assertEqual(self._days(merge_lifecycle([], 14 * DAY))["seine-worktrees-expiry"], 14)
+
+    def test_foreign_rules_are_kept_and_own_ones_replaced(self):
+        old = {"ID": "seine-worktrees-expiry", "Status": "Enabled", "Filter": {"Prefix": "worktrees/"},
+               "Expiration": {"Days": 30}}
+        rules = merge_lifecycle([FOREIGN, old], 3 * DAY)
+        self.assertEqual(rules[0], FOREIGN)
+        self.assertEqual(self._days(rules)["seine-worktrees-expiry"], 3)
+        self.assertEqual(len(rules), 3)
+
+    def test_no_change_means_no_put(self):
+        rules = merge_lifecycle([FOREIGN], 3 * DAY)
+        self.assertIsNone(merge_lifecycle(rules, 3 * DAY))
+
+    def test_a_reply_without_status_still_matches(self):
+        rules = [{k: v for k, v in r.items() if k != "Status"} for r in merge_lifecycle([], 3 * DAY)]
+        self.assertIsNone(merge_lifecycle(rules, 3 * DAY))
+
+    def test_never_removes_the_worktrees_rule_only(self):
+        rules = merge_lifecycle([FOREIGN] + merge_lifecycle([], 3 * DAY), None)
+        self.assertEqual(self._days(rules), {"other": 9, "seine-abort-multipart": None})
+        self.assertIsNone(merge_lifecycle(rules, None))
+
+
+class WorktreeHousekeepingTest(HousekeepingTest):
+    def _worktree(self, digest, age_d, provider=None, size=10):
+        provider = provider or self.dev
+        key = f"worktrees/core/{digest}.tar.zst"
+        provider.objects[key] = size
+        provider.modified[key] = NOW - age_d * DAY
+
+    def _wt_settings(self):
+        return self._settings(env(worktrees=3 * DAY), env(worktrees=14 * DAY))
+
+    def test_only_aged_unreferenced_digests_are_deleted(self):
+        self._worktree("old", 5)
+        self._worktree("fresh", 1)
+        self._worktree("busy", 9)
+        self._worktree("running", 9)
+        self.db.builds.create("q", "core", worktree_digest="busy")
+        self.db.builds.create("r", "core", worktree_digest="running")
+        self.db.builds.update_status("r", "running", started_at=1.0)
+        report = self._run(self._wt_settings())
+        self.assertEqual(report.worktrees, [("old", 10)])
+        self.assertEqual(sorted(self.dev.objects), [
+            "worktrees/core/busy.tar.zst", "worktrees/core/fresh.tar.zst", "worktrees/core/running.tar.zst"])
+
+    def test_a_finished_build_no_longer_protects_its_digest(self):
+        self._worktree("done", 5)
+        self.db.builds.create("d", "core", worktree_digest="done")
+        self.db.builds.update_status("d", "completed", finished_at=NOW)
+        self.assertEqual(self._run(self._wt_settings()).worktrees, [("done", 10)])
+
+    def test_prod_uses_its_own_ttl(self):
+        self._worktree("a", 5, self.prod)
+        self._worktree("b", 20, self.prod)
+        self._worktree("c", 5, self.dev)
+        report = self._run(self._wt_settings())
+        self.assertEqual(report.worktrees, [("c", 10), ("b", 10)])
+        self.assertEqual(list(self.prod.objects), ["worktrees/core/a.tar.zst"])
+
+    def test_usage_before_counts_the_worktrees_that_are_swept(self):
+        self._worktree("old", 5, size=7)
+        self._build("b1", 1)
+        report = self._run(self._wt_settings())
+        self.assertEqual((report.usage_before, report.usage_after), (GB + 7, GB))
+
+    def test_never_keeps_every_worktree(self):
+        self._worktree("old", 100)
+        report = self._run(self._settings())
+        self.assertEqual(report.worktrees, [])
+        self.assertEqual(len(self.dev.objects), 1)
+
+    def test_other_projects_and_prefixes_are_spared(self):
+        self.dev.objects["worktrees/core2/x.tar.zst"] = 1
+        self.dev.modified["worktrees/core2/x.tar.zst"] = 0
+        self.dev.objects["artifacts/core/x"] = 1
+        self.assertEqual(self._run(self._wt_settings()).worktrees, [])
+
+    def test_dry_run_lists_and_changes_nothing(self):
+        self._worktree("old", 5)
+        report = self._run(self._wt_settings(), dry_run=True)
+        self.assertEqual(report.worktrees, [("old", 10)])
+        self.assertEqual(len(self.dev.objects), 1)
+        self.assertEqual((self.dev.puts, self.prod.puts), ([], []))
+
+    def test_a_failed_delete_is_recorded_and_the_rest_goes_on(self):
+        self._worktree("a", 5)
+        self._worktree("b", 5)
+        self.dev.failing = {"worktrees/core/a.tar.zst"}
+        with self.assertLogs("seine.server.housekeeping", "ERROR"):
+            report = self._run(self._wt_settings())
+        self.assertEqual(report.worktrees, [("b", 10)])
+        self.assertEqual([f[0] for f in report.failures], ["worktree a"])
+
+    def test_rules_are_installed_in_both_buckets_once(self):
+        self.dev.rules = [FOREIGN]
+        settings = self._wt_settings()
+        self._run(settings)
+        self._run(settings)
+        self.assertEqual(len(self.dev.puts), 1)
+        self.assertEqual(len(self.prod.puts), 1)
+        self.assertIn(FOREIGN, self.dev.rules)
+        days = {r["ID"]: r.get("Expiration", {}).get("Days") for r in self.prod.rules}
+        self.assertEqual(days["seine-worktrees-expiry"], 14)
+
+    def test_lifecycle_failure_is_reported_and_the_sweep_goes_on(self):
+        self.dev.lifecycle_error = S3ClientError("denied")
+        self._worktree("old", 5)
+        with self.assertLogs("seine.server.housekeeping", "WARNING"):
+            report = self._run(self._wt_settings())
+        self.assertEqual(report.lifecycle, ["dev: denied"])
+        self.assertEqual(report.worktrees, [("old", 10)])
+        self.assertEqual(len(self.prod.puts), 1)

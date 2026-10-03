@@ -206,17 +206,23 @@ def _print_gc_report(report: dict[str, Any]) -> None:
     name = report["project"]
     if report.get("skipped_reason"):
         print(f"{name}: skipped, {report['skipped_reason']}")
-        return
-    evicted = report["evicted"]
-    freed = sum(e["bytes"] for e in evicted)
-    verb = "would evict" if report["dry_run"] else "evicted"
-    usage = ""
-    if report.get("usage_before") is not None and report.get("usage_after") is not None:
-        usage = f"usage {format_size(report['usage_before'])} -> {format_size(report['usage_after'])}, "
-    noun = "build" if len(evicted) == 1 else "builds"
-    print(f"{name}: {usage}{verb} {len(evicted)} {noun} ({format_size(freed)})")
-    for e in evicted:
-        print(f"  build {e['build']}  {e['reason']}  {format_size(e['bytes'])}")
+    else:
+        evicted = report["evicted"]
+        freed = sum(e["bytes"] for e in evicted)
+        verb = "would evict" if report["dry_run"] else "evicted"
+        usage = ""
+        if report.get("usage_before") is not None and report.get("usage_after") is not None:
+            usage = f"usage {format_size(report['usage_before'])} -> {format_size(report['usage_after'])}, "
+        noun = "build" if len(evicted) == 1 else "builds"
+        print(f"{name}: {usage}{verb} {len(evicted)} {noun} ({format_size(freed)})")
+        for e in evicted:
+            print(f"  build {e['build']}  {e['reason']}  {format_size(e['bytes'])}")
+    worktrees = report.get("worktrees") or []
+    if worktrees:
+        size = format_size(sum(w["bytes"] for w in worktrees))
+        print(f"  worktrees: {len(worktrees)} {'would expire' if report['dry_run'] else 'expired'} ({size})")
+    for note in report.get("lifecycle") or []:
+        print(f"  lifecycle rules not installed, {note}")
     for f in report["failures"]:
         print(f"  failed {f['build']}: {f['error']}")
 
