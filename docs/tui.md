@@ -140,7 +140,10 @@ type in the prompt (the terminal has to report ctrl-digit, as kitty, WezTerm
 and foot do; clicking the sidebar always works). The cockpit's top-right
 pane shows the full details of the selected row (IDs, checksums, timestamps,
 settings), which the table has to truncate; the connection status and the
-tab list sit below it. `/remote status` and `/remote disconnect` do what
+tab list sit below it. An artifact the server has expired (age or storage
+limit) stays in the artifacts tab with its name and size and `expired` in
+the download column; its details give the reason and the time, and `Enter`
+or `d` on it says so instead of downloading. `/remote status` and `/remote disconnect` do what
 they say.
 
 `/project` chooses the project remote builds go to. With no argument it
