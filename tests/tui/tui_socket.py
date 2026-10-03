@@ -14,6 +14,7 @@ import avocado
 import contextlib
 import json
 import os
+import shutil
 import socket
 import stat
 import sys
@@ -54,13 +55,20 @@ def _tui_required(test):
         test.cancel("the 'tui' extra (textual) is not installed: %s" % e)
 
 def _run(scenario):
-    asyncio.run(scenario())
+    try:
+        asyncio.run(scenario())
+    finally:
+        while _socket_dirs:
+            shutil.rmtree(_socket_dirs.pop(), ignore_errors=True)
 
 # A short, unprefixed-by-workdir path -- AF_UNIX addresses are capped
 # at ~108 bytes on Linux, and avocado's own per-test workdir can run
 # longer than that on its own.
+_socket_dirs = []
+
 def _socket_path():
-    return os.path.join(tempfile.mkdtemp(prefix="sock-"), "s")
+    _socket_dirs.append(tempfile.mkdtemp(prefix="sock-"))
+    return os.path.join(_socket_dirs[-1], "s")
 
 # A thin wrapper around a raw AF_UNIX client socket that keeps its own
 # read buffer across calls -- a bare socket.recv(4096) can return
