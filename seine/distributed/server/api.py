@@ -476,7 +476,8 @@ def create_app(
 
         download_urls: dict[str, str] = {}
         manifest = build.get("artifact_meta") or []
-        if build.get("status") == "completed" and manifest:
+        expired = bool(build.get("artifacts_expired_at"))
+        if build.get("status") == "completed" and manifest and not expired:
             project = build["project"]
             project_row = app_db.get_project(project)
             is_release = build.get("is_release", False)

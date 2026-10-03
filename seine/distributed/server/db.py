@@ -537,14 +537,17 @@ class BuildRepo:
     def mark_artifacts_expired(
         self, build_id: str, reason: str, now: Optional[float] = None
     ) -> bool:
-        """Forget the artifacts of a build whose objects were deleted."""
+        """Drop the download targets of a build whose objects were deleted.
+
+        The artifact metadata stays, so clients can still list what it held.
+        """
         if reason not in ("ttl", "pressure"):
             raise ValueError(f"unknown expiry reason: {reason}")
         with self.conn:
             cur = self.conn.execute(
                 """
                 UPDATE builds
-                SET artifact_urls = '[]', artifact_meta = '[]',
+                SET artifact_urls = '[]',
                     artifacts_expired_at = ?, artifacts_expired_reason = ?
                 WHERE id = ?
                 """,

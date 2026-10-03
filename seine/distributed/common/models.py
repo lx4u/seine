@@ -59,9 +59,14 @@ class ArtifactMeta(BaseModel):
 EXPIRY_REASONS = {"ttl": "age", "pressure": "storage pressure"}
 
 
+def format_expiry_reason(reason: str | None) -> str:
+    """Words for an artifacts_expired_reason code, e.g. 'storage pressure'."""
+    return EXPIRY_REASONS.get(reason or "", reason or "unknown")
+
+
 def expired_text(reason: str | None) -> str:
     """Words for an artifacts_expired_reason code, e.g. 'expired (age)'."""
-    return f"expired ({EXPIRY_REASONS.get(reason or '', reason or 'unknown')})"
+    return f"expired ({format_expiry_reason(reason)})"
 
 
 class BuildResponse(BuildModel):

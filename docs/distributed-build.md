@@ -326,7 +326,8 @@ log, not in the output of the command.
 The build stays in the database. When its artifacts have been evicted,
 `GET /api/v1/builds/{id}` still answers 200 and carries `artifacts_expired_at`
 and `artifacts_expired_reason` (`ttl` for age, `pressure` for the size
-limit), with empty `artifacts` and `download_urls`. It is not an HTTP 410.
+limit). `download_urls` is empty but `artifacts` still lists what the build
+produced (name, size, SHA-256). It is not an HTTP 410.
 The client prints a message such as `artifacts of build bld-1a2b3c4d expired
 (storage pressure); rebuild to get them again` and exits 1 (nothing is checked
 with `--no-download`), and the TUI shows an `expired (...)` row in the

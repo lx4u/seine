@@ -174,7 +174,7 @@ class TestBuildArtifactDownloadUrlsAPI(Test):
             self.assertEqual(data["artifacts_expired_at"], 1234.0)
             self.assertEqual(data["artifacts_expired_reason"], reason)
             self.assertEqual(data["download_urls"], {})
-            self.assertEqual(data["artifacts"], [])
+            self.assertEqual([a["name"] for a in data["artifacts"]], ["pc-image.img"])
         self.mock_storage.generate_download_url.assert_not_called()
 
     def test_queued_build_returns_empty_download_urls(self):
