@@ -45,7 +45,7 @@ def split(args):
 # between groups. 'defer_uki_check' skips the parse-time check that a
 # named 'initrd:' is already deployed, for a group that runs 'after:'
 # another one that deploys it in this same run.
-def _load(files, options, defer_uki_check=False):
+def load_group(files, options, defer_uki_check=False):
     build = BuildCmd()
     build.options = dict(options, ansible_library=[])
     build.options["files"] = files
@@ -304,7 +304,7 @@ def _logs(groups_files):
 # group: parse every group, print or build the merged result, then run
 # the bookkeeping Image.build() normally does per image.
 def run(groups_files, options):
-    builds = [_load(files, options) for files in groups_files]
+    builds = [load_group(files, options) for files in groups_files]
     _check_filenames(builds)
     _check_builder_image_collisions(builds)
 
