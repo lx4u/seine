@@ -75,6 +75,9 @@ TASK_RE = re.compile(r"^TASK \[(.+)\] \*+\s*$")
 # work left (_save_downloads()/_finalize()).
 PLAY_RECAP_RE = re.compile(r"^PLAY RECAP \*+\s*$")
 
+# The single row a remote build has until the worker announces its plan.
+REMOTE_PLACEHOLDER = "remote build"
+
 def new_row(needs=(), state="pending"):
     return {"needs": list(needs), "state": state, "started": None, "elapsed": None}
 
@@ -109,11 +112,10 @@ class BuildState:
         # App._build_finished() whether to give the AI chat an
         # unprompted turn to report the outcome. Reset each build.
         self.notify_ai = False
-        # Remote build: the server's host, its RemoteBuild (for /cancel)
-        # and the log text not yet written to #tail. None for a local one.
+        # Remote build: the server's host and its RemoteBuild (for /cancel).
+        # None for a local one.
         self.remote = None
         self.remote_job = None
-        self.remote_text = []
         # Where the streamed log of a remote build is kept, see 'logs'.
         self.remote_logs = None
 
@@ -126,10 +128,9 @@ class BuildState:
         self.remote = host
         self.remote_job = job
         self.remote_logs = log_dir
-        self.remote_text = []
-        self.order = ["remote build"]
-        self.rows = {"remote build": new_row()}
-        self.current = "remote build"
+        self.order = [REMOTE_PLACEHOLDER]
+        self.rows = {REMOTE_PLACEHOLDER: new_row()}
+        self.current = REMOTE_PLACEHOLDER
         self.message = "[BUILD: REMOTE @ %s]" % host
         self.error = False
         self.done = False
@@ -137,10 +138,7 @@ class BuildState:
         self.play = None
         self.ansible_task = None
         self.package_paths = {}
-        self.task_started("remote build")
-
-    def remote_output(self, text):
-        self.remote_text.append(text)
+        self.task_started(REMOTE_PLACEHOLDER)
 
     # The worker announced its task list: replace the placeholder row.
     def apply_plan(self, plan):
@@ -361,7 +359,7 @@ class RemoteLogIndex:
 
 # Same as start_build(), but the build runs on a seine-server worker:
 # RemoteBuild packs and uploads the worktree, submits it, and its log
-# stream lands in state.remote_text for BuildScreen to tail.
+# stream lands under state.logs for BuildScreen to tail.
 def start_remote_build(app, state, spec_file, session, no_download=False, project=None,
                        build=None):
     from seine.distributed.client.remote import DownloadError, RemoteBuild
@@ -371,9 +369,6 @@ def start_remote_build(app, state, spec_file, session, no_download=False, projec
     if not project:
         raise RuntimeError("no project chosen -- '/project' picks one")
     host = session.url.split("://", 1)[-1]
-
-    def write(text):
-        app.call_from_thread(state.remote_output, text)
 
     downloads = getattr(app, "download_state", None)
 
@@ -396,6 +391,11 @@ def start_remote_build(app, state, spec_file, session, no_download=False, projec
 
     # The stream is kept under the local logs, one file per task.
     log_dir = logindex.allocate_log_dir([spec_file] if build is None else build.options["files"])
+
+    # What the client says itself (upload, download...) joins the worker's own output.
+    def write(text):
+        with open(os.path.join(log_dir, "build.log"), "a", errors="replace") as f:
+            f.write(text)
     catalog = RemoteLogIndex(build, log_dir) if build is not None else None
 
     def on_event(event):
@@ -418,6 +418,8 @@ def start_remote_build(app, state, spec_file, session, no_download=False, projec
         out=write, err=write, prompt=tui_prompt(app), on_download=on_download,
         on_event=lambda event: app.call_from_thread(on_event, event), log_dir=log_dir)
     state.reset_remote(host, job, log_dir)
+    if build is not None:
+        state.package_paths = _package_paths(build)
 
     def run():
         try:
@@ -522,15 +524,12 @@ class BuildScreen(BaseScreen):
     # _log_target() picks the single most relevant one.
     def _follow(self):
         state = self.app.build_state
-        if state.remote:
-            text = "".join(state.remote_text)
-            state.remote_text.clear()
-            if text:
-                self.query_one("#tail", RichLog).write(sanitize(text))
-            return
         name = _log_target(state)
         if name is None or state.logs is None:
             return
+        # Before the plan arrives, the worker's own output is all there is.
+        if name == REMOTE_PLACEHOLDER:
+            name = "build"
         path = os.path.join(state.logs, "%s.log" % name)
         self._tail.switch(path)
         text = self._tail.read_new()
