@@ -464,6 +464,22 @@ $admin token issue bob
   `token revoke <id>` (`token list` shows the ids).
 - `user update <id> --no-active` disables a user and its tokens stop working.
   The last active administrator cannot be demoted or disabled.
+- Every user has a `uid`, a random UUID that is never reused (`GET
+  /api/v1/me` and `GET /api/v1/users` show it). Tokens, memberships and the
+  submitter of a build follow the uid, not the name.
+- `user delete <id> --purge [--anonymize] [--delete-home]` erases a user for
+  good. Without `--purge` it refuses; `user update --no-active` is the
+  reversible way to offboard. It removes the user's tokens and memberships,
+  and refuses (409) the last active administrator and a user whose builds are
+  still running. Over the API this is `DELETE /api/v1/users/<id>?purge=true`;
+  you cannot delete your own account (403).
+  - Builds stay, as they belong to the project. They keep the submitter's name,
+    or `deleted-user` with `--anonymize`.
+  - `--delete-home` also deletes the user's `home-` project. `seine admin` and
+    the API empty its bucket first; `seine-server admin` cannot reach the
+    storage server and leaves the bucket.
+  - The name is free afterwards. A new user of that name gets a new uid and
+    inherits no token, membership or build.
 - `project update <name> --quota-gb N` sets a project's storage quota in GB;
   `--no-quota` removes it. `project list` shows it. Over the API this is
   `PATCH /api/v1/projects/<name>` with `{"quota_gb": N}` or `null`.
