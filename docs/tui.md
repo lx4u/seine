@@ -132,7 +132,8 @@ Valid credentials are saved to writable backends (keyring or settings).
 defaults to the `default_remote` setting. Connected, `/build` runs on the
 server's workers and its log streams into the Build screen -- `--local`
 builds on this machine anyway, `--no-download` skips fetching the
-artifacts. `/remote` again opens the cockpit: builds, workers and
+artifacts. The task pane shows the worker's planned tasks, cached ones and
+one timer per task running in parallel, as for a local build. `/remote` again opens the cockpit: builds, workers and
 artifacts, plus users, projects and server settings for an
 administrator. `ctrl-1` to `ctrl-6` switch the cockpit's tabs, even while you
 type in the prompt (the terminal has to report ctrl-digit, as kitty, WezTerm

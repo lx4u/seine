@@ -710,6 +710,22 @@ A viewer then receives the history of the build followed by live messages of
 the form `{"build_id", "source", "text", "timestamp"}`. The history is
 bounded, so a long build may have lost its oldest lines.
 
+The stream also carries structured events, told apart by a `type` field
+instead of `text`, each with `build_id` and `timestamp`:
+
+| `type` | Fields | Meaning |
+|--------|--------|---------|
+| `task_plan` | `tasks`: list of `{name, needs, cached?}` | The planned tasks, sent once before the build starts |
+| `task_started` | `task` | A task began; several may run at once |
+| `task_finished` | `task`, `failed` | A task ended |
+| `sampled` | `sample`: `{load, cpu}` | Machine load sample |
+| `say` | `text` | A status message, such as an interrupt notice |
+
+The plan is kept apart from the log history, so a viewer that joins late or
+reconnects still gets it first. A client that does not know these events can
+ignore every message without `text`. Upgrade the server before the agents:
+an older server closes the stream of an agent that sends events.
+
 ### Submitting an `arm64` Raspberry Pi image build
 
 Build an ARM64 image using your remote ARM64 worker:
