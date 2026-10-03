@@ -4,15 +4,7 @@
 
 import os
 
-from seine.utils import playbook_items
-
-# Playbook keys that read files seine cannot list; 'with_*' loops included.
-UNMODELED_KEYS = {
-    "roles", "include_role", "import_role", "include_tasks", "import_tasks",
-    "import_playbook", "include_playbook", "vars_files", "include_vars",
-    "script", "with_file", "with_fileglob",
-}
-
+from seine.build import playbook
 
 def collect(builds):
     """Return the paths (files or trees) that 'builds' read, sub-builds included.
@@ -48,11 +40,6 @@ def unmodeled(builds):
     """Return the playbook keys of 'builds' that read files collect() cannot see."""
     keys = set()
     for build in builds:
-        for key, value in playbook_items((build.spec or {}).get("playbook") or []):
-            name = str(key).rsplit(".", 1)[-1]
-            if name in UNMODELED_KEYS:
-                keys.add(name)
-            elif isinstance(value, str) and "lookup(" in value:
-                keys.add("lookup")
+        keys.update(playbook.unmodeled((build.spec or {}).get("playbook") or []))
         keys.update(unmodeled(build.subbuilds.values()))
     return sorted(keys)

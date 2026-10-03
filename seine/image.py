@@ -274,20 +274,12 @@ class Image:
         parts = [val for _, val in self._rootfs_recipe(vendor_digest)]
         return hashlib.sha256("\n".join(map(str, parts)).encode()).hexdigest()
 
-    # Host files named by a relative 'src:'. Their content is not in the
-    # spec. Absolute paths are usually target paths, so they are skipped.
+    # Host files the playbooks read. Their content is not in the spec.
     def host_files(self):
+        from seine.build import playbook
         files = self.options.get("files") or []
         spec_dir = os.path.dirname(files[0]) if len(files) > 0 else "."
-        found = set()
-        for key, value in utils.playbook_items((self.spec or {}).get("playbook") or []):
-            if key == "src" and isinstance(value, str) and not os.path.isabs(value):
-                for base in (spec_dir, "."):
-                    path = os.path.join(base, value)
-                    if os.path.isfile(path):
-                        found.add(path)
-                        break
-        return sorted(found)
+        return playbook.host_files((self.spec or {}).get("playbook") or [], spec_dir)
 
     def _digest_file(self):
         return f"{self._rootfs}.digest"

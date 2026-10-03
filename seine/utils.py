@@ -732,17 +732,6 @@ def _normalize_remote(url):
 # 'foo.lock.yaml'. A file already named '*.lock.yaml' gets no lock of its
 # own. Generic, not vendor-specific: BuildCmd.load_all() auto-loads
 # whatever this names if it exists.
-def playbook_items(node):
-    """Yield every (key, value) of the dicts nested in a playbook, lists included."""
-    if isinstance(node, list):
-        for item in node:
-            yield from playbook_items(item)
-    elif isinstance(node, dict):
-        for key, value in node.items():
-            yield key, value
-            yield from playbook_items(value)
-
-
 def lock_sibling(yaml_file):
     base, ext = os.path.splitext(yaml_file)
     if base.endswith(".lock"):
