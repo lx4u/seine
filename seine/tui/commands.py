@@ -53,6 +53,7 @@ def _use(app, argv):
     except (OSError, ValueError) as e:
         raise CommandError(str(e))
     app.say("using %s" % app.context.label())
+    app.remote_session.sync_matches()
     app.refresh_screens()
 
 # Switches to overview when the current screen has no spec tree to show

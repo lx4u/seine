@@ -319,6 +319,55 @@ class RemoteBuildTuiTest(avocado.Test):
         self.assertEqual(rb.call_args.kwargs["spec_digest"],
                          analyze.spec_digest(self._build_cmd().spec))
 
+    def _matching_app(self, status):
+        from seine.tui import remote_match
+        remote_match.MATCHES.clear()
+        app = mock.Mock()
+        app.run_worker = lambda fn, **kw: fn()
+        app.call_from_thread = lambda fn, *a: fn(*a)
+        app.context.builds = [self._build_cmd()]
+        app.remote_session.connected = True
+        app.remote_session.active_project = "demo"
+        app.remote_session.request.return_value = mock.Mock(
+            status_code=status, json=lambda: {"id": "bld-1", "status": "completed",
+                                              "created_at": 10.0, "started_at": 12.0,
+                                              "finished_at": 72.0})
+        return app, remote_match
+
+    def tearDown(self):
+        from seine.tui import remote_match
+        remote_match.MATCHES.clear()
+
+    def test_refresh_stores_the_server_build_for_the_digest(self):
+        from seine import analyze
+        app, remote_match = self._matching_app(200)
+        remote_match.refresh(app)
+        _, path = app.remote_session.request.call_args.args[:2]
+        self.assertEqual(path, "/api/v1/projects/demo/builds/match")
+        digest = analyze.spec_digest(self._build_cmd().spec)
+        self.assertEqual(remote_match.MATCHES[digest]["id"], "bld-1")
+        self.assertEqual(app.remote_session.request.call_args.kwargs["params"],
+                         {"spec_digest": digest, "target_arch": "amd64"})
+
+    def test_refresh_without_a_match_or_a_session_leaves_nothing(self):
+        app, remote_match = self._matching_app(404)
+        remote_match.refresh(app)
+        self.assertEqual(remote_match.MATCHES, {})
+        remote_match.MATCHES["x"] = {}
+        app.remote_session.connected = False
+        remote_match.refresh(app)
+        self.assertEqual(remote_match.MATCHES, {})
+
+    def test_overview_names_the_remote_build(self):
+        from seine.tui import render
+        line = render._remote_line({"status": "completed", "created_at": 1.0,
+                                    "started_at": 2.0, "finished_at": 62.0})
+        self.assertIn("remote: built", line)
+        failed = render._remote_line({"status": "failed", "created_at": 1.0,
+                                      "artifacts_expired_at": 5.0})
+        self.assertIn("FAILED", failed)
+        self.assertIn("artifacts expired", failed)
+
     def test_remote_build_without_a_plan_is_not_cataloged(self):
         from seine import logindex
         app = mock.Mock()

@@ -185,6 +185,7 @@ class RemoteSession:
         self.last_error = None
         self.ping()
         self.notify_indicators()
+        self.sync_matches()
         return True
 
     def _decided_project(self) -> Optional[str]:
@@ -210,6 +211,7 @@ class RemoteSession:
     def use_project(self, name: str) -> None:
         self.active_project = name
         self.notify_indicators()
+        self.sync_matches()
 
     def set_default_project(self, name: Optional[str]) -> Optional[str]:
         """Save the default project on the server (None clears it); return an error or None."""
@@ -240,6 +242,7 @@ class RemoteSession:
         self._insecure = None
         self._ca_cert = None
         self.notify_indicators()
+        self.sync_matches()
 
     def ping(self) -> Optional[float]:
         """Perform light latency probe; updates self.ping_ms."""
@@ -260,6 +263,16 @@ class RemoteSession:
         self.ping_ms = None
         return None
 
+    def _on_ui(self, fn) -> None:
+        # Only route through call_from_thread if the app event loop is running.
+        if getattr(self.app, "is_running", False) is True and hasattr(self.app, "call_from_thread"):
+            try:
+                self.app.call_from_thread(fn)
+                return
+            except RuntimeError:
+                pass
+        fn()
+
     def notify_indicators(self) -> None:
         if not self.app:
             return
@@ -271,12 +284,11 @@ class RemoteSession:
                     self.app.screen.query_one("#remote-indicator").refresh_text()
             except Exception:
                 pass
-        # Only route through call_from_thread if the app event loop is running.
-        if getattr(self.app, "is_running", False) is True and hasattr(self.app, "call_from_thread"):
-            try:
-                self.app.call_from_thread(_refresh)
-                return
-            except RuntimeError:
-                pass
-        _refresh()
+        self._on_ui(_refresh)
 
+    def sync_matches(self) -> None:
+        """Ask the server what it holds for the active specification."""
+        if not self.app:
+            return
+        from seine.tui import remote_match
+        self._on_ui(lambda: remote_match.refresh(self.app))

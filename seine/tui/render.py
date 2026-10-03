@@ -18,10 +18,24 @@ from seine import packages
 from seine import sbom
 from seine import secscan
 from seine.diffing import diff, recall
+from seine.tui import remote_match
 from seine.progress import elapsed
 from seine.sbuild import BuilderImage
 from seine.container import ContainerEngine
 from seine.utils import git_status, lock_sibling
+
+# One line on the newest server build of this spec.
+def _remote_line(info):
+    if info["status"] not in ("completed", "failed"):
+        return "remote: %s on the server" % info["status"]
+    done = info.get("finished_at") or info["created_at"]
+    took = done - (info.get("started_at") or info["created_at"])
+    text = "remote: %s %s ago, took %s" % (
+        "built" if info["status"] == "completed" else "FAILED",
+        elapsed(max(0, time.time() - done)), elapsed(took))
+    if info.get("artifacts_expired_at"):
+        text += " (artifacts expired)"
+    return text
 
 # Overview lines for one build: distro/arch, last build, diff
 # status, output path. Shared by render_overview() and
@@ -42,6 +56,10 @@ def _overview_lines(files, build, name):
                     % (status, elapsed(ago), elapsed(analyze.spent(latest))))
     else:
         parts.append("  never built from here")
+
+    remote = remote_match.status(build)
+    if remote:
+        parts.append("  " + _remote_line(remote))
 
     baseline = recall(files)
     if baseline is None:

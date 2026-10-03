@@ -47,7 +47,9 @@ screen was open before it.
 Reached with the matching `/command` (`/help` gives the full list, with
 every argument each one takes):
 
- * **Overview** -- the active specification, once `/use` has set one.
+ * **Overview** -- the active specification, once `/use` has set one. When
+   connected to a `seine-server`, it also says when the server's project last
+   built this exact specification, whoever submitted it.
  * **Doctor** -- whether this machine has what a build needs: podman,
    crun, passt, guestfs, kvm, a hypervisor per architecture,
    ansible-playbook, gnupg, free space, and S3 remote cache reachability

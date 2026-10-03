@@ -873,6 +873,8 @@ class SeineApp(App):
                            "error": self.build_state.error,
                            "message": self.build_state.message})
         self.refresh_indicators()
+        if self.build_state.remote:
+            self.remote_session.sync_matches()
         # The build's analyze record and plan baseline now exist, so
         # whatever is on screen (overview, plan, build) is stale -- not
         # just the build screen's own task list.
