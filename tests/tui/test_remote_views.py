@@ -420,12 +420,17 @@ class RemoteViewsTest(avocado.Test):
         self.assertIn("No artifacts found in remote builds.", rendered)
         self.assertIn("[Enter] Download Artifact", rendered)
 
-    def test_render_artifacts_shows_expired_builds(self):
+    def test_render_artifacts_marks_expired_ones(self):
         rendered = self.render_remote_artifacts([
-            {"name": "expired (age)", "expired": True, "build_id": "b1", "project": "demo"},
+            {"name": "disk.img", "size": 2048, "expired": True, "build_id": "b1", "project": "demo"},
+            {"name": "[expired artifact]", "expired": True, "build_id": "b0"},
         ])
-        self.assertIn("expired (age)", rendered)
-        self.assertNotIn("0 B", rendered)
+        row, legacy = rendered.splitlines()[4:6]
+        for want in ("disk.img", "2.0 KB"):
+            self.assertIn(want, row)
+        self.assertTrue(row.endswith("expired"))
+        self.assertTrue(legacy.endswith("expired"))
+        self.assertIn(" - ", legacy)
 
     def test_render_artifacts_populated_and_selection(self):
         artifacts = [
@@ -469,6 +474,27 @@ class RemoteViewsTest(avocado.Test):
         self.assertEqual(len(arts), 1)
         self.assertEqual((arts[0]["name"], arts[0]["size"], arts[0]["key"]), ("a.img", 5, "k"))
         self.assertEqual((arts[0]["build_id"], arts[0]["target_arch"]), ("b1", "arm64"))
+
+    def test_extract_remote_artifacts_expired(self):
+        expired = {"artifacts_expired_at": 99, "artifacts_expired_reason": "pressure"}
+        builds = [
+            {"id": "b1", "artifact_meta": [{"name": "a.img", "size": 5}], **expired},
+            {"id": "b2", "artifact_meta": [], **expired},
+        ]
+        kept, legacy = self.extract_remote_artifacts(builds)
+        self.assertEqual((kept["name"], kept["size"], kept["expired"]), ("a.img", 5, True))
+        self.assertEqual((kept["expired_at"], kept["expired_reason"]), (99, "pressure"))
+        self.assertEqual(legacy["name"], "[expired artifact]")
+        self.assertNotIn("size", legacy)
+
+    def test_detail_expired_artifact(self):
+        art = {"name": "disk.img", "size": 2048, "sha256": "e" * 64, "key": "k/disk.img",
+               "build_id": "b1", "project": "demo", "target_arch": "amd64",
+               "expired": True, "expired_at": 86400 * 365, "expired_reason": "ttl"}
+        text = self.detail(3, art)
+        for want in ("disk.img", "2.0 KB", "e" * 64, "k/disk.img", "State:", "expired",
+                     "Expiry reason: age", "Expired at:", "expired (age)"):
+            self.assertIn(want, text)
 
     def test_fetch_data_artifacts(self):
         mock_app = mock.Mock()

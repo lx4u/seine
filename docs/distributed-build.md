@@ -330,8 +330,8 @@ limit). `download_urls` is empty but `artifacts` still lists what the build
 produced (name, size, SHA-256). It is not an HTTP 410.
 The client prints a message such as `artifacts of build bld-1a2b3c4d expired
 (storage pressure); rebuild to get them again` and exits 1 (nothing is checked
-with `--no-download`), and the TUI shows an `expired (...)` row in the
-artifacts tab.
+with `--no-download`), and the TUI keeps the artifacts in its list, marked
+`expired` in the download column.
 
 #### Lifecycle rules on the buckets
 

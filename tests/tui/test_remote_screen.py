@@ -175,6 +175,24 @@ class RemoteScreenTest(avocado.Test):
         with mock.patch.dict(os.environ, env):
             asyncio.run(scenario())
 
+    def test_download_of_an_expired_artifact_warns_without_a_request(self):
+        mock_app = mock.Mock()
+        screen = self.RemoteScreen()
+        screen.say = mock.Mock()
+        screen.active_tab = 3
+        screen.remote_artifacts = [{"name": "disk.img", "build_id": "b" * 32, "expired": True,
+                                    "expired_reason": "pressure"}]
+        screen._trigger_download = mock.Mock()
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            screen.action_download_artifact()
+            screen.action_view_logs()
+        screen._trigger_download.assert_not_called()
+        self.assertEqual(screen.say.call_count, 2)
+        screen.say.assert_called_with(
+            f"artifacts of build {'b' * 12} expired (storage pressure); rebuild to get them again",
+            warning=True,
+        )
+
     def test_screen_keeps_its_app_for_workers_that_outlive_it(self):
         from seine.tui.remote_screen import RemoteScreen
         screen = RemoteScreen()

@@ -4,7 +4,7 @@
 import time
 from typing import Any, Optional
 
-from seine.distributed.common.models import expired_text
+from seine.distributed.common.models import expired_text, format_expiry_reason
 from seine.progress import elapsed
 from seine.utils import format_size, format_timestamp
 
@@ -143,18 +143,26 @@ def extract_remote_artifacts(builds: list[dict[str, Any]]) -> list[dict[str, Any
             "target_arch": str(b.get("target_arch") or b.get("architecture") or ""),
         }
         if b.get("artifacts_expired_at"):
-            arts.append({"name": expired_text(b.get("artifacts_expired_reason")),
-                         "expired": True, **origin})
-        for m in b.get("artifact_meta") or []:
-            if isinstance(m, dict):
-                arts.append({
-                    "name": m.get("name", "artifact"),
-                    "size": m.get("size", 0),
-                    "sha256": m.get("sha256", ""),
-                    "key": m.get("key", ""),
-                    **origin,
-                })
+            origin.update(expired=True, expired_at=b["artifacts_expired_at"],
+                          expired_reason=b.get("artifacts_expired_reason"))
+        metas = [m for m in b.get("artifact_meta") or [] if isinstance(m, dict)]
+        if not metas and origin.get("expired"):
+            # builds expired before metadata was kept
+            arts.append({"name": "[expired artifact]", **origin})
+        for m in metas:
+            arts.append({
+                "name": m.get("name", "artifact"),
+                "size": m.get("size", 0),
+                "sha256": m.get("sha256", ""),
+                "key": m.get("key", ""),
+                **origin,
+            })
     return arts
+
+
+def artifact_download_label(a: dict[str, Any], progress: Optional[dict[str, Any]] = None) -> str:
+    """The DOWNLOAD column: expired, a transfer state, or nothing."""
+    return "expired" if a.get("expired") else _download_label(progress)
 
 
 def render_remote_artifacts(
@@ -183,13 +191,13 @@ def render_remote_artifacts(
         prefix = " ▸ " if i == selected_index else "   "
         name = str(a.get("name") or "")
         short_name = name[:24] + ".." if len(name) > 26 else name
-        size_str = "-" if a.get("expired") else format_size(a.get("size", 0))
+        size_str = format_size(a["size"]) if "size" in a else "-"
         build_id = str(a.get("build_id") or "")
         short_id = build_id[:12] if len(build_id) > 12 else build_id
         project = str(a.get("project") or "")
         short_proj = project[:12] if len(project) > 12 else project
         arch = str(a.get("target_arch") or a.get("architecture") or "")
-        download = _download_label(progress.get((build_id, name)))
+        download = artifact_download_label(a, progress.get((build_id, name)))
 
         lines.append(
             f"{prefix}{short_name:<26} {size_str:<10} {short_id:<14} {short_proj:<14} {arch:<8} {download}".rstrip()
@@ -410,7 +418,7 @@ def render_artifact_detail(a: dict[str, Any], progress: Optional[dict[str, Any]]
     sections = [
         _section("ARTIFACT", [
             ("Name", a.get("name")),
-            ("Size", None if expired else format_size(a.get("size", 0))),
+            ("Size", format_size(a["size"]) if "size" in a else None),
         ]),
         _section("INTEGRITY", [("SHA-256", a.get("sha256")), ("Storage key", a.get("key"))]),
         _section("ORIGIN", [
@@ -420,7 +428,9 @@ def render_artifact_detail(a: dict[str, Any], progress: Optional[dict[str, Any]]
         ]),
         _section("STATUS", [
             ("State", "expired" if expired else "available"),
-            ("Download", transfer),
+            ("Expiry reason", format_expiry_reason(a.get("expired_reason")) if expired else None),
+            ("Expired at", format_timestamp(a["expired_at"]) if a.get("expired_at") else None),
+            ("Download", expired_text(a.get("expired_reason")) if expired else transfer),
         ]),
     ]
     return _detail("ARTIFACT DETAIL", sections)

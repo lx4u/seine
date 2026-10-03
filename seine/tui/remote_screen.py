@@ -13,7 +13,7 @@ from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.widgets import Static
 
-from seine.distributed.common.models import expired_text
+from seine.distributed.common.models import expired_text, format_expiry_reason
 from seine.distributed.common.transport import check_server_url
 from seine.tui.download import DownloadState, redraw
 from seine.tui.base import BaseScreen, StaticPane
@@ -516,6 +516,8 @@ class RemoteScreen(BaseScreen):
             if not item:
                 self.say("no artifact selected", warning=True)
                 return
+            if self._warn_if_expired(item):
+                return
             build_id = str(item.get("build_id") or "")
             self._trigger_download(build_id, artifact_name=item.get("name"))
 
@@ -571,8 +573,18 @@ class RemoteScreen(BaseScreen):
             lbl = "build" if self.active_tab == 1 else "artifact"
             self.say(f"no {lbl} selected", warning=True)
             return
+        if self.active_tab == 3 and self._warn_if_expired(item):
+            return
         build_id = str(item.get("id") or item.get("build_id") or "")
         self._trigger_download(build_id, artifact_name=None)
+
+    def _warn_if_expired(self, artifact: dict[str, Any]) -> bool:
+        if not artifact.get("expired"):
+            return False
+        why = format_expiry_reason(artifact.get("expired_reason"))
+        build_id = str(artifact.get("build_id") or "")[:12]
+        self.say(f"artifacts of build {build_id} expired ({why}); rebuild to get them again", warning=True)
+        return True
 
     def _trigger_download(self, build_id: str, artifact_name: Optional[str] = None):
         session = getattr(self.app, "remote_session", None)
