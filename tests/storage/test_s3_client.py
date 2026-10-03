@@ -135,6 +135,47 @@ class S3ClientOperations(avocado.Test):
         self.stub.add_client_error("delete_object", "NoSuchKey", "gone", 404)
         self.client.delete_object("b", "missing.txt")
 
+    def test_delete_objects_batches_of_1000(self):
+        keys = [f"k{i}" for i in range(2500)]
+        for n in (1000, 1000, 500):
+            self.stub.add_response("delete_objects", {}, {
+                "Bucket": "b", "Delete": {
+                    "Objects": [{"Key": k} for k in keys[:n]], "Quiet": True}})
+            keys = keys[n:]
+        self.client.delete_objects("b", [f"k{i}" for i in range(2500)])
+        self.stub.assert_no_pending_responses()
+
+    def test_delete_objects_empty_is_a_noop(self):
+        self.client.delete_objects("b", [])
+
+    def test_delete_objects_raises_on_errors_in_a_200(self):
+        errors = [{"Key": f"k{i}", "Code": "InternalError", "Message": "boom"}
+                  for i in range(5)]
+        self.stub.add_response("delete_objects", {"Errors": errors})
+        with self.assertRaises(S3ClientError) as ctx:
+            self.client.delete_objects("b", ["k0", "k1"])
+        self.assertIn("5 keys", str(ctx.exception))
+        self.assertIn("k0, k1, k2", str(ctx.exception))
+        self.assertNotIn("k3", str(ctx.exception))
+
+    def test_delete_objects_ignores_missing_keys(self):
+        self.stub.add_response("delete_objects", {"Errors": [
+            {"Key": "gone", "Code": "NoSuchKey", "Message": "no"}]})
+        self.client.delete_objects("b", ["gone"])
+
+    def test_list_all_objects_sums_sizes_across_pages(self):
+        self.stub.add_response(
+            "list_objects_v2",
+            {"Contents": [{"Key": "a", "Size": 100}, {"Key": "b", "Size": 5}],
+             "IsTruncated": True, "NextContinuationToken": "t2"},
+            {"Bucket": "b", "MaxKeys": 1000, "Prefix": "p/"})
+        self.stub.add_response(
+            "list_objects_v2",
+            {"Contents": [{"Key": "c", "Size": 20}], "IsTruncated": False},
+            {"Bucket": "b", "MaxKeys": 1000, "Prefix": "p/", "ContinuationToken": "t2"})
+        total = sum(o["size"] for o in self.client.list_all_objects("b", "p/"))
+        self.assertEqual(total, 125)
+
     def test_presign_get(self):
         url = self.client.presign_get("my-bucket", "artifacts/a b.bin", expires_in=120)
         parts = urlsplit(url)

@@ -109,6 +109,17 @@ class FakeS3:
         return self.objects[key]
 
 
+    def list_all_objects(self, bucket, prefix=""):
+        for key in sorted(self.objects):
+            if key.startswith(prefix):
+                yield {"key": key, "size": len(self.objects[key])}
+
+    def delete_objects(self, bucket, keys):
+        self.deleted = list(keys)
+        for key in self.deleted:
+            self.objects.pop(key, None)
+
+
 def make_tar(members):
     """Build a tar from (TarInfo, bytes|None) pairs."""
     buf = io.BytesIO()
@@ -258,6 +269,39 @@ class S3ProviderOperations(avocado.Test):
             args, _ = mock_say.call_args
             self.assertEqual(args[0], {"verbose": True})
             self.assertEqual(args[1], "push packages mypkg failed: network timeout")
+
+
+class S3ProviderHousekeeping(avocado.Test):
+    def setUp(self):
+        self.client = FakeS3()
+        self.provider = S3StorageProvider(self.client, "test-bucket")
+        self.client.objects.update({
+            "artifacts/p/1/a.img": b"x" * 100,
+            "artifacts/p/1/b.img": b"y" * 50,
+            "artifacts/p/2/a.img": b"z" * 7,
+            "cache/packages/k.tar.zst": b"w" * 10,
+            "cache/packages/k.recipe": b"r",
+            "cache/packages/k.touch": b"t",
+        })
+
+    def test_usage_counts_everything_under_the_prefix(self):
+        self.assertEqual(self.provider.usage("artifacts/p/1/"), 150)
+        self.assertEqual(self.provider.usage("cache/"), 12)
+
+    def test_usage_without_prefix_is_the_whole_bucket(self):
+        self.assertEqual(self.provider.usage(), 169)
+
+    def test_delete_prefix_reports_and_spares_other_prefixes(self):
+        self.assertEqual(self.provider.delete_prefix("artifacts/p/1/"), (2, 150))
+        self.assertEqual(self.client.deleted,
+                         ["artifacts/p/1/a.img", "artifacts/p/1/b.img"])
+        self.assertIn("artifacts/p/2/a.img", self.client.objects)
+        self.assertIn("cache/packages/k.touch", self.client.objects)
+
+    def test_delete_prefix_refuses_an_empty_prefix(self):
+        with self.assertRaises(ValueError):
+            self.provider.delete_prefix("")
+        self.assertEqual(len(self.client.objects), 6)
 
 
 class S3ProviderPull(avocado.Test):

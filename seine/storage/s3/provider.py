@@ -314,6 +314,18 @@ class S3StorageProvider(StorageProvider):
             if self.offline_mode == "strict":
                 raise StorageOfflineError(f"s3 bucket check failed for {self.bucket}: {e}") from e
 
+    def usage(self, prefix=""):
+        """Bytes stored under a bucket key prefix (not relative to the cache prefix)."""
+        return sum(o["size"] for o in self.client.list_all_objects(self.bucket, prefix))
+
+    def delete_prefix(self, prefix):
+        """Delete every object under a bucket key prefix; return (count, bytes)."""
+        if not prefix:
+            raise ValueError("delete_prefix needs a prefix: refusing to empty the bucket")
+        objects = list(self.client.list_all_objects(self.bucket, prefix))
+        self.client.delete_objects(self.bucket, [o["key"] for o in objects])
+        return len(objects), sum(o["size"] for o in objects)
+
     def push_worktree(self, project: str, digest: str, path: str):
         """Push a staged project worktree archive to S3."""
         if not isinstance(path, (bytes, bytearray)) and not os.path.exists(path):
