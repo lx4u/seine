@@ -116,7 +116,34 @@ an error.
 | `storage.endpoint` | `SEINE_S3_ENDPOINT` | `--s3-endpoint` | none |
 | `storage.region` | `SEINE_S3_REGION` | `--s3-region` | `garage` |
 | `storage.projects`, `storage.default` | | | none, file only |
+| `retention` | | | none, file only |
 
+- **Retention.** Without a `retention:` section nothing is ever deleted.
+  With one, omitted keys take the values below. The settings are only read
+  and checked for now; nothing acts on them yet.
+
+      retention:
+        interval: 3600        # seconds between sweeps
+        dev:
+          worktrees: 3d
+          artifacts: 14d
+          cache: 30d
+          high_water: 80%     # start evicting above this ...
+          low_water: 60%      # ... and stop below this
+          min_age: 1h         # never evict anything younger
+        prod:
+          worktrees: 14d
+          artifacts: never
+          cache: 90d
+          high_water: 85%     # prod only warns, it is never evicted
+
+  Durations are `<n>s`, `<n>m`, `<n>h` or `<n>d` (above zero), or `never`
+  for no expiry. `interval` is a number of seconds or a duration.
+  `high_water` and `low_water` are either `<n>%` (above 0, up to 100) of the
+  project quota, or a size `<n>M`, `<n>G` or `<n>T` in binary units (1G is
+  1024 MiB). `low_water` must be below `high_water`, and the two must use the
+  same kind: a percentage cannot be compared with a size. Unknown keys are an
+  error.
 - **Enrollment token.** There is no default: the server refuses to start
   without one. Generate it with `openssl rand -hex 32`. Workers present it
   once to register and receive a worker token of their own; registering an

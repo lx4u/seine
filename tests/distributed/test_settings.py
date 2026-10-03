@@ -8,7 +8,7 @@ import tempfile
 
 from avocado import Test
 
-from seine.distributed.server.settings import Settings, SettingsError, is_loopback
+from seine.distributed.server.settings import EnvRetention, Settings, SettingsError, Threshold, is_loopback
 
 
 class SettingsTest(Test):
@@ -205,3 +205,149 @@ class StorageSettingsTest(Test):
         for value in ("GKalpha-dev", "alpha-prod-secret", "default-dev-secret"):
             self.assertIn(value, vault.secrets())
             self.assertNotIn(value, repr(s))
+
+
+class RetentionSettingsTest(Test):
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-retention-settings-")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _load(self, text):
+        path = os.path.join(self.tmp_dir, "server.yaml")
+        with open(path, "w") as f:
+            f.write(text)
+        return Settings.load(config_path=path, env={})
+
+    def _dev(self, **keys):
+        body = "".join(f"    {k}: {v}\n" for k, v in keys.items())
+        return self._load(f"retention:\n  dev:\n{body}").retention.dev
+
+    def test_absent_section_means_no_retention(self):
+        self.assertIsNone(Settings.load(config_path=None, env={}).retention)
+        self.assertIsNone(self._load("port: 9000\n").retention)
+
+    def test_full_section(self):
+        r = self._load(
+            """
+retention:
+  interval: 600
+  dev:
+    worktrees: 2d
+    artifacts: 7d
+    cache: 12h
+    high_water: 500G
+    low_water: 400G
+    min_age: 30m
+  prod:
+    worktrees: 20d
+    artifacts: 365d
+    cache: never
+    high_water: 90%
+"""
+        ).retention
+        self.assertEqual(r.interval, 600.0)
+        self.assertEqual(
+            r.dev,
+            EnvRetention(
+                worktrees=2 * 86400.0,
+                artifacts=7 * 86400.0,
+                cache=12 * 3600.0,
+                high_water=Threshold(500 * 1024**3, False),
+                low_water=Threshold(400 * 1024**3, False),
+                min_age=1800.0,
+            ),
+        )
+        self.assertEqual(r.prod.cache, None)
+        self.assertEqual(r.prod.high_water, Threshold(90, True))
+
+    def test_defaults_for_omitted_keys(self):
+        for text in ("retention: {}\n", "retention:\n", "retention:\n  dev:\n  prod: {}\n"):
+            r = self._load(text).retention
+            self.assertEqual(r.interval, 3600.0)
+            self.assertEqual(
+                r.dev,
+                EnvRetention(3 * 86400.0, 14 * 86400.0, 30 * 86400.0, Threshold(80, True), Threshold(60, True), 3600.0),
+            )
+            self.assertEqual(
+                r.prod,
+                EnvRetention(14 * 86400.0, None, 90 * 86400.0, Threshold(85, True), None, 3600.0),
+            )
+
+    def test_section_under_server_key(self):
+        r = self._load("server:\n  retention:\n    interval: 60\n").retention
+        self.assertEqual(r.interval, 60.0)
+
+    def test_duration_forms(self):
+        for text, seconds in (("45s", 45), ("10m", 600), ("2h", 7200), ("3d", 259200), ("never", None)):
+            self.assertEqual(self._dev(artifacts=text).artifacts, seconds, text)
+        self.assertEqual(self._dev(min_age="90s").min_age, 90.0)
+
+    def test_bad_durations(self):
+        for text in ("0d", "-1d", "3w", "3", "d", "1.5h", "soon", "''", "[1]"):
+            with self.assertRaises(SettingsError, msg=text):
+                self._dev(worktrees=text)
+        with self.assertRaises(SettingsError):
+            self._dev(min_age="never")
+
+    def test_interval_forms(self):
+        for text, seconds in (("30", 30.0), ("0.5", 0.5), ("'2m'", 120.0)):
+            r = self._load(f"retention:\n  interval: {text}\n").retention
+            self.assertEqual(r.interval, seconds, text)
+        for text in ("0", "-5", "never", "x", "true", "[1]"):
+            with self.assertRaises(SettingsError, msg=text):
+                self._load(f"retention:\n  interval: {text}\n")
+
+    def test_threshold_forms(self):
+        self.assertEqual(self._dev(high_water="100%").high_water, Threshold(100, True))
+        self.assertEqual(self._dev(high_water="72.5%").high_water, Threshold(72.5, True))
+        self.assertEqual(self._dev(high_water="2T", low_water="1G").high_water.bytes, 2 * 1024**4)
+        self.assertEqual(self._dev(high_water="512M", low_water="1M").high_water.bytes, 512 * 1024**2)
+        self.assertEqual(self._dev(high_water="2G", low_water="1G").low_water.bytes, 1024**3)
+        self.assertIsNone(self._dev(high_water="50%", low_water="40%").high_water.bytes)
+
+    def test_bad_thresholds(self):
+        for text in ("0%", "101%", "-5%", "10", "10K", "G", "ten%", "0G", "''"):
+            with self.assertRaises(SettingsError, msg=text):
+                self._dev(high_water=text)
+
+    def test_low_water_must_be_below_high_water(self):
+        for keys in (
+            {"high_water": "50%", "low_water": "50%"},
+            {"high_water": "50%", "low_water": "70%"},
+            {"high_water": "1G", "low_water": "1024M"},
+            {"high_water": "1G", "low_water": "2G"},
+        ):
+            with self.assertRaises(SettingsError, msg=str(keys)):
+                self._dev(**keys)
+        with self.assertRaises(SettingsError):
+            self._dev(low_water="90%")
+
+    def test_percent_and_size_cannot_be_mixed(self):
+        with self.assertRaises(SettingsError) as ctx:
+            self._dev(high_water="500G", low_water="60%")
+        self.assertIn("both be percentages or both sizes", str(ctx.exception))
+
+    def test_prod_needs_no_low_water(self):
+        r = self._load("retention:\n  prod:\n    high_water: 1T\n").retention
+        self.assertIsNone(r.prod.low_water)
+        self.assertEqual(r.prod.high_water.bytes, 1024**4)
+
+    def test_unknown_keys_are_rejected(self):
+        for text in (
+            "retention:\n  sweep: 1\n",
+            "retention:\n  staging: {}\n",
+            "retention:\n  dev:\n    ttl: 1d\n",
+            "retention:\n  prod:\n    interval: 5\n",
+            "retention: [1]\n",
+            "retention: 5\n",
+            "retention:\n  dev: [1]\n",
+        ):
+            with self.assertRaises(SettingsError, msg=text):
+                self._load(text)
+
+    def test_unknown_key_is_named(self):
+        with self.assertRaises(SettingsError) as ctx:
+            self._load("retention:\n  dev:\n    ttl: 1d\n")
+        self.assertIn("ttl", str(ctx.exception))
