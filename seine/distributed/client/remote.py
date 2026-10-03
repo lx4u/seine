@@ -268,10 +268,12 @@ class LogFollower(threading.Thread):
         ssl_context: Any = None,
         out: Callable[[str], None] = _stdout,
         err: Callable[[str], None] = _stderr,
+        on_event: Optional[Callable[[dict[str, Any]], None]] = None,
     ):
         super().__init__(daemon=True)
         self._write = out
         self._warn = err
+        self._on_event = on_event
         self.url = url
         self.token = token
         self.ssl_context = ssl_context
@@ -306,10 +308,16 @@ class LogFollower(threading.Thread):
 
     def _emit(self, raw: Union[str, bytes]) -> None:
         try:
-            text = json.loads(raw).get("text", "")
-        except (ValueError, AttributeError):
+            message = json.loads(raw)
+        except ValueError:
             return
-        self._write(text)
+        if not isinstance(message, dict):
+            return
+        if "type" in message:
+            if self._on_event is not None:
+                self._on_event(message)
+            return
+        self._write(message.get("text", ""))
 
     def _fail(self, reason: str) -> None:
         self.failure = reason
@@ -369,6 +377,7 @@ class RemoteBuild:
         prompt: Optional[Callable[..., Any]] = None,
         ask_project: Optional[Callable[[dict[str, str]], tuple[str, bool]]] = None,
         on_download: Optional[Callable[[str, str, str, int], None]] = None,
+        on_event: Optional[Callable[[dict[str, Any]], None]] = None,
     ):
         # out/err/prompt let the TUI take over what would go to the terminal.
         self._out = out
@@ -379,6 +388,8 @@ class RemoteBuild:
         self.ask_project = ask_project
         # on_download(kind, build_id, name, n): queue (n = size), start, bytes, done, failed.
         self.on_download = on_download
+        # on_event(event): the structured events of the build (task_plan, task_started...).
+        self.on_event = on_event
         # Set from another thread to cancel like Ctrl+C would.
         self.stop_requested = threading.Event()
         self.server_url = server_url.rstrip("/")
@@ -641,7 +652,7 @@ class RemoteBuild:
         self._say(f"[client] Connecting to live log stream: {stream_url} ...\n" + "-" * 60)
         follower = LogFollower(
             stream_url, self.token, ws_ssl_context(stream_url, self.ca_cert),
-            out=self._out, err=self._err,
+            out=self._out, err=self._err, on_event=self.on_event,
         )
         follower.start()
         return follower
