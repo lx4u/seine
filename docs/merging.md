@@ -153,7 +153,7 @@ picking a winner)?
 
 ## Where this lives in code
 
-`BuildCmd.merge(spec, peer)` (`seine/build.py`) is the dispatcher;
+`BuildCmd.merge(spec, peer)` (`seine/build/merger.py`) is the dispatcher;
 `_load()` computes `peer` itself, from `self._loading`'s depth at the
 point a file's own body is merged -- more than one deep means it was
 reached via `requires:`, anything else is a top-level/side-loaded file
