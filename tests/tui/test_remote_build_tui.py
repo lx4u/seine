@@ -91,6 +91,13 @@ class RemoteBuildTuiTest(avocado.Test):
         state.reset(mock.Mock(image=mock.Mock(tasks=lambda: [], packages=[]), spec={}))
         self.assertIsNone(state.remote)
 
+    def test_remote_render_is_a_header_over_the_task_rows(self):
+        state = self.build.BuildState()
+        with mock.patch("time.time", return_value=1000.0):
+            state.reset_remote("10.0.0.1:8000", mock.Mock())
+            self.assertEqual(state.render(),
+                             "[BUILD: REMOTE @ 10.0.0.1:8000]\n● remote build  0s\n")
+
     def test_remote_build_row_stops_when_the_build_ends(self):
         for finish, expected in (
             (lambda state: state.finished_ok(), "done"),
