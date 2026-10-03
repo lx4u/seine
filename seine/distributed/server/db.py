@@ -109,6 +109,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             prod_bucket TEXT NOT NULL,
             dev_bucket TEXT NOT NULL,
             dev_only INTEGER NOT NULL DEFAULT 0,
+            quota_gb REAL,
             created_at REAL NOT NULL
         );
 
@@ -137,6 +138,8 @@ def init_db(conn: sqlite3.Connection) -> None:
             artifact_meta TEXT NOT NULL DEFAULT '[]',
             error_message TEXT,
             user_id TEXT,
+            artifacts_expired_at REAL,
+            artifacts_expired_reason TEXT,
             FOREIGN KEY (project) REFERENCES projects(name) ON DELETE CASCADE
         );
 
@@ -211,6 +214,15 @@ def init_db(conn: sqlite3.Connection) -> None:
             )
         except sqlite3.OperationalError:
             pass
+        for stmt in (
+            "ALTER TABLE projects ADD COLUMN quota_gb REAL",
+            "ALTER TABLE builds ADD COLUMN artifacts_expired_at REAL",
+            "ALTER TABLE builds ADD COLUMN artifacts_expired_reason TEXT",
+        ):
+            try:
+                conn.execute(stmt)
+            except sqlite3.OperationalError:
+                pass
 
 
 class ProjectRepo:
@@ -255,6 +267,7 @@ class ProjectRepo:
             "prod_bucket": prod,
             "dev_bucket": dev,
             "dev_only": dev_only,
+            "quota_gb": None,
             "created_at": now,
         }
 
@@ -309,6 +322,17 @@ class ProjectRepo:
     def list(self) -> list[dict[str, Any]]:
         cur = self.conn.execute("SELECT * FROM projects ORDER BY created_at ASC")
         return [self._to_dict(r) for r in cur.fetchall()]
+
+    def set_quota(self, id_or_name: str, quota_gb: Optional[float]) -> bool:
+        """Set the storage quota in GB; None removes it."""
+        if quota_gb is not None and quota_gb <= 0:
+            raise ValueError("quota must be greater than zero")
+        with self.conn:
+            cur = self.conn.execute(
+                "UPDATE projects SET quota_gb = ? WHERE id = ? OR name = ?",
+                (quota_gb, id_or_name, id_or_name),
+            )
+            return cur.rowcount > 0
 
     def delete(self, id_or_name: str) -> bool:
         with self.conn:
@@ -509,6 +533,43 @@ class BuildRepo:
                 tuple(params),
             )
         return self.get(build_id)
+
+    def mark_artifacts_expired(
+        self, build_id: str, reason: str, now: Optional[float] = None
+    ) -> bool:
+        """Forget the artifacts of a build whose objects were deleted."""
+        if reason not in ("ttl", "pressure"):
+            raise ValueError(f"unknown expiry reason: {reason}")
+        with self.conn:
+            cur = self.conn.execute(
+                """
+                UPDATE builds
+                SET artifact_urls = '[]', artifact_meta = '[]',
+                    artifacts_expired_at = ?, artifacts_expired_reason = ?
+                WHERE id = ?
+                """,
+                (time.time() if now is None else now, reason, build_id),
+            )
+            return cur.rowcount > 0
+
+    def evictable_builds(self, project: str, older_than: float) -> list[dict[str, Any]]:
+        """Finished non-release builds of a project that still hold artifacts.
+
+        Only builds finished before `older_than` (epoch seconds), oldest first.
+        """
+        cur = self.conn.execute(
+            """
+            SELECT * FROM builds
+            WHERE project = ? AND is_release = 0
+              AND status IN ('completed', 'failed', 'cancelled')
+              AND artifact_urls != '[]'
+              AND artifacts_expired_at IS NULL
+              AND finished_at IS NOT NULL AND finished_at < ?
+            ORDER BY finished_at ASC
+            """,
+            (project, older_than),
+        )
+        return [self.get(r["id"]) for r in cur.fetchall()]  # type: ignore
 
     def create_job(
         self,
