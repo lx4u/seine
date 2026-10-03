@@ -575,7 +575,7 @@ class MultiGroupSharesPackagesWithinAnArchCohort(avocado.Test):
         self.assertNotIn("two:rootfs", blamed_one)
 
 # The 'multiconfig:' spec key -- an outer specification's own named
-# sub-builds, each loaded the way multiconfig._load() already loads one
+# sub-builds, each loaded the way multiconfig.load_group() already loads one
 # of the CLI's own '--' groups, but owned by the one outer BuildCmd
 # instead of a top-level group of its own.
 def _written(path, text):

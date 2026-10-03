@@ -166,7 +166,7 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                   for name, value in groups.items()}
         after = multiconfig.resolve_order(parsed)
         self.subbuilds = {
-            name: multiconfig._load(files, self.options,
+            name: multiconfig.load_group(files, self.options,
                                     defer_uki_check=len(after[name]) > 0)
             for name, (files, _after, _before) in parsed.items()}
         self.image.subbuilds = self.subbuilds
