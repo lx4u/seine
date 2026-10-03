@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import atexit
 import avocado
 import contextlib
 import os
@@ -12,13 +11,13 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-from tests.testutils import remove_tree
+from tests.testutils import remove_at_exit
 
 if "SEINE_CACHE_DIR" not in os.environ:
     os.environ["SEINE_CACHE_DIR"] = tempfile.mkdtemp(prefix="seine-ai-tests-")
-    atexit.register(remove_tree, os.environ["SEINE_CACHE_DIR"])
+    remove_at_exit(os.environ["SEINE_CACHE_DIR"])
 _cwd = tempfile.mkdtemp(prefix="seine-ai-tests-cwd-")
-atexit.register(remove_tree, _cwd)
+remove_at_exit(_cwd)
 os.chdir(_cwd)
 
 from tests.native_image import native_image
