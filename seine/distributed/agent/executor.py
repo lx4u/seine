@@ -14,8 +14,10 @@ import time
 from typing import Any, Callable, Optional
 
 from seine.credentials import FEED_AUTH_ENV
+from seine.distributed.agent.events import EventListener
 from seine.distributed.common.models import JobManifest, JobS3
 from seine.distributed.common.s3 import provider_from
+from seine.reporter import SOCKET_ENV
 
 
 def find_seine_binary() -> str:
@@ -112,6 +114,8 @@ class SubprocessExecutor:
 
     def __init__(self, work_dir: str):
         self.work_dir = os.path.abspath(work_dir)
+        # Called with each structured event the build reports, if set.
+        self.on_event: Optional[Callable[[dict], None]] = None
         self._cancel = threading.Event()
         self.failure_reason: Optional[str] = None
 
@@ -368,6 +372,11 @@ class SubprocessExecutor:
             ]
         cmd.append(rel_spec)
 
+        listener = None
+        if self.on_event is not None:
+            listener = EventListener(self.on_event)
+            env[SOCKET_ENV] = listener.path
+
         on_log("system", f"[agent] Launching {' '.join(cmd)} in {job_dir}\n")
 
         try:
@@ -383,6 +392,8 @@ class SubprocessExecutor:
             )
         except OSError as e:
             on_log("system", f"[agent] Failed to start {cmd[0]}: {e}\n")
+            if listener is not None:
+                listener.close()
             return 1
 
         def stream_output(pipe, source):
@@ -403,6 +414,8 @@ class SubprocessExecutor:
             t_out.join(timeout=10 if self.cancelled else None)
             t_err.join(timeout=10 if self.cancelled else None)
         finally:
+            if listener is not None:
+                listener.close()
             self.cleanup_containers(manifest, env, on_log)
 
         on_log("system", f"[agent] Build {manifest.build_id} finished with exit code {return_code}\n")
