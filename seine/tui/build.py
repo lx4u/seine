@@ -12,6 +12,7 @@ from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.widgets import RichLog, Static
 
+from seine import logindex
 from seine import tasks
 from seine.progress import elapsed
 from seine.tui.base import BaseScreen, StaticPane
@@ -113,15 +114,18 @@ class BuildState:
         self.remote = None
         self.remote_job = None
         self.remote_text = []
+        # Where the streamed log of a remote build is kept, see 'logs'.
+        self.remote_logs = None
 
     @property
     def running(self):
         return self.worker is not None and self.worker.is_running
 
-    def reset_remote(self, host, job):
+    def reset_remote(self, host, job, log_dir=None):
         self.build = None
         self.remote = host
         self.remote_job = job
+        self.remote_logs = log_dir
         self.remote_text = []
         self.order = ["remote build"]
         self.rows = {"remote build": new_row()}
@@ -247,6 +251,8 @@ class BuildState:
     # Read off the Image itself rather than tracked separately here.
     @property
     def logs(self):
+        if self.remote:
+            return self.remote_logs
         return getattr(self.build.image, "logs", None) if self.build else None
 
     def render(self):
@@ -321,10 +327,43 @@ def start_build(app, state, build, packages_only=False, target=None):
     # Start edge of the status-bar "N build" chip; on_finished covers the finish side.
     app.refresh_indicators()
 
+# Lists a remote build in the shared log catalog like a local one, so
+# the overview links its logs.
+class RemoteLogIndex:
+    def __init__(self, build, log_dir):
+        self.files = list(build.options.get("files") or [])
+        self.release = build.spec["distribution"]["release"]
+        self.arch = build.spec["distribution"]["architecture"]
+        self.log_dir = log_dir
+        self.started = None
+
+    def _entry(self, name, failed=False, cached=False):
+        log = None if cached else os.path.join(self.log_dir, "%s.log" % name)
+        return {"name": name, "failed": failed, "cached": cached, "log": log}
+
+    def begin(self, plan):
+        self.started = logindex.begin(
+            self.files, self.release, self.arch, self.log_dir,
+            [self._entry(t["name"], cached=bool(t.get("cached"))) for t in plan])
+
+    def record(self, state, ok):
+        if self.started is None:
+            return
+        entries = []
+        for name in state.order:
+            kind = state.rows[name]["state"]
+            if kind in ("done", "failed"):
+                entries.append(self._entry(name, failed=kind == "failed"))
+            elif kind == "cached":
+                entries.append(self._entry(name, cached=True))
+        logindex.record(self.files, self.release, self.arch, self.log_dir,
+                        entries, ok, self.started)
+
 # Same as start_build(), but the build runs on a seine-server worker:
 # RemoteBuild packs and uploads the worktree, submits it, and its log
 # stream lands in state.remote_text for BuildScreen to tail.
-def start_remote_build(app, state, spec_file, session, no_download=False, project=None):
+def start_remote_build(app, state, spec_file, session, no_download=False, project=None,
+                       build=None):
     from seine.distributed.client.remote import DownloadError, RemoteBuild
     from seine.tui.credentials import tui_prompt
     if state.running:
@@ -355,24 +394,41 @@ def start_remote_build(app, state, spec_file, session, no_download=False, projec
         if due:
             app.call_from_thread(redraw, app)
 
+    # The stream is kept under the local logs, one file per task.
+    log_dir = logindex.allocate_log_dir([spec_file] if build is None else build.options["files"])
+    catalog = RemoteLogIndex(build, log_dir) if build is not None else None
+
+    def on_event(event):
+        state.remote_event(event)
+        if catalog is not None and event.get("type") == "task_plan":
+            catalog.begin(event.get("tasks") or [])
+
+    def finish(error=None):
+        if catalog is not None:
+            catalog.record(state, error is None)
+        if error is None:
+            state.finished_ok()
+        else:
+            state.finished_failed(error)
+
     job = RemoteBuild(
         session.url, project, spec_file,
-        options={"no_download": no_download, "insecure": session.insecure,
+        options={"no_download": no_download, "verbose": True, "insecure": session.insecure,
                  "ca_cert": session.ca_cert}, token=session.token,
         out=write, err=write, prompt=tui_prompt(app), on_download=on_download,
-        on_event=lambda event: app.call_from_thread(state.remote_event, event))
-    state.reset_remote(host, job)
+        on_event=lambda event: app.call_from_thread(on_event, event), log_dir=log_dir)
+    state.reset_remote(host, job, log_dir)
 
     def run():
         try:
             code = job.run()
         except Exception as e:
-            app.call_from_thread(state.finished_failed, "%s: %s" % (type(e).__name__, e))
+            app.call_from_thread(finish, "%s: %s" % (type(e).__name__, e))
             return
         if code == 0:
-            app.call_from_thread(state.finished_ok)
+            app.call_from_thread(finish)
         else:
-            app.call_from_thread(state.finished_failed, "remote build failed (exit %d)" % code)
+            app.call_from_thread(finish, "remote build failed (exit %d)" % code)
 
     state.worker = app.run_worker(run, thread=True, exclusive=True, group="build")
     app.refresh_indicators()

@@ -4,6 +4,7 @@
 import contextlib
 import os
 import sys
+import types
 from unittest import mock
 
 import avocado
@@ -26,6 +27,8 @@ class RemoteBuildTuiTest(avocado.Test):
     """
 
     def setUp(self):
+        # Remote builds allocate their log directory under logs_root().
+        os.environ["SEINE_LOG_DIR"] = self.workdir
         with _tui_required(self):
             from seine.tui import build, commands
             from seine.tui.remote_session import RemoteSession
@@ -88,8 +91,14 @@ class RemoteBuildTuiTest(avocado.Test):
         self.assertEqual(state.message, "[BUILD: REMOTE @ 10.0.0.1:8000]")
         state.remote_output("hello\n")
         self.assertEqual(state.remote_text, ["hello\n"])
+        self.assertIsNone(state.logs)
         state.reset(mock.Mock(image=mock.Mock(tasks=lambda: [], packages=[]), spec={}))
         self.assertIsNone(state.remote)
+
+    def test_remote_state_reports_the_local_log_dir(self):
+        state = self.build.BuildState()
+        state.reset_remote("host", mock.Mock(), "/logs/x")
+        self.assertEqual(state.logs, "/logs/x")
 
     def test_remote_render_is_a_header_over_the_task_rows(self):
         state = self.build.BuildState()
@@ -211,6 +220,64 @@ class RemoteBuildTuiTest(avocado.Test):
             self.build.start_remote_build(app, state, "main.yaml", session, project="demo")
         rb.call_args.kwargs["on_event"](self.PLAN)
         self.assertIn("disk", state.rows)
+
+    def _build_cmd(self):
+        return types.SimpleNamespace(
+            options={"files": ["/w/main.yaml"]},
+            spec={"distribution": {"release": "trixie", "architecture": "amd64"}})
+
+    def _remote_with_build(self, code):
+        app = mock.Mock()
+        app.run_worker = lambda fn, **kw: fn() or mock.Mock()
+        app.call_from_thread = lambda fn, *a: fn(*a)
+        session = self.RemoteSession(app=app)
+        session.url, session.token = "http://127.0.0.1:8000", "t"
+        build = self._build_cmd()
+        state = self.build.BuildState()
+        with mock.patch("seine.distributed.client.remote.RemoteBuild") as rb, \
+                mock.patch("seine.tui.credentials.tui_prompt"):
+            rb.return_value.run.side_effect = (
+                lambda: rb.call_args.kwargs["on_event"](self.PLAN) or code)
+            self.build.start_remote_build(
+                app, state, "/w/main.yaml", session, project="demo", build=build)
+        return state, rb
+
+    def test_remote_build_keeps_its_logs_locally(self):
+        state, rb = self._remote_with_build(0)
+        self.assertEqual(rb.call_args.kwargs["log_dir"], state.logs)
+        self.assertTrue(os.path.isdir(state.logs))
+        self.assertTrue(state.logs.startswith(self.workdir))
+
+    def test_remote_build_is_listed_in_the_log_catalog(self):
+        from seine import logindex
+        for code, ok in ((0, True), (1, False)):
+            state, _ = self._remote_with_build(code)
+            entry = logindex.entries()[0]
+            self.assertEqual((entry["release"], entry["arch"], entry["ok"]),
+                             ("trixie", "amd64", ok))
+            self.assertEqual(entry["dir"], os.path.relpath(state.logs, self.workdir))
+            by_name = {t["name"]: t for t in entry["tasks"]}
+            self.assertTrue(by_name["package:amd64:busybox"]["cached"])
+            self.assertIsNone(by_name["package:amd64:busybox"]["log"])
+
+    def test_remote_build_without_a_plan_is_not_cataloged(self):
+        from seine import logindex
+        app = mock.Mock()
+        app.run_worker = lambda fn, **kw: fn() or mock.Mock()
+        app.call_from_thread = lambda fn, *a: fn(*a)
+        session = self.RemoteSession(app=app)
+        session.url, session.token = "http://127.0.0.1:8000", "t"
+        build = self._build_cmd()
+        with mock.patch("seine.distributed.client.remote.RemoteBuild") as rb, \
+                mock.patch("seine.tui.credentials.tui_prompt"):
+            rb.return_value.run.return_value = 1
+            self.build.start_remote_build(
+                app, self.build.BuildState(), "/w/main.yaml", session, project="demo", build=build)
+        self.assertEqual(logindex.entries(), [])
+
+    def test_remote_build_asks_the_worker_for_a_verbose_build(self):
+        _, rb = self._remote_with_build(0)
+        self.assertTrue(rb.call_args.kwargs["options"]["verbose"])
 
     def test_start_remote_build_reports_exit_code(self):
         app = mock.Mock()
