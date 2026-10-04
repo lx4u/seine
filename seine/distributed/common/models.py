@@ -296,6 +296,15 @@ class UserUpdateRequest(BaseModel):
     active: bool | None = None
 
 
+class StorageInfo(BaseModel):
+    """What a client may know of the server's shared storage: never a credential."""
+    type: str
+    endpoint: str | None = None
+    # Artifactory only: whether a build must bring its own token ("required") or may ("optional")
+    job_tokens: str | None = None
+    downloads: str | None = None
+
+
 class UserProfileResponse(BaseModel):
     """User profile and project role map for client capability negotiation."""
     id: str
@@ -303,6 +312,7 @@ class UserProfileResponse(BaseModel):
     is_admin: bool
     projects: dict[str, str] = Field(default_factory=dict)
     default_project: str | None = None
+    storage: StorageInfo | None = None
 
 
 class UserPreferencesRequest(BaseModel):

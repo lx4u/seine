@@ -71,17 +71,27 @@ MAX_SECRET_LENGTH = 4096
 
 
 def check_transient_secrets(secrets: dict[str, Any]) -> None:
-    """Raise ValueError unless secrets is {'feeds': {id: {'login', 'password'}}} within limits."""
+    """Raise ValueError unless secrets holds only well-formed 'feeds' and 'artifactory' entries."""
     if not secrets:
         return
-    if set(secrets) != {"feeds"}:
-        raise ValueError("transient_secrets takes only 'feeds'")
-    feeds = secrets["feeds"]
-    if not isinstance(feeds, dict) or not 0 < len(feeds) <= MAX_SECRET_FEEDS:
-        raise ValueError(f"transient_secrets.feeds takes 1 to {MAX_SECRET_FEEDS} feeds")
+    if not set(secrets) <= {"feeds", "artifactory"}:
+        raise ValueError("transient_secrets takes only 'feeds' and 'artifactory'")
 
     def text(value: Any) -> bool:
         return isinstance(value, str) and 0 < len(value) <= MAX_SECRET_LENGTH
+
+    if "artifactory" in secrets:
+        pair = secrets["artifactory"]
+        if not isinstance(pair, dict) or set(pair) not in ({"token"}, {"user", "password"}) \
+                or not all(text(v) for v in pair.values()):
+            raise ValueError(
+                f"transient_secrets.artifactory: takes a token, or a user and a password, "
+                f"of 1 to {MAX_SECRET_LENGTH} characters")
+    if "feeds" not in secrets:
+        return
+    feeds = secrets["feeds"]
+    if not isinstance(feeds, dict) or not 0 < len(feeds) <= MAX_SECRET_FEEDS:
+        raise ValueError(f"transient_secrets.feeds takes 1 to {MAX_SECRET_FEEDS} feeds")
 
     for feed_id, pair in feeds.items():
         if not text(feed_id):

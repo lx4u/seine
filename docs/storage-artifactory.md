@@ -153,6 +153,49 @@ and hands it to the child `seine build` through `SEINE_ARTIFACTORY_*`
 (or `AWS_*`) plus the matching `--storage-backend` flags; ambient
 storage variables of the agent are never inherited.
 
+### Builds that run as their user
+
+By default a worker gets the server's own token for the project and
+environment. Unless that token belongs to an identity limited to the
+repo (see "Make a token"), it reaches every repo on the instance, so a
+build, whose specification and playbooks run arbitrary code, could read
+or change other projects' repos. A user can bring their own token
+instead, and the build then runs with only what that user may do in
+Artifactory:
+
+```
+export SEINE_ARTIFACTORY_TOKEN=<your token>     # or SEINE_ARTIFACTORY_USER + SEINE_ARTIFACTORY_PASSWORD
+seine build --remote https://seine.example.org ...
+```
+
+The client looks the credential up where it looks up any other
+(`SEINE_ARTIFACTORY_*`, the keyring, `~/.config/seine/credentials.json`),
+never prompts for it, and sends it, with the build and over https only,
+to a server that reports it runs Artifactory. The server checks that the
+credential can read and write the project's repo (a small probe object
+is deployed and removed) and refuses the build with a 403 otherwise,
+instead of letting it fail after hours. The worker then pulls the
+worktree, runs the build and uploads the artifacts with that credential,
+and the server's own never leaves it. The secret is kept in memory only,
+for `secret_ttl`, like feed credentials, and the user's token must stay
+valid for as long as the build runs, since uploads happen at its end.
+
+`storage.artifactory_job_tokens` sets whether a build may or must do
+this:
+
+| Value | Without a token |
+| --- | --- |
+| `optional` (default) | the build runs on the server's credential, as an S3 build runs on the server's key |
+| `required` | the build is refused, saying how to bring one; no storage credential of the server ever reaches a worker |
+
+The server still needs its own credential for what it does itself:
+staging worktrees, retention sweeps and purges. Give it one that is
+limited to the repos it manages.
+
+Seine project membership no longer decides who may write a repo for a
+build that brings its own token: Artifactory does, so keep its
+permissions in step with the project's members.
+
 ### Downloads
 
 An S3 client downloads straight from storage with a presigned URL that

@@ -394,6 +394,13 @@ class ArtifactorySettingsTest(Test):
         self.assertEqual(s.artifactory_keys("gamma", "dev"), {"token": "default-dev-token"})
         self.assertIsNone(s.artifactory_keys("gamma", "prod"))
 
+    def test_job_tokens_and_downloads_are_parsed(self):
+        s = self._load("storage:\n  type: artifactory\n  artifactory_job_tokens: required\n"
+                       "  artifactory_downloads: byot\n")
+        self.assertEqual((s.artifactory_job_tokens, s.artifactory_downloads), ("required", "byot"))
+        s = self._load("storage:\n  type: artifactory\n")
+        self.assertEqual((s.artifactory_job_tokens, s.artifactory_downloads), ("optional", "proxy"))
+
     def test_storage_type_defaults_to_s3(self):
         s = self._load("storage:\n  endpoint: https://s3\n")
         self.assertEqual(s.storage_type, "s3")

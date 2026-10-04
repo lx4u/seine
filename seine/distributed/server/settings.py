@@ -41,7 +41,8 @@ ENV_VARS = {
 }
 
 S3_ENVIRONMENTS = ("dev", "prod")
-ARTIFACTORY_DOWNLOADS = ("proxy", "direct")
+ARTIFACTORY_DOWNLOADS = ("proxy", "direct", "byot")
+ARTIFACTORY_JOB_TOKENS = ("optional", "required")
 _S3_KEY_FIELDS = ("access_key", "secret_key")
 
 
@@ -116,8 +117,12 @@ class Settings:
     storage_type: str = "s3"
     artifactory_endpoint: Optional[str] = None
     # How clients fetch artifacts of an Artifactory-backed build: "proxy" (through
-    # this server, the default) or "direct" (a plain URL; the repo must allow anonymous read).
+    # this server, the default), "byot" (the client brings its own Artifactory token,
+    # else proxy) or "direct" (a plain URL; the repo must allow anonymous read).
     artifactory_downloads: str = "proxy"
+    # Whether a build may ("optional") or must ("required") bring its own Artifactory token;
+    # without one it runs on this server's credential for the project.
+    artifactory_job_tokens: str = "optional"
     # {project: {env: {token} or {user, password}}}; keys come from the file only.
     artifactory_projects: dict = field(default_factory=dict, repr=False)
     artifactory_default: dict = field(default_factory=dict, repr=False)
@@ -169,6 +174,10 @@ class Settings:
                 validate_project_name(self.new_user_project)
             except ValueError as e:
                 raise SettingsError(f"new_user_project: {e}") from e
+        if self.artifactory_job_tokens not in ARTIFACTORY_JOB_TOKENS:
+            raise SettingsError(
+                f"unknown artifactory_job_tokens: {self.artifactory_job_tokens!r}, "
+                f"expected one of {', '.join(ARTIFACTORY_JOB_TOKENS)}")
         if self.artifactory_downloads not in ARTIFACTORY_DOWNLOADS:
             raise SettingsError(
                 f"unknown artifactory_downloads: {self.artifactory_downloads!r}, "
@@ -282,7 +291,7 @@ def _read_storage(section: Any) -> dict[str, Any]:
         raise SettingsError("invalid 'storage' section: expected a mapping")
     unknown = set(section) - {"endpoint", "region", "projects", "default", "type",
                               "artifactory_endpoint", "artifactory_projects", "artifactory_default",
-                              "artifactory_downloads"}
+                              "artifactory_downloads", "artifactory_job_tokens"}
     if unknown:
         raise SettingsError(f"unknown storage setting(s): {', '.join(sorted(map(str, unknown)))}")
     projects = section.get("projects") or {}
@@ -304,8 +313,9 @@ def _read_storage(section: Any) -> dict[str, Any]:
         values["storage_type"] = section["type"]
     if section.get("artifactory_endpoint"):
         values["artifactory_endpoint"] = section["artifactory_endpoint"]
-    if section.get("artifactory_downloads"):
-        values["artifactory_downloads"] = section["artifactory_downloads"]
+    for name in ("artifactory_downloads", "artifactory_job_tokens"):
+        if section.get(name):
+            values[name] = section[name]
     return values
 
 

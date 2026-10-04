@@ -34,6 +34,7 @@ from seine.distributed.common.models import (
     BuildSubmitResponse,
     ClaimJobRequest,
     HeartbeatRequest,
+    JobArtifactory,
     JobManifest,
     JobStatusUpdateRequest,
     MemberAddRequest,
@@ -42,6 +43,7 @@ from seine.distributed.common.models import (
     RegisterWorkerRequest,
     RegisterWorkerResponse,
     StorageGcRequest,
+    StorageInfo,
     TokenIssueRequest,
     UserCreateRequest,
     UserPreferencesRequest,
@@ -70,11 +72,12 @@ from seine.distributed.server.housekeeping import HousekeepingBusy, run_housekee
 from seine.distributed.server.reaper import Reaper
 from seine.distributed.server.settings import S3_ENVIRONMENTS, Settings
 from seine.distributed.server.storage import (
-    StorageCredentialsError, env_name, job_storage, provider_for, storage_type,
+    StorageCredentialsError, check_job_credentials, env_name, job_storage, provider_for, storage_type,
 )
 from seine.distributed.server.transient import TransientSecrets
 from seine.distributed.server.events import ProjectEvents, build_event, serve_events
 from seine.distributed.server.ws import BroadcastHub, forget_finished_build, serve_stream
+from seine.storage.artifactory.client import ArtifactoryError
 from seine.storage.s3.client import S3ClientError
 
 logger = logging.getLogger("seine.server.api")
@@ -257,18 +260,30 @@ def create_app(
         secrets_mgr = _get_transient_secrets(request)
         build_id = job.get("build_id", "")
         build = app_db.get_build(build_id) or {}
+        settings = request.app.state.settings
+        secrets = dict(secrets_mgr.get(build_id, {}))
+        own = secrets.pop("artifactory", None)
         try:
-            job["storage"] = job_storage(
-                request.app.state.settings, job["project"], job["s3_bucket"],
-                env_name(build.get("is_release", False)),
-            )
+            if storage_type(settings) == "artifactory" and own:
+                # The build brought its own credential: it runs as its user, not as this server.
+                job["storage"] = JobArtifactory(
+                    endpoint=settings.artifactory_endpoint, bucket=job["s3_bucket"], **own)
+            elif storage_type(settings) == "artifactory" and settings.artifactory_job_tokens == "required":
+                raise StorageCredentialsError(
+                    "this server requires a build to bring its own Artifactory token and this one "
+                    "has none (the server restarted, or the secret expired while it was queued)")
+            else:
+                job["storage"] = job_storage(
+                    settings, job["project"], job["s3_bucket"],
+                    env_name(build.get("is_release", False)),
+                )
         except StorageCredentialsError as e:
             logger.warning("Failing job %s of build %s: %s", job["job_id"], build_id, e)
             app_db.update_job_status(job["job_id"], "failed", error_message=str(e))
             secrets_mgr.pop(build_id, None)
             forget_finished_build(app_db, request.app.state.hub, build_id)
             return Response(status_code=status.HTTP_204_NO_CONTENT)
-        job["transient_secrets"] = secrets_mgr.get(build_id, {})
+        job["transient_secrets"] = secrets
         return JobManifest(**job)
 
     @app.post("/api/v1/workers/jobs/{job_id}/status")
@@ -429,6 +444,25 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
         env = env_name(req.is_release)
+        settings = request.app.state.settings
+        own = req.transient_secrets.get("artifactory")
+        if storage_type(settings) != "artifactory":
+            req.transient_secrets.pop("artifactory", None)
+        elif own is None and settings.artifactory_job_tokens == "required":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="this server requires your own Artifactory token: set SEINE_ARTIFACTORY_TOKEN "
+                       "(or save one in the keyring or the credentials file) and submit again")
+        elif own is not None:
+            try:
+                check_job_credentials(settings, project_row[f"{env}_bucket"], own)
+            except ArtifactoryError as e:
+                refused = e.status_code in (401, 403)
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN if refused else status.HTTP_502_BAD_GATEWAY,
+                    detail=("your Artifactory credential cannot read and write repo "
+                            f"'{project_row[f'{env}_bucket']}': {e}") if refused
+                    else f"Artifactory check failed: {e}") from e
         provider = _get_storage_provider(request, req.project, project_row[f"{env}_bucket"], env)
         try:
             staged = provider.has_worktree(req.project, req.worktree_digest)
@@ -970,7 +1004,14 @@ def create_app(
             )
         return res
 
-    def _profile(db: Database, user_token: dict[str, Any]) -> UserProfileResponse:
+    def _storage_info(settings: Settings) -> StorageInfo:
+        if storage_type(settings) == "artifactory":
+            return StorageInfo(
+                type="artifactory", endpoint=settings.artifactory_endpoint,
+                job_tokens=settings.artifactory_job_tokens, downloads=settings.artifactory_downloads)
+        return StorageInfo(type="s3")
+
+    def _profile(db: Database, user_token: dict[str, Any], settings: Settings) -> UserProfileResponse:
         user_id = user_token["user_id"]
         is_admin = is_system_admin(db, user_token)
         rows = db.conn.execute(
@@ -989,6 +1030,7 @@ def create_app(
             is_admin=is_admin,
             projects=projects,
             default_project=default,
+            storage=_storage_info(settings),
         )
 
     @app.get("/api/v1/me", response_model=UserProfileResponse)
@@ -996,7 +1038,7 @@ def create_app(
         request: Request,
         user_token: dict[str, Any] = Depends(current_user),
     ) -> UserProfileResponse:
-        return _profile(get_db(request), user_token)
+        return _profile(get_db(request), user_token, request.app.state.settings)
 
     @app.patch("/api/v1/me", response_model=UserProfileResponse)
     async def update_current_user_preferences(
@@ -1011,7 +1053,7 @@ def create_app(
             require_member(db, user_token, project["id"])
             project_id = project["id"]
         db.users.set_default_project(user_token["user_id"], project_id)
-        return _profile(db, user_token)
+        return _profile(db, user_token, request.app.state.settings)
 
     @app.get("/api/v1/workers", response_model=WorkerRosterResponse)
     async def list_workers(

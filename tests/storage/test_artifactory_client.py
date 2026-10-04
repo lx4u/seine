@@ -112,6 +112,29 @@ class ArtifactoryClientObjects(avocado.Test):
         self.assertEqual(args[:2], ("GET", "http://a:8081/artifactory/repo/d/f.bin"))
         self.assertTrue(kwargs["stream"])
 
+    def test_check_access_deploys_and_removes_a_probe(self):
+        deployed = response(201, json_data=None)
+        deployed.json.side_effect = ValueError("no json")
+        self.session.request.side_effect = [response(200, json_data={"key": "repo"}), deployed, response(204)]
+        self.client.check_access("repo")
+        calls = self.session.request.call_args_list
+        self.assertEqual([c.args[0] for c in calls], ["GET", "PUT", "DELETE"])
+        probe = calls[1].args[1]
+        self.assertIn("/repo/.seine-probe-", probe)
+        self.assertEqual(calls[2].args[1], probe)
+
+    def test_check_access_names_a_missing_repo(self):
+        self.session.request.side_effect = [response(404)]
+        with self.assertRaises(ArtifactoryNotFoundError):
+            self.client.check_access("repo")
+
+    def test_check_access_fails_when_the_identity_cannot_deploy(self):
+        self.session.request.side_effect = [response(200, json_data={}), response(403)]
+        with self.assertRaises(ArtifactoryError) as ctx:
+            self.client.check_access("repo")
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(self.session.request.call_count, 2)
+
     def test_put_sends_checksum_and_returns_recorded(self):
         recorded = "bb" * 32
         self.session.request.return_value = response(

@@ -425,6 +425,8 @@ class RemoteBuild:
         # Set from another thread to cancel like Ctrl+C would.
         self.stop_requested = threading.Event()
         self.server_url = server_url.rstrip("/")
+        # The server's "storage" profile entry (type, endpoint), once known.
+        self.storage_info: Optional[dict[str, Any]] = None
         self.project = project
         self.options = dict(options or {})
         self.token = token or self.options.get("token") or os.environ.get("SEINE_TOKEN")
@@ -480,6 +482,7 @@ class RemoteBuild:
             self._resolve_project()
             arch = self._target_arch()
             secrets = self._feed_secrets()
+            secrets.update(self._storage_secrets())
             digest = self._upload()
             build_id = self._submit(arch, digest, secrets)
         except RemoteError as e:
@@ -663,6 +666,35 @@ class RemoteBuild:
         except ValueError as e:
             raise RemoteError(f"refusing to send feed credentials: {e}") from e
         return {"feeds": found}
+
+    def _storage_secrets(self) -> dict[str, Any]:
+        """The user's own Artifactory credential, if they have one and the server runs Artifactory.
+
+        It is looked up without prompting (keyring, credentials file, environment):
+        a build that does not need it should not stop to ask. Without one nothing is
+        sent, and the server says so if it requires one. Asking the server what
+        storage it runs comes last, so a user with no credential costs no request.
+        """
+        from seine import credentials
+
+        found: dict[str, str] = {}
+        for auth in (None, {"user": None, "password": None}):
+            try:
+                found = credentials.artifactory_credential_source(auth=auth).get()
+                break
+            except credentials.CredentialNotFound:
+                continue
+        if not found:
+            return {}
+        storage = self._get("/api/v1/me", "profile").get("storage") or {}
+        if storage.get("type") != "artifactory":
+            return {}
+        self.storage_info = storage
+        try:
+            check_server_url(self.server_url)
+        except ValueError as e:
+            raise RemoteError(f"refusing to send your Artifactory credential: {e}") from e
+        return {"artifactory": found}
 
     def _pack(self) -> tuple[str, str]:
         """Pack what the spec reads; the whole tree on worktree=full, or on auto if it must."""

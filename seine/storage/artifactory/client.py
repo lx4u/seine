@@ -4,6 +4,7 @@
 import contextlib
 import hashlib
 import os
+import secrets
 
 import requests
 
@@ -143,6 +144,18 @@ class ArtifactoryClient:
         """Delete paths one by one; already-gone paths are fine."""
         for path in paths:
             self.delete(repo, path)
+
+    def check_access(self, repo):
+        """Raise ArtifactoryError unless this identity can read and write *repo*.
+
+        Writes and removes a small probe, so a token that cannot deploy is
+        refused when a build is submitted, not after it ran.
+        """
+        if self.repo_info(repo) is None:
+            raise ArtifactoryNotFoundError(f"repo '{repo}' does not exist", status_code=404)
+        probe = f".seine-probe-{secrets.token_hex(6)}"
+        self.put_object(repo, probe, b"seine")
+        self.delete(repo, probe)
 
     def repo_info(self, repo):
         """Return repo metadata, None if the repo does not exist."""

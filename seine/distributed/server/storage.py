@@ -53,3 +53,11 @@ def job_storage(settings: Settings, project: str, bucket: str, env: str) -> JobS
 def provider_for(settings: Settings, project: str, bucket: str, env: str) -> Any:
     """Return a storage provider using the project's credentials for env."""
     return provider_from(job_storage(settings, project, bucket, env))
+
+
+def check_job_credentials(settings: Settings, bucket: str, creds: dict[str, str]) -> None:
+    """Raise unless the credential a client brought can read and write the repo."""
+    from seine.storage.artifactory.client import ArtifactoryClient
+
+    ArtifactoryClient(settings.artifactory_endpoint, bucket, **creds).check_access(bucket)
+
