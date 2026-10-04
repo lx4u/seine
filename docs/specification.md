@@ -1971,6 +1971,23 @@ chain searches `keyring` -> `settings` (`~/.config/seine/credentials.json`) -> `
 Interactive prompts mask `secret_key` and write it back to any writable backend
 named in the chain.
 
+JFrog Artifactory is selected the same way, with either a token or a
+user/password pair (see [Running a JFrog Artifactory
+cache](storage-artifactory.md)):
+
+```yaml
+storage:
+  artifactory:
+    endpoint: http://artifactory.example.org:8081
+    repo: seine-shared
+    auth:
+      token: "keyring:artifactory-token | settings:artifactory-token | env:SEINE_ARTIFACTORY_TOKEN"
+```
+
+`--storage-backend=s3|artifactory` on the command line overrides the
+spec, and `--artifactory-endpoint` / `--artifactory-repo` override the
+endpoint and repo.
+
 ## test
 
 A specification carries its own tests the same way it carries its

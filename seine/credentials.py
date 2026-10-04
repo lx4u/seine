@@ -66,9 +66,12 @@ from urllib.parse import urlsplit
 
 __all__ = [
     "CredentialError", "CredentialNotFound",
-    "resolve", "CredentialSource", "probe", "probe_s3",
+    "resolve", "CredentialSource", "probe", "probe_s3", "probe_artifactory",
     "s3_credential_source",
     "DEFAULT_S3_ACCESS_KEY_CHAIN", "DEFAULT_S3_SECRET_KEY_CHAIN",
+    "artifactory_credential_source",
+    "DEFAULT_ARTIFACTORY_TOKEN_CHAIN",
+    "DEFAULT_ARTIFACTORY_USER_CHAIN", "DEFAULT_ARTIFACTORY_PASSWORD_CHAIN",
     "remember_resolved", "resolved_for", "clear_resolved",
     "load_feed_auth", "DelegatedSource", "FEED_AUTH_ENV",
 ]
@@ -721,3 +724,80 @@ def probe_s3(endpoint, bucket, access_key, secret_key, region="garage",
         raise CredentialError("%s: unexpected HTTP %d" % (url, e.code))
     except urllib.error.URLError as e:
         raise CredentialError("could not reach %r: %s" % (url, e.reason)) from e
+
+
+# Public: Artifactory credentials & probe
+# ---------------------------------------------------------------------------
+
+DEFAULT_ARTIFACTORY_TOKEN_CHAIN = (
+    "keyring:artifactory-token | settings:artifactory-token | "
+    "env:SEINE_ARTIFACTORY_TOKEN"
+)
+DEFAULT_ARTIFACTORY_USER_CHAIN = (
+    "keyring:artifactory-user | settings:artifactory-user | "
+    "env:SEINE_ARTIFACTORY_USER"
+)
+DEFAULT_ARTIFACTORY_PASSWORD_CHAIN = (
+    "keyring:artifactory-password | settings:artifactory-password | "
+    "env:SEINE_ARTIFACTORY_PASSWORD"
+)
+
+
+def artifactory_credential_source(auth=None, context=None, prompt=None, vault_reader=None):
+    """Return a CredentialSource for a token, or a user/password pair."""
+    auth = auth or {}
+    if "user" in auth or "password" in auth:
+        fields = {
+            "user": auth.get("user") or DEFAULT_ARTIFACTORY_USER_CHAIN,
+            "password": auth.get("password") or DEFAULT_ARTIFACTORY_PASSWORD_CHAIN,
+        }
+    else:
+        fields = {"token": auth.get("token") or DEFAULT_ARTIFACTORY_TOKEN_CHAIN}
+    return CredentialSource(
+        fields, context=context or "artifactory storage", prompt=prompt, vault_reader=vault_reader)
+
+
+def probe_artifactory(endpoint, repo, user=None, password=None, token=None, timeout=15):
+    """Check Artifactory credentials against a repo with ping + file info.
+
+    :returns: ``True`` on a 200 (credential valid, repo accessible),
+        ``False`` on a 401/403 (wrong credential -- re-prompt).
+    :raises CredentialError: repo not found (404), unreachable, or unexpected status.
+    """
+    import requests
+
+    base = endpoint.rstrip("/")
+    auth, headers = None, {}
+    if token:
+        headers["Authorization"] = "Bearer %s" % token
+    elif user is not None:
+        auth = (user, password)
+    # Port 8081 serves Artifactory under /artifactory; a router or proxy
+    # may serve it at the root instead.
+    contexts = ("/artifactory", "")
+    try:
+        for context in contexts:
+            resp = requests.get(base + context + "/api/system/ping",
+                                auth=auth, headers=headers, timeout=timeout)
+            if resp.status_code == 404:
+                continue
+            break
+        else:
+            raise CredentialError("%s: no Artifactory ping endpoint found" % base)
+        if resp.status_code in (401, 403):
+            return False
+        if resp.status_code != 200 or resp.text.strip() != "OK":
+            raise CredentialError("%s: unexpected ping HTTP %d" % (base, resp.status_code))
+        resp = requests.get("%s%s/api/storage/%s" % (base, context, repo),
+                            auth=auth, headers=headers, timeout=timeout)
+    except CredentialError:
+        raise
+    except Exception as e:
+        raise CredentialError("could not reach %r: %s" % (base, e)) from e
+    if resp.status_code in (401, 403):
+        return False
+    if resp.status_code == 404:
+        raise CredentialError("%s: repo %r not found (404)" % (endpoint, repo))
+    if resp.status_code != 200:
+        raise CredentialError("%s: unexpected HTTP %d" % (base, resp.status_code))
+    return True

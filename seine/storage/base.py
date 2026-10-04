@@ -82,15 +82,26 @@ def for_build(options=None, spec=None):
     """Instantiate the configured StorageProvider for a build."""
     options = options or {}
     spec = spec or {}
+    storage_spec = spec.get("storage", {}) if isinstance(spec, dict) else {}
 
-    s3_cfg = spec.get("storage", {}).get("s3") if isinstance(spec, dict) else None
+    s3_cfg = storage_spec.get("s3")
+    arti_cfg = storage_spec.get("artifactory")
+    backend = options.get("storage_backend")
+    if backend is None:
+        if arti_cfg is not None or options.get("artifactory_endpoint"):
+            backend = "artifactory"
+        elif s3_cfg is not None:
+            backend = "s3"
     use_shared = options.get("shared_cache")
     if use_shared is None:
-        use_shared = s3_cfg is not None
+        use_shared = backend is not None
 
     if not use_shared:
         from .local import LocalStorageProvider
         return LocalStorageProvider()
+
+    if backend == "artifactory" or (backend is None and arti_cfg is not None):
+        return _artifactory_for_build(options, arti_cfg or {})
 
     from .s3 import S3StorageProvider
     from .s3.client import S3Client
@@ -120,3 +131,44 @@ def for_build(options=None, spec=None):
 
     return S3StorageProvider(
         client, bucket, offline_mode=offline_mode, cache_rootfs=cache_rootfs, options=options)
+
+
+def _artifactory_for_build(options, arti_cfg):
+    """Instantiate an ArtifactoryStorageProvider from options and spec."""
+    from .artifactory import ArtifactoryStorageProvider
+    from .artifactory.client import ArtifactoryClient
+    from seine import credentials
+
+    endpoint = options.get("artifactory_endpoint") or arti_cfg.get("endpoint")
+    repo = options.get("artifactory_repo") or arti_cfg.get("repo", "seine-shared")
+    prefix = arti_cfg.get("path_prefix", "cache")
+    offline_mode = options.get("offline_mode", options.get("s3_offline_mode", "fallback"))
+    cache_rootfs = options.get("cache_rootfs", False)
+
+    if not endpoint:
+        # Fall back to credentials.json if endpoint was not in spec/cli
+        cfg_path = os.environ.get("SEINE_CREDENTIALS_FILE", os.path.expanduser("~/.config/seine/credentials.json"))
+        if os.path.isfile(cfg_path):
+            with contextlib.suppress(Exception):
+                with open(cfg_path) as f:
+                    data = json.load(f)
+                    endpoint = data.get("artifactory-endpoint")
+                    repo = repo or data.get("artifactory-repo", "seine-shared")
+
+    if not endpoint:
+        raise StorageError(
+            "no artifactory endpoint: use --artifactory-endpoint, "
+            "storage.artifactory.endpoint in the spec, or artifactory-endpoint "
+            "in credentials.json")
+
+    src = credentials.artifactory_credential_source(auth=arti_cfg.get("auth"))
+    creds = src.get()
+    if creds.get("token"):
+        client = ArtifactoryClient(endpoint, repo, token=creds["token"])
+    else:
+        client = ArtifactoryClient(endpoint, repo, user=creds.get("user"),
+                                   password=creds.get("password"))
+
+    return ArtifactoryStorageProvider(
+        client, repo, prefix=prefix, offline_mode=offline_mode,
+        cache_rootfs=cache_rootfs, options=options)

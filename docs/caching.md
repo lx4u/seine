@@ -306,6 +306,15 @@ any archive to network storage:
 The `seine.storage` module provides the storage provider abstraction:
 * `LocalStorageProvider`: standard local filesystem cache used for standalone builds.
 * `S3StorageProvider`: network caching backed by S3 or Garage.
+* `ArtifactoryStorageProvider`: network caching backed by JFrog
+  Artifactory generic repositories (see
+  [Running a JFrog Artifactory cache](storage-artifactory.md)).
+
+The cache, worktree and artifact flows are shared (`ObjectStorageProvider`);
+only the transport verbs differ per backend. On Artifactory the SHA-256
+travels as an `X-Checksum-Sha256` header the server verifies, recipe and
+touch sidecars are plain files (the free edition has no custom
+properties), and listings run one AQL query per prefix.
 
 When an object is pushed to S3:
 1. Payloads are compressed using `zstd` (level 3) to `.tar.zst`.

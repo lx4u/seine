@@ -213,6 +213,54 @@ def check_s3(options=None):
         return Check(GROUP_S3, f"{bucket} @ {endpoint}", "ok", "reachable")
     return Check(GROUP_S3, f"{bucket} @ {endpoint}", "warn", "not reachable or bucket missing")
 
+GROUP_ARTIFACTORY = "Remote Cache (seine.storage.artifactory)"
+
+# Verifies Artifactory cache reachability and credentials when enabled.
+def check_artifactory(options=None):
+    options = options or {}
+    spec = options.get("spec") or {}
+    storage_spec = spec.get("storage", {}) if isinstance(spec, dict) else {}
+    arti_spec = storage_spec.get("artifactory", {}) if isinstance(storage_spec, dict) else {}
+    endpoint = (
+        options.get("artifactory_endpoint")
+        or arti_spec.get("endpoint")
+        or storage_spec.get("endpoint")
+        or os.environ.get("SEINE_ARTIFACTORY_ENDPOINT")
+    )
+    repo = (
+        options.get("artifactory_repo")
+        or arti_spec.get("repo")
+        or storage_spec.get("repo")
+        or os.environ.get("SEINE_ARTIFACTORY_REPO")
+    )
+    backend = options.get("storage_backend")
+    enabled = options.get("shared_cache") or arti_spec or backend == "artifactory"
+    if not endpoint and not repo and not enabled:
+        return None
+    endpoint = endpoint or "http://127.0.0.1:8081/artifactory"
+    repo = repo or "seine-shared"
+
+    from seine.credentials import CredentialNotFound, probe_artifactory, artifactory_credential_source
+    auth = arti_spec.get("auth", {})
+    src = artifactory_credential_source(auth=auth)
+    try:
+        creds = src.get()
+    except CredentialNotFound:
+        return Check(GROUP_ARTIFACTORY, f"{repo} @ {endpoint}", "warn", "credentials missing")
+    except Exception as e:
+        return Check(GROUP_ARTIFACTORY, f"{repo} @ {endpoint}", "warn", f"credentials error: {e}")
+
+    try:
+        ok = probe_artifactory(endpoint, repo, user=creds.get("user"),
+                               password=creds.get("password"), token=creds.get("token"),
+                               timeout=5)
+    except Exception as e:
+        return Check(GROUP_ARTIFACTORY, f"{repo} @ {endpoint}", "warn", f"connection error: {e}")
+
+    if ok:
+        return Check(GROUP_ARTIFACTORY, f"{repo} @ {endpoint}", "ok", "reachable")
+    return Check(GROUP_ARTIFACTORY, f"{repo} @ {endpoint}", "warn", "not reachable or repo missing")
+
 # A model configured without an API key is a warning. No model at all
 # is not reported: that means the feature is off, not misconfigured.
 def check_llm():
@@ -245,6 +293,9 @@ def run(options=None, pull=False):
     s3 = check_s3(options)
     if s3 is not None:
         checks.append(s3)
+    artifactory = check_artifactory(options)
+    if artifactory is not None:
+        checks.append(artifactory)
     if pull:
         checks.append(check_debsbom_image())
     return checks

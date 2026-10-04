@@ -30,6 +30,8 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
     NAME = "build"
     SHORT_OPTIONS = "dDhj:kv"
     LONG_OPTIONS = [
+        "artifactory-endpoint=",
+        "artifactory-repo=",
         "ca-cert=",
         "cache-bootstraps",
         "cache-rootfs",
@@ -67,6 +69,7 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
         "shared-cache",
         "sign-key=",
         "spec-only",
+        "storage-backend=",
         "target=",
         "target-arch=",
         "tasks-only",
@@ -94,6 +97,9 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                          "require_hashes": False, "require_native": False,
                          "resources": settings.load().get("resources"),
                          "rootfs_only": False,
+                         "artifactory_endpoint": None,
+                         "artifactory_repo": None,
+                         "storage_backend": None,
                          "s3_bucket": None,
                          "s3_endpoint": None, "s3_offline_mode": "fallback",
                          "s3_region": None,
@@ -288,6 +294,15 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                     sys.stderr.write("error: --s3-offline-mode must be 'fallback' or 'strict'\n")
                     sys.exit(1)
                 self.options["s3_offline_mode"] = a
+            elif o in ("--artifactory-endpoint",):
+                self.options["artifactory_endpoint"] = a
+            elif o in ("--artifactory-repo",):
+                self.options["artifactory_repo"] = a
+            elif o in ("--storage-backend",):
+                if a not in ("s3", "artifactory"):
+                    sys.stderr.write("error: --storage-backend must be 's3' or 'artifactory'\n")
+                    sys.exit(1)
+                self.options["storage_backend"] = a
             elif o in ("--prefer-native",):
                 self.options["prefer_native"] = True
             elif o in ("--require-native",):
@@ -531,6 +546,13 @@ Flags:
       --s3-offline-mode MODE
                         network cache failure behavior: 'fallback' (build
                         locally on failure, default) or 'strict' (abort)
+      --artifactory-endpoint URL
+                        endpoint URL for Artifactory network cache storage
+      --artifactory-repo NAME
+                        generic repo for Artifactory cache (default: 'seine-shared')
+      --storage-backend NAME
+                        network cache backend: 's3' or 'artifactory' (default:
+                        from the specification)
   --sbom                produce a Software Bill of Materials (SBOM) using
                         debsbom
   --spec-only           with '--dry-run', print the specification and not the

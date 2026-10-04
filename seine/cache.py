@@ -858,7 +858,8 @@ class CacheCmd(Cmd):
                 argv, "h", ["entries", "entries-matching=", "force", "help",
                             "older-than=", "replace", "spec=",
                             "with-image-rootfs", "shared-cache", "s3-endpoint=",
-                            "s3-bucket=", "s3-region="])
+                            "s3-bucket=", "s3-region=", "artifactory-endpoint=",
+                            "artifactory-repo=", "storage-backend="])
         except getopt.GetoptError as err:
             sys.stderr.write("%s\n%s" % (err, USAGE))
             sys.exit(1)
@@ -910,6 +911,15 @@ class CacheCmd(Cmd):
                 s3_options["s3_bucket"] = a
             elif o in ("--s3-region"):
                 s3_options["s3_region"] = a
+            elif o in ("--artifactory-endpoint"):
+                s3_options["artifactory_endpoint"] = a
+            elif o in ("--artifactory-repo"):
+                s3_options["artifactory_repo"] = a
+            elif o in ("--storage-backend"):
+                if a not in ("s3", "artifactory"):
+                    sys.stderr.write("error: --storage-backend must be 's3' or 'artifactory'\n")
+                    sys.exit(1)
+                s3_options["storage_backend"] = a
 
         ACTIONS = ["info", "clear", "export", "import", "explain"]
         if len(args) == 0:
