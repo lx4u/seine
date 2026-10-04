@@ -29,6 +29,10 @@ setups:
 litellm supports a good many other providers the same way -- its own
 model-name prefix is the thing to check for one not listed here.
 
+seine uses litellm's bundled price list, so starting the chat needs no
+network access. A very new model may be missing from it. Set
+`LITELLM_LOCAL_MODEL_COST_MAP=False` to download the current list instead.
+
 ## The tools
 
 The model never invents what it knows -- every answer is grounded in a

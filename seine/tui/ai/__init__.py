@@ -30,6 +30,10 @@ from seine import settings
 from seine.container import ContainerEngine
 from seine.utils import redact, redactions
 
+# Without this, importing litellm downloads its price list from GitHub,
+# which stalls an offline host. Set it to False to get the fresh list.
+os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
+
 # 'app' is not always a real SeineApp (tests use a stand-in with no
 # '_socket_send' at all), so check before calling.
 def _socket_send(app, event):
