@@ -351,3 +351,74 @@ retention:
         with self.assertRaises(SettingsError) as ctx:
             self._load("retention:\n  dev:\n    ttl: 1d\n")
         self.assertIn("ttl", str(ctx.exception))
+
+
+ARTIFACTORY_YAML = """\
+storage:
+  type: artifactory
+  artifactory_endpoint: https://arti.lan:8081
+  artifactory_projects:
+    alpha:
+      dev: {token: alpha-dev-token}
+      prod: {user: alpha-prod, password: alpha-prod-secret}
+  artifactory_default:
+    dev: {token: default-dev-token}
+"""
+
+
+class ArtifactorySettingsTest(Test):
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-arti-settings-")
+
+    def tearDown(self):
+        from seine import vault
+        vault.clear_secrets()
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _load(self, text, env=None, overrides=None):
+        path = os.path.join(self.tmp_dir, "server.yaml")
+        with open(path, "w") as f:
+            f.write(text)
+        return Settings.load(config_path=path, env=env or {}, overrides=overrides)
+
+    def test_artifactory_section_is_parsed(self):
+        s = self._load(ARTIFACTORY_YAML)
+        self.assertEqual(s.storage_type, "artifactory")
+        self.assertEqual(s.artifactory_endpoint, "https://arti.lan:8081")
+        self.assertEqual(s.artifactory_keys("alpha", "dev"), {"token": "alpha-dev-token"})
+        self.assertEqual(s.artifactory_keys("alpha", "prod"),
+                         {"user": "alpha-prod", "password": "alpha-prod-secret"})
+
+    def test_project_without_entry_uses_default(self):
+        s = self._load(ARTIFACTORY_YAML)
+        self.assertEqual(s.artifactory_keys("gamma", "dev"), {"token": "default-dev-token"})
+        self.assertIsNone(s.artifactory_keys("gamma", "prod"))
+
+    def test_storage_type_defaults_to_s3(self):
+        s = self._load("storage:\n  endpoint: https://s3\n")
+        self.assertEqual(s.storage_type, "s3")
+
+    def test_unknown_storage_type_is_rejected(self):
+        s = self._load("storage:\n  type: ftp\n")
+        with self.assertRaises(SettingsError):
+            Settings(**{**vars(s), "enrollment_token": "t"}).validate()
+
+    def test_artifactory_keys_need_an_endpoint(self):
+        s = self._load("storage:\n  artifactory_default:\n    dev: {token: t}\n")
+        with self.assertRaises(SettingsError):
+            Settings(**{**vars(s), "enrollment_token": "t"}).validate()
+
+    def test_artifactory_key_shapes_are_validated(self):
+        for text in (
+            "storage:\n  artifactory_default:\n    dev: {user: u}\n",
+            "storage:\n  artifactory_default:\n    dev: {password: p}\n",
+            "storage:\n  artifactory_default:\n    dev: {token: t, user: u}\n",
+            "storage:\n  artifactory_default:\n    staging: {token: t}\n",
+        ):
+            with self.assertRaises(SettingsError, msg=text):
+                self._load(text)
+
+    def test_artifactory_endpoint_from_env(self):
+        s = self._load("storage:\n  type: artifactory\n",
+                       env={"SEINE_ARTIFACTORY_ENDPOINT": "https://env:8081"})
+        self.assertEqual(s.artifactory_endpoint, "https://env:8081")

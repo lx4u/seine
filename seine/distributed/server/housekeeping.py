@@ -15,7 +15,11 @@ from typing import Any, Optional
 from seine.distributed.server.db import Database
 from seine.distributed.server.settings import EnvRetention, Settings, Threshold
 from seine.distributed.server.storage import StorageCredentialsError, provider_for
+from seine.storage.artifactory.client import ArtifactoryError
 from seine.storage.s3.client import S3ClientError
+
+# Either network backend may fail a sweep the same way.
+_STORAGE_ERRORS = (S3ClientError, ArtifactoryError)
 
 logger = logging.getLogger("seine.server.housekeeping")
 
@@ -94,7 +98,7 @@ def run_housekeeping(
                 _housekeep_worktrees(db, settings, row, report, now)
                 _prod_check(settings, row, report)
                 _housekeep_dev(db, settings, row, report, now)
-            except S3ClientError as e:
+            except _STORAGE_ERRORS as e:
                 report.skipped_reason = f"storage error: {e}"
                 logger.error("Housekeeping of %s failed: %s", row["name"], e)
             _log_summary(report)
@@ -176,20 +180,22 @@ def _housekeep_worktrees(
         except StorageCredentialsError as e:
             logger.debug("No %s storage for %s: %s", env_name, name, e)
             continue
-        if not report.dry_run:
+        # Backends without server-side expiry (Artifactory) rely on the
+        # explicit sweep below; there are no rules to install for them.
+        if not report.dry_run and getattr(provider, "supports_lifecycle", True):
             try:
                 rules = merge_lifecycle(provider.lifecycle_rules(), ttl, retention.cache, provider.prefix)
                 if rules is not None:
                     provider.set_lifecycle_rules(rules)
                     logger.info("Installed lifecycle rules on the %s bucket of %s", env_name, name)
-            except S3ClientError as e:
+            except _STORAGE_ERRORS as e:
                 logger.warning("Lifecycle rules of the %s bucket of %s not installed: %s", env_name, name, e)
                 report.lifecycle.append(f"{env_name}: {e}")
         if ttl is None:
             continue
         try:
             _sweep_worktrees(db, provider, name, ttl, report, now)
-        except S3ClientError as e:
+        except _STORAGE_ERRORS as e:
             logger.error("Listing worktrees of the %s bucket of %s failed: %s", env_name, name, e)
             report.failures.append((f"worktrees ({env_name})", str(e)))
 
@@ -208,7 +214,7 @@ def _sweep_worktrees(
         if not report.dry_run:
             try:
                 provider.delete_prefix(obj["key"])
-            except S3ClientError as e:
+            except _STORAGE_ERRORS as e:
                 logger.error("Deleting worktree %s of %s failed: %s", digest, project, e)
                 report.failures.append((f"worktree {digest}", str(e)))
                 continue
@@ -227,7 +233,7 @@ def _prod_check(settings: Settings, row: dict[str, Any], report: ProjectReport) 
     try:
         provider = provider_for(settings, row["name"], row["prod_bucket"], "prod")
         used = provider.usage()
-    except (StorageCredentialsError, S3ClientError) as e:
+    except (StorageCredentialsError,) + _STORAGE_ERRORS as e:
         logger.debug("No prod usage for %s: %s", row["name"], e)
         return
     if used >= high:
@@ -254,7 +260,7 @@ class _DevPass:
         else:
             try:
                 _, freed = self.provider.delete_prefix(f"artifacts/{self.name}/{build_id}/")
-            except S3ClientError as e:
+            except _STORAGE_ERRORS as e:
                 logger.error("Deleting artifacts of build %s (%s) failed: %s", build_id, self.name, e)
                 self.report.failures.append((build_id, str(e)))
                 return

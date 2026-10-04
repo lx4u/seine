@@ -15,6 +15,7 @@ from seine.distributed.server import housekeeping
 from seine.distributed.server.db import Database
 from seine.distributed.server.housekeeping import HousekeepingBusy, merge_lifecycle, run_housekeeping
 from seine.distributed.server.settings import EnvRetention, Retention, Settings, Threshold
+from seine.storage.artifactory.client import ArtifactoryError
 from seine.storage.s3.client import S3ClientError
 
 NOW = 1_000_000.0
@@ -406,3 +407,68 @@ class WorktreeHousekeepingTest(HousekeepingTest):
         self.assertEqual(report.lifecycle, ["dev: denied"])
         self.assertEqual(report.worktrees, [("old", 10)])
         self.assertEqual(len(self.prod.puts), 1)
+
+
+class NoLifecycleProvider(FakeProvider):
+    """An Artifactory-shaped backend: explicit deletes only, no expiry rules."""
+
+    supports_lifecycle = False
+
+    def lifecycle_rules(self):
+        raise AssertionError("no lifecycle rules on this backend")
+
+    def set_lifecycle_rules(self, rules):
+        raise AssertionError("no lifecycle rules on this backend")
+
+
+class ArtifactoryHousekeepingTest(WorktreeHousekeepingTest):
+    """Housekeeping over a backend without server-side expiry rules."""
+
+    def setUp(self):
+        super().setUp()
+        self.dev = NoLifecycleProvider()
+        self.prod = NoLifecycleProvider()
+
+    def test_no_rules_installed_but_sweep_deletes(self):
+        self._worktree("old", 5)
+        self._worktree("fresh", 1)
+        report = self._run(self._wt_settings())
+        self.assertEqual(report.lifecycle, [])
+        self.assertEqual(report.worktrees, [("old", 10)])
+        self.assertEqual(sorted(self.dev.objects), ["worktrees/core/fresh.tar.zst"])
+
+    def test_rules_are_installed_in_both_buckets_once(self):
+        self._run(self._wt_settings())
+        self._run(self._wt_settings())
+        self.assertEqual((self.dev.puts, self.prod.puts), ([], []))
+
+    def test_cache_rule_follows_each_environment(self):
+        self._run(self._settings(env(cache=30 * DAY), env(cache=90 * DAY)))
+        self.assertEqual((self.dev.rules, self.prod.rules), ([], []))
+
+    def test_dry_run_installs_no_cache_rule(self):
+        self._run(self._settings(env(cache=30 * DAY), env(cache=90 * DAY)), dry_run=True)
+        self.assertEqual((self.dev.puts, self.prod.puts), ([], []))
+
+    def test_lifecycle_failure_is_reported_and_the_sweep_goes_on(self):
+        self.dev.lifecycle_error = S3ClientError("denied")
+        self._worktree("old", 5)
+        report = self._run(self._wt_settings())
+        self.assertEqual(report.lifecycle, [])
+        self.assertEqual(report.worktrees, [("old", 10)])
+
+    def test_artifactory_delete_error_is_recorded_and_the_rest_goes_on(self):
+        self._worktree("bad", 5)
+        self._worktree("good", 5)
+        self.dev.failing = {"worktrees/core/bad.tar.zst"}
+        real_delete = self.dev.delete_prefix
+
+        def delete(prefix):
+            if prefix == "worktrees/core/bad.tar.zst":
+                raise ArtifactoryError("denied")
+            return real_delete(prefix)
+
+        with mock.patch.object(self.dev, "delete_prefix", delete):
+            report = self._run(self._wt_settings())
+        self.assertEqual(report.failures, [("worktree bad", "denied")])
+        self.assertEqual(report.worktrees, [("good", 10)])

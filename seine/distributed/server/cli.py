@@ -37,6 +37,8 @@ def main():
     run_parser.add_argument("--tls-key", default=None, help="TLS private key file (needs --tls-cert)")
     run_parser.add_argument("--s3-endpoint", default=None, help="S3 endpoint URL of the shared storage")
     run_parser.add_argument("--s3-region", default=None, help="S3 region name (default: garage)")
+    run_parser.add_argument("--storage-type", default=None, choices=["s3", "artifactory"], help="Shared storage backend (default: s3)")
+    run_parser.add_argument("--artifactory-endpoint", default=None, help="Artifactory base URL of the shared storage")
     run_parser.add_argument("--stale-after", type=float, default=None, help="Seconds of silence before a worker is stale")
     run_parser.add_argument("--native-grace", type=float, default=None, help="Seconds a job waits for a better-scoring idle worker (default: 30, 0 disables)")
     run_parser.add_argument("--job-lost-grace", type=float, default=None, help="Seconds a claimed job may go unreported by its worker before it is requeued (default: 90)")
@@ -51,7 +53,7 @@ def main():
     args = parser.parse_args()
 
     if args.command == "run" or args.command is None:
-        flags = ("host", "port", "enrollment_token", "db_path", "tls_cert", "tls_key", "stale_after", "native_grace", "job_lost_grace", "s3_endpoint", "s3_region")
+        flags = ("host", "port", "enrollment_token", "db_path", "tls_cert", "tls_key", "stale_after", "native_grace", "job_lost_grace", "s3_endpoint", "s3_region", "storage_type", "artifactory_endpoint")
         try:
             settings = Settings.load(
                 config_path=getattr(args, "config", None),

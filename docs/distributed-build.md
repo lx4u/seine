@@ -237,6 +237,24 @@ storage:
   that is claimed fails with the reason in its `error_message`, which the
   client prints.
 
+A site may run Artifactory instead of S3 (`type: artifactory`, repos named
+like the buckets, one token or user/password per project and environment;
+see [Running a JFrog Artifactory cache](storage-artifactory.md)):
+
+```yaml
+storage:
+  type: artifactory
+  artifactory_endpoint: https://artifactory.example.org:8081
+  artifactory_projects:
+    my-project:
+      dev:  {token: <dev token>}
+      prod: {user: releaser, password: <prod secret>}
+```
+
+The same no-mixing and endpoint rules apply. Retention sweeps work as
+below, except no lifecycle rules are installed: Artifactory has no such
+API, so expiry is by explicit delete only.
+
 ### Storage housekeeping
 
 Without a `retention:` section nothing is ever deleted: the feature is opt-in.

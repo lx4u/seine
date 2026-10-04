@@ -36,6 +36,8 @@ ENV_VARS = {
     "new_user_project": "SEINE_NEW_USER_PROJECT",
     "s3_endpoint": "SEINE_S3_ENDPOINT",
     "s3_region": "SEINE_S3_REGION",
+    "storage_type": "SEINE_STORAGE_TYPE",
+    "artifactory_endpoint": "SEINE_ARTIFACTORY_ENDPOINT",
 }
 
 S3_ENVIRONMENTS = ("dev", "prod")
@@ -109,6 +111,12 @@ class Settings:
     # {project: {env: {access_key, secret_key}}}; keys come from the file only.
     s3_projects: dict = field(default_factory=dict, repr=False)
     s3_default: dict = field(default_factory=dict, repr=False)
+    # "s3" or "artifactory": which backend project buckets live on.
+    storage_type: str = "s3"
+    artifactory_endpoint: Optional[str] = None
+    # {project: {env: {token} or {user, password}}}; keys come from the file only.
+    artifactory_projects: dict = field(default_factory=dict, repr=False)
+    artifactory_default: dict = field(default_factory=dict, repr=False)
     # None keeps today's behaviour: nothing is ever deleted.
     retention: Optional[Retention] = None
     config_path: Optional[str] = None
@@ -116,7 +124,13 @@ class Settings:
     def __post_init__(self) -> None:
         self.s3_projects = {p: _s3_envs(e, f"storage.projects.{p}") for p, e in self.s3_projects.items()}
         self.s3_default = _s3_envs(self.s3_default, "storage.default")
-        for envs in (*self.s3_projects.values(), self.s3_default):
+        self.artifactory_projects = {
+            p: _artifactory_envs(e, f"storage.artifactory_projects.{p}")
+            for p, e in self.artifactory_projects.items()}
+        self.artifactory_default = _artifactory_envs(self.artifactory_default,
+                                                     "storage.artifactory_default")
+        for envs in (*self.s3_projects.values(), self.s3_default,
+                     *self.artifactory_projects.values(), self.artifactory_default):
             for pair in envs.values():
                 for value in pair.values():
                     vault.record_secret(value)
@@ -124,6 +138,11 @@ class Settings:
     def s3_keys(self, project: str, env: str) -> Optional[dict[str, str]]:
         """Return the project's key pair for env ('dev' or 'prod'), else the default's, else None."""
         envs = self.s3_projects.get(project, self.s3_default)
+        return envs.get(env)
+
+    def artifactory_keys(self, project: str, env: str) -> Optional[dict[str, str]]:
+        """Return the project's token (or user/password) for env, else the default's, else None."""
+        envs = self.artifactory_projects.get(project, self.artifactory_default)
         return envs.get(env)
 
     def validate(self) -> None:
@@ -146,9 +165,14 @@ class Settings:
                 validate_project_name(self.new_user_project)
             except ValueError as e:
                 raise SettingsError(f"new_user_project: {e}") from e
+        if self.storage_type not in ("s3", "artifactory"):
+            raise SettingsError(f"unknown storage type: {self.storage_type!r}, expected 's3' or 'artifactory'")
         keyed = self.s3_default or any(self.s3_projects.values())
         if keyed and not self.s3_endpoint:
             raise SettingsError("storage keys are configured but 'storage.endpoint' is not")
+        akeyed = self.artifactory_default or any(self.artifactory_projects.values())
+        if akeyed and not self.artifactory_endpoint:
+            raise SettingsError("artifactory keys are configured but 'storage.artifactory_endpoint' is not")
 
     @property
     def tls_enabled(self) -> bool:
@@ -195,7 +219,8 @@ class Settings:
         }
         out: dict[str, Any] = {}
         for name, value in values.items():
-            if name in ("s3_projects", "s3_default", "retention"):
+            if name in ("s3_projects", "s3_default", "artifactory_projects",
+                        "artifactory_default", "retention"):
                 out[name] = value
                 continue
             try:
@@ -247,17 +272,68 @@ def _read_storage(section: Any) -> dict[str, Any]:
     """Flatten the 'storage:' section of the config file into settings values."""
     if not isinstance(section, Mapping):
         raise SettingsError("invalid 'storage' section: expected a mapping")
-    unknown = set(section) - {"endpoint", "region", "projects", "default"}
+    unknown = set(section) - {"endpoint", "region", "projects", "default", "type",
+                              "artifactory_endpoint", "artifactory_projects", "artifactory_default"}
     if unknown:
         raise SettingsError(f"unknown storage setting(s): {', '.join(sorted(map(str, unknown)))}")
     projects = section.get("projects") or {}
     if not isinstance(projects, Mapping):
         raise SettingsError("storage.projects: expected a mapping of project names")
-    values: dict[str, Any] = {"s3_projects": dict(projects), "s3_default": section.get("default")}
+    artifactory_projects = section.get("artifactory_projects") or {}
+    if not isinstance(artifactory_projects, Mapping):
+        raise SettingsError("storage.artifactory_projects: expected a mapping of project names")
+    values: dict[str, Any] = {
+        "s3_projects": dict(projects),
+        "s3_default": section.get("default"),
+        "artifactory_projects": dict(artifactory_projects),
+        "artifactory_default": section.get("artifactory_default"),
+    }
     for name in ("endpoint", "region"):
         if section.get(name):
             values[f"s3_{name}"] = section[name]
+    if section.get("type"):
+        values["storage_type"] = section["type"]
+    if section.get("artifactory_endpoint"):
+        values["artifactory_endpoint"] = section["artifactory_endpoint"]
     return values
+
+
+def _artifactory_envs(value: Any, where: str) -> dict[str, dict[str, str]]:
+    """Validate {env: {token}} or {env: {user, password}}; an env with no keys is left out."""
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise SettingsError(f"{where}: expected a mapping of dev/prod")
+    unknown = set(value) - set(S3_ENVIRONMENTS)
+    if unknown:
+        raise SettingsError(f"{where}: unknown environment(s): {', '.join(sorted(map(str, unknown)))}")
+    out = {}
+    for env, pair in value.items():
+        pair = pair or {}
+        if not isinstance(pair, Mapping):
+            raise SettingsError(f"{where}.{env}: expected a token or a user and password")
+        if "token" in pair:
+            unknown = set(pair) - {"token"}
+            if unknown:
+                raise SettingsError(f"{where}.{env}: unknown key(s): {', '.join(sorted(map(str, unknown)))}")
+            if not pair.get("token"):
+                continue
+            if not isinstance(pair["token"], str):
+                raise SettingsError(f"{where}.{env}: token must be a string")
+            out[env] = {"token": pair["token"]}
+            continue
+        unknown = set(pair) - {"user", "password"}
+        if unknown:
+            raise SettingsError(f"{where}.{env}: unknown key(s): {', '.join(sorted(map(str, unknown)))}")
+        present = [k for k in ("user", "password") if pair.get(k)]
+        if not present:
+            continue
+        if len(present) != 2:
+            raise SettingsError(f"{where}.{env}: user and password must be given together")
+        if not all(isinstance(pair[k], str) for k in ("user", "password")):
+            raise SettingsError(f"{where}.{env}: user and password must be strings")
+        out[env] = {"user": pair["user"], "password": pair["password"]}
+    return out
 
 
 def _duration(value: Any, where: str, allow_never: bool = True) -> Optional[float]:
