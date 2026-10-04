@@ -11,7 +11,9 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-from tests.testutils import remove_at_exit
+from tests.testutils import offline_vault, remove_at_exit
+
+offline_vault()
 
 if "SEINE_CACHE_DIR" not in os.environ:
     os.environ["SEINE_CACHE_DIR"] = tempfile.mkdtemp(prefix="seine-ai-tests-")

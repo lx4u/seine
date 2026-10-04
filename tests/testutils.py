@@ -51,3 +51,31 @@ def prune_on_pass(test):
     for path in glob.glob(os.path.join(test.outputdir, "*.log")):
         os.remove(path)
     test._cleanup()
+
+# Loading a spec with a vault() lookup starts the dev vault, which builds
+# its container image: minutes, in every test process. Answer kv_read from
+# the spec's defaults, then the throwaway ones, as the dev vault does on a
+# miss, and leave anything else (signing keys) to a real vault, started
+# only if asked. For tests that load specs and do not test the vault itself.
+def offline_vault():
+    from unittest import mock
+    from seine import vault
+    from seine.vault.base import VaultNotFound
+    from seine.vault.dev import DEV_DEFAULTS
+
+    for_build = vault.for_build
+
+    class OfflineVault:
+        def __init__(self, defaults=None):
+            self._defaults = defaults if defaults is not None else {}
+
+        def kv_read(self, ref):
+            for known in (self._defaults, DEV_DEFAULTS):
+                if ref in known:
+                    return known[ref]
+            raise VaultNotFound("no throwaway default for '%s'" % ref)
+
+        def __getattr__(self, name):
+            return getattr(for_build(self._defaults), name)
+
+    mock.patch.object(vault, "for_build", OfflineVault).start()
