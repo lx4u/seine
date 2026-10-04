@@ -10,6 +10,7 @@ import os
 import sys
 import tarfile
 import tempfile
+from unittest import mock
 
 path_to_self = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
@@ -36,6 +37,9 @@ class FakeArtifactory:
     def _check(self):
         if self.fail:
             raise self.fail
+
+    def object_url(self, repo, path):
+        return f"{self.endpoint}/{repo}/{path}"
 
     def head_object(self, repo, path):
         self._check()
@@ -217,9 +221,16 @@ class ArtifactoryProviderOperations(avocado.Test):
 
     def test_generate_download_url(self):
         url = self.provider.generate_download_url("proj", "pc.img")
-        self.assertIn("artifacts/proj/pc.img", url)
+        self.assertEqual(url, "http://arti:8081/artifactory/test-repo/artifacts/proj/pc.img")
         url = self.provider.generate_download_url("proj", "artifacts/proj/b1/pc.img")
-        self.assertTrue(url.endswith("artifacts/proj/b1/pc.img"))
+        self.assertEqual(url, "http://arti:8081/artifactory/test-repo/artifacts/proj/b1/pc.img")
+
+    def test_open_artifact_maps_names_and_keys_like_download_urls(self):
+        self.client.open_object = mock.MagicMock(return_value="stream")
+        self.assertEqual(self.provider.open_artifact("proj", "pc.img"), "stream")
+        self.client.open_object.assert_called_with("test-repo", "artifacts/proj/pc.img")
+        self.provider.open_artifact("proj", "artifacts/proj/b1/pc.img")
+        self.client.open_object.assert_called_with("test-repo", "artifacts/proj/b1/pc.img")
 
     def test_no_lifecycle_support(self):
         self.assertFalse(self.provider.supports_lifecycle)

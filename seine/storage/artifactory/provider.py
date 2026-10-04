@@ -58,12 +58,16 @@ class ArtifactoryStorageProvider(ObjectStorageProvider):
             if self.offline_mode == "strict":
                 raise StorageError(f"artifactory repo check failed for '{self.repo}': {e}") from e
 
+    @staticmethod
+    def _artifact_key(project: str, key_or_artifact: str) -> str:
+        clean = key_or_artifact.lstrip("/")
+        return clean if clean.startswith("artifacts/") else f"artifacts/{project}/{clean}"
+
     def generate_download_url(self, project: str, key_or_artifact: str,
                               expires_in: int = 3600) -> str:
-        """Direct download URL; CE has no presigned URLs, so expiry is ignored."""
-        clean = key_or_artifact.lstrip("/")
-        if clean.startswith("artifacts/"):
-            key = clean
-        else:
-            key = f"artifacts/{project}/{clean}"
-        return f"{self.client.endpoint}/{self.repo}/{key}"
+        """Plain URL, unusable without credentials; CE has no presigned URLs."""
+        return self.client.object_url(self.repo, self._artifact_key(project, key_or_artifact))
+
+    def open_artifact(self, project: str, key_or_artifact: str):
+        """Open an artifact for streaming; the caller closes the response."""
+        return self.client.open_object(self.repo, self._artifact_key(project, key_or_artifact))

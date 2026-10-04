@@ -122,9 +122,9 @@ storage:
 - **No server-side expiry.** Housekeeping deletes expired objects
   explicitly; there are no lifecycle rules to install. Worktree age is
   upload time, and digests of unfinished builds are spared.
-- **No presigned URLs.** `generate_download_url` returns the direct
-  repo URL; keep port 8081 reachable for developers or proxy downloads
-  through the server.
+- **No presigned URLs.** A plain repo URL needs credentials, which a
+  client of a remote build does not have. See "Downloads" below for how
+  the server gets artifacts to it.
 - **Listings are one AQL query** (CE supports neither sort nor
   offset), so sweeps over repos with tens of thousands of files should
   narrow the prefix instead.
@@ -152,3 +152,27 @@ repo. The worker pulls the worktree and uploads artifacts through it,
 and hands it to the child `seine build` through `SEINE_ARTIFACTORY_*`
 (or `AWS_*`) plus the matching `--storage-backend` flags; ambient
 storage variables of the agent are never inherited.
+
+### Downloads
+
+An S3 client downloads straight from storage with a presigned URL that
+authorises that one object. Artifactory has no equivalent: a link needs
+a credential, and even one limited to a repo reads every object in it.
+A token of the `readers` group read other projects' and the prod repos
+in testing, and anonymous access grants nothing until a permission
+gives it something. `storage.artifactory_downloads`
+chooses how clients get an artifact:
+
+| Value | What happens | Exposes |
+| --- | --- | --- |
+| `proxy` (default) | The server streams the artifact itself (`GET /api/v1/builds/{id}/artifacts/{name}`), after the same project-membership check as the artifact list. The client sends only its own seine token to the server. | Nothing: no Artifactory credential leaves the server. Artifact traffic flows through it. |
+| `direct` | The client gets the plain repo URL. | The repo must allow anonymous read, so anyone who can reach Artifactory can read what the repo holds. For public artifacts only. |
+
+```yaml
+storage:
+  type: artifactory
+  artifactory_downloads: proxy
+```
+
+A client checks the SHA-256 and size of every download against the
+manifest in both modes.

@@ -11,6 +11,7 @@ import secrets
 import sqlite3
 import time
 import uuid
+from urllib.parse import quote
 from contextlib import asynccontextmanager
 from typing import Any, Optional
 
@@ -25,7 +26,7 @@ from fastapi import (
 )
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from seine.distributed.common.models import (
     BuildResponse,
@@ -68,7 +69,9 @@ from seine.distributed.server.db import Database, LastAdminError, UserBusyError
 from seine.distributed.server.housekeeping import HousekeepingBusy, run_housekeeping
 from seine.distributed.server.reaper import Reaper
 from seine.distributed.server.settings import S3_ENVIRONMENTS, Settings
-from seine.distributed.server.storage import StorageCredentialsError, env_name, job_storage, provider_for
+from seine.distributed.server.storage import (
+    StorageCredentialsError, env_name, job_storage, provider_for, storage_type,
+)
 from seine.distributed.server.transient import TransientSecrets
 from seine.distributed.server.events import ProjectEvents, build_event, serve_events
 from seine.distributed.server.ws import BroadcastHub, forget_finished_build, serve_stream
@@ -467,6 +470,20 @@ def create_app(
             target_arch=req.target_arch,
         )
 
+    def build_bucket(app_db: Any, build: dict[str, Any]) -> str:
+        """The bucket (repo) a build keeps its worktree and artifacts in."""
+        project = build["project"]
+        project_row = app_db.get_project(project)
+        is_release = build.get("is_release", False)
+        if project_row:
+            return project_row["prod_bucket"] if is_release else project_row["dev_bucket"]
+        return f"seine-{project}-prod" if is_release else f"seine-{project}-dev"
+
+    def proxied_downloads(request: Request) -> bool:
+        """True when clients fetch artifacts through this server (Artifactory, 'proxy')."""
+        settings = request.app.state.settings
+        return storage_type(settings) == "artifactory" and settings.artifactory_downloads == "proxy"
+
     def build_response(request: Request, build: dict[str, Any]) -> BuildResponse:
         app_db = get_db(request)
         download_urls: dict[str, str] = {}
@@ -474,19 +491,19 @@ def create_app(
         expired = bool(build.get("artifacts_expired_at"))
         if build.get("status") == "completed" and manifest and not expired:
             project = build["project"]
-            project_row = app_db.get_project(project)
             is_release = build.get("is_release", False)
-            if project_row:
-                bucket = project_row["prod_bucket"] if is_release else project_row["dev_bucket"]
-            else:
-                bucket = f"seine-{project}-prod" if is_release else f"seine-{project}-dev"
+            bucket = build_bucket(app_db, build)
 
             try:
                 provider = _get_storage_provider(request, project, bucket, env_name(is_release))
                 for entry in manifest:
                     name, artifact_key = entry["name"], entry["key"]
                     try:
-                        url = provider.generate_download_url(project, artifact_key)
+                        if proxied_downloads(request):
+                            # Relative: the client adds its server's address and its own token.
+                            url = f"/api/v1/builds/{build['id']}/artifacts/{quote(name, safe='')}"
+                        else:
+                            url = provider.generate_download_url(project, artifact_key)
                         if url:
                             download_urls[name] = url
                     except Exception as e:
@@ -507,6 +524,50 @@ def create_app(
              "subdir": m.get("subdir")} for m in manifest
         ]
         return BuildResponse(**build_data)
+
+    @app.get("/api/v1/builds/{build_id}/artifacts/{name}")
+    def download_artifact(
+        build_id: str,
+        name: str,
+        request: Request,
+        token_record: dict[str, Any] = Depends(current_user),
+    ):
+        """Stream one artifact of a build, for backends whose storage URLs need credentials."""
+        app_db = get_db(request)
+        build = app_db.get_build(build_id)
+        if not build:
+            raise HTTPException(status_code=404, detail="Build not found")
+        require_member(app_db, token_record, build["project"])
+        if build.get("artifacts_expired_at"):
+            raise HTTPException(status_code=410, detail="artifacts expired")
+        entry = next((m for m in build.get("artifact_meta") or [] if m["name"] == name), None)
+        if build.get("status") != "completed" or entry is None:
+            raise HTTPException(status_code=404, detail="Artifact not found")
+        provider = _get_storage_provider(
+            request, build["project"], build_bucket(app_db, build),
+            env_name(build.get("is_release", False)))
+        if not hasattr(provider, "open_artifact"):
+            raise HTTPException(status_code=501, detail="this storage backend has no download proxy")
+        try:
+            upstream = provider.open_artifact(build["project"], entry["key"])
+        except Exception as e:
+            logger.warning("Artifact %s of build %s: %s", name, build_id, e)
+            gone = getattr(e, "status_code", None) == 404
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND if gone else status.HTTP_502_BAD_GATEWAY,
+                detail="artifact not found in storage" if gone else "storage error") from e
+
+        def chunks():
+            try:
+                yield from upstream.iter_content(chunk_size=1 << 20)
+            finally:
+                upstream.close()
+
+        return StreamingResponse(
+            chunks(), media_type="application/octet-stream",
+            headers={"Content-Length": str(entry["size"]),
+                     "X-Checksum-Sha256": entry["sha256"],
+                     "Content-Disposition": f'attachment; filename="{name}"'})
 
     @app.get("/api/v1/builds/{build_id}", response_model=BuildResponse)
     def get_build_status(

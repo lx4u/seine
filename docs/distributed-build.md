@@ -255,6 +255,12 @@ The same no-mixing and endpoint rules apply. Retention sweeps work as
 below, except no lifecycle rules are installed: Artifactory has no such
 API, so expiry is by explicit delete only.
 
+Clients download artifacts of such a site through the server
+(`artifactory_downloads: proxy`, the default), since an Artifactory URL
+cannot authorise a single object the way a presigned S3 URL does; see
+[Downloads](storage-artifactory.md#downloads) for the alternative and
+what each choice exposes.
+
 ### Storage housekeeping
 
 Without a `retention:` section nothing is ever deleted: the feature is opt-in.

@@ -101,6 +101,17 @@ class ArtifactoryClientObjects(avocado.Test):
         self.assertEqual(meta, {"sha256": "aa" * 32, "size": 12})
         self.assertTrue(self.client.exists("repo", "f.bin"))
 
+    def test_object_url_is_where_the_repo_serves_it_under_the_artifactory_prefix(self):
+        self.assertEqual(self.client.object_url("repo", "d/f.bin"), "http://a:8081/artifactory/repo/d/f.bin")
+
+    def test_open_streams_the_object_and_hands_it_back_open(self):
+        resp = response(200)
+        self.session.request.return_value = resp
+        self.assertIs(self.client.open_object("repo", "d/f.bin"), resp)
+        args, kwargs = self.session.request.call_args
+        self.assertEqual(args[:2], ("GET", "http://a:8081/artifactory/repo/d/f.bin"))
+        self.assertTrue(kwargs["stream"])
+
     def test_put_sends_checksum_and_returns_recorded(self):
         recorded = "bb" * 32
         self.session.request.return_value = response(

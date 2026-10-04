@@ -74,6 +74,10 @@ class ArtifactoryClient:
     def _item_url(self, repo, path):
         return self._base(repo, path)
 
+    def object_url(self, repo, path):
+        """The URL an object is served at (it needs the caller's credential)."""
+        return self._item_url(repo, path)
+
     def head_object(self, repo, path):
         """Return {"sha256", "size"}, None if the artifact is missing."""
         try:
@@ -91,6 +95,10 @@ class ArtifactoryClient:
     def get_object(self, repo, path):
         """Fetch full artifact content as bytes."""
         return self._call(f"GET {repo}/{path}", "GET", self._item_url(repo, path)).content
+
+    def open_object(self, repo, path):
+        """Open an artifact for streaming; the caller closes the response."""
+        return self._call(f"GET {repo}/{path}", "GET", self._item_url(repo, path), stream=True)
 
     def download_file(self, repo, path, target_path):
         os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
