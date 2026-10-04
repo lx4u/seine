@@ -15,8 +15,9 @@ from typing import Any, Callable, Optional
 
 from seine.credentials import FEED_AUTH_ENV
 from seine.distributed.agent.events import EventListener
-from seine.distributed.common.models import JobManifest, JobS3
-from seine.distributed.common.s3 import provider_from
+from seine.distributed.common.models import JobManifest, JobStorage
+from seine.distributed.common import storage as job_storage
+from seine.distributed.common.storage import provider_from
 from seine.reporter import SOCKET_ENV
 
 
@@ -33,6 +34,8 @@ def find_seine_binary() -> str:
 _ENV_NAMES = frozenset([
     "PATH", "HOME", "LANG", "TZ", "TERM", "TMPDIR", "DBUS_SESSION_BUS_ADDRESS",
     "http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+    # CA bundle for storage behind a private certificate (paths, not secrets).
+    "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE",
 ])
 _ENV_PREFIXES = ("LC_", "XDG_", "CONTAINERS_")
 # SEINE_* names holding secrets or keys (the agent's tokens, signing keys...).
@@ -59,8 +62,8 @@ _UNMOUNT_AND_REMOVE = (
     'chmod -R u+rwX "$J" 2>/dev/null || true\n'
     'rm -rf "$J"'
 )
-# Never inherited: the agent holds no S3 keys, a job brings its own.
-_S3_ENV_PREFIXES = ("AWS_", "SEINE_S3_")
+# Never inherited: the agent holds no storage keys, a job brings its own.
+_STORAGE_ENV_PREFIXES = ("AWS_", "SEINE_S3_", "SEINE_ARTIFACTORY_")
 
 
 def feed_secrets(manifest: JobManifest) -> dict[str, dict[str, str]]:
@@ -79,15 +82,14 @@ def child_env(
     environ = os.environ if environ is None else environ
     env = {}
     for name, value in environ.items():
-        if name.startswith(_S3_ENV_PREFIXES) or name in ("SEINE_CREDENTIALS_FILE", FEED_AUTH_ENV):
+        if name.startswith(_STORAGE_ENV_PREFIXES) or name in ("SEINE_CREDENTIALS_FILE", FEED_AUTH_ENV):
             continue
         if name in _ENV_NAMES or name.startswith(_ENV_PREFIXES):
             env[name] = value
         elif name.startswith("SEINE_") and not any(m in name for m in _SECRET_MARKERS):
             env[name] = value
-    if manifest.s3 and manifest.options.get("shared_cache"):
-        env["AWS_ACCESS_KEY_ID"] = manifest.s3.access_key
-        env["AWS_SECRET_ACCESS_KEY"] = manifest.s3.secret_key
+    if manifest.storage and manifest.options.get("shared_cache"):
+        env.update(job_storage.child_env(manifest.storage))
         # Keep a credentials file of the agent's user out of the key lookup.
         env["SEINE_CREDENTIALS_FILE"] = os.path.join(os.path.dirname(build_dir), "no-credentials.json")
     if feedauth_file:
@@ -172,10 +174,10 @@ class SubprocessExecutor:
         shutil.rmtree(self.secrets_dir(build_id), ignore_errors=True)
 
     def _pull_worktree(self, manifest: JobManifest, job_dir: str) -> None:
-        provider = provider_from(manifest.s3)
+        provider = provider_from(manifest.storage)
         if provider.pull_worktree(manifest.project, manifest.worktree_digest, dest_dir=job_dir) is None:
             raise FileNotFoundError(
-                f"worktree {manifest.worktree_digest} not found in bucket {manifest.s3.bucket}"
+                f"worktree {manifest.worktree_digest} not found in bucket {manifest.storage.bucket}"
             )
 
     def _wait(self, proc: subprocess.Popen, on_log: Callable[[str, str], None]) -> int:
@@ -353,8 +355,8 @@ class SubprocessExecutor:
         if not manifest.worktree_digest:
             on_log("system", f"[agent] Job {manifest.build_id} has no worktree digest\n")
             return 1
-        if manifest.s3 is None:
-            on_log("system", f"[agent] Job {manifest.build_id} came without S3 access\n")
+        if manifest.storage is None:
+            on_log("system", f"[agent] Job {manifest.build_id} came without storage access\n")
             return 1
         on_log("system", f"[agent] Pulling worktree {manifest.worktree_digest} from {manifest.s3_bucket}...\n")
         try:
@@ -379,12 +381,7 @@ class SubprocessExecutor:
         if manifest.options.get("packages_only"):
             cmd.append("--packages-only")
         if manifest.options.get("shared_cache"):
-            cmd += [
-                "--shared-cache",
-                f"--s3-endpoint={manifest.s3.endpoint}",
-                f"--s3-bucket={manifest.s3.bucket}",
-                f"--s3-region={manifest.s3.region}",
-            ]
+            cmd += job_storage.child_flags(manifest.storage)
         cmd += rel_specs
 
         listener = None
@@ -458,7 +455,7 @@ class SubprocessExecutor:
             project=manifest.project,
             build_id=manifest.build_id,
             provider=provider,
-            s3=manifest.s3,
+            storage=manifest.storage,
             on_log=on_log,
         )
 
@@ -515,25 +512,25 @@ def upload_artifacts(
     project: str,
     build_id: str,
     provider: Optional[Any] = None,
-    s3: Optional[JobS3] = None,
+    storage: Optional[JobStorage] = None,
     on_log: Optional[Callable[[str, str], None]] = None,
 ) -> list[dict[str, Any]]:
-    """Upload harvested deliverables to S3; return their {name, key, sha256, size}."""
+    """Upload harvested deliverables to shared storage; return their {name, key, sha256, size}."""
     files = harvest_artifacts(job_dir)
     if not files:
         return []
 
     if provider is None:
-        if s3 is None:
-            raise ValueError("the job came without S3 access")
-        provider = provider_from(s3)
+        if storage is None:
+            raise ValueError("the job came without storage access")
+        provider = provider_from(storage)
 
     root = os.path.abspath(deploy_root(job_dir))
     uploaded = []
     for file_path in files:
         name = os.path.basename(file_path)
         if on_log:
-            on_log("system", f"[agent] Uploading artifact {name} to S3...\n")
+            on_log("system", f"[agent] Uploading artifact {name} to shared storage...\n")
         try:
             info = provider.push_artifact_info(project, build_id, file_path, artifact_name=name)
         except Exception as e:

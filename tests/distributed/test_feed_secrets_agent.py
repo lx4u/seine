@@ -31,7 +31,7 @@ S3 = JobS3(endpoint="https://s3.example", bucket="p-dev", access_key="GKAK", sec
 def manifest(secrets=FEEDS, build_id="bld-1"):
     return JobManifest(
         job_id="job-1", build_id=build_id, project="p", spec_file="main.yaml",
-        worktree_digest="dgst", s3=S3, transient_secrets=secrets,
+        worktree_digest="dgst", storage=S3, transient_secrets=secrets,
     )
 
 

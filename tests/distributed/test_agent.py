@@ -134,12 +134,12 @@ class SubprocessExecutorTest(Test):
         build_dir = os.path.join(self.tmp_dir, "jobs", "bld-test-001", "build")
         self.assertTrue(os.path.isdir(build_dir))
 
-    def _execute(self, ex=None, spec_file="main.yaml", options=None, digest="dgst", s3=JOB_S3):
+    def _execute(self, ex=None, spec_file="main.yaml", options=None, digest="dgst", storage=JOB_S3):
         """Run execute_job with a fake worktree pull and a mocked Popen."""
         ex = ex or SubprocessExecutor(self.tmp_dir)
         manifest = JobManifest(
             job_id="job-1", build_id="bld-1", project="proj",
-            spec_file=spec_file, worktree_digest=digest, options=options or {}, s3=s3,
+            spec_file=spec_file, worktree_digest=digest, options=options or {}, storage=storage,
         )
 
         def pull(_manifest, job_dir):
@@ -195,7 +195,7 @@ class SubprocessExecutorTest(Test):
         os.chmod(script, 0o755)
         ex = SubprocessExecutor(self.tmp_dir)
         manifest = JobManifest(job_id="j", build_id="bld-1", project="proj",
-                               spec_file="main.yaml", worktree_digest="d", s3=JOB_S3,
+                               spec_file="main.yaml", worktree_digest="d", storage=JOB_S3,
                                options={"verbose": True})
 
         def pull(_manifest, job_dir):
@@ -213,7 +213,7 @@ class SubprocessExecutorTest(Test):
 
     def test_worktree_pull_failure_fails_the_job(self):
         ex = SubprocessExecutor(self.tmp_dir)
-        manifest = JobManifest(job_id="j", build_id="bld-2", project="p", worktree_digest="dgst", s3=JOB_S3)
+        manifest = JobManifest(job_id="j", build_id="bld-2", project="p", worktree_digest="dgst", storage=JOB_S3)
         logs = []
         with mock.patch.object(ex, "_pull_worktree", side_effect=RuntimeError("bucket gone")), \
                 mock.patch("subprocess.Popen") as popen:
@@ -222,7 +222,7 @@ class SubprocessExecutorTest(Test):
         popen.assert_not_called()
         self.assertIn("bucket gone", "".join(logs))
 
-    def test_job_without_s3_access_fails_before_any_pull(self):
+    def test_job_without_storage_access_fails_before_any_pull(self):
         ex = SubprocessExecutor(self.tmp_dir)
         manifest = JobManifest(job_id="j", build_id="bld-3", project="p", worktree_digest="dgst")
         logs = []
@@ -231,11 +231,11 @@ class SubprocessExecutorTest(Test):
         self.assertEqual(ret, 1)
         pull.assert_not_called()
         popen.assert_not_called()
-        self.assertIn("without S3 access", "".join(logs))
+        self.assertIn("without storage access", "".join(logs))
 
     def test_worktree_is_pulled_with_the_job_key_only(self):
         ex = SubprocessExecutor(self.tmp_dir)
-        manifest = JobManifest(job_id="j", build_id="bld-4", project="p", worktree_digest="dgst", s3=JOB_S3)
+        manifest = JobManifest(job_id="j", build_id="bld-4", project="p", worktree_digest="dgst", storage=JOB_S3)
         with mock.patch("seine.distributed.agent.executor.provider_from") as provider, \
                 mock.patch("seine.storage.for_build") as ambient:
             ex._pull_worktree(manifest, self.tmp_dir)
@@ -245,7 +245,7 @@ class SubprocessExecutorTest(Test):
 
     def test_missing_worktree_fails_the_job_with_a_precise_error(self):
         ex = SubprocessExecutor(self.tmp_dir)
-        manifest = JobManifest(job_id="j", build_id="bld-5", project="p", worktree_digest="dgst", s3=JOB_S3)
+        manifest = JobManifest(job_id="j", build_id="bld-5", project="p", worktree_digest="dgst", storage=JOB_S3)
         logs = []
         with mock.patch("seine.distributed.agent.executor.provider_from") as provider, \
                 mock.patch("subprocess.Popen") as popen:
@@ -302,7 +302,7 @@ class SubprocessExecutorTest(Test):
         ex = SubprocessExecutor(self.tmp_dir)
         manifest = JobManifest(
             job_id="job-1", build_id="bld-1", project="proj", worktree_digest="d",
-            spec_file="main.yaml", spec_files=["main.yaml", "--", "other.yaml"], s3=JOB_S3)
+            spec_file="main.yaml", spec_files=["main.yaml", "--", "other.yaml"], storage=JOB_S3)
 
         def pull(_manifest, path):
             with open(os.path.join(path, "main.yaml"), "w") as f:
@@ -318,7 +318,7 @@ class SubprocessExecutorTest(Test):
         ex = SubprocessExecutor(self.tmp_dir)
         manifest = JobManifest(
             job_id="job-1", build_id="bld-1", project="proj", worktree_digest="d",
-            spec_file="main.yaml", spec_files=["main.yaml", "--", "../../x.yaml"], s3=JOB_S3)
+            spec_file="main.yaml", spec_files=["main.yaml", "--", "../../x.yaml"], storage=JOB_S3)
 
         def pull(_manifest, path):
             with open(os.path.join(path, "main.yaml"), "w") as f:
@@ -347,7 +347,7 @@ class SubprocessExecutorTest(Test):
             f.write("x")
         with mock.patch("seine.distributed.agent.executor.provider_from") as provider:
             provider.return_value.push_artifact_info.return_value = {"key": "k"}
-            self.assertEqual(upload_artifacts(job_dir, "p", "bld-5", s3=JOB_S3), [{"key": "k"}])
+            self.assertEqual(upload_artifacts(job_dir, "p", "bld-5", storage=JOB_S3), [{"key": "k"}])
         provider.assert_called_once_with(JOB_S3)
         with self.assertRaises(ValueError):
             upload_artifacts(job_dir, "p", "bld-5")
@@ -400,7 +400,7 @@ class ChildEnvTest(Test):
         "TZ": "UTC", "TERM": "xterm", "TMPDIR": "/var/tmp", "XDG_RUNTIME_DIR": "/run/user/9",
         "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/9/bus",
         "CONTAINERS_CONF": "/etc/c.conf", "http_proxy": "http://p", "NO_PROXY": "lan",
-        "SEINE_CA_CERT": "/etc/ca.pem",
+        "SEINE_CA_CERT": "/etc/ca.pem", "REQUESTS_CA_BUNDLE": "/etc/bundle.pem", "SSL_CERT_FILE": "/etc/ssl.pem",
         "SEINE_ENROLLMENT_TOKEN": "enroll-secret", "SEINE_WORKER_TOKEN": "worker-secret",
         "SEINE_SIGN_KEY": "/keys/sign", "SEINE_VAULT_PASSWORD": "vault-secret",
         "AWS_ACCESS_KEY_ID": "AKIA", "AWS_SECRET_ACCESS_KEY": "aws-secret",
@@ -412,15 +412,15 @@ class ChildEnvTest(Test):
     S3_VARS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_REGION",
                "SEINE_S3_ACCESS_KEY", "SEINE_S3_SECRET_KEY", "SEINE_S3_ENDPOINT")
 
-    def _env(self, s3=JOB_S3, **options):
-        manifest = JobManifest(job_id="j", build_id="bld-9", project="p", options=options, s3=s3)
+    def _env(self, storage=JOB_S3, **options):
+        manifest = JobManifest(job_id="j", build_id="bld-9", project="p", options=options, storage=storage)
         return child_env(manifest, "/job/build", environ=self.AGENT_ENV)
 
     def test_allowlisted_variables_pass(self):
         env = self._env()
         for name in ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "TERM", "TMPDIR", "XDG_RUNTIME_DIR",
                      "DBUS_SESSION_BUS_ADDRESS", "CONTAINERS_CONF", "http_proxy", "NO_PROXY",
-                     "SEINE_CA_CERT"):
+                     "SEINE_CA_CERT", "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE"):
             self.assertEqual(env[name], self.AGENT_ENV[name], name)
 
     def test_tokens_and_unlisted_variables_never_pass(self):
@@ -433,10 +433,20 @@ class ChildEnvTest(Test):
 
     def test_inherited_s3_variables_never_pass(self):
         for options in ({}, {"shared_cache": True}):
-            env = self._env(s3=None, **options)
+            env = self._env(storage=None, **options)
             for name in self.S3_VARS:
                 self.assertNotIn(name, env, name)
             self.assertNotIn("SEINE_CREDENTIALS_FILE", env)
+
+    def test_inherited_artifactory_variables_never_pass_and_job_token_does(self):
+        from seine.distributed.common.models import JobArtifactory
+        agent = dict(self.AGENT_ENV, SEINE_ARTIFACTORY_USER="ambient", SEINE_ARTIFACTORY_TOKEN="amb")
+        job = JobArtifactory(endpoint="http://a", bucket="b", token="job-tok")
+        manifest = JobManifest(job_id="j", build_id="bld-9", project="p",
+                               options={"shared_cache": True}, storage=job)
+        env = child_env(manifest, "/job/build", environ=agent)
+        self.assertEqual(env["SEINE_ARTIFACTORY_TOKEN"], "job-tok")
+        self.assertNotIn("SEINE_ARTIFACTORY_USER", env)
 
     def test_job_keys_only_with_shared_cache(self):
         env = self._env()
@@ -475,7 +485,7 @@ class CancelExecutorTest(Test):
         return path
 
     def _cancel_running(self, script):
-        manifest = JobManifest(job_id="j", build_id="bld-c", project="p", worktree_digest="d", s3=JOB_S3)
+        manifest = JobManifest(job_id="j", build_id="bld-c", project="p", worktree_digest="d", storage=JOB_S3)
         pidfile = os.path.join(self.tmp_dir, "jobs", "bld-c", "build", "sleep.pid")
         result = []
 
@@ -1139,7 +1149,7 @@ class JobLifecycleTest(Test):
 
     def test_job_keys_are_registered_and_scrubbed_from_streamed_logs(self):
         from seine import vault
-        self.manifest = JobManifest(job_id="job-1", build_id="bld-1", project="p", s3=JOB_S3)
+        self.manifest = JobManifest(job_id="job-1", build_id="bld-1", project="p", storage=JOB_S3)
         sent = []
 
         def execute(manifest, on_log):

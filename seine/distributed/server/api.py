@@ -68,7 +68,7 @@ from seine.distributed.server.db import Database, LastAdminError, UserBusyError
 from seine.distributed.server.housekeeping import HousekeepingBusy, run_housekeeping
 from seine.distributed.server.reaper import Reaper
 from seine.distributed.server.settings import S3_ENVIRONMENTS, Settings
-from seine.distributed.server.storage import StorageCredentialsError, env_name, job_s3, provider_for
+from seine.distributed.server.storage import StorageCredentialsError, env_name, job_storage, provider_for
 from seine.distributed.server.transient import TransientSecrets
 from seine.distributed.server.events import ProjectEvents, build_event, serve_events
 from seine.distributed.server.ws import BroadcastHub, forget_finished_build, serve_stream
@@ -255,7 +255,7 @@ def create_app(
         build_id = job.get("build_id", "")
         build = app_db.get_build(build_id) or {}
         try:
-            job["s3"] = job_s3(
+            job["storage"] = job_storage(
                 request.app.state.settings, job["project"], job["s3_bucket"],
                 env_name(build.get("is_release", False)),
             )

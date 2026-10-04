@@ -94,8 +94,9 @@ class JobS3Test(Test):
         self._build()
         resp = self._claim()
         self.assertEqual(resp.status_code, 200)
-        s3 = resp.json()["s3"]
+        s3 = resp.json()["storage"]
         self.assertEqual(s3, {
+            "type": "s3",
             "endpoint": "https://s3.test", "region": "lan", "bucket": "alpha-dev",
             "access_key": "GKa-dev", "secret_key": "a-dev-secret",
         })
@@ -106,7 +107,7 @@ class JobS3Test(Test):
         self._build(is_release=True)
         resp = self._claim()
         self.assertEqual(resp.status_code, 200)
-        s3 = resp.json()["s3"]
+        s3 = resp.json()["storage"]
         self.assertEqual((s3["bucket"], s3["access_key"], s3["secret_key"]),
                          ("alpha-prod", "GKa-prod", "a-prod-secret"))
         self.assertNotIn("a-dev-secret", resp.text)
@@ -117,7 +118,7 @@ class JobS3Test(Test):
             "dev": {"access_key": "GKdef", "secret_key": "def-dev-secret"},
         })
         self._build("orphan")
-        self.assertEqual(self._claim().json()["s3"]["access_key"], "GKdef")
+        self.assertEqual(self._claim().json()["storage"]["access_key"], "GKdef")
 
     def test_project_without_credentials_fails_the_build_with_a_reason(self):
         build_id = self._build("orphan")

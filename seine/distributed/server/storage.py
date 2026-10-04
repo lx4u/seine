@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from seine.distributed.common.models import JobS3
-from seine.distributed.common.s3 import provider_from
+from seine.distributed.common.models import JobArtifactory, JobS3, JobStorage
+from seine.distributed.common.storage import provider_from
 from seine.distributed.server.settings import Settings
 
 
@@ -24,8 +24,18 @@ def storage_type(settings: Settings) -> str:
     return getattr(settings, "storage_type", "s3") or "s3"
 
 
-def job_s3(settings: Settings, project: str, bucket: str, env: str) -> JobS3:
-    """Return the S3 access for one bucket; raise StorageCredentialsError without a key pair."""
+def job_storage(settings: Settings, project: str, bucket: str, env: str) -> JobStorage:
+    """Return the access block for one bucket; raise StorageCredentialsError without credentials."""
+    if storage_type(settings) == "artifactory":
+        keys = settings.artifactory_keys(project, env)
+        if not settings.artifactory_endpoint or keys is None:
+            raise StorageCredentialsError(
+                f"no Artifactory {env} credentials configured for project '{project}'"
+            )
+        return JobArtifactory(
+            endpoint=settings.artifactory_endpoint, bucket=bucket,
+            token=keys.get("token"), user=keys.get("user"), password=keys.get("password"),
+        )
     keys = settings.s3_keys(project, env)
     if not settings.s3_endpoint or keys is None:
         raise StorageCredentialsError(
@@ -41,18 +51,5 @@ def job_s3(settings: Settings, project: str, bucket: str, env: str) -> JobS3:
 
 
 def provider_for(settings: Settings, project: str, bucket: str, env: str) -> Any:
-    """Return a storage provider using the project's key pair for env."""
-    if storage_type(settings) == "artifactory":
-        from seine.storage.artifactory import ArtifactoryStorageProvider
-        from seine.storage.artifactory.client import ArtifactoryClient
-
-        keys = settings.artifactory_keys(project, env)
-        if not settings.artifactory_endpoint or keys is None:
-            raise StorageCredentialsError(
-                f"no Artifactory {env} credentials configured for project '{project}'"
-            )
-        client = ArtifactoryClient(
-            settings.artifactory_endpoint, bucket,
-            user=keys.get("user"), password=keys.get("password"), token=keys.get("token"))
-        return ArtifactoryStorageProvider(client, bucket)
-    return provider_from(job_s3(settings, project, bucket, env))
+    """Return a storage provider using the project's credentials for env."""
+    return provider_from(job_storage(settings, project, bucket, env))

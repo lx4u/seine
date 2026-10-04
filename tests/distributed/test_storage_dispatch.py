@@ -55,6 +55,28 @@ class ProviderDispatchTest(avocado.Test):
             job = provider_from.call_args.args[0]
             self.assertEqual((job.endpoint, job.bucket), ("https://s3.lan:3900", "core-dev"))
 
+    def test_job_storage_is_a_typed_block_per_backend(self):
+        job = server_storage.job_storage(artifactory_settings(), "core", "core-dev", "dev")
+        self.assertEqual((job.type, job.endpoint, job.bucket, job.token),
+                         ("artifactory", "https://arti.lan:8081", "core-dev", "dev-tok"))
+
+    def test_manifest_round_trips_either_block(self):
+        from seine.distributed.common.models import JobArtifactory, JobManifest, JobS3
+        for block in (JobArtifactory(endpoint="http://a", bucket="b", token="t"),
+                      JobS3(endpoint="http://s", bucket="b", access_key="a", secret_key="s")):
+            wire = JobManifest(job_id="j", build_id="b", project="p", storage=block).model_dump_json()
+            self.assertEqual(JobManifest.model_validate_json(wire).storage, block)
+
+    def test_worker_side_provider_flags_env_and_secrets(self):
+        from seine.distributed.common import storage as job_storage
+        from seine.distributed.common.models import JobArtifactory
+        job = JobArtifactory(endpoint="http://a", bucket="b", user="u", password="pw")
+        self.assertEqual(job_storage.provider_from(job).client._session.auth, ("u", "pw"))
+        self.assertEqual(job_storage.child_env(job),
+                         {"SEINE_ARTIFACTORY_USER": "u", "SEINE_ARTIFACTORY_PASSWORD": "pw"})
+        self.assertIn("--artifactory-repo=b", job_storage.child_flags(job))
+        self.assertIn("pw", job_storage.secret_values(job))
+
 
 if __name__ == "__main__":
     avocado.main()

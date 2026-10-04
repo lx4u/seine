@@ -146,6 +146,9 @@ storage:
 The repo name is the project's bucket name (`seine-my-project-dev`
 unless renamed in `project create`). Retention sweeps, usage accounting
 and artifact eviction work as with S3, minus lifecycle rules.
-Handing Artifactory credentials to remote build workers (the
-scheduler/agent path) is not wired yet: distributed builds still stage
-worktrees and artifacts through S3.
+A claimed job carries one `storage` block (`type: s3` or
+`type: artifactory`) holding only the credentials of its own bucket or
+repo. The worker pulls the worktree and uploads artifacts through it,
+and hands it to the child `seine build` through `SEINE_ARTIFACTORY_*`
+(or `AWS_*`) plus the matching `--storage-backend` flags; ambient
+storage variables of the agent are never inherited.

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Shared data models and wire protocols for distributed seine."""
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal, Union
 from pydantic import BaseModel, Field
 
 
@@ -163,11 +163,26 @@ class ClaimJobRequest(BaseModel):
 
 class JobS3(BaseModel):
     """S3 access scoped to one bucket; sent only to the worker that owns the job."""
+    type: Literal["s3"] = "s3"
     endpoint: str
     region: str = "garage"
     bucket: str
     access_key: str = Field(repr=False)
     secret_key: str = Field(repr=False)
+
+
+class JobArtifactory(BaseModel):
+    """Artifactory access scoped to one repo; sent only to the worker that owns the job."""
+    type: Literal["artifactory"] = "artifactory"
+    endpoint: str
+    bucket: str
+    token: str | None = Field(default=None, repr=False)
+    user: str | None = None
+    password: str | None = Field(default=None, repr=False)
+
+
+# One access block per backend, told apart by 'type'.
+JobStorage = Annotated[Union[JobS3, JobArtifactory], Field(discriminator="type")]
 
 
 class JobManifest(BaseModel):
@@ -179,7 +194,7 @@ class JobManifest(BaseModel):
     target_arch: str = "amd64"
     worktree_digest: str = ""
     s3_bucket: str = ""
-    s3: JobS3 | None = None
+    storage: JobStorage | None = None
     spec_file: str = "spec.yaml"
     # Every spec file as on the command line, "--" between multiconfig groups.
     spec_files: list[str] = Field(default_factory=list)

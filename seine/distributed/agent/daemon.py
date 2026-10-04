@@ -15,6 +15,7 @@ import requests
 from seine import vault
 from seine.distributed.agent.detect import detect_capabilities
 from seine.distributed.agent.executor import SubprocessExecutor, feed_secrets
+from seine.distributed.common import storage as job_storage
 from seine.distributed.agent.stream import LogStreamer, redacting
 from seine.distributed.common.models import (
     ClaimJobRequest,
@@ -240,9 +241,9 @@ class WorkerAgent:
         self.executor.clear_cancel()
         self._current_job_id = manifest.job_id
         status, err, artifacts = "failed", None, []
-        if manifest.s3:
-            vault.record_secret(manifest.s3.access_key)
-            vault.record_secret(manifest.s3.secret_key)
+        if manifest.storage:
+            for secret in job_storage.secret_values(manifest.storage):
+                vault.record_secret(secret)
         for pair in feed_secrets(manifest).values():
             vault.record_secret(pair.get("login"))
             vault.record_secret(pair.get("password"))
