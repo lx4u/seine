@@ -22,7 +22,6 @@ playbook:
              apt:
                  state: present
                  name:
-                     - attr
                      - iputils-ping
            - name: install vim
              apt:

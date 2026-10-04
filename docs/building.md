@@ -44,6 +44,9 @@ and misses can be explained. Disk images similarly produce `<image>.digest` and
 Delete the tarball to force it; a file a playbook reads from an absolute host path
 is not tracked.
 
+Extended attributes, such as file capabilities, are carried by the tarball and
+always restored into the disk image.
+
 `--target TASK` is useful while working on one part of a build. It builds that
 task and what it needs. Find task names with `seine plan --tasks-only spec.yaml`.
 

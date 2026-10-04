@@ -10,7 +10,6 @@ import shlex
 import shutil
 import stat
 import struct
-import tarfile
 import tempfile
 import uuid
 
@@ -155,53 +154,6 @@ class Imager:
         self.reproducible = source.options["reproducible"]
         self._output_dir = None
         self._hypervisor_path = None
-
-    # Keeps only entries for files that made it into the tarball: getfattr
-    # walked the live container filesystem, which still had packages later
-    # removed before export.
-    def _filter_xattr_dump(self, text, known_files):
-        blocks = []
-        current = []
-        keep = False
-        for line in text.splitlines():
-            if line.startswith("# file: "):
-                if keep and current:
-                    blocks.append("\n".join(current))
-                current = [line]
-                keep = line[len("# file: "):] in known_files
-            elif keep:
-                current.append(line)
-        if keep and current:
-            blocks.append("\n".join(current))
-        return "\n\n".join(blocks) + "\n"
-
-    def _restore_xattrs(self, g, tarball):
-        with tarfile.open(tarball) as tar:
-            known_files = set()
-            xattr_member = None
-            for member in tar.getmembers():
-                if member.name == "rootfs.xattr":
-                    xattr_member = member
-                    continue
-                if member.issym() or member.isdir():
-                    continue
-                known_files.add(member.name)
-            if xattr_member is None:
-                return
-            dump = tar.extractfile(xattr_member).read().decode()
-
-        if not g.is_file("/usr/bin/setfattr"):
-            print("  note: 'attr' is not installed in the target image, "
-                  "skipping restore of extended attributes (e.g. file capabilities)")
-            return
-
-        # Xattr values can hold NULs, which a Python str can't carry to the
-        # setxattr API -- upload the dump instead and let setfattr --restore
-        # apply it.
-        filtered = self._filter_xattr_dump(dump, known_files)
-        g.write("/rootfs.xattr", filtered.encode())
-        g.sh("setfattr --restore=/rootfs.xattr")
-        g.rm("/rootfs.xattr")
 
     def _mkfs(self, g, part, dev):
         ro = part["type"] in RO_FSTYPES
@@ -1338,10 +1290,9 @@ class Imager:
 
         print("Extracting root file-system...")
         tarball = self.source._tarball_for(source)
-        g.tar_in(tarball, "/")
-
-        print("Restoring extended attributes...")
-        self._restore_xattrs(g, tarball)
+        # xattrs=True restores file capabilities and the like from the
+        # tarball's PAX headers.
+        g.tar_in_opts(tarball, "/", xattrs=True)
 
         print("Writing fstab...")
         self._write_fstab(g, mounts, mount_devices, part_index)

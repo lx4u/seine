@@ -14,7 +14,7 @@ from seine.utils import netrc_for
 from seine.utils import TRANSPORT_KIND
 from seine.utils import vendor_mountpoint
 
-# Caches the python3/python3-apt/attr install (needed by ansible) as one
+# Caches the python3/python3-apt install (needed by ansible) as one
 # layer, keyed by baseline + arch since a 'baseline:' string can resolve to
 # different content per architecture.
 class TransportBootstrap(Bootstrap):
@@ -79,8 +79,8 @@ RUN{5} rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.sources \\
            /etc/apt/sources.list.d/*.list && \\
     {1} && \\
     apt-get update -qqy{6} && \\
-    apt-get install -qqy{6} --no-install-recommends python3 python3-apt attr && \\
-    apt-mark auto python3 python3-apt attr && \\
+    apt-get install -qqy{6} --no-install-recommends python3 python3-apt && \\
+    apt-mark auto python3 python3-apt && \\
     {4}
 CMD /bin/true
 """

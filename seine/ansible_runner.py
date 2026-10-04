@@ -299,11 +299,6 @@ class AnsibleContainerRunner:
             "dracut --reproducible --force \"/boot/initrd.img-$v\" \"$v\"; "
             "fi; "
             "done"])
-        self._exec(["sh", "-c",
-            "mkdir -p /var/lib/seine && "
-            "getfattr -Rh -m '' -d -e hex $(find / -mindepth 1 -maxdepth 1 "
-            "-type d -not -name proc -not -name sys -not -name tmp "
-            "-printf '%P\\n') > /rootfs.xattr"])
         # TransportBootstrap marks its own packages "auto" so a plain
         # autoremove sweeps them away here without this runner needing to
         # know what TransportBootstrap actually installed.

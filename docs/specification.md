@@ -1633,7 +1633,7 @@ playbook:
 ```
 
 A minimal image that includes `apt` is used as starting point; `seine` adds
-just `python3`/`python3-apt`/`attr` to it (removed again once the build is
+just `python3`/`python3-apt` to it (removed again once the build is
 done) and runs `ansible-playbook` from the host, connecting into the
 container instead of installing `ansible` there -- this keeps ansible
 itself off the (possibly foreign-architecture, emulated) target entirely.
