@@ -37,6 +37,19 @@ def requests_verify(ca_cert: Optional[str]) -> Union[str, bool]:
     return ca_cert or True
 
 
+def resolve_download(server_url: str, token: Optional[str], url: str) -> tuple[str, dict[str, str]]:
+    """Return the absolute URL and request headers for one artifact download.
+
+    A relative URL is served by the seine server itself, so it is joined to
+    the server's address and authenticated with the user's own token. An
+    absolute URL points at storage and carries its own authorisation.
+    """
+    if url.startswith("/"):
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        return server_url.rstrip("/") + url, headers
+    return url, {}
+
+
 def ws_ssl_context(url: str, ca_cert: Optional[str]) -> Optional[ssl.SSLContext]:
     """SSL context for a wss:// URL, None for ws://."""
     if not url.startswith("wss://"):

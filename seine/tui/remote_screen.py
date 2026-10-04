@@ -16,7 +16,7 @@ from textual.widgets import Static
 from seine.container import ContainerEngine
 from seine.distributed.client.remote import DownloadError, artifact_dir
 from seine.distributed.common.models import expired_text, format_expiry_reason
-from seine.distributed.common.transport import check_server_url
+from seine.distributed.common.transport import check_server_url, resolve_download
 from seine.tui.download import DownloadState, redraw
 from seine.tui.base import BaseScreen, StaticPane
 from seine.tui.render_remote import (
@@ -671,12 +671,14 @@ class RemoteScreen(BaseScreen):
                 try:
                     if progress and progress.cancelled:
                         raise RuntimeError("cancelled")
+                    url, headers = resolve_download(session.url, session.token, url)
                     try:
                         check_server_url(url, insecure=session.insecure)
                     except ValueError as e:
                         raise RuntimeError(f"{e} (or '/set remote_insecure true')") from e
                     with requests.get(
                         url, stream=True, timeout=(5.0, 30.0), verify=session.verify,
+                        headers=headers, allow_redirects=False,
                     ) as r:
                         if r.status_code != 200:
                             raise RuntimeError(f"HTTP {r.status_code}")

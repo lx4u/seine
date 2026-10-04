@@ -610,7 +610,7 @@ class RemoteViewsTest(avocado.Test):
                 )
                 # The presigned URL carries its own authorization: no token.
                 _, kwargs = mock_get.call_args
-                self.assertNotIn("headers", kwargs)
+                self.assertNotIn("Authorization", kwargs.get("headers") or {})
                 self.assertIs(kwargs["verify"], True)
 
     def _download_with_progress(self, chunks, sha, size_hint=None, status="completed"):
@@ -772,6 +772,44 @@ class RemoteViewsTest(avocado.Test):
             else:
                 self.assertTrue(any("plain http" in str(c) for c in screen.say.call_args_list))
                 self.assertTrue(any("remote_insecure" in str(c) for c in screen.say.call_args_list))
+
+    def test_server_relative_download_url_carries_the_token_to_the_server_only(self):
+        import hashlib
+        mock_app = mock.Mock()
+        mock_app.is_running = False
+        mock_app.download_dir = self.tmp_dir
+        session = self.RemoteSession(app=mock_app)
+        session.connected = True
+        session.url = "http://cluster.lan:8000"
+        session.token = "test-token"
+        session.insecure = True
+        mock_app.remote_session = session
+        screen = self.RemoteScreen()
+        screen.say = mock.Mock()
+        payload = b"proxied payload"
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            screen.active_tab = 1
+            screen.remote_builds = [{"id": "bld-1"}]
+            screen.selected_indices[1] = 0
+            with mock.patch("requests.get") as mock_get:
+                build_resp = mock.Mock(status_code=200)
+                build_resp.json.return_value = {
+                    "id": "bld-1", "status": "completed",
+                    "download_urls": {"disk.raw": "/api/v1/builds/bld-1/artifacts/disk.raw"},
+                    "artifacts": [{"name": "disk.raw", "size": len(payload),
+                                   "sha256": hashlib.sha256(payload).hexdigest()}],
+                }
+                stream_resp = mock.Mock(status_code=200)
+                stream_resp.iter_content.return_value = [payload]
+                stream_resp.__enter__ = mock.Mock(return_value=stream_resp)
+                stream_resp.__exit__ = mock.Mock(return_value=None)
+                mock_get.side_effect = [build_resp, stream_resp]
+                screen.action_download_artifact()
+        args, kwargs = mock_get.call_args_list[1]
+        self.assertEqual(args[0], "http://cluster.lan:8000/api/v1/builds/bld-1/artifacts/disk.raw")
+        self.assertEqual(kwargs["headers"], {"Authorization": "Bearer test-token"})
+        self.assertFalse(kwargs["allow_redirects"])
+        self.assertTrue(os.path.exists(os.path.join(self.tmp_dir, "disk.raw")))
 
     def test_download_all_artifacts_flow(self):
         import hashlib

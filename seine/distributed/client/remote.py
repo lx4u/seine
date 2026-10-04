@@ -26,6 +26,7 @@ from seine.distributed.common.transport import (
     MAX_TOKEN_REJECTIONS,
     check_server_url,
     requests_verify,
+    resolve_download,
     ws_ssl_context,
 )
 from seine.distributed.common.wsclient import WsClient, WsClosed
@@ -209,6 +210,7 @@ def _download_artifact(
     verify: Union[str, bool],
     insecure: bool,
     progress: Optional[Callable[[int], None]] = None,
+    headers: Optional[dict[str, str]] = None,
 ) -> None:
     """Stream url to dest through a .part file, checking sha256 and size.
 
@@ -226,7 +228,7 @@ def _download_artifact(
     try:
         resp = requests.get(
             url, stream=True, timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
-            verify=verify, allow_redirects=False,
+            verify=verify, allow_redirects=False, headers=headers,
         )
         try:
             if resp.status_code != 200:
@@ -885,9 +887,11 @@ class RemoteBuild:
                 dest = _destination(name, target_for(name))
                 if expected is None:
                     raise DownloadError(f"{name}: the server reported no checksum, not downloaded")
+                url, headers = resolve_download(self.server_url, self.token, url)
                 _download_artifact(
                     name, url, expected, dest, self.verify, self.insecure,
-                    progress=lambda n, name=name: event("bytes", name, n))
+                    progress=lambda n, name=name: event("bytes", name, n),
+                    headers=headers)
             except DownloadError as e:
                 event("failed", name)
                 self._out("failed\n")

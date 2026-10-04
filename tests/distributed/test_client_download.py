@@ -78,7 +78,7 @@ class TestClientArtifactDownload(Test):
         return resp
 
     def _http_get(self, url, **kwargs):
-        if "/api/v1/builds/" in url:
+        if "/api/v1/builds/" in url and "/artifacts/" not in url:
             return self._json(self.build)
         self.storage_gets.append((url, kwargs))
         name = url.rsplit("/", 1)[-1]
@@ -136,6 +136,22 @@ class TestClientArtifactDownload(Test):
             self.assertEqual(f.read(), b"binary-raw-image-bytes")
         self.assertIn("Downloading pc-image.raw", out)
         self.assertIn("Downloaded 1 of 1 artifact(s)", out)
+
+    def test_server_relative_url_goes_to_the_server_with_the_users_token(self):
+        self._complete({"disk.raw": b"binary-raw-image-bytes"})
+        self.build["download_urls"] = {"disk.raw": "/api/v1/builds/bld-test1/artifacts/disk.raw"}
+        ret, _, _ = self._run()
+        self.assertEqual(ret, 0)
+        url, kwargs = self.storage_gets[0]
+        self.assertEqual(url, "http://localhost:8000/api/v1/builds/bld-test1/artifacts/disk.raw")
+        self.assertEqual(kwargs["headers"], {"Authorization": "Bearer pat-test"})
+        self.assertFalse(kwargs["allow_redirects"])
+
+    def test_storage_url_never_gets_the_users_token(self):
+        self._complete({"disk.raw": b"binary-raw-image-bytes"})
+        ret, _, _ = self._run()
+        self.assertEqual(ret, 0)
+        self.assertEqual(self.storage_gets[0][1]["headers"], {})
 
     def test_download_honors_deploy_dir_override(self):
         deploy = os.path.join(self.tmp_dir, "elsewhere")
@@ -387,7 +403,7 @@ class TestClientArtifactDownload(Test):
         [(_, kwargs)] = self.storage_gets
         self.assertEqual(kwargs["verify"], "/etc/seine-ca.pem")
         self.assertIs(kwargs["allow_redirects"], False)
-        self.assertNotIn("headers", kwargs)
+        self.assertNotIn("Authorization", kwargs.get("headers") or {})
 
     def test_default_verify_without_ca_cert(self):
         self._complete({"disk.raw": b"disk-content"})
