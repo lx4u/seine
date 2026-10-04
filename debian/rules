@@ -25,7 +25,7 @@ execute_after_dh_auto_install-arch:
 		litellm jsonpath-ng 'ruamel.yaml' textual 'rich<14' pyte \
 		robotframework
 	for d in debian/seine/usr/lib/python3*/dist-packages; do \
-		echo /usr/share/seine/pylibs > "$$d/seine-extras.pth"; \
+		echo "import sys; sys.path.insert(0, '/usr/share/seine/pylibs')" > "$$d/seine-extras.pth"; \
 	done
 	HOSTARCH=$(DEB_HOST_ARCH) debian/build-tools.py debian/seine/usr/lib/seine/bbolt-normalize
 
