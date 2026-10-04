@@ -2,6 +2,7 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import fcntl
 import glob
 import multiprocessing.util
 import os
@@ -64,6 +65,7 @@ def offline_vault():
     from seine.vault.dev import DEV_DEFAULTS
 
     for_build = vault.for_build
+    cache_vault_image()
 
     class OfflineVault:
         def __init__(self, defaults=None):
@@ -79,3 +81,54 @@ def offline_vault():
             return getattr(for_build(self._defaults), name)
 
     mock.patch.object(vault, "for_build", OfflineVault).start()
+
+
+# Each test is its own process with its own, empty container store, so
+# the dev vault image would be built again by every test that needs it
+# (about two minutes). Build it once per sources digest instead, keep it
+# in the user's cache and load it from there. Returns the replacement
+# for seine.vault.dev.ensure_image(), which is also what a DevVault calls.
+def cache_vault_image():
+    import subprocess
+    from unittest import mock
+    from seine.container import ContainerEngine
+    from seine.utils import HOST_ARCH
+    from seine.vault import dev
+
+    original = dev.ensure_image
+    primed = []
+
+    def prime():
+        digest = dev._sources_digest()
+        cache = os.environ.get("XDG_CACHE_HOME") \
+            or os.path.join(os.path.expanduser("~"), ".cache")
+        where = os.path.join(cache, "seine-tests")
+        os.makedirs(where, exist_ok=True)
+        prefix = os.path.join(where, "vault-%s-" % HOST_ARCH)
+        archive = "%s%s.tar" % (prefix, digest)
+        # One builder at a time, the others wait for the archive.
+        with open(prefix + "lock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if os.path.isfile(archive) and dev._image_label() != digest:
+                try:
+                    ContainerEngine.run(["load", "-i", archive], check=True)
+                except subprocess.CalledProcessError:
+                    os.remove(archive)
+            original()
+            if not os.path.isfile(archive) and dev._image_label() == digest:
+                partial = "%s.%d.partial" % (archive, os.getpid())
+                ContainerEngine.run(
+                    ["save", "-o", partial, dev.CUSTOM_IMAGE], check=True)
+                os.replace(partial, archive)
+                for old in glob.glob(prefix + "*.tar"):
+                    if old != archive:
+                        os.remove(old)
+
+    def ensure_image():
+        if not primed:
+            prime()
+            primed.append(True)
+        original()
+
+    mock.patch.object(dev, "ensure_image", ensure_image).start()
+    return ensure_image

@@ -22,6 +22,9 @@ from seine.container import ContainerEngine
 from seine.vault import OpenBaoProvider
 from seine.vault.base import VaultNotFound
 from seine.vault.dev import DEV_DEFAULTS, DevVault, STALE_AFTER, reap_stale
+from tests.testutils import cache_vault_image
+
+cache_vault_image()
 
 _STORAGE = None
 
@@ -35,8 +38,8 @@ def _rm_storage(path):
         shutil.rmtree(path, ignore_errors=True)
 
 
-# One podman storage per test process, so the dev image is pulled once
-# no matter how many container tests run.
+# One podman storage per test, avocado runs each in a process of its own.
+# The vault image comes from the cache, see cache_vault_image().
 def storage(test):
     global _STORAGE
     if _STORAGE is None:
