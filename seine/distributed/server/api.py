@@ -80,6 +80,9 @@ from seine.distributed.server.ws import BroadcastHub, forget_finished_build, ser
 from seine.storage.artifactory.client import ArtifactoryError
 from seine.storage.s3.client import S3ClientError
 
+# Sent by a client that holds its own storage credential and will download with it.
+OWN_CREDENTIAL_HEADER = "x-seine-own-credential"
+
 logger = logging.getLogger("seine.server.api")
 
 _JOB_STATUSES = ("running", "completed", "failed", "cancelled")
@@ -514,9 +517,14 @@ def create_app(
         return f"seine-{project}-prod" if is_release else f"seine-{project}-dev"
 
     def proxied_downloads(request: Request) -> bool:
-        """True when clients fetch artifacts through this server (Artifactory, 'proxy')."""
+        """True when this client fetches artifacts through this server (Artifactory)."""
         settings = request.app.state.settings
-        return storage_type(settings) == "artifactory" and settings.artifactory_downloads == "proxy"
+        if storage_type(settings) != "artifactory":
+            return False
+        if settings.artifactory_downloads == "byot":
+            # A client that holds its own credential says so; any other is served here.
+            return not request.headers.get(OWN_CREDENTIAL_HEADER)
+        return settings.artifactory_downloads == "proxy"
 
     def build_response(request: Request, build: dict[str, Any]) -> BuildResponse:
         app_db = get_db(request)

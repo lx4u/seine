@@ -811,6 +811,81 @@ class RemoteViewsTest(avocado.Test):
         self.assertFalse(kwargs["allow_redirects"])
         self.assertTrue(os.path.exists(os.path.join(self.tmp_dir, "disk.raw")))
 
+    def test_a_storage_certificate_the_ca_file_lacks_says_which_host_and_what_to_do(self):
+        import hashlib
+        import requests
+        mock_app = mock.Mock()
+        mock_app.is_running = False
+        mock_app.download_dir = self.tmp_dir
+        session = self.RemoteSession(app=mock_app)
+        session.connected = True
+        session.url = "https://cluster.lan:8000"
+        session.token = "test-token"
+        mock_app.remote_session = session
+        screen = self.RemoteScreen()
+        screen.say = mock.Mock()
+        with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+            screen.active_tab = 1
+            screen.remote_builds = [{"id": "bld-1"}]
+            screen.selected_indices[1] = 0
+            with mock.patch("requests.get") as mock_get:
+                build_resp = mock.Mock(status_code=200)
+                build_resp.json.return_value = {
+                    "id": "bld-1", "status": "completed",
+                    "download_urls": {"disk.raw": "https://arti.lan/r/disk.raw"},
+                    "artifacts": [{"name": "disk.raw", "size": 3, "sha256": hashlib.sha256(b"abc").hexdigest()}],
+                }
+                mock_get.side_effect = [build_resp, requests.exceptions.SSLError("self-signed certificate")]
+                screen.action_download_artifact()
+        said = " ".join(str(c) for c in screen.say.call_args_list)
+        self.assertIn("certificate of arti.lan", said)
+        self.assertIn("remote_ca_cert", said)
+
+    def test_the_users_own_credential_goes_to_downloads_from_their_storage_endpoint_only(self):
+        import hashlib
+        payload = b"byot payload"
+        for url, header in (("https://arti.lan/r/disk.raw", {"Authorization": "Bearer user-tok"}),
+                            ("https://other.example/r/disk.raw", None)):
+            mock_app = mock.Mock()
+            mock_app.is_running = False
+            mock_app.download_dir = self.tmp_dir
+            session = self.RemoteSession(app=mock_app)
+            session.connected = True
+            session.url = "https://cluster.lan:8000"
+            session.token = "test-token"
+            session.storage = {"type": "artifactory", "endpoint": "https://arti.lan"}
+            session.storage_credential = {"token": "user-tok"}
+            mock_app.remote_session = session
+            self.assertEqual(session.auth_headers["X-Seine-Own-Credential"], "1")
+            screen = self.RemoteScreen()
+            screen.say = mock.Mock()
+            with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
+                screen.active_tab = 1
+                screen.remote_builds = [{"id": "bld-1"}]
+                screen.selected_indices[1] = 0
+                with mock.patch("requests.get") as mock_get:
+                    build_resp = mock.Mock(status_code=200)
+                    build_resp.json.return_value = {
+                        "id": "bld-1", "status": "completed", "download_urls": {"disk.raw": url},
+                        "artifacts": [{"name": "disk.raw", "size": len(payload),
+                                       "sha256": hashlib.sha256(payload).hexdigest()}],
+                    }
+                    stream_resp = mock.Mock(status_code=200)
+                    stream_resp.iter_content.return_value = [payload]
+                    stream_resp.__enter__ = mock.Mock(return_value=stream_resp)
+                    stream_resp.__exit__ = mock.Mock(return_value=None)
+                    mock_get.side_effect = [build_resp, stream_resp]
+                    screen.action_download_artifact()
+                    self.assertEqual(mock_get.call_args_list[1][1]["headers"], header or {})
+            dest = os.path.join(self.tmp_dir, "disk.raw")
+            if os.path.exists(dest):
+                os.remove(dest)
+
+    def test_a_session_without_its_own_credential_says_nothing_extra(self):
+        session = self.RemoteSession(app=mock.Mock())
+        session.token = "test-token"
+        self.assertEqual(session.auth_headers, {"Authorization": "Bearer test-token"})
+
     def test_download_all_artifacts_flow(self):
         import hashlib
         mock_app = mock.Mock()

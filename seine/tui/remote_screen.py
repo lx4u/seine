@@ -671,8 +671,11 @@ class RemoteScreen(BaseScreen):
                 try:
                     if progress and progress.cancelled:
                         raise RuntimeError("cancelled")
-                    url, headers = resolve_download(session.url, session.token, url)
+                    storage = None
+                    if session.storage_credential and (session.storage or {}).get("endpoint"):
+                        storage = (session.storage["endpoint"], session.storage_credential)
                     try:
+                        url, headers = resolve_download(session.url, session.token, url, storage)
                         check_server_url(url, insecure=session.insecure)
                     except ValueError as e:
                         raise RuntimeError(f"{e} (or '/set remote_insecure true')") from e
@@ -715,7 +718,11 @@ class RemoteScreen(BaseScreen):
                             os.remove(part)
                         except OSError:
                             pass
-                    errors.append(f"{name}: {e}")
+                    reason = str(e)
+                    if isinstance(e, requests.exceptions.SSLError):
+                        reason = (f"cannot verify the certificate of {urlsplit(url).hostname}: add it to the "
+                                  f"file set with '/set remote_ca_cert', next to the server's ({e})")
+                    errors.append(f"{name}: {reason}")
 
             if progress:
                 self._download_changed()

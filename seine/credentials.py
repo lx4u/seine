@@ -69,7 +69,7 @@ __all__ = [
     "resolve", "CredentialSource", "probe", "probe_s3", "probe_artifactory",
     "s3_credential_source",
     "DEFAULT_S3_ACCESS_KEY_CHAIN", "DEFAULT_S3_SECRET_KEY_CHAIN",
-    "artifactory_credential_source",
+    "artifactory_credential_source", "own_artifactory_credential",
     "DEFAULT_ARTIFACTORY_TOKEN_CHAIN",
     "DEFAULT_ARTIFACTORY_USER_CHAIN", "DEFAULT_ARTIFACTORY_PASSWORD_CHAIN",
     "remember_resolved", "resolved_for", "clear_resolved",
@@ -755,6 +755,16 @@ def artifactory_credential_source(auth=None, context=None, prompt=None, vault_re
         fields = {"token": auth.get("token") or DEFAULT_ARTIFACTORY_TOKEN_CHAIN}
     return CredentialSource(
         fields, context=context or "artifactory storage", prompt=prompt, vault_reader=vault_reader)
+
+
+def own_artifactory_credential():
+    """The user's own Artifactory credential, from the usual chains, or None. Never prompts."""
+    for auth in (None, {"user": None, "password": None}):
+        try:
+            return artifactory_credential_source(auth=auth).get()
+        except CredentialNotFound:
+            continue
+    return None
 
 
 def probe_artifactory(endpoint, repo, user=None, password=None, token=None, timeout=15):

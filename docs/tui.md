@@ -208,7 +208,10 @@ server, whose workers run them natively rather than under emulation.
 and `--release` always win over the setting.
 
 `/remote --insecure` and `/remote --ca-cert=PATH` (also `seine tui
---insecure --ca-cert=PATH`) override the two TLS settings for one connection. A host
+--insecure --ca-cert=PATH`) override the two TLS settings for one connection.
+The CA file may hold several certificates, and the TUI uses it for the
+storage as well when it downloads from it: with a private certificate on
+the storage, put it in the same file as the server's. A host
 given without a scheme is reached over `https://`, except a loopback one
 (`http://`). Plain `http://` to a remote host is refused unless
 `remote_insecure` allows it, and then the token travels unencrypted: `/remote`

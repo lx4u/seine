@@ -492,8 +492,10 @@ Flags:
       --parallel N      cores one package build may use. Unset, it is derived
                         from --jobs so that the builds running together do not
                         ask for more of the machine than it has
-      --ca-cert PATH    CA bundle to verify the remote server's TLS certificate
-                        with ($SEINE_CA_CERT says the same thing)
+      --ca-cert PATH    CA file to verify the remote server's TLS certificate
+                        with, and the storage's when it downloads from it
+                        itself; it may hold several certificates
+                        ($SEINE_CA_CERT says the same thing)
       --insecure        allow plain http:// to a remote server that is not on
                         this machine. Without it only https:// is accepted
       --dest-dir PATH   custom directory to download build artifacts into

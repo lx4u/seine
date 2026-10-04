@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 import requests
 
 from seine import settings
-from seine.credentials import CredentialNotFound, token_source
+from seine.credentials import CredentialNotFound, own_artifactory_credential, token_source
 from seine.distributed.client.events import EventFollower
 from seine.distributed.common.transport import (
     MAX_TOKEN_REJECTIONS,
@@ -39,6 +39,9 @@ class RemoteSession:
         self.is_admin: bool = False
         self.projects: dict[str, str] = {}
         self.default_project: Optional[str] = None
+        # The server's storage profile and the user's own credential for it, if any.
+        self.storage: Optional[dict] = None
+        self.storage_credential: Optional[dict] = None
         self.active_project: Optional[str] = None
         self.ping_ms: Optional[float] = None
         self.last_error: Optional[str] = None
@@ -73,7 +76,12 @@ class RemoteSession:
 
     @property
     def auth_headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        if not self.token:
+            return {}
+        headers = {"Authorization": f"Bearer {self.token}"}
+        if self.storage_credential:
+            headers["X-Seine-Own-Credential"] = "1"
+        return headers
 
     def request(self, method: str, path: str, **kwargs: Any) -> Any:
         """Call the connected server with its token, TLS policy and a timeout."""
@@ -182,6 +190,10 @@ class RemoteSession:
         self.is_admin = bool(data.get("is_admin"))
         self.projects = data.get("projects") or {}
         self.default_project = data.get("default_project")
+        self.storage = data.get("storage")
+        self.storage_credential = (
+            own_artifactory_credential()
+            if (self.storage or {}).get("type") == "artifactory" else None)
         self.active_project = self._decided_project()
         self.connected = True
         self.last_error = None

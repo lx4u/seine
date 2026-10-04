@@ -9,6 +9,7 @@ import os
 import sys
 import threading
 import time
+from urllib.parse import urlsplit
 from typing import Any, Callable, Optional, Union
 
 import requests
@@ -247,6 +248,10 @@ def _download_artifact(
         _remove(part)
         if isinstance(e, DownloadError):
             raise
+        if isinstance(e, requests.exceptions.SSLError):
+            raise DownloadError(
+                f"{name}: cannot verify the certificate of {urlsplit(url).hostname}: add it to the "
+                f"CA file given with --ca-cert (or $SEINE_CA_CERT), next to the server's ({e})") from e
         raise DownloadError(f"{name}: {e}") from e
 
     if sha256.hexdigest() != expected["sha256"].lower() or size != expected["size"]:
@@ -427,6 +432,7 @@ class RemoteBuild:
         self.server_url = server_url.rstrip("/")
         # The server's "storage" profile entry (type, endpoint), once known.
         self.storage_info: Optional[dict[str, Any]] = None
+        self._storage_credential: Optional[dict[str, str]] = None
         self.project = project
         self.options = dict(options or {})
         self.token = token or self.options.get("token") or os.environ.get("SEINE_TOKEN")
@@ -473,7 +479,10 @@ class RemoteBuild:
 
     @property
     def headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.token}"}
+        headers = {"Authorization": f"Bearer {self.token}"}
+        if self._storage_credential:
+            headers["X-Seine-Own-Credential"] = "1"
+        return headers
 
     def run(self) -> int:
         """Run the build and return the exit code."""
@@ -677,24 +686,24 @@ class RemoteBuild:
         """
         from seine import credentials
 
-        found: dict[str, str] = {}
-        for auth in (None, {"user": None, "password": None}):
-            try:
-                found = credentials.artifactory_credential_source(auth=auth).get()
-                break
-            except credentials.CredentialNotFound:
-                continue
+        found = credentials.own_artifactory_credential()
         if not found:
             return {}
         storage = self._get("/api/v1/me", "profile").get("storage") or {}
         if storage.get("type") != "artifactory":
             return {}
-        self.storage_info = storage
         try:
             check_server_url(self.server_url)
         except ValueError as e:
             raise RemoteError(f"refusing to send your Artifactory credential: {e}") from e
+        self.storage_info, self._storage_credential = storage, found
         return {"artifactory": found}
+
+    def _storage_auth(self) -> Optional[tuple[str, dict[str, str]]]:
+        """(endpoint, credential) for downloads from the storage, once the user's own is known."""
+        if self._storage_credential and (self.storage_info or {}).get("endpoint"):
+            return self.storage_info["endpoint"], self._storage_credential
+        return None
 
     def _pack(self) -> tuple[str, str]:
         """Pack what the spec reads; the whole tree on worktree=full, or on auto if it must."""
@@ -919,7 +928,10 @@ class RemoteBuild:
                 dest = _destination(name, target_for(name))
                 if expected is None:
                     raise DownloadError(f"{name}: the server reported no checksum, not downloaded")
-                url, headers = resolve_download(self.server_url, self.token, url)
+                try:
+                    url, headers = resolve_download(self.server_url, self.token, url, self._storage_auth())
+                except ValueError as e:
+                    raise DownloadError(f"{name}: {e}") from e
                 _download_artifact(
                     name, url, expected, dest, self.verify, self.insecure,
                     progress=lambda n, name=name: event("bytes", name, n),

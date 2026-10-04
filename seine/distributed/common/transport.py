@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Server URL and TLS checks shared by the agent and, later, the client."""
 
+import base64
 import ipaddress
 import ssl
 from typing import Optional, Union
@@ -37,16 +38,41 @@ def requests_verify(ca_cert: Optional[str]) -> Union[str, bool]:
     return ca_cert or True
 
 
-def resolve_download(server_url: str, token: Optional[str], url: str) -> tuple[str, dict[str, str]]:
+def _origin(url: str) -> tuple[str, str, int]:
+    parts = urlsplit(url)
+    return parts.scheme, parts.hostname or "", parts.port or (443 if parts.scheme == "https" else 80)
+
+
+def credential_headers(credential: dict[str, str]) -> dict[str, str]:
+    """The Authorization header for an Artifactory token, or a user and password."""
+    if credential.get("token"):
+        return {"Authorization": f"Bearer {credential['token']}"}
+    pair = f"{credential['user']}:{credential['password']}".encode()
+    return {"Authorization": "Basic " + base64.b64encode(pair).decode()}
+
+
+def resolve_download(
+    server_url: str, token: Optional[str], url: str,
+    storage: Optional[tuple[str, dict[str, str]]] = None,
+) -> tuple[str, dict[str, str]]:
     """Return the absolute URL and request headers for one artifact download.
 
     A relative URL is served by the seine server itself, so it is joined to
-    the server's address and authenticated with the user's own token. An
-    absolute URL points at storage and carries its own authorisation.
+    the server's address and authenticated with the user's own seine token.
+    An absolute URL points at storage and carries its own authorisation,
+    unless it is on the storage endpoint the user holds a credential for,
+    ``storage`` being (endpoint, credential): then that credential is sent,
+    to that one origin only, and over https or to a loopback host only,
+    whatever --insecure says.
     """
     if url.startswith("/"):
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         return server_url.rstrip("/") + url, headers
+    if storage and _origin(url) == _origin(storage[0]):
+        host = urlsplit(url).hostname
+        if urlsplit(url).scheme != "https" and not (host and is_loopback(host)):
+            raise ValueError(f"refusing to send your storage credential over plain http to {host}")
+        return url, credential_headers(storage[1])
     return url, {}
 
 

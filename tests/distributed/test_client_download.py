@@ -45,6 +45,7 @@ class TestClientArtifactDownload(Test):
             mock.patch.object(remote, "ws_ssl_context", return_value=None),
             mock.patch("requests.post"),
             mock.patch("requests.get", side_effect=self._http_get),
+            mock.patch("seine.credentials.own_artifactory_credential", side_effect=lambda: self.own),
         ]
         started = [p.start() for p in self.patches]
         self.post, self.get = started[4], started[5]
@@ -53,6 +54,9 @@ class TestClientArtifactDownload(Test):
             "build_id": "bld-test1", "status": "queued", "project": "demo", "target_arch": "amd64",
         })
         self.build = {}
+        self.own = None
+        self.profile = {"storage": {"type": "artifactory", "endpoint": "https://arti.lan"}}
+        self.build_gets = []
         self.contents = {}
         self.failures = {}
         self.storage_gets = []
@@ -78,7 +82,10 @@ class TestClientArtifactDownload(Test):
         return resp
 
     def _http_get(self, url, **kwargs):
+        if url.endswith("/api/v1/me"):
+            return self._json(self.profile)
         if "/api/v1/builds/" in url and "/artifacts/" not in url:
+            self.build_gets.append(kwargs.get("headers"))
             return self._json(self.build)
         self.storage_gets.append((url, kwargs))
         name = url.rsplit("/", 1)[-1]
@@ -146,6 +153,57 @@ class TestClientArtifactDownload(Test):
         self.assertEqual(url, "http://localhost:8000/api/v1/builds/bld-test1/artifacts/disk.raw")
         self.assertEqual(kwargs["headers"], {"Authorization": "Bearer pat-test"})
         self.assertFalse(kwargs["allow_redirects"])
+
+    def test_a_storage_certificate_the_ca_file_lacks_says_which_host_and_what_to_do(self):
+        self._complete({"disk.raw": b"binary-raw-image-bytes"}, base="https://arti.lan/repo")
+        original = self.get.side_effect
+
+        def fail_on_storage(url, **kwargs):
+            if "arti.lan" in url:
+                raise requests.exceptions.SSLError("self-signed certificate")
+            return original(url, **kwargs)
+
+        self.get.side_effect = fail_on_storage
+        ret, _, err = self._run(server_url="https://seine.lan")
+        self.assertNotEqual(ret, 0)
+        self.assertIn("certificate of arti.lan", err)
+        self.assertIn("--ca-cert", err)
+        self.assertEqual(self._leftovers(self.tmp_dir), [])
+
+    def test_the_users_own_credential_goes_to_downloads_from_their_storage_endpoint(self):
+        self.own = {"token": "user-tok"}
+        self._complete({"disk.raw": b"binary-raw-image-bytes"}, base="https://arti.lan/repo")
+        ret, _, _ = self._run(server_url="https://seine.lan")
+        self.assertEqual(ret, 0)
+        self.assertEqual(self.storage_gets[0][1]["headers"], {"Authorization": "Bearer user-tok"})
+
+    def test_the_server_is_told_the_client_holds_its_own_credential(self):
+        self.own = {"token": "user-tok"}
+        self._complete({"disk.raw": b"binary-raw-image-bytes"}, base="https://arti.lan/repo")
+        self._run(server_url="https://seine.lan")
+        self.assertTrue(self.build_gets)
+        self.assertTrue(all(h.get("X-Seine-Own-Credential") == "1" for h in self.build_gets))
+
+    def test_without_one_the_server_is_not_told_and_nothing_extra_is_sent(self):
+        self._complete({"disk.raw": b"binary-raw-image-bytes"}, base="https://arti.lan/repo")
+        self._run(server_url="https://seine.lan")
+        self.assertTrue(all("X-Seine-Own-Credential" not in h for h in self.build_gets))
+        self.assertEqual(self.storage_gets[0][1]["headers"], {})
+
+    def test_the_credential_never_goes_to_a_download_elsewhere(self):
+        self.own = {"token": "user-tok"}
+        self._complete({"disk.raw": b"binary-raw-image-bytes"}, base="https://other.example/repo")
+        self._run(server_url="https://seine.lan")
+        self.assertEqual(self.storage_gets[0][1]["headers"], {})
+
+    def test_the_credential_is_not_sent_over_plain_http_even_with_insecure(self):
+        self.own = {"token": "user-tok"}
+        self.profile = {"storage": {"type": "artifactory", "endpoint": "http://arti.lan"}}
+        self._complete({"disk.raw": b"binary-raw-image-bytes"}, base="http://arti.lan/repo")
+        ret, _, err = self._run(options={"insecure": True}, server_url="https://seine.lan")
+        self.assertNotEqual(ret, 0)
+        self.assertEqual(self.storage_gets, [])
+        self.assertIn("plain http", err)
 
     def test_storage_url_never_gets_the_users_token(self):
         self._complete({"disk.raw": b"binary-raw-image-bytes"})

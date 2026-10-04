@@ -80,6 +80,22 @@ class ArtifactProxyTest(avocado.Test):
         self.assertEqual(resp.json()["download_urls"], {
             "disk image.raw": "https://arti.lan/seine-demo-dev/artifacts/demo/bld-1/disk image.raw"})
 
+    def test_byot_sends_the_storage_url_to_a_client_that_holds_its_own_credential(self):
+        client = self._client(artifactory_downloads="byot")
+        own = client.get("/api/v1/builds/bld-1", headers={**self.headers["alice"], "X-Seine-Own-Credential": "1"})
+        self.assertEqual(own.json()["download_urls"], {
+            "disk image.raw": "https://arti.lan/seine-demo-dev/artifacts/demo/bld-1/disk image.raw"})
+
+    def test_byot_serves_any_other_client_through_the_server(self):
+        resp = self._client(artifactory_downloads="byot").get("/api/v1/builds/bld-1", headers=self.headers["alice"])
+        self.assertEqual(resp.json()["download_urls"],
+                         {"disk image.raw": "/api/v1/builds/bld-1/artifacts/disk%20image.raw"})
+
+    def test_the_marker_changes_nothing_in_proxy_mode(self):
+        resp = self._client().get("/api/v1/builds/bld-1", headers={**self.headers["alice"], "X-Seine-Own-Credential": "1"})
+        self.assertEqual(resp.json()["download_urls"],
+                         {"disk image.raw": "/api/v1/builds/bld-1/artifacts/disk%20image.raw"})
+
     def test_s3_keeps_presigned_urls_whatever_the_setting(self):
         resp = self._client(storage_type="s3").get("/api/v1/builds/bld-1", headers=self.headers["alice"])
         self.assertTrue(resp.json()["download_urls"]["disk image.raw"].startswith("https://arti.lan/"))

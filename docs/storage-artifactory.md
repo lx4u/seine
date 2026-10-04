@@ -209,13 +209,27 @@ chooses how clients get an artifact:
 | Value | What happens | Exposes |
 | --- | --- | --- |
 | `proxy` (default) | The server streams the artifact itself (`GET /api/v1/builds/{id}/artifacts/{name}`), after the same project-membership check as the artifact list. The client sends only its own seine token to the server. | Nothing: no Artifactory credential leaves the server. Artifact traffic flows through it. |
+| `byot` | A client that holds its own Artifactory credential (see "Builds that run as their user") gets the plain repo URL and downloads with that credential, so Artifactory's own permissions decide, and the traffic does not cross the server. Any other client is served through the server, as in `proxy`. | What each user's Artifactory permissions allow; seine project membership does not decide. |
 | `direct` | The client gets the plain repo URL. | The repo must allow anonymous read, so anyone who can reach Artifactory can read what the repo holds. For public artifacts only. |
 
 ```yaml
 storage:
   type: artifactory
-  artifactory_downloads: proxy
+  artifactory_downloads: proxy   # proxy | byot | direct
 ```
 
+With `byot` the client announces that it holds a credential (an
+`X-Seine-Own-Credential` header on its requests to the server), which
+is how the server picks the plain URL for it. The credential is sent to
+the storage endpoint the server reported in the user's profile and to no
+other origin, over https only (or to a loopback host), never over plain
+http even with `--insecure`, and redirects are not followed with it.
+Both the CLI and the TUI do this.
+
+The client verifies the storage endpoint with the same CA bundle it
+uses for the seine server (`--ca-cert` or `SEINE_CA_CERT`). When
+Artifactory has its own private certificate, put both certificates in
+that one file (`cat seine-ca.crt artifactory.crt > bundle.pem`).
+
 A client checks the SHA-256 and size of every download against the
-manifest in both modes.
+manifest in every mode.
