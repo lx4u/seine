@@ -339,7 +339,7 @@ class ToolTable(avocado.Test):
         text = self.ai.TOOLS["docs"].run(app, {"name": "specification.md"})
         self.assertTrue(text.startswith("lines 1-"))
         self.assertIn(" of ", text.splitlines()[0])
-        self.assertIn("## Specification files", text)
+        self.assertIn("# Specification files", text)
 
     def test_docs_refuses_an_unknown_name(self):
         app = self.SeineApp()
