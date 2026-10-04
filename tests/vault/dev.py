@@ -505,6 +505,19 @@ class ImagePin(avocado.Test):
         self.assertEqual(shipped[-1].split()[1], DevVault.IMAGE)
 
 
+class ImageSources(avocado.Test):
+    # The Dockerfile builds every plugin, so the digest must see each one.
+    def test_every_plugin_is_part_of_the_digest(self):
+        from seine.vault.dev import _source_files
+        _, paths = _source_files()
+        plugins = os.path.join(path_to_sources, "vault", "openbao", "plugins")
+        for name in os.listdir(plugins):
+            self.assertTrue(
+                any(path.startswith(os.path.join("vault", "openbao", "plugins", name, ""))
+                    and path.endswith(".go") for path in paths),
+                "plugin '%s' is not part of the vault image digest" % name)
+
+
 class EnsureImage(avocado.Test):
     def test_missing_image_returns_none_without_inspect_error(self):
         from seine.vault.dev import _image_label, CUSTOM_IMAGE

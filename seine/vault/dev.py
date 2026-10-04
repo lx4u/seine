@@ -116,19 +116,25 @@ def _image_label():
 
 # What the image was built from: plugin sources plus the Dockerfile
 # itself, so editing any of them rebuilds it on next use.
-def _sources_digest():
+def _source_files():
     root = os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.abspath(__file__))))
-    digest = hashlib.sha256()
     paths = [os.path.join("vault", "openbao", "image", "Dockerfile")]
-    for plugindir in ("pgp", "pkcs7", "sbsign"):
-        plugindir = os.path.join("vault", "openbao", "plugins", plugindir)
+    plugins = os.path.join("vault", "openbao", "plugins")
+    for name in sorted(os.listdir(os.path.join(root, plugins))):
+        plugindir = os.path.join(plugins, name)
         full = os.path.join(root, plugindir)
         if not os.path.isdir(full):
             continue
-        paths += [os.path.join(plugindir, name)
-                  for name in sorted(os.listdir(full))
-                  if name.endswith(".go") or name in ("go.mod", "go.sum")]
+        paths += [os.path.join(plugindir, source)
+                  for source in sorted(os.listdir(full))
+                  if source.endswith(".go") or source in ("go.mod", "go.sum")]
+    return root, paths
+
+
+def _sources_digest():
+    root, paths = _source_files()
+    digest = hashlib.sha256()
     for path in paths:
         with open(os.path.join(root, path), "rb") as f:
             digest.update(f.read())
