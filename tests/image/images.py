@@ -943,13 +943,19 @@ class ScopedRebuild(avocado.Test):
                          "the two builds are of different versions: %s"
                          % ", ".join(sorted(versions)))
 
-        # And exactly one copy each of the architecture-independent
-        # binaries the source also builds (busybox-syslogd, udhcpc,
-        # udhcpd), made by the native build: a second copy of any of
-        # them would be one filename written twice, with whichever
-        # landed last deciding what an image installs.
-        self.assertEqual(len(self.debs(space, "*_all.deb")), 3,
-                         "the arch-all packages were not built exactly once each")
+        # And each architecture-independent binary the source also builds
+        # made once, by the native build: a second copy of any of them
+        # would be one filename written twice, with whichever landed last
+        # deciding what an image installs. Which binaries those are is
+        # up to the source, so go by what was published.
+        arch_all = set(os.path.basename(path).split("_")[0]
+                       for path in glob.glob(os.path.join(
+                           self.repository(space), "*_all.deb")))
+        self.assertNotEqual(arch_all, set(), "no arch-all package was built")
+        for name in arch_all:
+            self.assertEqual(
+                said.count("dpkg-deb: building package '%s'" % name), 1,
+                "%s was not built exactly once" % name)
 
         # Its index describes every architecture at once, which is what
         # lets one repository serve them all.
