@@ -66,7 +66,7 @@ whole project. The ones in use are:
 | `sbom`         | Software Bill of Materials generation                 |
 | `sbuild`       | The buildd chroot packages are rebuilt in             |
 | `spec`         | The specification files, and how they are loaded      |
-| `storage`      | The S3 storage provider and the shared cache transport (`seine/storage/`) |
+| `storage`      | The S3 and Artifactory storage providers and the shared cache transport (`seine/storage/`) |
 | `target`       | Driving real hardware through mtda: `/target`, `seine.tui.target` |
 | `testing`      | Test suites and their execution: `seine test`, `seine.testing` |
 | `tui`          | The terminal UI, `seine tui`                          |

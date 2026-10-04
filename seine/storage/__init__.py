@@ -10,6 +10,7 @@ from .base import (
 )
 from .local import LocalStorageProvider
 from .s3 import S3StorageProvider
+from .artifactory import ArtifactoryStorageProvider
 
 __all__ = [
     "StorageError",
@@ -18,5 +19,6 @@ __all__ = [
     "StorageProvider",
     "LocalStorageProvider",
     "S3StorageProvider",
+    "ArtifactoryStorageProvider",
     "for_build",
 ]
