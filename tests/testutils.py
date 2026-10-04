@@ -8,6 +8,10 @@ import os
 import shutil
 import subprocess
 
+# Importing litellm fetches its price list from GitHub in a thread. The
+# thread's log lines can outlive the test and block on a full log pipe.
+os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
+
 # Plain rmtree can't touch rootless podman's storage: its files belong
 # to a uid-mapped "root", and an overlay mount can still be busy.
 # podman unshare owns that uid and can unmount and remove both.
