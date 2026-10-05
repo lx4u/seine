@@ -232,9 +232,10 @@ def parse_entry(text):
     return fields
 
 # The boot entries 'deploy' wrote, one per deployment.
+# '_file' keeps the entry's file name.
 def read_entries(g):
     base = "%s/boot/loader/entries" % SYSROOT
-    return [parse_entry(g.cat("%s/%s" % (base, name)))
+    return [dict(parse_entry(g.cat("%s/%s" % (base, name))), _file=name)
             for name in sorted(g.ls(base)) if name.endswith(".conf")]
 
 # GRUB menu entries for the sysroots in 'groups' (the boot owner first):
@@ -259,6 +260,55 @@ def grub_menuentries(groups):
             ) % (title, group["uuid"], group["boot"], entry["linux"],
                  entry["options"], group["boot"], entry["initrd"])
     return text
+
+# systemd-boot cannot read ext4, so the ESP holds the entries and the
+# kernel files itself. Entries of 'groups' (as for grub_menuentries) as
+# {file name: text}: both are prefixed with the stateroot so the entries
+# of several sysroots do not collide, and so are the titles if there are
+# several.
+def systemd_boot_entries(groups):
+    several = len(groups) > 1
+    files = {}
+    for group in groups:
+        for entry in group["entries"]:
+            fields = {k: v for k, v in entry.items() if not k.startswith("_")}
+            if several:
+                fields["title"] = "%s: %s" % (group["label"], fields["title"])
+            files["%s-%s" % (group["label"], entry["_file"])] = "".join(
+                "%s %s\n" % field for field in fields.items())
+    return files
+
+# The directories (relative to the file system holding /boot) with the
+# kernel and initramfs of the entries of 'group'.
+def boot_directories(group):
+    return sorted({os.path.dirname(entry[key])
+                   for entry in group["entries"] for key in ("linux", "initrd")})
+
+# What the boot loader of the boot owner 'label' reads. A glob, because
+# an update names its entries differently.
+def loader_conf(label):
+    return "default %s-*\ntimeout 5\n" % label
+
+# Copies the kernel files of 'directories' ({source: destination}, as
+# guest paths) and stops before the first copy if they do not fit: a
+# copy that fails halfway leaves truncated files on the ESP.
+def copy_boot_files(g, directories, esp_path):
+    stat = g.statvfs(esp_path)
+    free = stat["bavail"] * stat["bsize"]
+    names = {src: g.ls(src) for src in directories}
+    # Every file takes whole clusters.
+    cluster = stat["bsize"]
+    needed = sum(-(-g.stat("%s/%s" % (src, name))["size"] // cluster) * cluster
+                 for src in names for name in names[src])
+    if needed > free:
+        raise RuntimeError(
+            "the ESP '%s' has %d MiB free, the kernel files of the boot "
+            "entries need %d MiB: make it larger (256 MiB is advisable)" % (
+                esp_path, free >> 20, -(-needed >> 20)))
+    for src, dst in directories.items():
+        g.mkdir_p(dst)
+        for name in names[src]:
+            g.cp("%s/%s" % (src, name), "%s/%s" % (dst, name))
 
 # The ostree flow of an Imager: unpack, commit, deploy and boot a sysroot.
 # Part of Imager, like PartitionRebuild: it relies on the imager's own
@@ -324,9 +374,11 @@ class OstreeSysroot:
                      distro, boot_owner, boot_entries):
         root = next(m for m in mounts if m["_prefix"] == "/")
         boot = next((m for m in mounts if m["_prefix"] == "/boot/"), None)
+        boot_device = mount_devices[id(boot or root)]
         boot_entries.append({
             "label": stateroot,
-            "uuid": g.vfs_uuid(mount_devices[id(boot or root)]),
+            "uuid": g.vfs_uuid(boot_device),
+            "device": boot_device,
             "boot": "" if boot else "/boot",
             "entries": read_entries(g),
         })
@@ -339,18 +391,41 @@ class OstreeSysroot:
             raise NotImplementedError(
                 "booting an ostree image is only supported on amd64 for now "
                 "(this one is '%s')" % distro["architecture"])
-        if not isinstance(bootloader, GrubBootloader):
-            raise NotImplementedError(
-                "booting an ostree image with systemd-boot is not supported yet")
         esp = next((m for m in mounts if m["_prefix"] == ESP_PREFIX), None)
-        if esp is None or not g.is_dir("/usr/lib/grub/x86_64-efi"):
+        efi = "/usr/lib/grub/x86_64-efi" if isinstance(bootloader, GrubBootloader) \
+            else "/usr/lib/systemd/boot/efi"
+        if esp is None or not g.is_dir(efi):
             raise RuntimeError(
-                "booting an ostree image needs an '%s' partition and "
-                "grub-efi-amd64 in the root file-system" % ESP_PREFIX.rstrip("/"))
+                "booting an ostree image needs an '%s' partition and the "
+                "boot loader's EFI files (%s) in the root file-system" % (
+                    ESP_PREFIX.rstrip("/"), efi))
         print("Installing boot loader and entries...")
         esp_path = self._guest_paths[id(esp)]
-        bootloader.install(g, esp_path, boot_directory=esp_path, removable=True)
         ordered = [boot_entries[-1]] + boot_entries[:-1]
-        g.write_append("%s/grub/grub.cfg" % esp_path,
-                       grub_menuentries(ordered).encode())
+        if isinstance(bootloader, GrubBootloader):
+            bootloader.install(g, esp_path, boot_directory=esp_path, removable=True)
+            g.write_append("%s/grub/grub.cfg" % esp_path,
+                           grub_menuentries(ordered).encode())
+        else:
+            bootloader.install(g, esp_path, boot_path=None)
+            self._write_systemd_boot(g, esp_path, ordered)
         self._sign_bootloader_files(g, bootloader, esp_path)
+
+    # The ESP gets the entries and the kernel files of every sysroot.
+    # The other sysroots are not mounted any more: mount them to read.
+    def _write_systemd_boot(self, g, esp_path, groups):
+        directories = {}
+        for group in groups[1:]:
+            base = "/other-%s" % group["label"]
+            g.mkdir_p(base)
+            g.mount_ro(group["device"], base)
+            group["base"] = base + group["boot"]
+        groups[0]["base"] = "%s/boot" % SYSROOT
+        for group in groups:
+            for directory in boot_directories(group):
+                directories[group["base"] + directory] = esp_path + directory
+        copy_boot_files(g, directories, esp_path)
+        for name, text in systemd_boot_entries(groups).items():
+            g.write("%s/loader/entries/%s" % (esp_path, name), text.encode())
+        g.write("%s/loader/loader.conf" % esp_path,
+                loader_conf(groups[0]["label"]).encode())

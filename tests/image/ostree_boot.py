@@ -45,7 +45,26 @@ playbook:
                 dest: /etc/issue
 """
 
-SINGLE = GROUP + """
+# The same with systemd-boot: the common amd64 fragment installs grub, so
+# what it adds is spelled out here, without it.
+GROUP_SYSTEMD_BOOT = """
+distribution:
+    architecture: amd64
+    architectures:
+        - amd64
+
+imager:
+    kernel: linux-image-amd64
+""" + GROUP.replace("    - {common}/amd64\n", "") + """    - name: systemd-boot and the kernel
+      priority: 800
+      tasks:
+          - name: install systemd-boot, kernel and firmware blobs
+            apt:
+                name: [systemd-boot, linux-image-amd64, firmware-linux-free]
+                state: present
+"""
+
+SINGLE_DISK = """
 image:
     filename: {disk}
     table: gpt
@@ -54,7 +73,7 @@ image:
     partitions:
         - label: esp
           type: vfat
-          size: 64MiB
+          size: 256MiB
           where: /efi
           flags: [boot]
         - label: sysroot
@@ -166,8 +185,14 @@ class OstreeImageBoots(avocado.Test):
         self.assertNotIn("emergency mode", text)
 
     def test_a_single_sysroot_boots(self):
+        self.single_sysroot_boots(GROUP)
+
+    def test_a_single_sysroot_boots_with_systemd_boot(self):
+        self.single_sysroot_boots(GROUP_SYSTEMD_BOOT)
+
+    def single_sysroot_boots(self, group):
         disk = os.path.join(self.workdir, "single.img")
-        spec = self.write("single.yaml", SINGLE.format(
+        spec = self.write("single.yaml", (group + SINGLE_DISK).format(
             common=COMMON, pc_image=os.path.join(EXAMPLES, "pc-image"),
             name="single-os", disk=disk))
         self.build(spec, "single")
@@ -176,10 +201,16 @@ class OstreeImageBoots(avocado.Test):
     # The boot owner is the first menu entry, so building with each in
     # turn boots each group's own sysroot.
     def test_each_group_of_a_two_sysroot_disk_boots(self):
+        self.each_group_boots(GROUP)
+
+    def test_each_group_of_a_two_sysroot_disk_boots_with_systemd_boot(self):
+        self.each_group_boots(GROUP_SYSTEMD_BOOT)
+
+    def each_group_boots(self, group):
         pc_image = os.path.join(EXAMPLES, "pc-image")
         groups = {}
         for name in ("main", "other"):
-            groups[name] = self.write("%s.yaml" % name, GROUP.format(
+            groups[name] = self.write("%s.yaml" % name, group.format(
                 common=COMMON, pc_image=pc_image, name="%s-os" % name))
         for owner in ("main", "other"):
             disk = os.path.join(self.workdir, "%s-first.img" % owner)

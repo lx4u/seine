@@ -21,6 +21,12 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
     timeout = 3600
     FILENAME = "reproducible-ostree.img"
     RELEASE = "trixie"
+    # The common amd64 fragment brings grub and the kernel; the
+    # systemd-boot variant below lists its own.
+    BOOT = ("requires:\n"
+            "    - %(common)s/amd64\n")
+    BOOT_PLAYBOOK = ""
+    ESP_SIZE = "64MiB"
 
     def setUp(self):
         super().setUp()
@@ -30,9 +36,8 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
     def specification(self):
         where = os.path.join(self.workdir, "reproducible-ostree.yml")
         with open(where, "w") as f:
-            f.write(
-                "requires:\n"
-                "    - %(common)s/amd64\n"
+            f.write((
+                self.BOOT +
                 "distribution:\n"
                 "    release: trixie\n"
                 "    architecture: amd64\n"
@@ -56,16 +61,17 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
                 "            apt:\n"
                 "                state: present\n"
                 "                name: [dracut, dracut-config-generic, ostree, ostree-boot,\n"
-                "                       systemd, systemd-sysv]\n"
+                "                       systemd, systemd-sysv]\n" +
+                self.BOOT_PLAYBOOK +
                 "image:\n"
-                "    filename: reproducible-ostree.img\n"
+                "    filename: %(filename)s\n"
                 "    table: gpt\n"
                 "    ostree:\n"
                 "        mode: standard\n"
                 "    partitions:\n"
                 "        - label: efi\n"
                 "          type: vfat\n"
-                "          size: 64MiB\n"
+                "          size: %(esp)s\n"
                 "          where: /efi\n"
                 "          flags: [boot]\n"
                 "        - label: sysroot\n"
@@ -75,5 +81,27 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
                 "          type: ext4\n"
                 "          size: 256MiB\n"
                 "          where: /var\n"
-                % {"ts": self.SNAPSHOT, "common": COMMON})
+                ) % {"ts": self.SNAPSHOT, "common": COMMON,
+                     "esp": self.ESP_SIZE, "filename": self.FILENAME})
         return [where]
+
+
+# The same with systemd-boot: the ESP also holds the kernel files.
+class OstreeSystemdBootDiskImageIsByteIdenticalAcrossTwoBuilds(
+        OstreeDiskImageIsByteIdenticalAcrossTwoBuilds):
+    """
+    :avocado: tags=full,container
+    """
+    FILENAME = "reproducible-ostree-sdboot.img"
+    BOOT = ("requires:\n"
+            "    - %(common)s/trixie\n"
+            "imager:\n"
+            "    kernel: linux-image-amd64\n")
+    BOOT_PLAYBOOK = ("    - name: systemd-boot and the kernel\n"
+                     "      priority: 800\n"
+                     "      tasks:\n"
+                     "          - name: install systemd-boot, kernel and firmware blobs\n"
+                     "            apt:\n"
+                     "                state: present\n"
+                     "                name: [systemd-boot, linux-image-amd64, firmware-linux-free]\n")
+    ESP_SIZE = "256MiB"

@@ -17,6 +17,8 @@ class FakeGuestfs:
         self.written = {}
         self.removed = []
         self.dirs = []
+        self.free = 0
+        self.sizes = {}
 
     def command(self, argv):
         self.commands.append(argv)
@@ -37,10 +39,21 @@ class FakeGuestfs:
     def ls(self, path):
         if path.endswith("loader/entries"):
             return ["ostree-2.conf", "ostree-1.conf", "other"]
+        if path.startswith("/boot/ostree"):
+            return ["vmlinuz", "initramfs.img"]
         return ["abc.0", "abc.0.origin"]
 
     def cat(self, path):
         return "title %s\nlinux /ostree/x/vmlinuz\ninitrd /ostree/x/initrd\noptions rw ostree=/y\n" % path
+
+    def statvfs(self, path):
+        return {"bsize": 4096, "bavail": self.free // 4096}
+
+    def stat(self, path):
+        return {"size": self.sizes[path]}
+
+    def cp(self, src, dst):
+        self.copied = getattr(self, "copied", []) + [(src, dst)]
 
     def set_e2attrs(self, path, attrs, clear=False):
         self.unlocked = getattr(self, "unlocked", []) + [(path, attrs, clear)]
@@ -132,6 +145,7 @@ class BootEntries(avocado.Test):
         self.assertEqual([e["title"] for e in entries], [
             "/sysroot/boot/loader/entries/ostree-1.conf",
             "/sysroot/boot/loader/entries/ostree-2.conf"])
+        self.assertEqual(entries[0]["_file"], "ostree-1.conf")
 
 class GrubMenu(avocado.Test):
     def group(self, label="debian", uuid="u1", boot="/boot"):
@@ -161,3 +175,44 @@ class GrubMenu(avocado.Test):
         group = self.group()
         group["entries"] = [dict(ENTRY, title="it's")]
         self.assertIn("menuentry 'its' {", ostree.grub_menuentries([group]))
+
+class SystemdBoot(avocado.Test):
+    def group(self, label="main"):
+        return {"label": label, "entries": [dict(ENTRY, _file="ostree-1.conf")]}
+
+    def test_one_group_keeps_its_titles_but_not_its_file_names(self):
+        files = ostree.systemd_boot_entries([self.group()])
+        self.assertEqual(list(files), ["main-ostree-1.conf"])
+        self.assertIn("title Debian (ostree:0)\n", files["main-ostree-1.conf"])
+        self.assertIn("linux /ostree/debian-1/vmlinuz-6.1\n", files["main-ostree-1.conf"])
+        self.assertNotIn("_file", files["main-ostree-1.conf"])
+
+    def test_several_groups_do_not_collide(self):
+        files = ostree.systemd_boot_entries([self.group("main"), self.group("other")])
+        self.assertEqual(sorted(files), ["main-ostree-1.conf", "other-ostree-1.conf"])
+        self.assertIn("title other: Debian", files["other-ostree-1.conf"])
+
+    def test_the_kernel_directories_come_once(self):
+        group = self.group()
+        group["entries"].append(dict(ENTRY, _file="ostree-2.conf"))
+        self.assertEqual(ostree.boot_directories(group), ["/ostree/debian-1"])
+
+    def test_the_owner_is_the_default_entry(self):
+        self.assertEqual(ostree.loader_conf("main"), "default main-*\ntimeout 5\n")
+
+    def test_kernel_files_are_copied_when_they_fit(self):
+        g = FakeGuestfs()
+        g.free = 100 * 4096
+        g.sizes = {"/boot/ostree/a/vmlinuz": 5000, "/boot/ostree/a/initramfs.img": 4096}
+        ostree.copy_boot_files(g, {"/boot/ostree/a": "/efi/ostree/a"}, "/efi")
+        self.assertEqual(g.copied, [
+            ("/boot/ostree/a/vmlinuz", "/efi/ostree/a/vmlinuz"),
+            ("/boot/ostree/a/initramfs.img", "/efi/ostree/a/initramfs.img")])
+
+    def test_nothing_is_copied_when_they_do_not_fit(self):
+        g = FakeGuestfs()
+        g.free = 2 * 4096
+        g.sizes = {"/boot/ostree/a/vmlinuz": 5000, "/boot/ostree/a/initramfs.img": 4096}
+        with self.assertRaisesRegex(RuntimeError, "need 1 MiB"):
+            ostree.copy_boot_files(g, {"/boot/ostree/a": "/efi/ostree/a"}, "/efi")
+        self.assertFalse(hasattr(g, "copied"))

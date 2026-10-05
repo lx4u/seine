@@ -90,7 +90,11 @@ class SystemdBootBootloader(Bootloader):
         return g.is_file("/usr/bin/bootctl")
 
     def install(self, g, esp_mount, **opts):
-        g.sh("bootctl install --esp-path=%s --boot-path=/boot" % esp_mount)
+        # An ostree image passes boot_path=None: the boot files sit on
+        # the ESP, and bootctl refuses a /boot that is no file system root.
+        boot_path = opts.get("boot_path", "/boot")
+        g.sh("bootctl install --esp-path=%s%s" % (
+            esp_mount, " --boot-path=%s" % boot_path if boot_path else ""))
         # A real random seed, freshly generated every build -- every
         # device flashed from this same image would share it. Drop it;
         # systemd-boot makes its own the first time it actually boots.
