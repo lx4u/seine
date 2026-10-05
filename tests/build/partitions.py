@@ -524,3 +524,161 @@ class SecureBootVaultKey(avocado.Test):
 
 if __name__ == "__main__":
     avocado.main()
+
+# 'image: ostree' -- see PartitionHandler._validate_ostree().
+def ostree_spec(mode="standard", release="trixie", partitions=None, **image):
+    spec = {
+        "distribution": {"release": release},
+        "image": dict({
+            "filename": "disk.img",
+            "table": "gpt",
+            "ostree": {"mode": mode},
+            "partitions": partitions or [
+                {"label": "esp", "type": "vfat", "where": "/efi", "size": "64MiB"},
+                {"label": "sysroot", "where": "/"},
+                {"label": "var", "where": "/var"},
+            ],
+        }, **image),
+    }
+    return spec
+
+class OstreeSpecification(avocado.Test):
+    def refuses(self, text, **kwargs):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(ostree_spec(**kwargs))
+        self.assertIn(text, str(cm.exception))
+
+    def test_standard_layout_is_accepted(self):
+        ph = PartitionHandler()
+        ph.parse(ostree_spec())
+        self.assertEqual(ph.ostree["mode"], "standard")
+
+    def test_disabled_is_the_default_and_checks_nothing(self):
+        ph = PartitionHandler()
+        spec = ostree_spec(release="bookworm", table="msdos")
+        del spec["image"]["ostree"]
+        ph.parse(spec)
+        self.assertEqual(ph.ostree["mode"], "disabled")
+
+    def test_unknown_mode_is_refused(self):
+        self.refuses("is not one of", mode="bootc")
+
+    def test_bookworm_is_refused(self):
+        self.refuses("needs dracut", release="bookworm")
+
+    def test_composefs_needs_forky(self):
+        self.refuses("composefs", mode="composefs")
+        PartitionHandler().parse(ostree_spec(mode="composefs", release="forky"))
+
+    def test_msdos_is_refused(self):
+        self.refuses("'gpt' partition table", table="msdos")
+
+    def test_missing_var_is_refused(self):
+        self.refuses("needs a '/var'", partitions=[
+            {"label": "sysroot", "where": "/"}])
+
+    def test_reserved_mount_points_are_refused_with_a_hint(self):
+        for where in ("/home", "/srv", "/root", "/mnt", "/opt", "/usr/local"):
+            self.refuses("'where: /var%s'" % where, partitions=[
+                {"label": "sysroot", "where": "/"},
+                {"label": "var", "where": "/var"},
+                {"label": "data", "where": where}])
+
+    def test_nested_data_mounts_are_accepted(self):
+        PartitionHandler().parse(ostree_spec(partitions=[
+            {"label": "sysroot", "where": "/"},
+            {"label": "var", "where": "/var"},
+            {"label": "home", "where": "/var/home"}]))
+
+    def test_verity_on_the_os_is_refused(self):
+        self.refuses("verity: true", partitions=[
+            {"label": "sysroot", "where": "/", "type": "erofs", "verity": True},
+            {"label": "hash", "type": "verity-hash", "verity-for": "sysroot",
+             "size": "64MiB"},
+            {"label": "var", "where": "/var"}])
+
+    def test_vfat_boot_is_refused(self):
+        self.refuses("vfat '/boot'", partitions=[
+            {"label": "sysroot", "where": "/"},
+            {"label": "var", "where": "/var"},
+            {"label": "boot", "where": "/boot", "type": "vfat"}])
+
+    def test_root_must_be_ext4(self):
+        self.refuses("plain 'ext4'", partitions=[
+            {"label": "sysroot", "where": "/", "type": "btrfs"},
+            {"label": "var", "where": "/var"}])
+
+    def test_bad_stateroot_is_refused(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["stateroot"] = "a/b"
+        with self.assertRaises(ValueError):
+            PartitionHandler().parse(spec)
+
+    def test_every_rooted_group_needs_its_own_var(self):
+        spec = ostree_spec(partitions=[
+            {"label": "a-root", "where": "/", "source": "a"},
+            {"label": "a-var", "where": "/var", "source": "a"},
+            {"label": "b-root", "where": "/", "source": "b"}])
+        spec["multiconfig"] = {"a": ["a.yaml"], "b": ["b.yaml"]}
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("group 'b'", str(cm.exception))
+
+    def test_explicit_stateroot_cannot_serve_two_groups(self):
+        spec = ostree_spec(partitions=[
+            {"label": "a-root", "where": "/", "source": "a"},
+            {"label": "a-var", "where": "/var", "source": "a"},
+            {"label": "b-root", "where": "/", "source": "b"},
+            {"label": "b-var", "where": "/var", "source": "b"}])
+        spec["multiconfig"] = {"a": ["a.yaml"], "b": ["b.yaml"]}
+        spec["image"]["ostree"]["stateroot"] = "debian"
+        with self.assertRaises(ValueError):
+            PartitionHandler().parse(spec)
+
+def two_groups(**sources):
+    spec = ostree_spec(partitions=[
+        {"label": "a-root", "where": "/", "source": "a"},
+        {"label": "a-var", "where": "/var", "source": "a"},
+        {"label": "b-root", "where": "/", "source": "b", "type": "btrfs"}])
+    spec["multiconfig"] = {"a": ["a.yaml"], "b": ["b.yaml"]}
+    spec["image"]["ostree"]["sources"] = sources
+    return spec
+
+class OstreePerGroupSettings(avocado.Test):
+    def test_a_group_can_opt_out_and_keep_a_plain_layout(self):
+        ph = PartitionHandler()
+        ph.parse(two_groups(b={"mode": "disabled"}))
+        self.assertEqual(ph.ostree_for("a")["mode"], "standard")
+        self.assertEqual(ph.ostree_for("b")["mode"], "disabled")
+
+    def test_a_group_without_an_opt_out_is_still_checked(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(two_groups())
+        self.assertIn("group 'b'", str(cm.exception))
+
+    def test_stateroot_defaults_to_the_group_name_and_can_be_overridden(self):
+        ph = PartitionHandler()
+        ph.parse(two_groups(a={"stateroot": "main", "ref": "main/stable"},
+                            b={"mode": "disabled"}))
+        self.assertEqual(ph.ostree_for("a")["stateroot"], "main")
+        self.assertEqual(ph.ostree_for("a")["ref"], "main/stable")
+        self.assertEqual(ph.ostree_for("b")["stateroot"], "b")
+
+    def test_two_groups_cannot_share_a_stateroot(self):
+        spec = two_groups(a={"stateroot": "os"}, b={"stateroot": "os"})
+        spec["image"]["partitions"][2]["type"] = "ext4"
+        spec["image"]["partitions"].append(
+            {"label": "b-var", "where": "/var", "source": "b"})
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("share the ostree stateroot", str(cm.exception))
+
+    def test_an_unknown_group_is_refused(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(two_groups(c={"mode": "disabled"}))
+        self.assertIn("not one of the declared", str(cm.exception))
+
+    def test_only_disabled_groups_leave_the_release_unchecked(self):
+        spec = two_groups(a={"mode": "disabled"}, b={"mode": "disabled"})
+        spec["distribution"]["release"] = "bookworm"
+        PartitionHandler().parse(spec)

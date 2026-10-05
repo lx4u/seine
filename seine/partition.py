@@ -7,11 +7,27 @@ import os
 import re
 import tarfile
 
+from seine import utils
+
 RO_FSTYPES = {"squashfs", "erofs"}
 
 # Raw dm-verity hash tree, never mounted or mkfs'd. Only valid paired with
 # a '/' or '/usr' mount (the only types DPS gives an auto-discovered GUID).
 VERITY_HASH_TYPE = "verity-hash"
+
+OSTREE_MODES = ("disabled", "standard", "composefs")
+
+# These live in the commit as symlinks into /var (or, for composefs,
+# as plain directories), so a mount there would hide or break them.
+OSTREE_RESERVED = ("/home", "/srv", "/root", "/mnt", "/opt", "/usr/local")
+
+# Releases without the dracut ostree path, and releases with an ostree
+# built with composefs (trixie's is not).
+OSTREE_OLD_RELEASES = ("bullseye", "bookworm", "oldstable")
+OSTREE_COMPOSEFS_RELEASES = ("forky", "testing", "sid", "unstable")
+
+# Stateroots and refs end up in file names and ostree ref names.
+OSTREE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 class PartitionHandler:
 
@@ -26,6 +42,7 @@ class PartitionHandler:
         self.groups = []
         self.mounts = []
         self.partitions = []
+        self.ostree = {"mode": "disabled"}
         self.secure_boot = None
         self.volumes = []
         self.size = None
@@ -448,7 +465,139 @@ class PartitionHandler:
         self.mounts = sorted(self.mounts, key=lambda vol: vol["_depth"], reverse=True)
         self._validate_sources(spec)
         self._validate_verity(spec)
+        if "ostree" in image:
+            self.ostree = self._parse_ostree(image["ostree"])
+        self._validate_ostree(spec)
         return spec
+
+    def _parse_ostree_settings(self, where, settings):
+        if type(settings) != type({}):
+            raise ValueError("'%s' shall be a mapping" % where)
+        allowed = ("mode", "stateroot", "ref")
+        if where == "image: ostree":
+            allowed += ("sources",)
+        for key in settings:
+            if key not in allowed:
+                raise ValueError("'%s' has no '%s' attribute" % (where, key))
+        mode = settings.get("mode")
+        if mode is not None and mode not in OSTREE_MODES:
+            raise ValueError(
+                "'%s: mode: %s' is not one of: %s"
+                % (where, mode, ", ".join(OSTREE_MODES)))
+        for key in ("stateroot", "ref"):
+            if key not in settings:
+                continue
+            value = settings[key]
+            ok = type(value) == type("") and all(
+                OSTREE_NAME.match(part) for part in value.split("/"))
+            if not ok or (key == "stateroot" and "/" in value):
+                raise ValueError(
+                    "'%s: %s: %s' is not a valid name" % (where, key, value))
+        return dict(settings)
+
+    def _parse_ostree(self, ostree):
+        parsed = self._parse_ostree_settings("image: ostree", ostree)
+        parsed.setdefault("mode", "disabled")
+        sources = parsed.get("sources", {})
+        if type(sources) != type({}):
+            raise ValueError("'image: ostree: sources' shall be a mapping")
+        parsed["sources"] = {
+            name: self._parse_ostree_settings(
+                "image: ostree: sources: %s" % name, settings)
+            for name, settings in sources.items()}
+        return parsed
+
+    # What applies to one 'source:' (None is the image's own root):
+    # the block's own settings, overridden by its 'sources:' entry.
+    def ostree_for(self, source):
+        settings = {k: v for k, v in self.ostree.items() if k != "sources"}
+        settings.update(self.ostree.get("sources", {}).get(source, {}))
+        if "stateroot" not in settings:
+            settings["stateroot"] = source or "debian"
+        return settings
+
+    # Mounts of each rooted 'source:' (None is the image's own root).
+    def _rooted_sources(self):
+        sources = {}
+        for mount in self.mounts:
+            sources.setdefault(mount.get("source"), []).append(mount)
+        return {name: mounts for name, mounts in sources.items()
+                if any(m["_prefix"] == "/" for m in mounts)}
+
+    # With ostree on, each rooted source gets a physical sysroot ('/')
+    # and a persistent '/var'; the commit itself holds no partition.
+    def _validate_ostree(self, spec):
+        groups = spec.get("multiconfig") or {}
+        for name in self.ostree.get("sources", {}):
+            if name not in groups:
+                raise ValueError(
+                    "'image: ostree: sources' names '%s', which is not one "
+                    "of the declared 'multiconfig:' groups (%s)"
+                    % (name, ", ".join(sorted(groups)) if groups else "none"))
+        rooted = self._rooted_sources()
+        enabled = {name: self.ostree_for(name)
+                   for name in rooted
+                   if self.ostree_for(name)["mode"] != "disabled"}
+        if not enabled:
+            return
+
+        modes = {settings["mode"] for settings in enabled.values()}
+        release = utils.distribution(spec)["release"]
+        if release in OSTREE_OLD_RELEASES:
+            raise ValueError(
+                "'image: ostree' needs dracut, which seine only supports "
+                "on trixie or newer (this build is '%s')" % release)
+        if "composefs" in modes and release not in OSTREE_COMPOSEFS_RELEASES:
+            raise ValueError(
+                "'image: ostree: mode: composefs' needs an ostree built "
+                "with composefs, which '%s' does not ship (forky or newer "
+                "does)" % release)
+        if self._table != "gpt":
+            raise ValueError(
+                "'image: ostree' needs a 'gpt' partition table (this "
+                "image's table is '%s')" % self._table)
+
+        stateroots = {}
+        for name, settings in enabled.items():
+            who = "'multiconfig:' group '%s'" % name if name else "the image"
+            other = stateroots.setdefault(settings["stateroot"], who)
+            if other != who:
+                raise ValueError(
+                    "%s and %s share the ostree stateroot '%s' -- give "
+                    "each its own in 'image: ostree: sources'"
+                    % (other, who, settings["stateroot"]))
+            if not OSTREE_NAME.match(settings["stateroot"]):
+                raise ValueError(
+                    "%s cannot name an ostree stateroot -- set 'stateroot' "
+                    "in 'image: ostree: sources'" % who)
+            mounts = rooted[name]
+            for part in mounts:
+                if part.get("verity") and part["_prefix"] in ("/", "/usr/"):
+                    raise ValueError(
+                        "partition '%s' has 'verity: true' on '%s', which "
+                        "'image: ostree' does not support (the sysroot "
+                        "stays writable)"
+                        % (part["label"], part["_prefix"].rstrip("/") or "/"))
+                where = part["_prefix"].rstrip("/")
+                if where in OSTREE_RESERVED:
+                    raise ValueError(
+                        "'%s' mounts '%s', which 'image: ostree' keeps in "
+                        "the commit -- mount the data under '/var' instead "
+                        "(e.g. 'where: /var%s')" % (part["label"], where, where))
+                if where == "/boot" and part["type"] in ("vfat", "msdos"):
+                    raise ValueError(
+                        "'%s' mounts a vfat '/boot', where ostree cannot "
+                        "deploy -- use ext4 (the ESP carries the boot "
+                        "loader)" % part["label"])
+            root = next(m for m in mounts if m["_prefix"] == "/")
+            if root["type"] != "ext4" or root["_lvm"]:
+                raise ValueError(
+                    "'%s' is %s's ostree sysroot, which needs a plain "
+                    "'ext4' partition" % (root["label"], who))
+            if not any(m["_prefix"] == "/var/" for m in mounts):
+                raise ValueError(
+                    "'image: ostree' needs a '/var' partition or volume "
+                    "for %s" % who)
 
     # Each 'multiconfig:' group a mount's 'source:' names needs exactly
     # one root ('where: "/"') -- groups are side-by-side OSes, not

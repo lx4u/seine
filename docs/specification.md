@@ -1663,6 +1663,7 @@ created in the disk image. The following top-level attributes are supported:
 
  * `filename`
  * `bootlets`
+ * `ostree`
  * `partitions`
  * `secure-boot`
  * `size`
@@ -1673,6 +1674,50 @@ An `image` shall have at least one partition defined and an output `filename`
 specified. The `size` of the disk `image` may be omitted and it will then be
 estimated (as the sum of the various partition sizes plus some overhead). The
 partition `table` may either be `gpt` or `msdos`.
+
+### ostree
+
+Optionally turns the root file system into an OSTree sysroot instead of
+unpacking it onto `/`. Omit it, or set `mode: disabled`, for the usual
+layout.
+
+| Attribute | Required | Description                                          |
+| --------- |:--------:| ----------------------------------------------------- |
+| mode      | no       | `disabled` (default), `standard` or `composefs`      |
+| stateroot | no       | OSTree stateroot, defaults to the `multiconfig:` group name, else `debian` |
+| ref       | no       | Commit ref, defaults to `<stateroot>/<arch>`         |
+| sources   | no       | Per `multiconfig:` group overrides of the three above |
+
+When `mode` is not `disabled`, the build is refused unless:
+
+ * the release is trixie or newer (`composefs` needs forky or newer),
+   since the initramfs is generated with dracut;
+ * the partition `table` is `gpt`;
+ * each rooted source has an `ext4` `/` partition (the physical sysroot)
+   and a `/var` partition, as OSTree keeps state there;
+ * nothing is mounted at `/home`, `/srv`, `/root`, `/mnt`, `/opt` or
+   `/usr/local`, as the commit owns them. Mount data under `/var`
+   instead, e.g. `where: /var/home`;
+ * `/` and `/usr` do not use `verity: true`, the sysroot stays writable;
+ * `/boot`, if mounted, is not `vfat`.
+
+With `multiconfig:`, the settings above apply to every group that has a
+root. A `sources:` entry, named after a group, overrides them for that
+group, and `mode: disabled` keeps the group on a plain layout:
+
+```yaml
+image:
+  ostree:
+    mode: standard
+    sources:
+      recovery: { mode: disabled }
+      main:     { stateroot: main, ref: main/stable }
+```
+
+Two groups cannot share a `stateroot`, so name each one apart when
+setting it. The checks above apply to the groups that have ostree on.
+The whole `ostree` block is replaced, not merged, when a later file
+sets it again.
 
 ### secure-boot
 

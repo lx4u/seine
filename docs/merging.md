@@ -106,7 +106,7 @@ between two real files on disk.
 | `vendor-exclude` | exact source package name | additive, deduplicated | order doesn't matter, only presence |
 | `playbook` | `name` | first-loaded wins within `requires:`, peer amends by field; `tasks:` is one additive, order-preserving list either way | tasks never merge task-by-task -- see below |
 | `test` | `name` | first-loaded wins within `requires:`, peer amends by field; `library`/`tags`/`variables` additive either way; `tests:` cases merged the same way one level down, by their own `name` | `keywords:` and a case's own `steps:` are equality-or-error regardless of peer vs. `requires:`, not first-wins -- see below |
-| `image` (scalars) | scalar setting | last-loaded wins | |
+| `image` (scalars) | scalar setting | last-loaded wins | `ostree` (with its `sources:`) is one setting, replaced whole |
 | `image.partitions` / `image.volumes` | `label` | first-loaded wins within `requires:`, peer amends by field; `flags` additive either way (`~flag` removes one a fragment already set) | |
 
 ## Respecting the language a section embeds
