@@ -526,7 +526,8 @@ class TheHypervisorFollowsTheArchitecture(avocado.Test):
 class DiscoverablePartitionsAreIdentifiedByRole(avocado.Test):
     def setUp(self):
         try:
-            from seine.imager.imager import Imager, GPT_TYPE_ROOT, GPT_TYPE_USR, GPT_TYPE_VAR
+            from seine.imager.imager import Imager
+            from seine.imager.gpt import GPT_TYPE_ROOT, GPT_TYPE_USR, GPT_TYPE_VAR
         except ImportError as e:
             self.cancel("python3-guestfs is missing: %s" % e)
         self.imager = Imager.__new__(Imager)
@@ -550,19 +551,19 @@ class DiscoverablePartitionsAreIdentifiedByRole(avocado.Test):
                 self.imager._dps_gpt_type({"_prefix": "/var/"}, architecture, {}), self.var)
 
     def test_home_is_universal(self):
-        from seine.imager.imager import GPT_TYPE_HOME
+        from seine.imager.gpt import GPT_TYPE_HOME
         for architecture in self.root:
             self.assertEqual(
                 self.imager._dps_gpt_type({"_prefix": "/home/"}, architecture, {}), GPT_TYPE_HOME)
 
     def test_srv_is_universal(self):
-        from seine.imager.imager import GPT_TYPE_SRV
+        from seine.imager.gpt import GPT_TYPE_SRV
         for architecture in self.root:
             self.assertEqual(
                 self.imager._dps_gpt_type({"_prefix": "/srv/"}, architecture, {}), GPT_TYPE_SRV)
 
     def test_var_tmp_is_universal_and_distinct_from_var(self):
-        from seine.imager.imager import GPT_TYPE_VAR_TMP
+        from seine.imager.gpt import GPT_TYPE_VAR_TMP
         for architecture in self.root:
             self.assertEqual(
                 self.imager._dps_gpt_type({"_prefix": "/var/tmp/"}, architecture, {}), GPT_TYPE_VAR_TMP)
@@ -577,7 +578,7 @@ class DiscoverablePartitionsAreIdentifiedByRole(avocado.Test):
             self.imager._dps_gpt_type({"_prefix": "/"}, "riscv64", {}))
 
     def test_verity_hash_partition_takes_its_role_from_its_pair(self):
-        from seine.imager.imager import GPT_TYPE_ROOT_VERITY, GPT_TYPE_USR_VERITY
+        from seine.imager.gpt import GPT_TYPE_ROOT_VERITY, GPT_TYPE_USR_VERITY
         by_label = {
             "usr": {"_prefix": "/usr/"},
             "root": {"_prefix": "/"},
