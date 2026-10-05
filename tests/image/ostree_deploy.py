@@ -34,6 +34,12 @@ class FakeGuestfs:
     def rm_rf(self, path):
         self.removed.append(path)
 
+    def ls(self, path):
+        return ["abc.0", "abc.0.origin"]
+
+    def set_e2attrs(self, path, attrs, clear=False):
+        self.unlocked = getattr(self, "unlocked", []) + [(path, attrs, clear)]
+
 class MountPaths(avocado.Test):
     def test_var_belongs_to_the_stateroot(self):
         self.assertEqual(ostree.target_path("/var/", "debian"),
@@ -89,3 +95,10 @@ class Commands(avocado.Test):
         self.assertEqual(g.commands, [
             ["/usr/bin/ostree", "admin", "deploy", "--sysroot=/sysroot",
              "--os=main", "main/amd64"]])
+
+class Unlock(avocado.Test):
+    def test_deployment_roots_lose_the_immutable_flag(self):
+        g = FakeGuestfs()
+        ostree.unlock_deployments(g, "main")
+        self.assertEqual(g.unlocked, [
+            ("/sysroot/ostree/deploy/main/deploy/abc.0", "i", True)])

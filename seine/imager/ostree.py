@@ -177,3 +177,12 @@ def commit(g, ref, epoch):
 def deploy(g, stateroot, ref):
     _ostree(g, "admin", "deploy", "--sysroot=%s" % SYSROOT,
             "--os=%s" % stateroot, ref)
+
+# 'deploy' makes each deployment root immutable, and the timestamp pass
+# that follows (touch) cannot change an immutable directory. The mke2fs
+# rebuild would drop the flag anyway; ostree sets it on the next deploy.
+def unlock_deployments(g, stateroot):
+    base = "%s/ostree/deploy/%s/deploy" % (SYSROOT, stateroot)
+    for name in g.ls(base):
+        if not name.endswith(".origin"):
+            g.set_e2attrs("%s/%s" % (base, name), "i", clear=True)

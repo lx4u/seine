@@ -36,6 +36,10 @@ DEVICE = "/dev/sda"
 SCRATCH_DEVICE = "/dev/sdb"
 SCRATCH_MOUNT = "/.ext-scratch-disk"
 
+# An ostree build unpacks its rootfs here and runs from it (see
+# _deploy_ostree()), so the scratch disk stays free for the rebuilds.
+STAGE_DEVICE = "/dev/sdc"
+
 # squashfs/erofs are not g.mkfs() targets, so RO_FSTYPES mounts are
 # staged as this and replaced later (see create()'s finalize pass).
 STAGING_TYPE = "ext4"
@@ -150,6 +154,8 @@ after_launch = lambda: None
 class Imager:
     def __init__(self, source):
         self.source = source
+        # Mount -> where an ostree build mounted it, see _where().
+        self._guest_paths = {}
         self.keep = source.options["keep"]
         self.verbose = source.options["verbose"]
         self.reproducible = source.options["reproducible"]
@@ -280,6 +286,18 @@ class Imager:
             fstab.append("%s %s %s %s 0 %d" % (what, m["_prefix"], m["type"], options, passno))
         g.write("/etc/fstab", ("\n".join(fstab) + "\n").encode())
 
+    # Where the guest has this mount: its own prefix, unless an ostree
+    # build mounted it under /sysroot.
+    def _where(self, m):
+        return self._guest_paths.get(id(m), m["_prefix"])
+
+    # g.write() cannot carry more than the protocol's message size.
+    def _upload_bytes(self, g, data, path):
+        with tempfile.NamedTemporaryFile(dir=self._output_dir) as f:
+            f.write(data)
+            f.flush()
+            g.upload(f.name, path)
+
     # Files the imager writes directly (fstab, grub.cfg, EFI binaries)
     # get a real 'now' timestamp. Reset any such file back to a fixed
     # time, so two builds of the same spec match.
@@ -306,11 +324,11 @@ class Imager:
             if m["type"] in RO_FSTYPES:
                 continue
             if self.verbose:
-                print("  normalizing timestamps under '%s'..." % m["_prefix"])
+                print("  normalizing timestamps under '%s'..." % self._where(m))
             # '-xdev': skip /proc and /sys, mounted here too but not
             # part of the disk image.
             g.sh("find %s -xdev -newermt '@%d' -exec touch --no-dereference "
-                 "--date=@%d {} +" % (m["_prefix"], started, epoch))
+                 "--date=@%d {} +" % (self._where(m), started, epoch))
             if self.reproducible and m["type"] in ("vfat", "msdos"):
                 self._normalize_fat_tree(g, m, mount_devices[id(m)], staging=staging)
         if scratch_mounted and not ext_mounts:
@@ -321,16 +339,16 @@ class Imager:
 
     def _normalize_ext_mount(self, g, m, mounts, mount_devices):
         dev = mount_devices[id(m)]
-        prefix = m["_prefix"]
+        prefix = self._where(m)
         epoch = self.source._epoch()
         print("Rebuilding %s file-system for '%s'..." % (m["type"], m.get("label") or dev))
         # A parent (usually root) must let go of any mounted child
         # before capturing its own content, or the capture would
         # wrongly include that child's own, separately-rebuilt files.
         children = [c for c in mounts if c is not m
-                   and c["_prefix"] != prefix and c["_prefix"].startswith(prefix)]
+                   and self._where(c) != prefix and self._where(c).startswith(prefix)]
         for c in children:
-            g.umount(c["_prefix"])
+            g.umount(self._where(c))
 
         # Capture onto the scratch disk, not the partition: both copies
         # need room at once. It also keeps 'prefix' mounted for g.sh()'s
@@ -351,37 +369,22 @@ class Imager:
                           if e != scratch_prefix and not e.startswith(scratch_prefix + "/"))
         # Remount now that g.find() is done: g.sh() below needs '/bin/sh',
         # which lives under '/usr' on a usrmerged target.
+        # An ext child was rebuilt already: mounted read-only, so the
+        # kernel cannot stamp its root with a real access time.
         for c in children:
-            g.mount(mount_devices[id(c)], c["_prefix"])
+            if c["type"] in EXT_FSTYPES:
+                g.mount_ro(mount_devices[id(c)], self._where(c))
+            else:
+                g.mount(mount_devices[id(c)], self._where(c))
         if self.verbose:
             print("  copying %d entries..." % len(entries))
         # One RPC per entry used to mean tens of thousands of round-trips
         # for a real rootfs. Batch it into one script, one g.sh() call.
         tools_dir = self._upload_tools(g, "%s/tools" % SCRATCH_MOUNT, self._extra_tools_files)
-        # A fork per entry (~20k execs) is slow under an emulated CPU.
-        # Classify with shell builtins (free), then batch each list
-        # through one xargs call -- same order, same destination paths.
-        dirlist = "%s/dirs-%s.list" % (SCRATCH_MOUNT, tag)
-        filelist = "%s/files-%s.list" % (SCRATCH_MOUNT, tag)
-        lines = ["set -e", "cd %s" % shlex.quote(root or "/"),
-                 ": > %s" % shlex.quote(dirlist), ": > %s" % shlex.quote(filelist)]
-        for e in entries:
-            src = shlex.quote("%s%s" % (root, e))
-            dst = shlex.quote("%s%s" % (content, e))
-            rel = shlex.quote(e.lstrip("/"))
-            lines.append("if [ -d %s ] && [ ! -L %s ]; then printf '%%s\\0' %s >> %s; "
-                          "else printf '%%s\\0' %s >> %s; fi"
-                          % (src, src, dst, shlex.quote(dirlist), rel, shlex.quote(filelist)))
-        lines.append("if [ -s %s ]; then xargs -0 %s/mkdir -p -- < %s; fi"
-                      % (shlex.quote(dirlist), tools_dir, shlex.quote(dirlist)))
-        lines.append("if [ -s %s ]; then xargs -0 %s/cp -a --parents -t %s -- < %s; fi"
-                      % (shlex.quote(filelist), tools_dir, shlex.quote(content), shlex.quote(filelist)))
-        lines.append("rm -f %s %s" % (shlex.quote(dirlist), shlex.quote(filelist)))
-        # Directory mtimes only now, after every copy: creating a file
-        # bumps its parent directory's own mtime, and 'mkdir' (unlike
-        # 'cp -a' for files) never preserved it anyway.
-        lines.append("%s/find %s -mindepth 1 -type d -exec %s/touch -d @%d {} +"
-                      % (tools_dir, shlex.quote(content), tools_dir, epoch))
+        if id(m) in self._guest_paths:
+            lines = self._tar_copy_script(g, root, content, entries, tag, tools_dir, epoch)
+        else:
+            lines = self._cp_copy_script(root, content, entries, tag, tools_dir, epoch)
         script_path = "%s/copy-%s.sh" % (SCRATCH_MOUNT, tag)
         g.write(script_path, ("\n".join(lines) + "\n").encode())
         g.sh("LD_LIBRARY_PATH=%s sh %s" % (tools_dir, script_path))
@@ -422,7 +425,7 @@ class Imager:
                   for field in ("ctime", "atime", "mtime")]
         script = "\n".join(lines)
         script_path = "%s/ctimefix-%s" % (SCRATCH_MOUNT, tag)
-        g.write(script_path, script.encode())
+        self._upload_bytes(g, script.encode(), script_path)
         if self.verbose:
             print("  fixing up inode timestamps...")
         # debugfs echoes every command it runs -- for root's ~15000
@@ -449,7 +452,7 @@ class Imager:
         # Re-unmount 'children' (remounted above for g.sh()'s sake) --
         # 'prefix' can't unmount while they're still mounted under it.
         for c in children:
-            g.umount(c["_prefix"])
+            g.umount(self._where(c))
         g.umount(prefix)
         if self.verbose:
             print("  writing image back (%s)..." % self.source.partitionHandler._to_human_size(size))
@@ -475,9 +478,54 @@ class Imager:
         # since later steps still write to it.
         for c in sorted(children, key=lambda c: c["_depth"]):
             if c["type"] in EXT_FSTYPES:
-                g.mount_ro(mount_devices[id(c)], c["_prefix"])
+                g.mount_ro(mount_devices[id(c)], self._where(c))
             else:
-                g.mount(mount_devices[id(c)], c["_prefix"])
+                g.mount(mount_devices[id(c)], self._where(c))
+
+    def _cp_copy_script(self, root, content, entries, tag, tools_dir, epoch):
+        # A fork per entry (~20k execs) is slow under an emulated CPU.
+        # Classify with shell builtins (free), then batch each list
+        # through one xargs call -- same order, same destination paths.
+        dirlist = "%s/dirs-%s.list" % (SCRATCH_MOUNT, tag)
+        filelist = "%s/files-%s.list" % (SCRATCH_MOUNT, tag)
+        lines = ["set -e", "cd %s" % shlex.quote(root or "/"),
+                 ": > %s" % shlex.quote(dirlist), ": > %s" % shlex.quote(filelist)]
+        for e in entries:
+            src = shlex.quote("%s%s" % (root, e))
+            dst = shlex.quote("%s%s" % (content, e))
+            rel = shlex.quote(e.lstrip("/"))
+            lines.append("if [ -d %s ] && [ ! -L %s ]; then printf '%%s\\0' %s >> %s; "
+                          "else printf '%%s\\0' %s >> %s; fi"
+                          % (src, src, dst, shlex.quote(dirlist), rel, shlex.quote(filelist)))
+        lines.append("if [ -s %s ]; then xargs -0 %s/mkdir -p -- < %s; fi"
+                      % (shlex.quote(dirlist), tools_dir, shlex.quote(dirlist)))
+        lines.append("if [ -s %s ]; then xargs -0 %s/cp -a --parents -t %s -- < %s; fi"
+                      % (shlex.quote(filelist), tools_dir, shlex.quote(content), shlex.quote(filelist)))
+        lines.append("rm -f %s %s" % (shlex.quote(dirlist), shlex.quote(filelist)))
+        # Directory mtimes only now, after every copy: creating a file
+        # bumps its parent directory's own mtime, and 'mkdir' (unlike
+        # 'cp -a' for files) never preserved it anyway.
+        lines.append("%s/find %s -mindepth 1 -type d -exec %s/touch -d @%d {} +"
+                      % (tools_dir, shlex.quote(content), tools_dir, epoch))
+        return lines
+
+    # One tar stream, in the sorted order, keeps hardlinks (the ostree
+    # repo and its deployments share files): xargs would split the list
+    # over several cp calls, and a link only survives within one call.
+    def _tar_copy_script(self, g, root, content, entries, tag, tools_dir, epoch):
+        listing = "%s/list-%s" % (SCRATCH_MOUNT, tag)
+        archive = "%s/copy-%s.tar" % (SCRATCH_MOUNT, tag)
+        self._upload_bytes(g, b"".join(e.lstrip("/").encode() + b"\0" for e in entries), listing)
+        return [
+            "set -e", "cd %s" % shlex.quote(root or "/"),
+            "tar --no-recursion --xattrs --numeric-owner --null -T %s -cf %s"
+            % (shlex.quote(listing), shlex.quote(archive)),
+            "tar -C %s --xattrs --numeric-owner -xpf %s"
+            % (shlex.quote(content), shlex.quote(archive)),
+            "rm -f %s %s" % (shlex.quote(listing), shlex.quote(archive)),
+            "%s/find %s -mindepth 1 -type d -exec %s/touch -d @%d {} +"
+            % (tools_dir, shlex.quote(content), tools_dir, epoch),
+        ]
 
     # ext4's on-disk checksum is plain crc32c with no final '~crc' --
     # a textbook CRC-32C applies that step, this must not.
@@ -519,14 +567,15 @@ class Imager:
     def _normalize_fat_tree(self, g, m, dev, staging=""):
         scratch = "%s/.fat-scratch" % staging
         g.mkdir_p(scratch)
-        g.cp_a(m["_prefix"], scratch)
-        base = "%s/%s" % (scratch, os.path.basename(m["_prefix"].rstrip("/")))
+        where = self._where(m)
+        g.cp_a(where, scratch)
+        base = "%s/%s" % (scratch, os.path.basename(where.rstrip("/")))
         # Sorted, and read while still mounted: 'mcopy -s' would instead
         # walk the scratch copy's own random per-build hash-seed order,
         # allocating FAT clusters differently for identical content.
-        entries = sorted(g.find(m["_prefix"]))
-        dirs = {e for e in entries if g.is_dir("%s/%s" % (m["_prefix"], e))}
-        g.umount(m["_prefix"])
+        entries = sorted(g.find(where))
+        dirs = {e for e in entries if g.is_dir("%s/%s" % (where, e))}
+        g.umount(where)
 
         # mformat only rewrites the boot sector, FAT and root directory
         # -- old data (real timestamps included) survives a reformat
@@ -558,7 +607,7 @@ class Imager:
 
         g.rm_rf(scratch)
         g.rm_rf(tools_dir)
-        g.mount(dev, m["_prefix"])
+        g.mount(dev, where)
 
     # Uploads 'host_files' into a scratch dir, ready to run via
     # 'LD_LIBRARY_PATH=<dir> <dir>/<name>'.
@@ -1156,6 +1205,16 @@ class Imager:
                     f.truncate(scratch_size)
                 g.add_drive_opts(scratch_disk, format="raw", readonly=False)
 
+            # Staged rootfs of an ostree build, sized like the sysroot
+            # partition that will hold it (sparse, so cheap).
+            stage_sizes = [m["_size"] for m in ph.mounts if m["_prefix"] == "/"
+                           and ph.ostree_for(m.get("source"))["mode"] != "disabled"]
+            if stage_sizes:
+                stage_disk = os.path.join(output_dir, "ostree-stage.raw")
+                with open(stage_disk, "wb") as f:
+                    f.truncate(max(stage_sizes) + 128 * 1024 * 1024)
+                g.add_drive_opts(stage_disk, format="raw", readonly=False)
+
             archive_to_guest_path = {}
             if all_container_archives:
                 containers_stage_dir = os.path.join(output_dir, "containers")
@@ -1209,9 +1268,13 @@ class Imager:
                     ]
                     if ph.ostree_for(source)["mode"] != "disabled" \
                             and any(m["_prefix"] == "/" for m in mounts):
-                        self._deploy_ostree(
+                        mount_devices = self._deploy_ostree(
                             g, ph, source, mounts, part_devices, vol_devices,
                             container_devs)
+                        g.umount_all()
+                        self._guest_paths = {}
+                        if self.reproducible:
+                            self._pin_ext_mtimes(g, mounts, mount_devices)
                         continue
                     mount_devices = self._populate_source(
                         g, ph, source, mounts, part_devices, vol_devices, part_index,
@@ -1316,9 +1379,10 @@ class Imager:
         self._label_selinux(g, mounts)
         return mount_devices
 
-    # Unpacks the rootfs onto the scratch disk, which becomes the
-    # chroot the target's own ostree runs from, then commits and deploys
-    # it into the real sysroot mounted under '/sysroot'.
+    # Unpacks the rootfs onto the stage disk, which becomes the chroot
+    # the target's own ostree runs from, then commits and deploys it
+    # into the real sysroot mounted under '/sysroot'. Leaves everything
+    # mounted, timestamps normalized, and returns the mount devices.
     def _deploy_ostree(self, g, ph, source, mounts, part_devices, vol_devices,
                        container_devices):
         if container_devices:
@@ -1330,32 +1394,34 @@ class Imager:
             self.source.subbuilds[source].spec["distribution"]
         ref = settings.get("ref") or "%s/%s" % (stateroot, distro["architecture"])
         print("Staging root file-system for ostree '%s'..." % ref)
-        g.mkfs("ext4", SCRATCH_DEVICE, features="^dir_index")
-        g.mount(SCRATCH_DEVICE, "/")
+        g.mkfs("ext4", STAGE_DEVICE, features="^dir_index")
+        g.mount(STAGE_DEVICE, "/")
         g.tar_in_opts(self.source._tarball_for(source), "/", xattrs=True)
         ostree.sanitize(g, "/")
 
-        def device(m):
-            return part_devices.get(id(m)) or vol_devices.get(id(m))
+        mount_devices = {id(m): part_devices.get(id(m)) or vol_devices.get(id(m))
+                         for m in mounts}
+        self._guest_paths = {id(m): ostree.target_path(m["_prefix"], stateroot)
+                             for m in mounts}
         root = next(m for m in mounts if m["_prefix"] == "/")
-        g.mount(device(root), ostree.SYSROOT)
+        g.mount(mount_devices[id(root)], ostree.SYSROOT)
         ostree.init_sysroot(g, stateroot)
         for m in mounts:
             if m is root:
                 continue
-            path = ostree.target_path(m["_prefix"], stateroot)
+            path = self._guest_paths[id(m)]
             if not g.is_dir(path):
                 g.mkdir_p(os.path.dirname(path))
                 g.mkmountpoint(path)
-            g.mount(device(m), path)
+            g.mount(mount_devices[id(m)], path)
 
         print("Committing and deploying...")
         checksum = ostree.commit(g, ref, self.source._epoch())
         ostree.deploy(g, stateroot, ref)
         print("  %s %s" % (ref, checksum))
-        g.umount_all()
-        # The next source (or rebuild step) expects an empty scratch disk.
-        g.mkfs("ext4", SCRATCH_DEVICE, features="^dir_index")
+        ostree.unlock_deployments(g, stateroot)
+        self._normalize_mount_timestamps(g, mounts, mount_devices)
+        return mount_devices
 
     # Ingests preloaded containers into their respective runtime storage inside the appliance,
     # then prunes daemon state and clamps mtimes for reproducibility.

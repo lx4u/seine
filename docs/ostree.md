@@ -28,8 +28,8 @@ partition under `/var` instead, for instance `where: /var/home`.
 
 For each root file system, in the imager appliance:
 
-1. Unpack the tarball onto the scratch disk. The target's own `ostree`
-   runs from there, so the commit is made by the version the device
+1. Unpack the tarball onto a throwaway stage disk. The target's own
+   `ostree` runs from there, so the commit is made by the version the device
    will run later.
 2. Reshape the tree: usr-merge links, an empty `/sysroot`, links into
    `/var`, `/etc` moved to `/usr/etc`, the kernel and initramfs next to
@@ -37,6 +37,13 @@ For each root file system, in the imager appliance:
    new `/var` on first boot.
 3. Mount the partitions under `/sysroot`, then `ostree admin init-fs`,
    `os-init`, `commit` and `deploy`.
+
+With `--reproducible`, the partitions are then rebuilt like any other
+ext4 partition, so two builds of the same specification give a
+byte-identical image. The commit itself does not depend on the build
+time. The rebuild keeps the hardlinks between the repository and the
+deployments. It does not keep the immutable flag `deploy` puts on each
+deployment root, which ostree sets again on the next deploy.
 
 The commit carries an empty `machine-id` and no SSH host keys, so
 every device creates its own. A root file system that ships host keys
