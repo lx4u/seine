@@ -116,6 +116,12 @@ itself where what it needs is missing. `tests/tui/tui.py` (the TUI,
 `seine/tui/`) needs `textual` (the `tui` extra) the same way and is
 tagged `tui`, cancelling itself where that is missing.
 
+The boot tests in `tests/image/` start QEMU with KVM and OVMF, and drive
+the guest's root shell over its serial console (`qemu_guest.py`). They
+run with `SEINE_TEST_PLAN=full` only. The Secure Boot ones also need
+`efitools`, `sbsign` and `ukify` on the host. They build one image and
+keep it in `~/.cache/seine-tests/` until the imager sources change.
+
 ## Coding style
 
 Follow the style of the code around what you are changing. Comments are
