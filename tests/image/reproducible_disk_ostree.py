@@ -13,7 +13,8 @@ COMMON = os.path.join(os.path.dirname(os.path.realpath(__file__)),
                       "..", "..", "examples", "common")
 
 # Sibling of reproducible_disk.py's test, for an ostree sysroot: the two
-# images must match byte for byte, which includes the commit.
+# images must match byte for byte, which includes the commit and its
+# signature.
 class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avocado.Test):
     """
     :avocado: tags=full,container
@@ -33,11 +34,18 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
         if HOST_ARCH != "amd64":
             self.cancel("this spec's kernel/bootloader packages are amd64-only")
 
+    # Identical images prove nothing if the commit was never signed.
+    def test(self):
+        super().test()
+        with open(os.path.join(self.outputdir, "build-first.log")) as f:
+            self.assertIn("signed with vault:ostree-commits", f.read())
+
     def specification(self):
         where = os.path.join(self.workdir, "reproducible-ostree.yml")
         with open(where, "w") as f:
             f.write((
-                self.BOOT +
+                self.BOOT.replace(
+                    "requires:\n", "requires:\n    - %(common)s/dev-ostree-key\n", 1) +
                 "distribution:\n"
                 "    release: trixie\n"
                 "    architecture: amd64\n"
@@ -68,6 +76,7 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
                 "    table: gpt\n"
                 "    ostree:\n"
                 "        mode: standard\n"
+                "        gpg-key: vault:ostree-commits\n"
                 "    partitions:\n"
                 "        - label: efi\n"
                 "          type: vfat\n"
