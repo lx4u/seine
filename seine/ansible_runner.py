@@ -13,6 +13,7 @@ from seine.container import ContainerEngine, spawn_own_pgroup
 from seine.utils                import base_feed
 from seine.utils                import feed_auth_entries
 from seine.utils                import locale_purge_script
+from seine.utils                import mdadm_conf_script
 from seine.utils                import NETRC_MOUNT
 from seine.utils                import netrc_for
 from seine.utils                import offline_apt_script
@@ -329,6 +330,7 @@ class AnsibleContainerRunner:
         self._exec(["sh", "-c",
                     "printf 'uninitialized\\n' > /etc/machine-id; "
                     "rm -f /var/lib/dbus/machine-id 2>/dev/null; true"])
+        self._exec(["sh", "-c", mdadm_conf_script()])
         # _seed_downloads() copied every .deb the shared per-release cache
         # ever held into here, saved back by _save_downloads() already --
         # a build cache, not part of the image, else the shipped rootfs

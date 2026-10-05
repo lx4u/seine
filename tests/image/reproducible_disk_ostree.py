@@ -27,8 +27,6 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
         if HOST_ARCH != "amd64":
             self.cancel("this spec's kernel/bootloader packages are amd64-only")
 
-    # dracut's recommends pull in mdadm, whose mkconf dates mdadm.conf.
-    # That is a rootfs matter, not ostree's, so the spec masks it.
     def specification(self):
         where = os.path.join(self.workdir, "reproducible-ostree.yml")
         with open(where, "w") as f:
@@ -59,14 +57,6 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
                 "                state: present\n"
                 "                name: [dracut, dracut-config-generic, ostree, ostree-boot,\n"
                 "                       systemd, systemd-sysv]\n"
-                "    - name: drop the time stamp mdadm writes at install\n"
-                "      priority: 900\n"
-                "      tasks:\n"
-                "          - name: strip the date from mdadm.conf\n"
-                "            replace:\n"
-                "                path: /etc/mdadm/mdadm.conf\n"
-                "                regexp: '^(# This configuration was auto-generated) on .*$'\n"
-                "                replace: '\\1'\n"
                 "image:\n"
                 "    filename: reproducible-ostree.img\n"
                 "    table: gpt\n"

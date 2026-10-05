@@ -481,6 +481,13 @@ def locale_purge_script(locales):
         "done"
     )
 
+# mdadm's mkconf dates mdadm.conf with the real build time, so no two
+# builds match. Dropped; the rest of the file is kept.
+def mdadm_conf_script(path="/etc/mdadm/mdadm.conf"):
+    return (f"[ -f {path} ] && "
+            f"sed -i -E 's/^(# This configuration was auto-generated) on .*/\\1/' {path}; "
+            "true")
+
 # One build at a time for a cache two builds share, so two writers don't
 # race and leave a half-written file behind. The lock sits beside the
 # thing it guards.

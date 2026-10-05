@@ -6,6 +6,7 @@ import atexit
 import avocado
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -22,6 +23,7 @@ atexit.register(shutil.rmtree, os.environ["SEINE_DEPLOY_DIR"], ignore_errors=Tru
 
 from seine.ansible_runner import AnsibleContainerRunner
 from seine.utils import locale_purge_script
+from seine.utils import mdadm_conf_script
 from seine import vendor
 
 def offline_distro():
@@ -137,3 +139,40 @@ class LocalePurgeScriptKeepsOnlyWhatWasAskedFor(avocado.Test):
     def test_default_is_english_alone(self):
         script = locale_purge_script(["en"])
         self.assertIn('case "$d" in en)', script)
+
+# mdadm's mkconf writes the build time into mdadm.conf.
+class MdadmConfDropsItsBuildDate(avocado.Test):
+    CONF = ("# mdadm.conf\n"
+            "MAILADDR root\n"
+            "# This configuration was auto-generated on Mon, 05 Oct 2026 07:17:12 +0000 by mkconf\n")
+
+    def run_script(self, content):
+        path = os.path.join(self.workdir, "mdadm.conf")
+        if content is not None:
+            with open(path, "w") as f:
+                f.write(content)
+        done = subprocess.run(["sh", "-c", mdadm_conf_script(path)])
+        return done.returncode, path
+
+    def test_the_date_goes_and_the_rest_stays(self):
+        status, path = self.run_script(self.CONF)
+        self.assertEqual(status, 0)
+        with open(path) as f:
+            self.assertEqual(f.read(), self.CONF.replace(
+                " on Mon, 05 Oct 2026 07:17:12 +0000 by mkconf", ""))
+
+    def test_a_rootfs_without_mdadm_is_left_alone(self):
+        status, path = self.run_script(None)
+        self.assertEqual(status, 0)
+        self.assertFalse(os.path.exists(path))
+
+    def test_finalize_runs_it_before_the_timestamps_are_reset(self):
+        cmd = runner(online_distro())
+        cmd.epoch = 0
+        run = []
+        with patch.object(cmd, "_exec", lambda args, check=True: run.append(args[-1])):
+            cmd._finalize()
+        mdadm = [i for i, c in enumerate(run) if "mdadm.conf" in c]
+        reset = [i for i, c in enumerate(run) if "-newer /.ansible-marker" in c]
+        self.assertEqual(len(mdadm), 1)
+        self.assertLess(mdadm[0], reset[0])
