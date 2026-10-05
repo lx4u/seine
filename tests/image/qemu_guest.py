@@ -150,8 +150,10 @@ class Guest(Console):
             self.run("modprobe 9pnet_virtio 9p; mkdir -p %s; mount -t 9p host %s"
                      % (SHARE, SHARE))
 
-    def reboot(self, timeout=240):
+    # With 'login' false, returns as soon as the guest restarts.
+    def reboot(self, timeout=240, login=True):
         self.send("systemctl reboot\n")
         # A stop job (the serial getty) may run into systemd's 90 s timeout.
         self.expect(r"reboot: Restarting system", 150)
-        self.login(timeout)
+        if login:
+            self.login(timeout)

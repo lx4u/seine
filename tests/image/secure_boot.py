@@ -76,14 +76,25 @@ def missing_tool():
     return None
 
 # A UKI of 'kernel' and 'initrd' with its own 'cmdline', and an os-release
-# of its own: sd-boot sorts by IMAGE_VERSION. Signed with db if 'keys'.
-def build_uki(target, kernel, initrd, cmdline, version, keys=None):
+# of its own: sd-boot sorts by IMAGE_VERSION. Signed with db if 'keys'. Each
+# of 'profiles' ({id: command line}) is a profile of the file, which boots
+# with that command line when picked as '<file>@<id>'.
+def build_uki(target, kernel, initrd, cmdline, version, keys=None, profiles=None):
     osrel = target + ".osrel"
     with open(osrel, "w") as f:
         f.write("ID=debian\nPRETTY_NAME=seine test\nIMAGE_VERSION=%s\n" % version)
     unsigned = target + ".unsigned"
-    run(["ukify", "build", "--linux", kernel, "--initrd", initrd,
-         "--cmdline", cmdline, "--os-release", "@%s" % osrel, "--output", unsigned])
+    argv = ["ukify", "build", "--linux", kernel, "--initrd", initrd,
+            "--cmdline", cmdline, "--os-release", "@%s" % osrel, "--output", unsigned]
+    if profiles:
+        # The base is the first profile: it needs an ID of its own.
+        argv += ["--profile", "ID=main\nTITLE=main"]
+    for name, line in (profiles or {}).items():
+        profile = "%s.%s" % (target, name)
+        run(["ukify", "build", "--profile", "ID=%s\nTITLE=%s" % (name, name),
+             "--cmdline", line, "--output", profile])
+        argv += ["--join-profile", profile]
+    run(argv)
     if keys:
         keys.sign(unsigned, target)
     else:
@@ -277,15 +288,22 @@ class SecureBootGuest:
         self.sh("ln -s deploy/debian/deploy/%s.0 /sysroot/ostree/debian-%s"
                 % (commit, commit))
 
-    # Builds a UKI of 'commit' on the host, signed with db, and puts it on the
-    # ESP as 'name' (a lowercase name without .efi), counted if 'tries'. The
-    # file is renamed last, so that sd-boot never sees a partial one.
-    def install_uki(self, name, commit, marker, version, tries=None, extra=""):
+    # The command line of a UKI of 'commit': the factory one, with the
+    # deployment and a host name that tells the UKIs apart.
+    def uki_cmdline(self, commit, marker, extra=""):
         options = ostree.with_ostree_root(self.cmdline, "/ostree/debian-%s" % commit)
         words = [w for w in options.split() if not w.startswith("systemd.hostname=")]
-        cmdline = " ".join(words + ["systemd.hostname=%s" % marker] + extra.split())
+        return " ".join(words + ["systemd.hostname=%s" % marker] + extra.split())
+
+    # Builds a UKI of 'commit' on the host, signed with db, and puts it on the
+    # ESP as 'name' (a lowercase name without .efi), counted if 'tries'. The
+    # file is renamed last, so that sd-boot never sees a partial one. The host
+    # name is 'marker', and 'profiles' are the markers of its profiles.
+    def install_uki(self, name, commit, marker, version, tries=None, extra="",
+                    profiles=()):
         build_uki(os.path.join(self.share, name + ".efi"), self.kernel, self.initrd,
-                  cmdline, version, self.keys)
+                  self.uki_cmdline(commit, marker, extra), version, self.keys,
+                  {p: self.uki_cmdline(commit, p, extra) for p in profiles})
         final = "%s%s.efi" % (name, "+%d" % tries if tries else "")
         esp = "/efi/EFI/Linux"
         self.sh("cp %s/%s.efi %s/%s.tmp && mv %s/%s.tmp %s/%s && sync" % (
