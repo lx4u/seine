@@ -184,6 +184,16 @@ class Imager:
             g.set_uuid(dev, self._uuid_for("fs", label or dev))
         except RuntimeError as e:
             print("  note: could not set a UUID on '%s' (%s): %s" % (dev, fstype, e))
+        if self.reproducible and fstype in ("vfat", "msdos"):
+            self._pin_fat_serial(g, dev, self._fat_serial(label, dev))
+
+    # What _normalize_fat_tree() writes later, set now so a boot loader
+    # installed in between (grub embeds the serial of its ESP) names the
+    # volume the image will have, not the random one mkfs picked.
+    def _pin_fat_serial(self, g, dev, serial):
+        # The volume ID sits at 0x43 on FAT32 and at 0x27 on FAT12/16.
+        offset = 0x43 if g.pread_device(dev, 8, 0x52) == b"FAT32   " else 0x27
+        g.pwrite_device(dev, struct.pack("<I", int(serial, 16)), offset)
 
     # DPS role GUID for a plain (non-ESP/LVM/XBOOTLDR) partition.
     # 'None' means no DPS role -- parted keeps its generic default GUID.
