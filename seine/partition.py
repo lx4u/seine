@@ -517,7 +517,7 @@ class PartitionHandler:
         return settings
 
     # Mounts of each rooted 'source:' (None is the image's own root).
-    def _rooted_sources(self):
+    def rooted_sources(self):
         sources = {}
         for mount in self.mounts:
             sources.setdefault(mount.get("source"), []).append(mount)
@@ -534,7 +534,7 @@ class PartitionHandler:
                     "'image: ostree: sources' names '%s', which is not one "
                     "of the declared 'multiconfig:' groups (%s)"
                     % (name, ", ".join(sorted(groups)) if groups else "none"))
-        rooted = self._rooted_sources()
+        rooted = self.rooted_sources()
         enabled = {name: self.ostree_for(name)
                    for name in rooted
                    if self.ostree_for(name)["mode"] != "disabled"}

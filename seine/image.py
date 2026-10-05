@@ -26,6 +26,7 @@ from seine.ansible_runner import AnsibleContainerRunner
 from seine.bootstrap      import HostBootstrap
 from seine.bootstrap      import TargetBootstrap
 from seine.imager.imager    import Imager
+from seine.imager.ostree    import check_tarball
 from seine.imager.appliance import ImagerAppliance
 from seine.transport_bootstrap import TransportBootstrap
 from seine.sbom           import SBOM
@@ -708,9 +709,19 @@ class Image:
             self._from or self.targetBootstrap.name, distro, self.options).name)
         return named
 
+    # Fails before any disk work when a rooted source lacks what its
+    # ostree sysroot needs.
+    def _check_ostree_sources(self):
+        for source in self.partitionHandler.rooted_sources():
+            if self.partitionHandler.ostree_for(source)["mode"] == "disabled":
+                continue
+            what = "'multiconfig:' group '%s'" % source if source else "the image"
+            check_tarball(self._tarball_for(source), what)
+
     def _prepare_disk(self):
         if self._image_current():
             return
+        self._check_ostree_sources()
         self._size_partitions()
         self._empty_disk()
 

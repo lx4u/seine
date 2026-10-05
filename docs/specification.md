@@ -1701,6 +1701,11 @@ When `mode` is not `disabled`, the build is refused unless:
  * `/` and `/usr` do not use `verity: true`, the sysroot stays writable;
  * `/boot`, if mounted, is not `vfat`.
 
+Packages usually come from a playbook, so the root file system is
+checked once it is built, before any disk work: it must have `dracut`,
+`ostree` and `ostree-boot` (for `ostree-prepare-root` and the dracut
+module) and must not have `initramfs-tools`.
+
 With `multiconfig:`, the settings above apply to every group that has a
 root. A `sources:` entry, named after a group, overrides them for that
 group, and `mode: disabled` keeps the group on a plain layout:
