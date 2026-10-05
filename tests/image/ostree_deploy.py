@@ -62,6 +62,8 @@ class Commands(avocado.Test):
         self.assertEqual(g.commands, [
             ["/usr/bin/ostree", "admin", "init-fs", "/sysroot"],
             ["/usr/bin/ostree", "admin", "os-init", "--sysroot=/sysroot", "main"],
+            ["/usr/bin/ostree", "config", "--repo=/sysroot/ostree/repo", "set",
+             "sysroot.bootloader", "none"],
         ])
 
     def test_commit_skips_the_mounts_and_pins_the_time(self):
@@ -88,6 +90,14 @@ class Commands(avocado.Test):
         ostree.commit(g, "debian/amd64", 0)
         self.assertEqual(sorted(g.removed),
                          sorted([ostree.SKIP_LIST, ostree.SKELETON]))
+
+    def test_deploy_passes_the_kernel_args_before_the_ref(self):
+        g = FakeGuestfs()
+        ostree.deploy(g, "main", "main/amd64", ["root=PARTUUID=abc", "rw", "console=ttyS0"])
+        self.assertEqual(g.commands, [
+            ["/usr/bin/ostree", "admin", "deploy", "--sysroot=/sysroot",
+             "--os=main", "--karg=root=PARTUUID=abc", "--karg=rw",
+             "--karg=console=ttyS0", "main/amd64"]])
 
     def test_deploy_names_stateroot_and_ref(self):
         g = FakeGuestfs()

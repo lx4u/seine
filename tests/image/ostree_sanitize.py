@@ -123,6 +123,28 @@ class Sanitize(avocado.Test):
         conf = self.g.nodes[ROOT + "/usr/lib/tmpfiles.d/seine-ostree.conf"][1].decode()
         self.assertIn("C /var/roothome - - - - /usr/share/factory/var/roothome", conf)
 
+    def test_a_mount_point_outside_var_is_made_in_the_commit(self):
+        sanitize(self.g, ROOT, ["/efi/", "/data/"])
+        self.assertTrue(self.g.is_dir(ROOT + "/efi"))
+        self.assertTrue(self.g.is_dir(ROOT + "/data"))
+
+    def test_a_mount_point_below_var_is_made_by_tmpfiles(self):
+        sanitize(self.g, ROOT, ["/var/", "/var/data/"])
+        self.assertFalse(self.g.is_dir(ROOT + "/var/data"))
+        conf = self.g.nodes[ROOT + "/usr/lib/tmpfiles.d/seine-ostree.conf"][1].decode()
+        self.assertIn("d /var/data 0755 root root -", conf)
+
+    def test_var_and_boot_need_nothing_more(self):
+        sanitize(self.g, ROOT, ["/var/", "/boot/"])
+        conf = self.g.nodes[ROOT + "/usr/lib/tmpfiles.d/seine-ostree.conf"][1].decode()
+        self.assertNotIn("d /var/var", conf)
+        self.assertEqual(self.g.ls(ROOT + "/boot"), [])
+
+    def test_a_mount_point_tmpfiles_already_makes_is_not_repeated(self):
+        sanitize(self.g, ROOT, ["/var/home/"])
+        conf = self.g.nodes[ROOT + "/usr/lib/tmpfiles.d/seine-ostree.conf"][1].decode()
+        self.assertEqual(conf.count("/var/home "), 1)
+
     def test_etc_moves_to_usr_etc(self):
         sanitize(self.g, ROOT)
         self.assertFalse(self.g.is_dir(ROOT + "/etc"))

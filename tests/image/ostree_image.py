@@ -102,13 +102,23 @@ class StandardOstreeImageBuilds(avocado.Test):
             entries = g.ls("/boot/loader/entries")
             self.assertEqual(len(entries), 1, entries)
             entry = g.cat("/boot/loader/entries/%s" % entries[0])
-            self.assertIn("options ostree=/ostree/boot.1/debian/", entry)
+            options = [l for l in entry.splitlines() if l.startswith("options ")][0]
+            partuuid = g.part_get_gpt_guid("/dev/sda", 2).lower()
+            self.assertIn("root=PARTUUID=%s rw " % partuuid, options)
+            self.assertIn(" ostree=/ostree/boot.1/debian/", options)
+            self.assertIn("bootloader=none", g.cat("/ostree/repo/config"))
 
             self.assertEqual(g.cat("%s/etc/machine-id" % deployment), "",
                              "every device would share this machine-id")
             self.assertFalse(g.is_file("%s/etc/ssh/ssh_host_ed25519_key" % deployment))
             self.assertTrue(g.is_file("%s/usr/bin/ostree" % deployment))
             self.assertEqual(g.readlink("%s/home" % deployment), "var/home")
+
+            # Only the physical mounts: ostree mounts the root itself.
+            fstab = [l.split()[1] for l in g.cat("%s/etc/fstab" % deployment).splitlines()]
+            self.assertEqual(sorted(fstab), ["/efi/", "/var/"])
+            self.assertTrue(g.is_dir("%s/efi" % deployment),
+                            "no mount point for the ESP in the commit")
 
             leftovers = [n for n in g.ls("/") if n.startswith(".seine")]
             self.assertEqual(leftovers, [], "the build left files on the sysroot")

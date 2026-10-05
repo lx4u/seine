@@ -35,8 +35,19 @@ For each root file system, in the imager appliance:
    `/var`, `/etc` moved to `/usr/etc`, the kernel and initramfs next to
    their modules. Content already in `/root` or `/usr/local` seeds the
    new `/var` on first boot.
-3. Mount the partitions under `/sysroot`, then `ostree admin init-fs`,
-   `os-init`, `commit` and `deploy`.
+3. Write `/etc/fstab` with the mounts other than `/` (`/var`, `/efi`,
+   and so on): without those lines the `/var` partition and the ESP are
+   never mounted. Each mount point outside `/var` is created in the
+   commit, and nested ones under `/var` by `tmpfiles.d`.
+4. Mount the partitions under `/sysroot`, then `ostree admin init-fs`,
+   `os-init`, `commit` and `deploy`. The deployment gets the kernel
+   arguments `root=PARTUUID=<root partition> rw`, plus those of
+   `GRUB_CMDLINE_LINUX` and `GRUB_CMDLINE_LINUX_DEFAULT` in
+   `/etc/default/grub` if the root file system has one. They stay in the
+   boot entry, and later deployments inherit them.
+   The repository is set to `sysroot.bootloader none`: the imager writes
+   the boot configuration, not ostree, which would otherwise try to run
+   `grub-mkconfig` on a deploy and fail.
 
 With `--reproducible`, the partitions are then rebuilt like any other
 ext4 partition, so two builds of the same specification give a
@@ -64,5 +75,5 @@ full deployment, so the first update does not fail on a full disk. Set
 
 ## Not supported yet
 
-Booting the result, `composefs`, `containers:`, `bootlets:` and read-only
+Writing a boot loader, `composefs`, `containers:`, `bootlets:` and read-only
 (`squashfs`/`erofs`) partitions.

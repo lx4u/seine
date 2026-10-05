@@ -52,8 +52,10 @@ def _has_files(g, path):
     return any(not g.is_dir(posixpath.join(path, name)) for name in g.find(path))
 
 # Reshapes the tree unpacked under 'root' into what 'ostree commit' and
-# 'ostree admin deploy' accept.
-def sanitize(g, root):
+# 'ostree admin deploy' accept. 'mounts' are the guest prefixes of the
+# partitions to be mounted ('/efi/', '/var/home/', ...): each needs its
+# mount point in the commit.
+def sanitize(g, root, mounts=()):
     def at(*parts):
         return posixpath.join(root, *parts)
 
@@ -88,6 +90,8 @@ def sanitize(g, root):
         g.rm_rf(at("tmp"))
     g.ln_s("sysroot/tmp", at("tmp"))
 
+    tmpfiles += _mount_points(g, at, mounts, tmpfiles)
+
     g.mkdir_p(at(posixpath.dirname(TMPFILES)))
     g.write(at(TMPFILES), ("\n".join(tmpfiles) + "\n").encode())
 
@@ -107,6 +111,22 @@ def sanitize(g, root):
     g.write(at("usr/etc/machine-id"), b"")
 
     _relocate_kernel(g, at)
+
+# /var is the stateroot's and is seeded once, so a mount point below it is
+# made by tmpfiles; any other lives in the commit. Returns tmpfiles lines.
+def _mount_points(g, at, mounts, tmpfiles):
+    lines = []
+    for prefix in mounts:
+        path = prefix.rstrip("/")
+        if path in ("", "/var", "/boot"):
+            continue
+        if path.startswith("/var/"):
+            line = "d %s 0755 root root -" % path
+            if line not in tmpfiles and line not in lines:
+                lines.append(line)
+        else:
+            g.mkdir_p(at(path.lstrip("/")))
+    return lines
 
 # 'deploy' only looks for the kernel and initramfs next to the modules.
 def _relocate_kernel(g, at):
@@ -156,6 +176,10 @@ def _ostree(g, *args):
 def init_sysroot(g, stateroot):
     _ostree(g, "admin", "init-fs", SYSROOT)
     _ostree(g, "admin", "os-init", "--sysroot=%s" % SYSROOT, stateroot)
+    # With a grub.cfg present, 'deploy' runs grub-mkconfig and fails. The
+    # boot configuration is written by the imager, and by an updater later.
+    _ostree(g, "config", "--repo=%s/ostree/repo" % SYSROOT, "set",
+            "sysroot.bootloader", "none")
 
 # Commits the staged root ('/'), whatever is mounted under it aside.
 # Returns the commit checksum.
@@ -174,9 +198,10 @@ def commit(g, ref, epoch):
     g.rm_rf(SKELETON)
     return checksum
 
-def deploy(g, stateroot, ref):
+# 'kargs' end up in the boot entry, and a later deploy inherits them.
+def deploy(g, stateroot, ref, kargs=()):
     _ostree(g, "admin", "deploy", "--sysroot=%s" % SYSROOT,
-            "--os=%s" % stateroot, ref)
+            "--os=%s" % stateroot, *["--karg=%s" % k for k in kargs], ref)
 
 # 'deploy' makes each deployment root immutable, and the timestamp pass
 # that follows (touch) cannot change an immutable directory. The mke2fs

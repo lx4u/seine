@@ -1270,7 +1270,7 @@ class Imager:
                             and any(m["_prefix"] == "/" for m in mounts):
                         mount_devices = self._deploy_ostree(
                             g, ph, source, mounts, part_devices, vol_devices,
-                            container_devs)
+                            part_index, container_devs)
                         g.umount_all()
                         self._guest_paths = {}
                         if self.reproducible:
@@ -1384,7 +1384,7 @@ class Imager:
     # into the real sysroot mounted under '/sysroot'. Leaves everything
     # mounted, timestamps normalized, and returns the mount devices.
     def _deploy_ostree(self, g, ph, source, mounts, part_devices, vol_devices,
-                       container_devices):
+                       part_index, container_devices):
         if container_devices:
             raise NotImplementedError(
                 "'containers:' cannot be loaded into an ostree sysroot yet")
@@ -1397,13 +1397,20 @@ class Imager:
         g.mkfs("ext4", STAGE_DEVICE, features="^dir_index")
         g.mount(STAGE_DEVICE, "/")
         g.tar_in_opts(self.source._tarball_for(source), "/", xattrs=True)
-        ostree.sanitize(g, "/")
 
         mount_devices = {id(m): part_devices.get(id(m)) or vol_devices.get(id(m))
                          for m in mounts}
+        root = next(m for m in mounts if m["_prefix"] == "/")
+        # Both read '/etc', which sanitize() moves to '/usr/etc'. fstab
+        # holds the physical mounts only: ostree mounts the root itself.
+        others = [m for m in mounts if m is not root]
+        kargs = ["root=PARTUUID=%s" % self._partuuid(g, part_index, root), "rw"]
+        kargs += shlex.split(self._grub_cmdline(g))
+        self._write_fstab(g, others, mount_devices, part_index)
+        ostree.sanitize(g, "/", [m["_prefix"] for m in others])
+
         self._guest_paths = {id(m): ostree.target_path(m["_prefix"], stateroot)
                              for m in mounts}
-        root = next(m for m in mounts if m["_prefix"] == "/")
         g.mount(mount_devices[id(root)], ostree.SYSROOT)
         ostree.init_sysroot(g, stateroot)
         for m in mounts:
@@ -1417,7 +1424,7 @@ class Imager:
 
         print("Committing and deploying...")
         checksum = ostree.commit(g, ref, self.source._epoch())
-        ostree.deploy(g, stateroot, ref)
+        ostree.deploy(g, stateroot, ref, kargs)
         print("  %s %s" % (ref, checksum))
         ostree.unlock_deployments(g, stateroot)
         self._normalize_mount_timestamps(g, mounts, mount_devices)
