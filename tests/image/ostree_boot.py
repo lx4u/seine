@@ -64,6 +64,22 @@ imager:
                 state: present
 """
 
+# A UKI of the rootfs' own kernel and initramfs, made at build time
+# without the deployment's command line: the imager adds it.
+UKI = """    - name: a UKI of the kernel
+      priority: 900
+      tasks:
+          - name: install ukify
+            apt:
+                name: [systemd-ukify, systemd-boot-efi]
+                state: present
+          - name: build the UKI
+            shell: |
+                mkdir -p /boot/EFI/Linux
+                ukify build --linux=$(ls /boot/vmlinuz-*) --initrd=$(ls /boot/initrd.img-*) \\
+                    --cmdline=systemd.hostname=uki-host --output=/boot/EFI/Linux/os.efi
+"""
+
 SINGLE_DISK = """
 image:
     filename: {disk}
@@ -220,3 +236,45 @@ class OstreeImageBoots(avocado.Test):
             self.build(spec, "disk-%s" % owner)
             self.boots(disk, "%s-os" % owner)
             os.remove(disk)
+
+    # The UKI is on the ESP, the kernel files are not (systemd-boot) or
+    # are left to the menu (grub chainloads), and the login prompt shows the
+    # host name that only the UKI's command line sets.
+    def test_a_single_sysroot_boots_from_its_uki_with_grub(self):
+        self.uki_boots(GROUP, "grub")
+
+    def test_a_single_sysroot_boots_from_its_uki_with_systemd_boot(self):
+        self.uki_boots(GROUP_SYSTEMD_BOOT, "systemd-boot")
+
+    def uki_boots(self, group, loader):
+        disk = os.path.join(self.workdir, "uki.img")
+        spec = self.write("uki.yaml", (group + UKI + SINGLE_DISK).format(
+            common=COMMON, pc_image=os.path.join(EXAMPLES, "pc-image"),
+            name="uki-os", disk=disk))
+        self.build(spec, "uki")
+
+        import guestfs
+        g = guestfs.GuestFS(python_return_dict=True)
+        g.add_drive_opts(disk, format="raw", readonly=True)
+        g.launch()
+        try:
+            g.mount_ro("/dev/sda1", "/")
+            self.assertTrue(g.is_file("/EFI/Linux/debian-os.efi"))
+            if loader == "grub":
+                self.assertIn("chainloader /EFI/Linux/debian-os.efi",
+                              g.cat("/grub/grub.cfg"))
+            else:
+                self.assertFalse(g.exists("/ostree"), "kernel files on the ESP")
+                self.assertEqual(
+                    g.ls("/loader/entries") if g.is_dir("/loader/entries") else [],
+                    [], "entries on the ESP")
+        finally:
+            g.close()
+        workdir = os.path.join(self.workdir, "boot-uki")
+        os.makedirs(workdir)
+        found, text = qemu_boot.boot_until(disk, workdir, "login:")
+        with open(os.path.join(self.outputdir, "boot-uki.log"), "w") as f:
+            f.write(text)
+        self.assertTrue(found, "no 'login:' on the serial console")
+        self.assertIn("uki-host login:", text, "the system did not boot from the UKI")
+        self.assertIn("uki-os", text)

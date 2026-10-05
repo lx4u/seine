@@ -105,3 +105,27 @@ class OstreeSystemdBootDiskImageIsByteIdenticalAcrossTwoBuilds(
                      "                state: present\n"
                      "                name: [systemd-boot, linux-image-amd64, firmware-linux-free]\n")
     ESP_SIZE = "256MiB"
+
+
+# The same with a UKI of the kernel, rebuilt with the deployment's command
+# line: the rebuilt UKI must not differ between builds either.
+class OstreeUkiDiskImageIsByteIdenticalAcrossTwoBuilds(
+        OstreeSystemdBootDiskImageIsByteIdenticalAcrossTwoBuilds):
+    """
+    :avocado: tags=full,container
+    """
+    FILENAME = "reproducible-ostree-uki.img"
+    BOOT_PLAYBOOK = (
+        OstreeSystemdBootDiskImageIsByteIdenticalAcrossTwoBuilds.BOOT_PLAYBOOK +
+        "    - name: a UKI of the kernel\n"
+        "      priority: 900\n"
+        "      tasks:\n"
+        "          - name: install ukify\n"
+        "            apt:\n"
+        "                state: present\n"
+        "                name: [systemd-ukify, systemd-boot-efi]\n"
+        "          - name: build the UKI\n"
+        "            shell: |\n"
+        "                mkdir -p /boot/EFI/Linux\n"
+        "                ukify build --linux=$(ls /boot/vmlinuz-*) --initrd=$(ls /boot/initrd.img-*) \\\n"
+        "                    --cmdline=quiet --output=/boot/EFI/Linux/os.efi\n")

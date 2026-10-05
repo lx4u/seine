@@ -70,6 +70,20 @@ For each root file system, in the imager appliance:
    for a few kernels. A deployment that an update adds later needs its
    files copied to the ESP as well, which is the updater's job.
 
+6. A UKI in the root file system (`/boot/EFI/Linux/*.efi`, from
+   `extends: uki:` or a playbook) is taken out of the commit and rebuilt
+   after `deploy`: the kernel arguments of the deployment, including
+   `ostree=` with the checksum of the kernel and initramfs, are added to
+   its command line, and it is signed if `image: secure-boot:` is set.
+   It lands on the ESP as `EFI/Linux/<stateroot>-<name>.efi`. The
+   sysroot then gets no boot entry of its own and no kernel files on the
+   ESP: systemd-boot finds the UKI by itself, and GRUB gets a menu entry
+   that chainloads it. A root file system with a UKI needs a boot loader.
+
+   The UKI names the deployment of the first boot. After an update, the
+   new deployment is not covered by it: keeping the UKI in step with the
+   commits is the updater's job.
+
 With `--reproducible`, the partitions are then rebuilt like any other
 ext4 partition, so two builds of the same specification give a
 byte-identical image. The commit itself does not depend on the build

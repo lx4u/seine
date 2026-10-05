@@ -2,7 +2,9 @@
 
 import avocado
 import os
+import shutil
 import sys
+import tempfile
 
 path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
@@ -216,3 +218,77 @@ class SystemdBoot(avocado.Test):
         with self.assertRaisesRegex(RuntimeError, "need 1 MiB"):
             ostree.copy_boot_files(g, {"/boot/ostree/a": "/efi/ostree/a"}, "/efi")
         self.assertFalse(hasattr(g, "copied"))
+
+class UkiBoot(avocado.Test):
+    def group(self, label="main"):
+        return {"label": label, "uuid": "u1", "boot": "/boot",
+                "entries": [dict(ENTRY, _file="ostree-1.conf")],
+                "ukis": ["%s-os.efi" % label]}
+
+    def test_grub_chainloads_the_uki_instead_of_the_kernel(self):
+        menu = ostree.grub_menuentries([self.group()])
+        self.assertEqual(menu,
+            "menuentry 'main-os' {\n"
+            "    search --no-floppy --file --set=root /EFI/Linux/main-os.efi\n"
+            "    chainloader /EFI/Linux/main-os.efi\n"
+            "}\n\n")
+
+    def test_a_group_without_uki_keeps_its_entry(self):
+        plain = self.group("other")
+        del plain["ukis"]
+        menu = ostree.grub_menuentries([self.group(), plain])
+        self.assertIn("menuentry 'main: main-os'", menu)
+        self.assertIn("menuentry 'other: Debian (ostree:0)'", menu)
+
+    def test_systemd_boot_gets_no_entry_for_a_uki(self):
+        plain = self.group("other")
+        del plain["ukis"]
+        files = ostree.systemd_boot_entries([self.group(), plain])
+        self.assertEqual(list(files), ["other-ostree-1.conf"])
+
+class UkiRebuild(avocado.Test):
+    class Fake(ostree.OstreeSysroot):
+        def __init__(self, output_dir):
+            self._output_dir = output_dir
+            self.rebuilt = []
+
+        def _rebuild_uki(self, workdir, original, extra):
+            self.rebuilt.append((original, extra))
+            return "rebuilt.efi"
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="seine-test-uki-")
+
+    def tearDown(self):
+        shutil.rmtree(self.dir)
+
+    def guest(self):
+        g = FakeGuestfs()
+        g.ls = lambda path: ["os.efi", "notes.txt"]
+        g.is_dir = lambda path: True
+        g.download = lambda src, dst: open(dst, "w").close()
+        g.rm = lambda path: g.removed.append(path)
+        return g
+
+    def test_only_efi_files_leave_the_root_file_system(self):
+        g = self.guest()
+        ukis = self.Fake(self.dir)._take_ukis(g)
+        self.assertEqual([name for name, _ in ukis], ["os.efi"])
+        self.assertEqual(g.removed, ["/boot/EFI/Linux/os.efi"])
+
+    def test_no_uki_directory_means_no_uki(self):
+        g = self.guest()
+        g.is_dir = lambda path: False
+        self.assertEqual(self.Fake(self.dir)._take_ukis(g), [])
+
+    def test_the_uki_gets_the_deployment_options_and_the_stateroot_name(self):
+        sysroot = self.Fake(self.dir)
+        group = {"entries": [dict(ENTRY)]}
+        sysroot._rebuild_ukis(group, "main", [("os.efi", "/w/os.efi")])
+        self.assertEqual(sysroot.rebuilt, [("/w/os.efi", ENTRY["options"])])
+        self.assertEqual(group["ukis"], ["main-os.efi"])
+
+    def test_several_boot_entries_are_refused(self):
+        group = {"entries": [dict(ENTRY), dict(ENTRY)]}
+        with self.assertRaises(RuntimeError):
+            self.Fake(self.dir)._rebuild_ukis(group, "main", [("os.efi", "/w/os.efi")])

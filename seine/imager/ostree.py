@@ -5,6 +5,7 @@ import os
 import posixpath
 import shlex
 import tarfile
+import tempfile
 
 from seine.imager.appliance import DEVICE
 from seine.imager.appliance import STAGE_DEVICE
@@ -238,15 +239,33 @@ def read_entries(g):
     return [dict(parse_entry(g.cat("%s/%s" % (base, name))), _file=name)
             for name in sorted(g.ls(base)) if name.endswith(".conf")]
 
+# Where the root file system keeps its UKIs, and the ESP its own.
+UKI_DIR = "/boot/EFI/Linux"
+ESP_UKI_DIR = "/EFI/Linux"
+
 # GRUB menu entries for the sysroots in 'groups' (the boot owner first):
 # each has its 'label', the 'uuid' of the file system that holds its boot
 # files, their 'boot' directory ('/boot', or '' on a partition of its
 # own) and its 'entries'. The paths of an entry are relative to that
-# file system's /boot.
+# file system's /boot. A group with 'ukis' (file names on the ESP) gets
+# an entry that chainloads each, instead of its own: the UKI holds the
+# kernel, the initramfs and the command line.
 def grub_menuentries(groups):
     several = len(groups) > 1
     text = ""
     for group in groups:
+        for uki in group.get("ukis", ()):
+            title = os.path.splitext(uki)[0]
+            if several:
+                title = "%s: %s" % (group["label"], title)
+            text += (
+                "menuentry '%s' {\n"
+                "    search --no-floppy --file --set=root %s/%s\n"
+                "    chainloader %s/%s\n"
+                "}\n\n"
+            ) % (title, ESP_UKI_DIR, uki, ESP_UKI_DIR, uki)
+        if group.get("ukis"):
+            continue
         for entry in group["entries"]:
             title = entry["title"].replace("'", "")
             if several:
@@ -263,13 +282,15 @@ def grub_menuentries(groups):
 
 # systemd-boot cannot read ext4, so the ESP holds the entries and the
 # kernel files itself. Entries of 'groups' (as for grub_menuentries) as
-# {file name: text}: both are prefixed with the stateroot so the entries
-# of several sysroots do not collide, and so are the titles if there are
-# several.
+# {file name: text}, none for a group with UKIs. Names are prefixed with
+# the stateroot so the entries of several sysroots do not collide, and
+# so are the titles if there are several.
 def systemd_boot_entries(groups):
     several = len(groups) > 1
     files = {}
     for group in groups:
+        if group.get("ukis"):
+            continue
         for entry in group["entries"]:
             fields = {k: v for k, v in entry.items() if not k.startswith("_")}
             if several:
@@ -342,6 +363,7 @@ class OstreeSysroot:
         kargs = ["root=PARTUUID=%s" % self._partuuid(g, part_index, root), "rw"]
         kargs += shlex.split(self._grub_cmdline(g))
         self._write_fstab(g, others, mount_devices, part_index)
+        ukis = self._take_ukis(g)
         sanitize(g, "/", [m["_prefix"] for m in others])
 
         self._guest_paths = {id(m): target_path(m["_prefix"], stateroot)
@@ -362,16 +384,50 @@ class OstreeSysroot:
         deploy(g, stateroot, ref, kargs)
         print("  %s %s" % (ref, checksum))
         self._boot_ostree(g, source, mounts, mount_devices, stateroot,
-                          distro, boot_owner, boot_entries)
+                          distro, boot_owner, boot_entries, ukis)
         unlock_deployments(g, stateroot)
         self._normalize_mount_timestamps(g, mounts, mount_devices)
         return mount_devices
+
+    # The UKIs of the root file system leave the commit: they cannot name
+    # the deployment yet, and they live on the ESP. Returns their names
+    # and where they were downloaded.
+    def _take_ukis(self, g):
+        if not g.is_dir(UKI_DIR):
+            return []
+        ukis = []
+        for name in sorted(g.ls(UKI_DIR)):
+            if name.endswith(".efi"):
+                workdir = tempfile.mkdtemp(dir=self._output_dir, prefix="uki-ostree-")
+                original = os.path.join(workdir, name)
+                g.download("%s/%s" % (UKI_DIR, name), original)
+                g.rm("%s/%s" % (UKI_DIR, name))
+                ukis.append((name, original))
+        return ukis
+
+    # Appends the command line the deployment boots with (root, ostree=...)
+    # to each UKI. 'group' gets the names they have on the ESP, and the
+    # rebuilt files for the boot owner to upload.
+    def _rebuild_ukis(self, group, stateroot, ukis):
+        if len(group["entries"]) != 1:
+            raise RuntimeError(
+                "expected one boot entry to name in the UKI, found %d"
+                % len(group["entries"]))
+        options = group["entries"][0]["options"]
+        group["ukis"], group["built"] = [], []
+        for name, original in ukis:
+            print("Adding the ostree command line to '%s'..." % name)
+            workdir = os.path.dirname(original)
+            result = self._rebuild_uki(workdir, original, options)
+            esp_name = "%s-%s" % (stateroot, name)
+            group["ukis"].append(esp_name)
+            group["built"].append((esp_name, workdir, result))
 
     # Records this sysroot's boot entries. The boot owner (last) installs
     # the boot loader and writes every group's menu on the shared ESP,
     # as _install_boot_entry() does for a plain layout.
     def _boot_ostree(self, g, source, mounts, mount_devices, stateroot,
-                     distro, boot_owner, boot_entries):
+                     distro, boot_owner, boot_entries, ukis):
         root = next(m for m in mounts if m["_prefix"] == "/")
         boot = next((m for m in mounts if m["_prefix"] == "/boot/"), None)
         boot_device = mount_devices[id(boot or root)]
@@ -382,10 +438,16 @@ class OstreeSysroot:
             "boot": "" if boot else "/boot",
             "entries": read_entries(g),
         })
+        if ukis:
+            self._rebuild_ukis(boot_entries[-1], stateroot, ukis)
         if source is not None and source != boot_owner:
             return
         bootloader = detect_bootloader(g, DEVICE)
         if bootloader is None:
+            if ukis:
+                raise RuntimeError(
+                    "the root file-system ships a UKI but no boot loader "
+                    "(grub or systemd-boot) to start it from the ESP")
             return
         if distro["architecture"] != "amd64":
             raise NotImplementedError(
@@ -401,6 +463,12 @@ class OstreeSysroot:
                     ESP_PREFIX.rstrip("/"), efi))
         print("Installing boot loader and entries...")
         esp_path = self._guest_paths[id(esp)]
+        if any(group.get("ukis") for group in boot_entries):
+            g.mkdir_p(esp_path + ESP_UKI_DIR)
+            for group in boot_entries:
+                for name, workdir, result in group.get("built", ()):
+                    self._upload_uki(
+                        g, workdir, result, "%s%s/%s" % (esp_path, ESP_UKI_DIR, name))
         ordered = [boot_entries[-1]] + boot_entries[:-1]
         if isinstance(bootloader, GrubBootloader):
             bootloader.install(g, esp_path, boot_directory=esp_path, removable=True)
@@ -422,6 +490,8 @@ class OstreeSysroot:
             group["base"] = base + group["boot"]
         groups[0]["base"] = "%s/boot" % SYSROOT
         for group in groups:
+            if group.get("ukis"):
+                continue
             for directory in boot_directories(group):
                 directories[group["base"] + directory] = esp_path + directory
         copy_boot_files(g, directories, esp_path)
