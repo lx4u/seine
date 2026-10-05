@@ -84,15 +84,21 @@ class UkiAnchor:
                 if name.endswith(".efi"):
                     self._anchor_one_uki(g, efi_dir, name, roothash)
 
-    # objcopy/ukify/sbsign run as container commands, not inside the
-    # appliance, on a copy of the '.efi' downloaded to a scratch dir.
+    # Downloads the '.efi', rebuilds it with 'usrhash=' and uploads it back.
     def _anchor_one_uki(self, g, efi_dir, name, roothash):
         print("Anchoring '%s' with usrhash=%s..." % (name, roothash))
         efi_path = "%s/%s" % (efi_dir, name)
         workdir = tempfile.mkdtemp(dir=self._output_dir, prefix="uki-anchor-")
         original = os.path.join(workdir, "original.efi")
         g.download(efi_path, original)
+        result = self._rebuild_uki(workdir, original, "usrhash=%s" % roothash)
+        self._upload_uki(g, workdir, result, efi_path)
 
+    # objcopy/ukify/sbsign run as container commands, not inside the
+    # appliance. Appends 'extra' to the command line of 'original' (a file
+    # of 'workdir'), returns the rebuilt, possibly signed file's name there.
+    def _rebuild_uki(self, workdir, original, extra):
+        original = os.path.relpath(original, workdir)
         # ukify stamps the PE header's build time from this unless told
         # otherwise, which would make the .efi differ build to build.
         epoch = self.source._epoch()
@@ -110,11 +116,10 @@ class UkiAnchor:
              "--dump-section", ".linux=linux.bin",
              "--dump-section", ".initrd=initrd.bin",
              "--dump-section", ".cmdline=cmdline.txt",
-             "original.efi", "discard.efi"])
+             original, "discard.efi"])
 
         base_cmdline = open(os.path.join(workdir, "cmdline.txt")).read().strip()
-        cmdline = ("%s usrhash=%s" % (base_cmdline, roothash)) if base_cmdline \
-            else "usrhash=%s" % roothash
+        cmdline = ("%s %s" % (base_cmdline, extra)) if base_cmdline else extra
 
         # A real 'ukify build', not an 'objcopy --update-section' patch, so
         # a future PCR-policy pass only extends 'extra' here instead of a
@@ -125,18 +130,19 @@ class UkiAnchor:
         # it into the signature.
         self._pin_pe_timestamp(os.path.join(workdir, "rebuilt.efi"), epoch)
 
-        secure_boot = self.source.partitionHandler.secure_boot
-        result = "rebuilt.efi"
-        if secure_boot is not None:
-            result = self._sign_uki(workdir, epoch)
+        if self.source.partitionHandler.secure_boot is not None:
+            return self._sign_uki(workdir, epoch)
+        return "rebuilt.efi"
 
+    def _upload_uki(self, g, workdir, result, efi_path):
+        epoch = self.source._epoch()
         g.upload(os.path.join(workdir, result), efi_path)
         # g.upload() stamps the real time, unlike the mtools rebuild
         # the rest of this FAT tree already went through.
         g.utimens(efi_path, epoch, 0, epoch, 0)
 
         # The cmdline change invalidates whatever _scan_boot_signers()
-        # recorded before anchoring -- replace it with the truth.
+        # recorded before rebuilding -- replace it with the truth.
         with open(os.path.join(workdir, result), "rb") as f:
             self._boot_signers[efi_path] = pe_cert.extract_signer_cert(f.read())
 
