@@ -6,12 +6,13 @@ import shlex
 import struct
 import tempfile
 
+from seine.imager.appliance import SCRATCH_DEVICE
 from seine.partition import RO_FSTYPES
 
 # An ext or FAT rebuild needs room for a content copy plus the new
 # image at once, more than any partition has spare. A throwaway second
-# disk gives that room without touching real partitions.
-SCRATCH_DEVICE = "/dev/sdb"
+# disk (SCRATCH_DEVICE) gives that room without touching real partitions;
+# it is mounted here.
 SCRATCH_MOUNT = "/.ext-scratch-disk"
 
 # The only types _normalize_ext_mount() (mke2fs/debugfs based) knows how

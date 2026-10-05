@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
 import shutil
 import stat
 import struct
@@ -18,12 +17,12 @@ import guestfs
 from seine                   import pe_cert
 from seine                   import utils
 from seine.imager.bootloader import detect as detect_bootloader
-from seine.imager.bootloader import GrubBootloader
+from seine.imager.appliance import DEVICE
 from seine.imager.appliance import ImagerAppliance
+from seine.imager.appliance import SCRATCH_DEVICE
 from seine.imager.rebuild   import EXT_FSTYPES
 from seine.imager.rebuild   import PartitionRebuild
-from seine.imager.rebuild   import SCRATCH_DEVICE
-from seine.imager             import ostree
+from seine.imager.ostree    import OstreeSysroot
 from seine.packages          import FALLBACK_EPOCH
 from seine.partition        import RO_FSTYPES
 from seine.partition        import VERITY_HASH_TYPE
@@ -32,17 +31,9 @@ from seine.extends.uki import ukify_argv
 from seine.container import ContainerEngine
 from seine.utils            import HOST_ARCH
 
-DEVICE = "/dev/sda"
-
-
-# An ostree build unpacks its rootfs here and runs from it (see
-# _deploy_ostree()), so the scratch disk stays free for the rebuilds.
-STAGE_DEVICE = "/dev/sdc"
-
 # squashfs/erofs are not g.mkfs() targets, so RO_FSTYPES mounts are
 # staged as this and replaced later (see create()'s finalize pass).
 STAGING_TYPE = "ext4"
-
 
 # Fixed, so the same spec always derives the same GPT/filesystem UUIDs.
 UUID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_DNS, "seine.debian.org")
@@ -146,7 +137,7 @@ from seine.containers.ingest import ContainerdIngestionHandler, DockerIngestionH
 before_launch = lambda: None
 after_launch = lambda: None
 
-class Imager(PartitionRebuild):
+class Imager(PartitionRebuild, OstreeSysroot):
     def __init__(self, source):
         self.source = source
         # Mount -> where an ostree build mounted it, see _where().
@@ -1052,96 +1043,6 @@ class Imager(PartitionRebuild):
         self._label_selinux(g, mounts)
         return mount_devices
 
-    # Unpacks the rootfs onto the stage disk, which becomes the chroot
-    # the target's own ostree runs from, then commits and deploys it
-    # into the real sysroot mounted under '/sysroot'. Leaves everything
-    # mounted, timestamps normalized, and returns the mount devices.
-    def _deploy_ostree(self, g, ph, source, mounts, part_devices, vol_devices,
-                       part_index, container_devices, boot_owner, boot_entries):
-        if container_devices:
-            raise NotImplementedError(
-                "'containers:' cannot be loaded into an ostree sysroot yet")
-        settings = ph.ostree_for(source)
-        stateroot = settings["stateroot"]
-        distro = self.source.spec["distribution"] if source is None else \
-            self.source.subbuilds[source].spec["distribution"]
-        ref = settings.get("ref") or "%s/%s" % (stateroot, distro["architecture"])
-        print("Staging root file-system for ostree '%s'..." % ref)
-        g.mkfs("ext4", STAGE_DEVICE, features="^dir_index")
-        g.mount(STAGE_DEVICE, "/")
-        g.tar_in_opts(self.source._tarball_for(source), "/", xattrs=True)
-
-        mount_devices = {id(m): part_devices.get(id(m)) or vol_devices.get(id(m))
-                         for m in mounts}
-        root = next(m for m in mounts if m["_prefix"] == "/")
-        # Both read '/etc', which sanitize() moves to '/usr/etc'. fstab
-        # holds the physical mounts only: ostree mounts the root itself.
-        others = [m for m in mounts if m is not root]
-        kargs = ["root=PARTUUID=%s" % self._partuuid(g, part_index, root), "rw"]
-        kargs += shlex.split(self._grub_cmdline(g))
-        self._write_fstab(g, others, mount_devices, part_index)
-        ostree.sanitize(g, "/", [m["_prefix"] for m in others])
-
-        self._guest_paths = {id(m): ostree.target_path(m["_prefix"], stateroot)
-                             for m in mounts}
-        g.mount(mount_devices[id(root)], ostree.SYSROOT)
-        ostree.init_sysroot(g, stateroot)
-        for m in mounts:
-            if m is root:
-                continue
-            path = self._guest_paths[id(m)]
-            if not g.is_dir(path):
-                g.mkdir_p(os.path.dirname(path))
-                g.mkmountpoint(path)
-            g.mount(mount_devices[id(m)], path)
-
-        print("Committing and deploying...")
-        checksum = ostree.commit(g, ref, self.source._epoch())
-        ostree.deploy(g, stateroot, ref, kargs)
-        print("  %s %s" % (ref, checksum))
-        self._boot_ostree(g, source, mounts, mount_devices, stateroot,
-                          distro, boot_owner, boot_entries)
-        ostree.unlock_deployments(g, stateroot)
-        self._normalize_mount_timestamps(g, mounts, mount_devices)
-        return mount_devices
-
-    # Records this sysroot's boot entries. The boot owner (last) installs
-    # the boot loader and writes every group's menu on the shared ESP,
-    # as _install_boot_entry() does for a plain layout.
-    def _boot_ostree(self, g, source, mounts, mount_devices, stateroot,
-                     distro, boot_owner, boot_entries):
-        root = next(m for m in mounts if m["_prefix"] == "/")
-        boot = next((m for m in mounts if m["_prefix"] == "/boot/"), None)
-        boot_entries.append({
-            "label": stateroot,
-            "uuid": g.vfs_uuid(mount_devices[id(boot or root)]),
-            "boot": "" if boot else "/boot",
-            "entries": ostree.read_entries(g),
-        })
-        if source is not None and source != boot_owner:
-            return
-        bootloader = detect_bootloader(g, DEVICE)
-        if bootloader is None:
-            return
-        if distro["architecture"] != "amd64":
-            raise NotImplementedError(
-                "booting an ostree image is only supported on amd64 for now "
-                "(this one is '%s')" % distro["architecture"])
-        if not isinstance(bootloader, GrubBootloader):
-            raise NotImplementedError(
-                "booting an ostree image with systemd-boot is not supported yet")
-        esp = next((m for m in mounts if m["_prefix"] == ostree.ESP_PREFIX), None)
-        if esp is None or not g.is_dir("/usr/lib/grub/x86_64-efi"):
-            raise RuntimeError(
-                "booting an ostree image needs an '%s' partition and "
-                "grub-efi-amd64 in the root file-system" % ostree.ESP_PREFIX.rstrip("/"))
-        print("Installing boot loader and entries...")
-        esp_path = self._guest_paths[id(esp)]
-        bootloader.install(g, esp_path, boot_directory=esp_path, removable=True)
-        ordered = [boot_entries[-1]] + boot_entries[:-1]
-        g.write_append("%s/grub/grub.cfg" % esp_path,
-                       ostree.grub_menuentries(ordered).encode())
-        self._sign_bootloader_files(g, bootloader, esp_path)
 
     # Ingests preloaded containers into their respective runtime storage inside the appliance,
     # then prunes daemon state and clamps mtimes for reproducibility.
