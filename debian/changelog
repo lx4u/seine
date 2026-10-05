@@ -1,3 +1,71 @@
+seine (0.4-1) unstable; urgency=medium
+
+  * Add distributed builds: a seine-server with a REST API, database,
+    capability-aware scheduler (with package fan-out) and RBAC, plus
+    seine-agent worker daemons, an admin CLI for projects, users and
+    roles, live build logs and events over websocket, and new
+    seine-server and seine-agent binary packages, with a setup guide.
+  * Send a sparse worktree to remote builds, with several spec files,
+    'gist:NAME' specs and side-loaded fragments. Impure ansible
+    lookups are blocked at parse time and playbook file references
+    are tracked ('uses:'), so a build's local inputs are known.
+  * Harvest build deliverables to object storage and download them
+    when a remote build ends, expiring them with a lifecycle rule,
+    per-project quota and artifact expiry. Housekeeping runs
+    periodically and from 'seine admin'.
+  * Give users an immutable uid, link builds to the submitter and add
+    'user delete --purge' to the admin CLIs and the TUI.
+  * Add object-storage backends (S3, e.g. Garage, and JFrog
+    Artifactory) with zstd compression, a shared cache for host and
+    target bootstraps, and a clean-chroot gate against secret
+    leakage. Replace '--s3-cache' with '--shared-cache', on by
+    default for remote dev builds. Artifactory builds and downloads
+    use the user's own token, or are proxied through the server.
+    Add a Garage S3 setup guide.
+  * Add 'seine cache explain' to diff input recipes, record them for
+    rootfs and disk image digests, and explain in the plan why tasks
+    need to run.
+  * Add a credential resolver (keyring, settings, environment,
+    vault) and 'auth:' on feeds, checked against the Release file,
+    handed to apt through a netrc kept outside the target, and
+    prompted for in a TUI modal when missing.
+  * Add a remote cockpit to the TUI: '/remote' commands, builds,
+    workers and artifacts views, administrative views for
+    super-users, live tasks and logs of remote builds kept locally,
+    and '/build' on the server when connected. Add a navigation bar
+    on every screen, a 'remote_build' policy setting, and toggle
+    buttons in '/settings'.
+  * Add 'extends: go' to build Go programs from source, with
+    'systemd-unit' to install a service and vendored-module scanning
+    for the SBOM, and an 'extends:' rework sharing helpers between
+    all kinds. Generated packages now carry a copyright file.
+    Build k3s from source in the k3s example.
+  * Preload containers into the disk image: a 'containers:' spec
+    section with 'docker' or 'containerd' targets, partitions sized
+    from layer archives, ingestion in the imager appliance with
+    deterministic output, a unified SBOM through syft, and
+    'seine vendor' support through skopeo. Add a k3s containerd
+    example with a boot test.
+  * Make the imager appliance generic across images and keyed by
+    kernel, prebuild the default-kernel one in seine-oci, and add
+    'imager: rebuild:' to control its reuse. Reuse an existing disk
+    image or SBOM when inputs are unchanged, merge rootfs and tarball
+    into one cached step, and convert the disk image into VM formats.
+  * Cache git sources between builds, resume an interrupted
+    'seine vendor --refresh' (new '--restart'), report progress of
+    long vendor phases and fix lookups of arch:all binaries on
+    snapshot.
+  * Support dynamic sizing of LV and LVM partitions, use it in
+    pc-image, and add a common networkd and resolved spec fragment.
+  * Fix feed keyrings missing from bootstrapped rootfs and sbuild
+    chroots, builds picking up feeds of another release, restoring
+    xattrs from the tarball's PAX headers, machine-id on first boot,
+    and bundled pylibs ordered after system packages.
+  * Split the build code into a package and document running seine
+    and its tests with uv.
+
+ -- Cedric Hombourger <chombourger@gmail.com>  Mon, 05 Oct 2026 12:00:00 +0200
+
 seine (0.3-1) unstable; urgency=medium
 
   * Make snapshot-pinned rootfs builds byte-reproducible: fixed
