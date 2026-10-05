@@ -140,9 +140,8 @@ class BootSigners:
              "sh", "-c", faketime], check=True)
         return "signed.efi"
 
-    # Bytes up, signed PE back; the key never leaves the vault. The
-    # timestamp is pinned to the build epoch, not faked.
-    def _sign_uki_vault(self, workdir, epoch, name):
+    # The vault of this build, with this image's own defaults folded in.
+    def _vault_provider(self):
         from seine import vault as _vault
         own_defaults = self.source._vault_defaults()
         provider = _vault.for_build(own_defaults)
@@ -153,6 +152,12 @@ class BootSigners:
         defaults = getattr(provider, "_defaults", None)
         if type(defaults) == type({}) and defaults is not own_defaults:
             defaults.update(own_defaults)
+        return provider
+
+    # Bytes up, signed PE back; the key never leaves the vault. The
+    # timestamp is pinned to the build epoch, not faked.
+    def _sign_uki_vault(self, workdir, epoch, name):
+        provider = self._vault_provider()
         with open(os.path.join(workdir, "rebuilt.efi"), "rb") as f:
             signed = provider.sbsign_sign(name, f.read(), epoch)
         with open(os.path.join(workdir, "signed.efi"), "wb") as f:
