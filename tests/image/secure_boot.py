@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
@@ -108,6 +109,11 @@ IMAGE = ostree_boot.GROUP_SYSTEMD_BOOT + """    - name: tools for the guest
           - name: install efitools
             apt:
                 name: [efitools]
+                state: present
+          # The boot check asks systemd over the bus, which init only recommends.
+          - name: install dbus
+            apt:
+                name: [dbus]
                 state: present
     - name: a root shell on the serial console
       priority: 960
@@ -221,6 +227,15 @@ class SecureBootGuest:
         status, output = self.guest.run(command, timeout)
         self.assertEqual(status, 0, "'%s' failed: %s" % (command, output))
         return output
+
+    # Waits for a command to succeed, as a service can take a while.
+    def wait_until(self, command, timeout=90):
+        deadline = time.time() + timeout
+        while self.guest.run(command)[0] != 0:
+            if time.time() > deadline:
+                self.fail("'%s' still fails after %d s: %s" % (
+                    command, timeout, self.guest.run("ls -l /efi/EFI/Linux")[1]))
+            time.sleep(2)
 
     # Signs the boot files on the ESP (a guestfs session on the disk, which
     # the guest must not have open), then enrols the keys from the guest,
