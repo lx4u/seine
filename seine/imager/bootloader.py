@@ -38,15 +38,20 @@ class GrubBootloader(Bootloader):
 
     # No 'boot_directory' means grub-install's default: the mounted
     # root's own /boot. A 'multiconfig:' build passes the ESP instead.
+    # 'removable' has grub-install write EFI/boot/bootx64.efi itself,
+    # for a root without the /etc/default/grub that names its own path.
     def install(self, g, esp_mount, **opts):
         boot_directory = opts.get("boot_directory")
+        removable = opts.get("removable")
         options = ""
         if g.is_dir("/usr/lib/grub/x86_64-efi"):
             options = "--target x86_64-efi --efi-directory=%s" % esp_mount
             if boot_directory:
                 options += " --boot-directory=%s" % boot_directory
+            if removable:
+                options += " --removable"
         g.sh("grub-install %s %s" % (options, self.device))
-        if g.is_dir("/usr/lib/grub/x86_64-efi"):
+        if g.is_dir("/usr/lib/grub/x86_64-efi") and not removable:
             g.mkdir_p("%s/EFI/boot" % esp_mount)
             g.mv("%s/EFI/debian/grubx64.efi" % esp_mount,
                  "%s/EFI/boot/bootx64.efi" % esp_mount)

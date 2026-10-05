@@ -48,6 +48,16 @@ For each root file system, in the imager appliance:
    The repository is set to `sysroot.bootloader none`: the imager writes
    the boot configuration, not ostree, which would otherwise try to run
    `grub-mkconfig` on a deploy and fail.
+5. Install GRUB into the ESP when the root file system has
+   `grub-efi-amd64` (`grub-install --removable`, so there is no NVRAM
+   entry to make) and write `grub/grub.cfg` there from the boot entries
+   `deploy` wrote. The boot loader runs from the root file system's own
+   tools, so install it like for any image, from a playbook. Each
+   entry names its root file system by UUID, so one `grub.cfg` boots
+   every sysroot of a multiconfig disk; the group named by
+   `imager: boot` is the first entry, and the others are prefixed with
+   their stateroot. Debian's `15_ostree` is not used: it leaves out the
+   `/boot` prefix, and `grub-mkconfig` cannot run from the staged tree.
 
 With `--reproducible`, the partitions are then rebuilt like any other
 ext4 partition, so two builds of the same specification give a
@@ -67,6 +77,10 @@ The root file system needs `dracut`, `ostree` and `ostree-boot`, and no
 `examples/minimal-initrd/main.yaml` does for dracut. The build stops
 before any disk work if one is missing.
 
+With a boot loader in the root file system, the disk also needs an ESP
+mounted at `/efi`, in the group named by `imager: boot` for a multiconfig
+disk.
+
 ## Disk size
 
 Partitions without a `size:` get room for the repository plus one more
@@ -75,5 +89,8 @@ full deployment, so the first update does not fail on a full disk. Set
 
 ## Not supported yet
 
-Writing a boot loader, `composefs`, `containers:`, `bootlets:` and read-only
+Booting on a non-amd64 architecture or with systemd-boot (the build
+stops with a message), mixing ostree and plain root file systems on one
+disk, a separate `/boot` partition (its entries are written, but it has
+not been boot-tested), `composefs`, `containers:`, `bootlets:` and read-only
 (`squashfs`/`erofs`) partitions.

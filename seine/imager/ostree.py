@@ -211,3 +211,44 @@ def unlock_deployments(g, stateroot):
     for name in g.ls(base):
         if not name.endswith(".origin"):
             g.set_e2attrs("%s/%s" % (base, name), "i", clear=True)
+
+# The ESP, mounted next to the sysroot's own mounts.
+ESP_PREFIX = "/efi/"
+
+# One 'key value' per line of a Boot Loader Specification entry.
+def parse_entry(text):
+    fields = {}
+    for line in text.splitlines():
+        key, _, value = line.partition(" ")
+        if key and not key.startswith("#"):
+            fields[key] = value.strip()
+    return fields
+
+# The boot entries 'deploy' wrote, one per deployment.
+def read_entries(g):
+    base = "%s/boot/loader/entries" % SYSROOT
+    return [parse_entry(g.cat("%s/%s" % (base, name)))
+            for name in sorted(g.ls(base)) if name.endswith(".conf")]
+
+# GRUB menu entries for the sysroots in 'groups' (the boot owner first):
+# each has its 'label', the 'uuid' of the file system that holds its boot
+# files, their 'boot' directory ('/boot', or '' on a partition of its
+# own) and its 'entries'. The paths of an entry are relative to that
+# file system's /boot.
+def grub_menuentries(groups):
+    several = len(groups) > 1
+    text = ""
+    for group in groups:
+        for entry in group["entries"]:
+            title = entry["title"].replace("'", "")
+            if several:
+                title = "%s: %s" % (group["label"], title)
+            text += (
+                "menuentry '%s' {\n"
+                "    search --no-floppy --fs-uuid --set=root %s\n"
+                "    linux %s%s %s\n"
+                "    initrd %s%s\n"
+                "}\n\n"
+            ) % (title, group["uuid"], group["boot"], entry["linux"],
+                 entry["options"], group["boot"], entry["initrd"])
+    return text

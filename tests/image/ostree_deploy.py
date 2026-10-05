@@ -35,7 +35,12 @@ class FakeGuestfs:
         self.removed.append(path)
 
     def ls(self, path):
+        if path.endswith("loader/entries"):
+            return ["ostree-2.conf", "ostree-1.conf", "other"]
         return ["abc.0", "abc.0.origin"]
+
+    def cat(self, path):
+        return "title %s\nlinux /ostree/x/vmlinuz\ninitrd /ostree/x/initrd\noptions rw ostree=/y\n" % path
 
     def set_e2attrs(self, path, attrs, clear=False):
         self.unlocked = getattr(self, "unlocked", []) + [(path, attrs, clear)]
@@ -112,3 +117,47 @@ class Unlock(avocado.Test):
         ostree.unlock_deployments(g, "main")
         self.assertEqual(g.unlocked, [
             ("/sysroot/ostree/deploy/main/deploy/abc.0", "i", True)])
+
+ENTRY = {"title": "Debian (ostree:0)", "linux": "/ostree/debian-1/vmlinuz-6.1",
+         "initrd": "/ostree/debian-1/initramfs-6.1.img",
+         "options": "root=PARTUUID=abc rw ostree=/ostree/boot.1/debian/1/0"}
+
+class BootEntries(avocado.Test):
+    def test_an_entry_is_read_key_by_key(self):
+        entry = ostree.parse_entry("# note\ntitle A b\nversion 1\noptions rw x=y\n\n")
+        self.assertEqual(entry, {"title": "A b", "version": "1", "options": "rw x=y"})
+
+    def test_entries_are_read_in_file_name_order_and_only_conf_files(self):
+        entries = ostree.read_entries(FakeGuestfs())
+        self.assertEqual([e["title"] for e in entries], [
+            "/sysroot/boot/loader/entries/ostree-1.conf",
+            "/sysroot/boot/loader/entries/ostree-2.conf"])
+
+class GrubMenu(avocado.Test):
+    def group(self, label="debian", uuid="u1", boot="/boot"):
+        return {"label": label, "uuid": uuid, "boot": boot, "entries": [ENTRY]}
+
+    def test_an_entry_finds_its_file_system_and_adds_the_boot_directory(self):
+        menu = ostree.grub_menuentries([self.group()])
+        self.assertEqual(menu,
+            "menuentry 'Debian (ostree:0)' {\n"
+            "    search --no-floppy --fs-uuid --set=root u1\n"
+            "    linux /boot/ostree/debian-1/vmlinuz-6.1 root=PARTUUID=abc rw "
+            "ostree=/ostree/boot.1/debian/1/0\n"
+            "    initrd /boot/ostree/debian-1/initramfs-6.1.img\n"
+            "}\n\n")
+
+    def test_a_boot_partition_of_its_own_has_no_boot_prefix(self):
+        menu = ostree.grub_menuentries([self.group(boot="")])
+        self.assertIn("    linux /ostree/debian-1/vmlinuz-6.1 ", menu)
+
+    def test_several_groups_are_told_apart_by_title_and_file_system(self):
+        menu = ostree.grub_menuentries([self.group("main", "u1"), self.group("other", "u2")])
+        self.assertLess(menu.index("'main: Debian"), menu.index("'other: Debian"))
+        self.assertIn("--set=root u1", menu)
+        self.assertIn("--set=root u2", menu)
+
+    def test_a_quote_in_a_title_is_dropped(self):
+        group = self.group()
+        group["entries"] = [dict(ENTRY, title="it's")]
+        self.assertIn("menuentry 'its' {", ostree.grub_menuentries([group]))

@@ -1699,7 +1699,7 @@ When `mode` is not `disabled`, the build is refused unless:
    `/usr/local`, as the commit owns them. Mount data under `/var`
    instead, e.g. `where: /var/home`;
  * `/` and `/usr` do not use `verity: true`, the sysroot stays writable;
- * `/boot`, if mounted, is not `vfat`.
+ * `/boot`, if mounted, is not `vfat`;
  * there are no `bootlets` and no read-only (`squashfs`/`erofs`) partitions
    yet.
 
@@ -1712,7 +1712,9 @@ module) and must not have `initramfs-tools`.
 
 With `multiconfig:`, the settings above apply to every group that has a
 root. A `sources:` entry, named after a group, overrides them for that
-group, and `mode: disabled` keeps the group on a plain layout:
+group, and `mode: disabled` keeps the group on a plain layout (a disk
+cannot yet boot both kinds, so the build is refused unless every group
+agrees):
 
 ```yaml
 image:

@@ -18,6 +18,7 @@ import guestfs
 from seine                   import pe_cert
 from seine                   import utils
 from seine.imager.bootloader import detect as detect_bootloader
+from seine.imager.bootloader import GrubBootloader
 from seine.imager.appliance import ImagerAppliance
 from seine.imager             import ostree
 from seine.packages          import FALLBACK_EPOCH
@@ -1154,6 +1155,13 @@ class Imager:
                         % (boot_owner, ", ".join(declared_groups)))
                 sources = [s for s in sources if s != boot_owner] + [boot_owner]
 
+            rooted = [s for s in sources if any(m["_prefix"] == "/" for m in by_source[s])]
+            if len({ph.ostree_for(s)["mode"] != "disabled" for s in rooted}) > 1:
+                raise NotImplementedError(
+                    "one disk cannot yet boot both ostree and plain root "
+                    "file-systems: set 'image: ostree: sources' to the same "
+                    "mode for every group")
+
             source_archives = {}
             all_container_archives = []
             containers_fetch_dir = os.path.join(
@@ -1280,7 +1288,7 @@ class Imager:
                             and any(m["_prefix"] == "/" for m in mounts):
                         mount_devices = self._deploy_ostree(
                             g, ph, source, mounts, part_devices, vol_devices,
-                            part_index, container_devs)
+                            part_index, container_devs, boot_owner, boot_entries)
                         g.umount_all()
                         self._guest_paths = {}
                         if self.reproducible:
@@ -1394,7 +1402,7 @@ class Imager:
     # into the real sysroot mounted under '/sysroot'. Leaves everything
     # mounted, timestamps normalized, and returns the mount devices.
     def _deploy_ostree(self, g, ph, source, mounts, part_devices, vol_devices,
-                       part_index, container_devices):
+                       part_index, container_devices, boot_owner, boot_entries):
         if container_devices:
             raise NotImplementedError(
                 "'containers:' cannot be loaded into an ostree sysroot yet")
@@ -1436,9 +1444,49 @@ class Imager:
         checksum = ostree.commit(g, ref, self.source._epoch())
         ostree.deploy(g, stateroot, ref, kargs)
         print("  %s %s" % (ref, checksum))
+        self._boot_ostree(g, source, mounts, mount_devices, stateroot,
+                          distro, boot_owner, boot_entries)
         ostree.unlock_deployments(g, stateroot)
         self._normalize_mount_timestamps(g, mounts, mount_devices)
         return mount_devices
+
+    # Records this sysroot's boot entries. The boot owner (last) installs
+    # the boot loader and writes every group's menu on the shared ESP,
+    # as _install_boot_entry() does for a plain layout.
+    def _boot_ostree(self, g, source, mounts, mount_devices, stateroot,
+                     distro, boot_owner, boot_entries):
+        root = next(m for m in mounts if m["_prefix"] == "/")
+        boot = next((m for m in mounts if m["_prefix"] == "/boot/"), None)
+        boot_entries.append({
+            "label": stateroot,
+            "uuid": g.vfs_uuid(mount_devices[id(boot or root)]),
+            "boot": "" if boot else "/boot",
+            "entries": ostree.read_entries(g),
+        })
+        if source is not None and source != boot_owner:
+            return
+        bootloader = detect_bootloader(g, DEVICE)
+        if bootloader is None:
+            return
+        if distro["architecture"] != "amd64":
+            raise NotImplementedError(
+                "booting an ostree image is only supported on amd64 for now "
+                "(this one is '%s')" % distro["architecture"])
+        if not isinstance(bootloader, GrubBootloader):
+            raise NotImplementedError(
+                "booting an ostree image with systemd-boot is not supported yet")
+        esp = next((m for m in mounts if m["_prefix"] == ostree.ESP_PREFIX), None)
+        if esp is None or not g.is_dir("/usr/lib/grub/x86_64-efi"):
+            raise RuntimeError(
+                "booting an ostree image needs an '%s' partition and "
+                "grub-efi-amd64 in the root file-system" % ostree.ESP_PREFIX.rstrip("/"))
+        print("Installing boot loader and entries...")
+        esp_path = self._guest_paths[id(esp)]
+        bootloader.install(g, esp_path, boot_directory=esp_path, removable=True)
+        ordered = [boot_entries[-1]] + boot_entries[:-1]
+        g.write_append("%s/grub/grub.cfg" % esp_path,
+                       ostree.grub_menuentries(ordered).encode())
+        self._sign_bootloader_files(g, bootloader, esp_path)
 
     # Ingests preloaded containers into their respective runtime storage inside the appliance,
     # then prunes daemon state and clamps mtimes for reproducibility.

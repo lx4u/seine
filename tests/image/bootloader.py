@@ -71,6 +71,15 @@ class GrubInstall(avocado.Test):
         ])
         self.assertEqual(g.written, {})
 
+    def test_removable_has_grub_install_write_the_fallback_path_itself(self):
+        g = FakeGuestfs(dirs=["/usr/lib/grub/x86_64-efi"])
+        GrubBootloader("/dev/sda").install(
+            g, "/efi", boot_directory="/efi", removable=True)
+        self.assertEqual(g.calls, [
+            ("sh", "grub-install --target x86_64-efi --efi-directory=/efi "
+                   "--boot-directory=/efi --removable /dev/sda"),
+        ])
+
     def test_non_efi_passes_no_options(self):
         g = FakeGuestfs()
         GrubBootloader("/dev/sda").install(g, "/efi")
