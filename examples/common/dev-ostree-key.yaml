@@ -1,0 +1,54 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Signs the ostree commit of the examples and the tests. Fixed dev-only
+# key, so local builds agree; a remote vault ignores this and fails
+# closed. Never use it for anything real.
+defaults:
+    vault:
+        ostree-commits:
+            private_key: |
+                -----BEGIN PGP PRIVATE KEY BLOCK-----
+
+                lQVYBGlVuQABDADm+AB6cFAGH9xb+mh5OKJvDvczN4Y4cnHUDePdhz5fZ/Qghjyh
+                0RqyoZKWE24gF/tXY4UsUYhOzZ+wVHZu8YgMXYjLUFswrJNG84D0GEvIPGWTZr+s
+                9v8xAYnYx2q0qaG3NGLpkFn6kAfdZ82Ev1M2zSVEOsVftlkHimPEC2OfsRCUCDmO
+                XY9FcyOWCBd3+Tw2D1jxLNoVoX21J+CVbMld8Cn3unJe+SLjFyzAD75MIhL5gizC
+                sLW2zm4+26CnP5ptMg95yALXu07V32+i/O+qWhTak6My7Djf2FnUzpnkB3DhN4z+
+                f/gJER4COAoMyI9ISTfqWYdCwz49z0+mKV99P4dqM+nwlK2hpkfVVq/Yk1wBO0di
+                GR+qFt2fwcSgw5OyyTRA2CCivdyiCIEnOg+JfQ+D79RuzmOsUB/8rX8togy1Q+2v
+                +vtVVS92ZicxKwck17xPkJXcguJfcRTOO+MawNrA62MbV8ZmEXZSLsEtSySG+dgj
+                SnY1t2nJfw8kyCkAEQEAAQAL/A9gaI8TiJmrx9dzb5P4bln581ZR0T9TS9rhVNpT
+                +BX7x/qIAqPcQGHZlLZ7PdboTyegJ3F4o8bpShhquxrDkjo5L5Onj8vzr/dmhonZ
+                pJFEshd9h5pr3uKZQV8xAYcxuY4xRY+FTcmQYAcAXjlC+owuCAKHmMnN4ZX5WOR9
+                mfOQ+HNT1oRw8UpJ8iR5eUSCZNzi1ISekY358HJIdhtvQLsJXjs7oAR3eM2JEVs1
+                ARyKR9ycFb+dakTsxSqtTlVWzCBU6D0nTu+vYZDjIX1f+tRq5g2u4KnWbdu1oWwO
+                jDjQb70rw8/w1KVOxyGR0KfmpLb3OwaOE+lCiaoDyFQ5NZwVoMJ6i2f4ItAmvxFJ
+                gmvORFQF2CzmYlTNCJhWBXKL2ju3GIwwdqWfJ7DtiEdZjxd4yRUjyJoSy3wOp0G3
+                kQ0PkXOjSTXQqQeqrHySBsyo/VGadX9ncbm3zvlJKQm8yUQwrb/JXOgWXFtvfsnn
+                Q05uoIRd0KZFnItqQ+0Z0G2qjQYA7BiG1a9PtRMrgW/6H6jnDdMGu1GjIS3qQ3uB
+                /NMp3riq2K/BrFHhAdAWVOo/UE0gdKpmuU3rs3gX9E5wLSz5KbFPBe7WYHfOhbl2
+                my3Gv3IsYOCX/MMm+yAN+999SxmtFZ8VEHDwgWP1acz1aZ4DOSXH0K9jvXTFV6Bt
+                gvdTDOLnT9mVE+8fPob8t6P8mfjlH08ypklsDrGUXfejVFimdkx8qQweKhytQjIK
+                F/AnNij1QOCrXHuqbaUYMnSRDMolBgD6cNJvTnvk43jdpdyuaVhDPdOiRrfGa4Ll
+                XRq2HUQzA+v+ejZPmssXTk2/aHIy87pD7kMsePQnCZ1zfiTb+MbO+OxjRinr/nO1
+                dkDgjNcCD0cWu9j8gFNQdnUzoi4cToskVJJhAk/4fIvsO0yOOZ7vCEHuGZQxsOmQ
+                h9vMpKW2dhiZFqWLgMClB4EJSxmMq9vDgjlutH/xVT8i2OHUD3yZO0G7MxkvIspz
+                Vz8fc68t5SHhwENdrEWuKJXG9C9VrLUF/A4sH0O8LvM4r+puAgSk3/BB2PIj+h93
+                2S8Hy6pFCmXlvS9NVLR78Kwo3snsI90pq2csKRcBfbYK90y2Pai0pOzTS2gLmeQm
+                8lBrheqtNE+o8QfJ5adatn55quUcEz7KKmb1q5t5Dl2A3CZz2X4MmNHP1XKuu0zf
+                7r6uvctHxC53UBkh6G3OX3GZCOyRCgGXIC7oyZNV29VT9em3xZ4aC/V1TvassaHw
+                zqZTJFDvyG/gFjGt6h1Erm/5CK7rZcs6uOdGtCNzZWluZSBkZXYgb3N0cmVlIGNv
+                bW1pdHMgKElOU0VDVVJFKYkBzgQTAQoAOBYhBFTUIS13qlnmV9wMeocKzxbAGVJu
+                BQJpVbkAAhsDBQsJCAcCBhUKCQgLAgQWAgMBAh4BAheAAAoJEIcKzxbAGVJuWYAM
+                AIfwuct+DvuL+vVfopichVrACh1NeimWJByyye8aY/qdiHJZT8bY9NKe8N0EKnXa
+                Fn0aZX42Bhb6ZFyYUDrzfwDVaCQaLIMnHJEML6BI4jsbV3FyR9KB+L4w34r4CWTe
+                P58MuXlN9/shk2fF/gvSeawTcGvwh3P70I9yY3XO4sDk3/j/+Kcb24+cmcyWZKtx
+                k6mQL/DJBb6kry+NxocVCjPwUyovKuiBNNcfLz9/XziThoA9QXP+vP9pFp+rQD+j
+                2NKDNJC6+a4fq49RWqS9njAQi/Mo6GJbh9Q+A6ETxFEoVz8ZK9i6Hff/+qT4zqC5
+                XQ/lfJ3YBNfPB1eJs9HpQtws3F7ZLmRe8N6fjKW4p18mqNiWfXnXeQJF745lgfOc
+                J+WjTo8b7jwo0YJlEqfvGLuzoHNot5l472KU8lPAUNRe9eT+Z1N6KnZ5u/ZcEA0A
+                +n/a633dV+nJpXZSxrOwNCZ7TYe7vKFQgBW1I3cOAgjMekbZA6IIRwatJKaBjz/i
+                rA==
+                =kwrS
+                -----END PGP PRIVATE KEY BLOCK-----

@@ -191,6 +191,14 @@ composing the two ends up with one keypair for the whole boot chain:
 echo '{"generate": {}}' | bao write seine-sbsign/keys/uefi-secureboot -
 ```
 
+An OSTree commit is signed with its own pgp key
+(`image: ostree: gpg-key: vault:ostree-commits`):
+
+```
+echo '{"generate": {"name": "seine ostree commits", "email": "seine-demo@example.invalid", "key_type": "rsa3072"}}' \
+  | bao write seine-pgp/keys/ostree-commits -
+```
+
 ## 6. Point a build at it
 
 ```

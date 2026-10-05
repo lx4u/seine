@@ -206,6 +206,27 @@ def commit(g, ref, epoch):
     g.rm_rf(SKELETON)
     return checksum
 
+# The '.commitmeta' of a commit: an 'a{sv}' with the signatures (one
+# 'ay' each) under 'ostree.gpgsigs'.
+def commitmeta(signatures):
+    from gi.repository import GLib
+    meta = GLib.Variant("a{sv}", {
+        "ostree.gpgsigs": GLib.Variant("aay", signatures)})
+    return meta.get_data_as_bytes().get_data()
+
+# Where the repo keeps the commit object of 'checksum'.
+def commit_path(checksum):
+    return "%s/ostree/repo/objects/%s/%s.commit" % (
+        SYSROOT, checksum[:2], checksum[2:])
+
+# Signs the commit object with 'key' ('vault:<name>') at 'epoch'. ostree
+# signs the commit file itself and keeps the signature next to it.
+def sign_commit(g, provider, checksum, key, epoch):
+    path = commit_path(checksum)
+    signature = provider.pgp_detach_sign(
+        key[len("vault:"):], g.read_file(path), epoch)
+    g.write(path[:-len("commit")] + "commitmeta", commitmeta([signature]))
+
 # 'kargs' end up in the boot entry, and a later deploy inherits them.
 def deploy(g, stateroot, ref, kargs=()):
     _ostree(g, "admin", "deploy", "--sysroot=%s" % SYSROOT,
@@ -381,6 +402,10 @@ class OstreeSysroot:
 
         print("Committing and deploying...")
         checksum = commit(g, ref, self.source._epoch())
+        if settings.get("gpg-key"):
+            sign_commit(g, self._vault_provider(), checksum,
+                        settings["gpg-key"], self.source._epoch())
+            print("  signed with %s" % settings["gpg-key"])
         deploy(g, stateroot, ref, kargs)
         print("  %s %s" % (ref, checksum))
         self._boot_ostree(g, source, mounts, mount_devices, stateroot,

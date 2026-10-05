@@ -95,6 +95,20 @@ The commit carries an empty `machine-id` and no SSH host keys, so
 every device creates its own. A root file system that ships host keys
 is refused.
 
+## Signing the commit
+
+Set `gpg-key: vault:<name>` under `image: ostree` (or in a `sources:`
+entry) to sign the commit with a pgp key of the vault. The imager signs
+the commit object with the build time and stores the signature in the
+`.commitmeta` file next to it, as `ostree gpg-sign` does. Use a key of
+its own, not the one that signs an apt repository. Two builds with the
+same key stay byte-identical. `examples/common/dev-ostree-key.yaml`
+holds a fixed key for development only (`ostree-commits`). The
+[vault guide](vault-openbao.md) shows how to create a real one.
+
+The signature is not checked on the device yet: that needs a remote with
+`gpg-verify`, which comes with updates.
+
 ## Requirements
 
 The root file system needs `dracut`, `ostree` and `ostree-boot`, and no

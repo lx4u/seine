@@ -57,6 +57,9 @@ class FakeGuestfs:
     def cp(self, src, dst):
         self.copied = getattr(self, "copied", []) + [(src, dst)]
 
+    def read_file(self, path):
+        return self.files[path]
+
     def set_e2attrs(self, path, attrs, clear=False):
         self.unlocked = getattr(self, "unlocked", []) + [(path, attrs, clear)]
 
@@ -125,6 +128,37 @@ class Commands(avocado.Test):
         self.assertEqual(g.commands, [
             ["/usr/bin/ostree", "admin", "deploy", "--sysroot=/sysroot",
              "--os=main", "main/amd64"]])
+
+class FakeVault:
+    def pgp_detach_sign(self, name, data, timestamp):
+        self.args = (name, data, timestamp)
+        return b"signature"
+
+class SignedCommit(avocado.Test):
+    def setUp(self):
+        try:
+            import gi.repository.GLib
+        except ImportError as e:
+            self.cancel("python3-gi is missing: %s" % e)
+
+
+    def test_the_commit_file_is_signed_and_its_signature_kept_beside_it(self):
+        g = FakeGuestfs()
+        path = "/sysroot/ostree/repo/objects/ab/cdef.commit"
+        g.files = {path: b"commit"}
+        vault = FakeVault()
+        ostree.sign_commit(g, vault, "abcdef", "vault:ostree-commits", 1700000000)
+        self.assertEqual(vault.args, ("ostree-commits", b"commit", 1700000000))
+        self.assertEqual(
+            g.written, {path[:-6] + "commitmeta": ostree.commitmeta([b"signature"])})
+
+    def test_commitmeta_holds_the_signatures_under_the_ostree_key(self):
+        from gi.repository import GLib
+        meta = GLib.Variant.new_from_bytes(
+            GLib.VariantType("a{sv}"),
+            GLib.Bytes.new(ostree.commitmeta([b"one", b"two"])), False)
+        sigs = meta.lookup_value("ostree.gpgsigs", GLib.VariantType("aay"))
+        self.assertEqual([bytes(s) for s in sigs], [b"one", b"two"])
 
 class Unlock(avocado.Test):
     def test_deployment_roots_lose_the_immutable_flag(self):

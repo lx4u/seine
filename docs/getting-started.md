@@ -7,7 +7,7 @@ The easiest way to get started is to install the following packages, all
 available from your distribution:
 
 ```
-sudo apt-get install -y podman passt qemu-kvm crun python3-venv python3-guestfs
+sudo apt-get install -y podman passt qemu-kvm crun python3-venv python3-gi python3-guestfs
 sudo adduser $USER kvm
 ```
 
@@ -64,8 +64,8 @@ pip install -r requirements.txt -e .
 ansible-galaxy collection install containers.podman ansible.posix community.general
 ```
 
-`--system-site-packages` is needed for `python3-guestfs`, which pip cannot
-install and seine imports.
+`--system-site-packages` is needed for `python3-guestfs` and `python3-gi`,
+which pip cannot install (or only with build tools) and seine imports.
 
 seine runs `ansible-playbook` as a command rather than importing it, so it
 has to be on `PATH` -- from the virtual environment, or installed
@@ -150,7 +150,7 @@ system packages pip cannot install:
 With `uv`:
 
 ```
-sudo apt-get install -y python3-guestfs python3-libarchive-c
+sudo apt-get install -y python3-gi python3-guestfs python3-libarchive-c
 uv pip install avocado-framework 'setuptools<81'
 uv run avocado run tests/*/*.py
 ```
@@ -158,7 +158,7 @@ uv run avocado run tests/*/*.py
 Or using an activated `venv`:
 
 ```
-sudo apt-get install -y python3-guestfs python3-libarchive-c
+sudo apt-get install -y python3-gi python3-guestfs python3-libarchive-c
 python3 -m venv --system-site-packages .venv
 . .venv/bin/activate
 pip install -r requirements.txt avocado-framework 'setuptools<81'
