@@ -560,6 +560,21 @@ class OstreeSpecification(avocado.Test):
         ph.parse(spec)
         self.assertEqual(ph.ostree["mode"], "disabled")
 
+    def test_gpg_key_names_a_vault_key(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["gpg-key"] = "vault:ostree-commits"
+        ph = PartitionHandler()
+        ph.parse(spec)
+        self.assertEqual(ph.ostree_for(None)["gpg-key"], "vault:ostree-commits")
+
+    def test_gpg_key_must_be_a_vault_reference(self):
+        for key in ("/etc/key.pem", "vault:", "vault:a/b", 3):
+            spec = ostree_spec()
+            spec["image"]["ostree"]["gpg-key"] = key
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse(spec)
+            self.assertIn("shall be 'vault:<name>'", str(cm.exception))
+
     def test_unknown_mode_is_refused(self):
         self.refuses("is not one of", mode="bootc")
 

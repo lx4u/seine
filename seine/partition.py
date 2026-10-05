@@ -32,6 +32,9 @@ OSTREE_DEPLOYMENT_OVERHEAD = 2 * 1024 * 1024
 # Stateroots and refs end up in file names and ostree ref names.
 OSTREE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+# Same rule as VaultSigner for the name of a vault key.
+OSTREE_KEY_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
+
 class PartitionHandler:
 
     START_OFFSET_KB  = 1 * 1024
@@ -493,7 +496,7 @@ class PartitionHandler:
     def _parse_ostree_settings(self, where, settings):
         if type(settings) != type({}):
             raise ValueError("'%s' shall be a mapping" % where)
-        allowed = ("mode", "stateroot", "ref")
+        allowed = ("mode", "stateroot", "ref", "gpg-key")
         if where == "image: ostree":
             allowed += ("sources",)
         for key in settings:
@@ -513,6 +516,12 @@ class PartitionHandler:
             if not ok or (key == "stateroot" and "/" in value):
                 raise ValueError(
                     "'%s: %s: %s' is not a valid name" % (where, key, value))
+        key = settings.get("gpg-key")
+        if key is not None and not (
+                type(key) == type("") and key.startswith("vault:")
+                and OSTREE_KEY_NAME.match(key[len("vault:"):])):
+            raise ValueError(
+                "'%s: gpg-key: %s' shall be 'vault:<name>'" % (where, key))
         return dict(settings)
 
     def _parse_ostree(self, ostree):

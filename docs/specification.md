@@ -1686,7 +1686,8 @@ layout.
 | mode      | no       | `disabled` (default), `standard` or `composefs`      |
 | stateroot | no       | OSTree stateroot, defaults to the `multiconfig:` group name, else `debian` |
 | ref       | no       | Commit ref, defaults to `<stateroot>/<arch>`         |
-| sources   | no       | Per `multiconfig:` group overrides of the three above |
+| gpg-key   | no       | `vault:<name>`: signs the commit with this vault pgp key, unsigned if unset |
+| sources   | no       | Per `multiconfig:` group overrides of the four above |
 
 When `mode` is not `disabled`, the build is refused unless:
 
