@@ -26,6 +26,9 @@ OSTREE_RESERVED = ("/home", "/srv", "/root", "/mnt", "/opt", "/usr/local")
 OSTREE_OLD_RELEASES = ("bullseye", "bookworm", "oldstable")
 OSTREE_COMPOSEFS_RELEASES = ("forky", "testing", "sid", "unstable")
 
+# Each retained deployment checks out its own /etc and boot entry.
+OSTREE_DEPLOYMENT_OVERHEAD = 2 * 1024 * 1024
+
 # Stateroots and refs end up in file names and ostree ref names.
 OSTREE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -144,6 +147,7 @@ class PartitionHandler:
             part["_size"] = self._from_human_size(part["extra"])
         else:
             part["_size"] = self._from_human_size("%dMiB" % PartitionHandler.DEFAULT_EXTRA_MB)
+        part["_slack"] = part["_size"]
 
         if "where" in part:
             prefix = os.path.normpath(part["where"])
@@ -375,6 +379,8 @@ class PartitionHandler:
         start = self._to_rounded_mib(start)
         self._start_offset = start
 
+        self._add_ostree_room()
+
         for mount in self.mounts:
             mount["_size"] = self._to_rounded_mib(mount["_size"]) * 1024 * 1024
             if "size" in mount and mount["size"] > mount["_size"]:
@@ -406,6 +412,20 @@ class PartitionHandler:
 
         # +1 MiB at the end of the disk for the backup GPT
         self._min_size = (layout_start + 1) * 1024 * 1024
+
+    # An ostree sysroot holds the repo (the root's own content, plus the
+    # /var content it keeps for seeding) and room for one more full
+    # deployment, so a first upgrade does not fail on a full disk. An
+    # explicit 'size:' still wins.
+    def _add_ostree_room(self):
+        for source, mounts in self.rooted_sources().items():
+            if self.ostree_for(source)["mode"] == "disabled":
+                continue
+            root = next(m for m in mounts if m["_prefix"] == "/")
+            var = next(m for m in mounts if m["_prefix"] == "/var/")
+            content = root["_size"] - root["_slack"]
+            seed = var["_size"] - var["_slack"]
+            root["_size"] += content + seed + OSTREE_DEPLOYMENT_OVERHEAD
 
     def print_stats(self):
         print("prologue:\t%s" % self._to_human_size(self._start_offset))
@@ -557,6 +577,9 @@ class PartitionHandler:
                 "'image: ostree' needs a 'gpt' partition table (this "
                 "image's table is '%s')" % self._table)
 
+        if self.bootlets:
+            raise ValueError(
+                "'image: bootlets' cannot be used with 'image: ostree' yet")
         stateroots = {}
         for name, settings in enabled.items():
             who = "'multiconfig:' group '%s'" % name if name else "the image"
@@ -578,6 +601,10 @@ class PartitionHandler:
                         "'image: ostree' does not support (the sysroot "
                         "stays writable)"
                         % (part["label"], part["_prefix"].rstrip("/") or "/"))
+                if part["type"] in RO_FSTYPES:
+                    raise ValueError(
+                        "'%s' is a read-only partition, which 'image: "
+                        "ostree' cannot fill yet" % part["label"])
                 where = part["_prefix"].rstrip("/")
                 if where in OSTREE_RESERVED:
                     raise ValueError(

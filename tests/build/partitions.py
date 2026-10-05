@@ -682,3 +682,43 @@ class OstreePerGroupSettings(avocado.Test):
         spec = two_groups(a={"mode": "disabled"}, b={"mode": "disabled"})
         spec["distribution"]["release"] = "bookworm"
         PartitionHandler().parse(spec)
+
+class OstreeSysroot(avocado.Test):
+    MIB = 1024 * 1024
+
+    def sized(self, root_mib, var_mib, **root):
+        ph = PartitionHandler()
+        spec = ostree_spec()
+        spec["image"]["partitions"][1].update(root)
+        ph.parse(spec)
+        for path, mib in (("etc/data", root_mib), ("var/data", var_mib)):
+            member = tarfile.TarInfo(path)
+            member.size = mib * self.MIB
+            ph.distribute(member)
+        ph.compute_sizes()
+        return {m["label"]: m["_size"] // self.MIB for m in ph.mounts}
+
+    def test_the_sysroot_has_room_for_the_repo_and_one_more_deployment(self):
+        plain = PartitionHandler()
+        spec = ostree_spec()
+        del spec["image"]["ostree"]
+        plain.parse(spec)
+        member = tarfile.TarInfo("etc/data")
+        member.size = 100 * self.MIB
+        plain.distribute(member)
+        plain.compute_sizes()
+        plain_root = next(m for m in plain.mounts if m["label"] == "sysroot")
+        sizes = self.sized(100, 10)
+        # content again for the next deployment, plus /var kept in the repo
+        self.assertEqual(sizes["sysroot"], plain_root["_size"] // self.MIB + 100 + 10 + 2)
+
+    def test_an_explicit_size_still_wins_when_larger(self):
+        self.assertEqual(self.sized(100, 10, size="2GiB")["sysroot"], 2048)
+
+    def test_read_only_partitions_are_refused(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(ostree_spec(partitions=[
+                {"label": "sysroot", "where": "/"},
+                {"label": "var", "where": "/var"},
+                {"label": "ro", "where": "/data", "type": "squashfs"}]))
+        self.assertIn("read-only", str(cm.exception))

@@ -127,3 +127,53 @@ def _relocate_kernel(g, at):
     for link in ("vmlinuz", "vmlinuz.old", "initrd.img", "initrd.img.old"):
         if g.is_symlink(at(link)):
             g.rm_rf(at(link))
+
+SYSROOT = "/sysroot"
+OSTREE = "/usr/bin/ostree"
+
+# Both stay under /sysroot, which the commit skips, and are removed
+# right after it.
+SKIP_LIST = "/sysroot/.seine-skip"
+SKELETON = "/sysroot/.seine-skeleton"
+
+# Directories the skip list drops from the commit but the initramfs
+# needs (ostree-prepare-root moves /sysroot).
+SKIPPED = ("/sysroot", "/proc", "/dev", "/sys", "/run", "/lost+found")
+
+# Where the guest mounts a partition meant for 'prefix' ('/var/', ...).
+# /var is the stateroot's, so deploy seeds the partition and not the
+# sysroot.
+def target_path(prefix, stateroot):
+    path = prefix.rstrip("/")
+    if path == "/var" or path.startswith("/var/"):
+        return "%s/ostree/deploy/%s%s" % (SYSROOT, stateroot, path)
+    return SYSROOT + path
+
+def _ostree(g, *args):
+    return g.command([OSTREE] + list(args))
+
+# '/sysroot' is the physical sysroot, already mounted.
+def init_sysroot(g, stateroot):
+    _ostree(g, "admin", "init-fs", SYSROOT)
+    _ostree(g, "admin", "os-init", "--sysroot=%s" % SYSROOT, stateroot)
+
+# Commits the staged root ('/'), whatever is mounted under it aside.
+# Returns the commit checksum.
+def commit(g, ref, epoch):
+    g.write(SKIP_LIST, ("\n".join(SKIPPED) + "\n").encode())
+    for name in ("sysroot", "dev", "proc", "sys", "run"):
+        directory = "%s/%s" % (SKELETON, name)
+        g.mkdir_p(directory)
+        g.chmod(0o755, directory)
+    checksum = _ostree(
+        g, "--repo=%s/ostree/repo" % SYSROOT, "commit", "-b", ref,
+        "--tree=dir=/", "--tree=dir=%s" % SKELETON,
+        "--skip-list=%s" % SKIP_LIST, "--timestamp=@%d" % epoch,
+        "--no-bindings").strip()
+    g.rm_rf(SKIP_LIST)
+    g.rm_rf(SKELETON)
+    return checksum
+
+def deploy(g, stateroot, ref):
+    _ostree(g, "admin", "deploy", "--sysroot=%s" % SYSROOT,
+            "--os=%s" % stateroot, ref)

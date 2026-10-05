@@ -1700,6 +1700,10 @@ When `mode` is not `disabled`, the build is refused unless:
    instead, e.g. `where: /var/home`;
  * `/` and `/usr` do not use `verity: true`, the sysroot stays writable;
  * `/boot`, if mounted, is not `vfat`.
+ * there are no `bootlets` and no read-only (`squashfs`/`erofs`) partitions
+   yet.
+
+See [OSTree sysroots](ostree.md) for what the imager builds.
 
 Packages usually come from a playbook, so the root file system is
 checked once it is built, before any disk work: it must have `dracut`,

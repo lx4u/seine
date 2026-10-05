@@ -19,6 +19,7 @@ from seine                   import pe_cert
 from seine                   import utils
 from seine.imager.bootloader import detect as detect_bootloader
 from seine.imager.appliance import ImagerAppliance
+from seine.imager             import ostree
 from seine.packages          import FALLBACK_EPOCH
 from seine.partition        import RO_FSTYPES
 from seine.partition        import VERITY_HASH_TYPE
@@ -1206,6 +1207,12 @@ class Imager:
                         (archive_to_guest_path[arch_path], target, root, ns, img_name)
                         for (arch_path, target, root, ns, img_name) in source_archives.get(source, [])
                     ]
+                    if ph.ostree_for(source)["mode"] != "disabled" \
+                            and any(m["_prefix"] == "/" for m in mounts):
+                        self._deploy_ostree(
+                            g, ph, source, mounts, part_devices, vol_devices,
+                            container_devs)
+                        continue
                     mount_devices = self._populate_source(
                         g, ph, source, mounts, part_devices, vol_devices, part_index,
                         container_devices=container_devs)
@@ -1308,6 +1315,47 @@ class Imager:
 
         self._label_selinux(g, mounts)
         return mount_devices
+
+    # Unpacks the rootfs onto the scratch disk, which becomes the
+    # chroot the target's own ostree runs from, then commits and deploys
+    # it into the real sysroot mounted under '/sysroot'.
+    def _deploy_ostree(self, g, ph, source, mounts, part_devices, vol_devices,
+                       container_devices):
+        if container_devices:
+            raise NotImplementedError(
+                "'containers:' cannot be loaded into an ostree sysroot yet")
+        settings = ph.ostree_for(source)
+        stateroot = settings["stateroot"]
+        distro = self.source.spec["distribution"] if source is None else \
+            self.source.subbuilds[source].spec["distribution"]
+        ref = settings.get("ref") or "%s/%s" % (stateroot, distro["architecture"])
+        print("Staging root file-system for ostree '%s'..." % ref)
+        g.mkfs("ext4", SCRATCH_DEVICE, features="^dir_index")
+        g.mount(SCRATCH_DEVICE, "/")
+        g.tar_in_opts(self.source._tarball_for(source), "/", xattrs=True)
+        ostree.sanitize(g, "/")
+
+        def device(m):
+            return part_devices.get(id(m)) or vol_devices.get(id(m))
+        root = next(m for m in mounts if m["_prefix"] == "/")
+        g.mount(device(root), ostree.SYSROOT)
+        ostree.init_sysroot(g, stateroot)
+        for m in mounts:
+            if m is root:
+                continue
+            path = ostree.target_path(m["_prefix"], stateroot)
+            if not g.is_dir(path):
+                g.mkdir_p(os.path.dirname(path))
+                g.mkmountpoint(path)
+            g.mount(device(m), path)
+
+        print("Committing and deploying...")
+        checksum = ostree.commit(g, ref, self.source._epoch())
+        ostree.deploy(g, stateroot, ref)
+        print("  %s %s" % (ref, checksum))
+        g.umount_all()
+        # The next source (or rebuild step) expects an empty scratch disk.
+        g.mkfs("ext4", SCRATCH_DEVICE, features="^dir_index")
 
     # Ingests preloaded containers into their respective runtime storage inside the appliance,
     # then prunes daemon state and clamps mtimes for reproducibility.

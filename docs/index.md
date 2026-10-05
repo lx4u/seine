@@ -17,6 +17,7 @@ specification
 merging
 kernels
 building
+ostree
 distributed-build
 environment
 testing
