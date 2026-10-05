@@ -72,17 +72,21 @@ For each root file system, in the imager appliance:
 
 6. A UKI in the root file system (`/boot/EFI/Linux/*.efi`, from
    `extends: uki:` or a playbook) is taken out of the commit and rebuilt
-   after `deploy`: the kernel arguments of the deployment, including
-   `ostree=` with the checksum of the kernel and initramfs, are added to
+   after `deploy`: the kernel arguments of the deployment are added to
    its command line, and it is signed if `image: secure-boot:` is set.
+   Its `ostree=` names a link, `/ostree/<stateroot>-<commit>`, that the
+   imager creates to the deployment, instead of the `boot.<N>` path of
+   the boot entry.
    It lands on the ESP as `EFI/Linux/<stateroot>-<name>.efi`. The
    sysroot then gets no boot entry of its own and no kernel files on the
    ESP: systemd-boot finds the UKI by itself, and GRUB gets a menu entry
    that chainloads it. A root file system with a UKI needs a boot loader.
 
-   The UKI names the deployment of the first boot. After an update, the
-   new deployment is not covered by it: keeping the UKI in step with the
-   commits is the updater's job.
+   The link stays valid when an update flips `boot.<N>`, so the UKI
+   keeps booting its deployment, and a rollback to it works. The name
+   does not pin the commit: `ostree-prepare-root` does not check it. A
+   new deployment is not covered by this UKI: the updater builds a UKI
+   and creates a link for each new commit.
 
 With `--reproducible`, the partitions are then rebuilt like any other
 ext4 partition, so two builds of the same specification give a

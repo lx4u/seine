@@ -258,8 +258,16 @@ class OstreeImageBoots(avocado.Test):
         g.add_drive_opts(disk, format="raw", readonly=True)
         g.launch()
         try:
+            g.mount_ro("/dev/sda2", "/")
+            commit = g.cat("/ostree/repo/refs/heads/debian/amd64").strip()
+            target = g.readlink("/ostree/debian-%s" % commit)
+            self.assertEqual(target, "deploy/debian/deploy/%s.0" % commit)
+            self.assertTrue(g.is_dir("/ostree/%s" % target))
+            g.umount("/")
             g.mount_ro("/dev/sda1", "/")
             self.assertTrue(g.is_file("/EFI/Linux/debian-os.efi"))
+            self.assertIn(b"ostree=/ostree/debian-%s" % commit.encode(),
+                          g.read_file("/EFI/Linux/debian-os.efi"))
             if loader == "grub":
                 self.assertIn("chainloader /EFI/Linux/debian-os.efi",
                               g.cat("/grub/grub.cfg"))

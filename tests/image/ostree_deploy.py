@@ -60,6 +60,9 @@ class FakeGuestfs:
     def read_file(self, path):
         return self.files[path]
 
+    def ln_s(self, target, path):
+        self.links = getattr(self, "links", []) + [(target, path)]
+
     def set_e2attrs(self, path, attrs, clear=False):
         self.unlocked = getattr(self, "unlocked", []) + [(path, attrs, clear)]
 
@@ -182,6 +185,29 @@ class FindDeployment(avocado.Test):
         g.ls = lambda path: ["abc.0", "abc.0.origin", "def.0", "def.0.origin"]
         with self.assertRaisesRegex(RuntimeError, "found 2"):
             ostree.find_deployment(g, "main")
+
+class UkiLink(avocado.Test):
+    def test_the_link_is_named_after_the_stateroot_and_the_commit(self):
+        g = FakeGuestfs()
+        self.assertEqual(ostree.link_deployment(g, "main"), "/ostree/main-abc")
+        self.assertEqual(g.links, [
+            ("deploy/main/deploy/abc.0", "/sysroot/ostree/main-abc")])
+
+    def test_each_stateroot_gets_a_link_of_its_own(self):
+        g = FakeGuestfs()
+        g.ls = lambda path: ["%s.0" % path.split("/")[-2], "x.0.origin"]
+        self.assertEqual(ostree.link_deployment(g, "main"), "/ostree/main-main")
+        self.assertEqual(ostree.link_deployment(g, "other"), "/ostree/other-other")
+        self.assertEqual(len(set(path for _, path in g.links)), 2)
+
+    def test_the_ostree_word_is_replaced_and_the_others_kept(self):
+        self.assertEqual(
+            ostree.with_ostree_root("root=PARTUUID=a rw ostree=/ostree/boot.1/d/c/0 quiet",
+                                    "/ostree/main-abc"),
+            "root=PARTUUID=a rw quiet ostree=/ostree/main-abc")
+
+    def test_the_ostree_word_is_added_when_missing(self):
+        self.assertEqual(ostree.with_ostree_root("rw", "/ostree/x"), "rw ostree=/ostree/x")
 
 ENTRY = {"title": "Debian (ostree:0)", "linux": "/ostree/debian-1/vmlinuz-6.1",
          "initrd": "/ostree/debian-1/initramfs-6.1.img",
@@ -334,11 +360,13 @@ class UkiRebuild(avocado.Test):
     def test_the_uki_gets_the_deployment_options_and_the_stateroot_name(self):
         sysroot = self.Fake(self.dir)
         group = {"entries": [dict(ENTRY)]}
-        sysroot._rebuild_ukis(group, "main", [("os.efi", "/w/os.efi")])
-        self.assertEqual(sysroot.rebuilt, [("/w/os.efi", ENTRY["options"])])
+        sysroot._rebuild_ukis(FakeGuestfs(), group, "main", [("os.efi", "/w/os.efi")])
+        self.assertEqual(sysroot.rebuilt, [
+            ("/w/os.efi", "root=PARTUUID=abc rw ostree=/ostree/main-abc")])
         self.assertEqual(group["ukis"], ["main-os.efi"])
 
     def test_several_boot_entries_are_refused(self):
         group = {"entries": [dict(ENTRY), dict(ENTRY)]}
         with self.assertRaises(RuntimeError):
-            self.Fake(self.dir)._rebuild_ukis(group, "main", [("os.efi", "/w/os.efi")])
+            self.Fake(self.dir)._rebuild_ukis(
+                FakeGuestfs(), group, "main", [("os.efi", "/w/os.efi")])

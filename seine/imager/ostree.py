@@ -256,6 +256,21 @@ def unlock_deployments(g, stateroot):
     for name in deployments(g, stateroot):
         g.set_e2attrs("%s/%s" % (base, name), "i", clear=True)
 
+# Names the deployment by its commit, for 'ostree=' in a UKI. Unlike the
+# 'boot.<N>' paths of the boot entries, it survives updates and rollbacks.
+# Returns the path the initramfs sees.
+def link_deployment(g, stateroot):
+    name = find_deployment(g, stateroot)
+    link = "%s-%s" % (stateroot, name.rpartition(".")[0])
+    g.ln_s("deploy/%s/deploy/%s" % (stateroot, name),
+           "%s/ostree/%s" % (SYSROOT, link))
+    return "/ostree/%s" % link
+
+# 'options' of a boot entry with its 'ostree=' word set to 'root'.
+def with_ostree_root(options, root):
+    words = [w for w in options.split() if not w.startswith("ostree=")]
+    return " ".join(words + ["ostree=%s" % root])
+
 # The ESP, mounted next to the sysroot's own mounts.
 ESP_PREFIX = "/efi/"
 
@@ -448,12 +463,13 @@ class OstreeSysroot:
     # Appends the command line the deployment boots with (root, ostree=...)
     # to each UKI. 'group' gets the names they have on the ESP, and the
     # rebuilt files for the boot owner to upload.
-    def _rebuild_ukis(self, group, stateroot, ukis):
+    def _rebuild_ukis(self, g, group, stateroot, ukis):
         if len(group["entries"]) != 1:
             raise RuntimeError(
                 "expected one boot entry to name in the UKI, found %d"
                 % len(group["entries"]))
-        options = group["entries"][0]["options"]
+        options = with_ostree_root(
+            group["entries"][0]["options"], link_deployment(g, stateroot))
         group["ukis"], group["built"] = [], []
         for name, original in ukis:
             print("Adding the ostree command line to '%s'..." % name)
@@ -479,7 +495,7 @@ class OstreeSysroot:
             "entries": read_entries(g),
         })
         if ukis:
-            self._rebuild_ukis(boot_entries[-1], stateroot, ukis)
+            self._rebuild_ukis(g, boot_entries[-1], stateroot, ukis)
         if source is not None and source != boot_owner:
             return
         bootloader = detect_bootloader(g, DEVICE)
