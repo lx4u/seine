@@ -1,0 +1,24 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier Apache-2.0
+
+# What a root file system needs to become an OSTree sysroot: dracut
+# (ostree's initramfs module) and ostree itself, with no
+# initramfs-tools. Installed before the kernel (priority 700 vs 800) so
+# dracut's own Provides pre-empts initramfs-tools, as in
+# examples/minimal-initrd/. The build stops before any disk work if one
+# is missing.
+
+playbook:
+    - name: build the initramfs with dracut and add ostree
+      priority: 700
+      tasks:
+          - name: install dracut, ostree and systemd
+            apt:
+                name:
+                    - dracut
+                    - dracut-config-generic
+                    - ostree
+                    - ostree-boot
+                    - systemd
+                    - systemd-sysv
+                state: present

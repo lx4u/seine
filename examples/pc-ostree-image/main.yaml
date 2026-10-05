@@ -1,0 +1,42 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier Apache-2.0
+
+# A PC disk whose root file system is an OSTree commit, with one
+# deployment of it booted by GRUB (docs/ostree.md).
+#   seine build examples/pc-ostree-image/main.yaml
+#   dd if=build/deploy/trixie/pc-ostree.img of=/dev/sdX bs=4M status=progress conv=fsync
+
+requires:
+    - ../common/amd64
+    - ../common/trixie
+    - ../common/debian
+    - ../common/conf-accounts
+    - ../common/conf-locales
+    - ../common/conf-timezone
+    - ../pc-image/grub-serial-console
+    - ostree
+
+image:
+    filename: pc-ostree.img
+    table: gpt
+    ostree:
+        mode: standard
+    partitions:
+        - label: esp
+          type: vfat
+          size: 256MiB
+          where: /efi
+          flags: [boot]
+        # No size: room for the commit plus one more deployment.
+        - label: sysroot
+          type: ext4
+          where: /
+        - label: var
+          type: ext4
+          size: 1024MiB
+          where: /var
+        # No /home mount in an ostree image: /home links into /var.
+        - label: home
+          type: ext4
+          size: 256MiB
+          where: /var/home

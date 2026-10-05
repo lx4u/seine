@@ -98,9 +98,10 @@ is refused.
 ## Requirements
 
 The root file system needs `dracut`, `ostree` and `ostree-boot`, and no
-`initramfs-tools`. Install them from a playbook before the kernel, as
-`examples/minimal-initrd/main.yaml` does for dracut. The build stops
-before any disk work if one is missing.
+`initramfs-tools`. Install them from a playbook before the kernel:
+`examples/pc-ostree-image/ostree.yaml` does it, and `main.yaml` next to
+it is a bootable PC disk built on it. The build stops before any disk
+work if one is missing.
 
 With a boot loader in the root file system, the disk also needs an ESP
 mounted at `/efi`, in the group named by `imager: boot` for a multiconfig
