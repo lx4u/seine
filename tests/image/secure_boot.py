@@ -18,6 +18,7 @@ sys.path.append(os.path.dirname(path_to_self))
 import ostree_boot
 import qemu_boot
 import qemu_guest
+from seine.imager import ostree
 from seine.utils import HOST_ARCH
 from tests.testutils import prune_on_pass
 
@@ -249,3 +250,43 @@ class SecureBootGuest:
             g.download(path, source)
             self.keys.sign(source, target)
             g.upload(target, path)
+
+    # The kernel and initramfs of the running deployment, and the command
+    # line of its UKI: what the UKIs of later commits are made from.
+    def fetch_boot_files(self):
+        for name in ("vmlinuz", "initramfs.img"):
+            self.sh("cp /usr/lib/modules/*/%s %s/%s" % (name, qemu_guest.SHARE, name))
+        self.kernel = os.path.join(self.share, "vmlinuz")
+        self.initrd = os.path.join(self.share, "initramfs.img")
+        self.cmdline = self.sh("cat /proc/cmdline")
+
+    # The commit a UKI boots, from the command line of the running system.
+    def booted_commit(self):
+        return self.sh("cat /proc/cmdline").split("ostree=/ostree/debian-")[1].split()[0]
+
+    # A new commit of the branch with a file that tells the versions apart.
+    def commit_update(self, version):
+        overlay = "/var/seine-update/usr/share/seine-test"
+        self.sh("mkdir -p %s && echo %s > %s/version" % (overlay, version, overlay))
+        return self.sh("ostree commit --repo=/sysroot/ostree/repo -b debian/amd64 "
+                       "--tree=ref=debian/amd64 --tree=dir=/var/seine-update")
+
+    # Makes the deployment of 'commit' and the link its UKI names.
+    def deploy_update(self, commit):
+        self.sh("ostree admin deploy debian/amd64")
+        self.sh("ln -s deploy/debian/deploy/%s.0 /sysroot/ostree/debian-%s"
+                % (commit, commit))
+
+    # Builds a UKI of 'commit' on the host, signed with db, and puts it on the
+    # ESP as 'name' (a lowercase name without .efi), counted if 'tries'. The
+    # file is renamed last, so that sd-boot never sees a partial one.
+    def install_uki(self, name, commit, marker, version, tries=None, extra=""):
+        options = ostree.with_ostree_root(self.cmdline, "/ostree/debian-%s" % commit)
+        words = [w for w in options.split() if not w.startswith("systemd.hostname=")]
+        cmdline = " ".join(words + ["systemd.hostname=%s" % marker] + extra.split())
+        build_uki(os.path.join(self.share, name + ".efi"), self.kernel, self.initrd,
+                  cmdline, version, self.keys)
+        final = "%s%s.efi" % (name, "+%d" % tries if tries else "")
+        esp = "/efi/EFI/Linux"
+        self.sh("cp %s/%s.efi %s/%s.tmp && mv %s/%s.tmp %s/%s && sync" % (
+            qemu_guest.SHARE, name, esp, name, esp, name, esp, final))
