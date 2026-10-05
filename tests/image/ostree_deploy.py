@@ -167,6 +167,22 @@ class Unlock(avocado.Test):
         self.assertEqual(g.unlocked, [
             ("/sysroot/ostree/deploy/main/deploy/abc.0", "i", True)])
 
+class FindDeployment(avocado.Test):
+    def test_the_origin_file_is_not_a_deployment(self):
+        self.assertEqual(ostree.find_deployment(FakeGuestfs(), "main"), "abc.0")
+
+    def test_no_deployment_is_an_error(self):
+        g = FakeGuestfs()
+        g.ls = lambda path: []
+        with self.assertRaisesRegex(RuntimeError, "found 0"):
+            ostree.find_deployment(g, "main")
+
+    def test_several_deployments_are_an_error(self):
+        g = FakeGuestfs()
+        g.ls = lambda path: ["abc.0", "abc.0.origin", "def.0", "def.0.origin"]
+        with self.assertRaisesRegex(RuntimeError, "found 2"):
+            ostree.find_deployment(g, "main")
+
 ENTRY = {"title": "Debian (ostree:0)", "linux": "/ostree/debian-1/vmlinuz-6.1",
          "initrd": "/ostree/debian-1/initramfs-6.1.img",
          "options": "root=PARTUUID=abc rw ostree=/ostree/boot.1/debian/1/0"}

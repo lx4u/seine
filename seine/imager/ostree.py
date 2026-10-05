@@ -232,14 +232,29 @@ def deploy(g, stateroot, ref, kargs=()):
     _ostree(g, "admin", "deploy", "--sysroot=%s" % SYSROOT,
             "--os=%s" % stateroot, *["--karg=%s" % k for k in kargs], ref)
 
+def _deploy_dir(stateroot):
+    return "ostree/deploy/%s/deploy" % stateroot
+
+# The deployments of a stateroot, as '<checksum>.<n>' directory names.
+def deployments(g, stateroot):
+    return [name for name in g.ls("%s/%s" % (SYSROOT, _deploy_dir(stateroot)))
+            if not name.endswith(".origin")]
+
+# The name of the only deployment of a stateroot.
+def find_deployment(g, stateroot):
+    names = deployments(g, stateroot)
+    if len(names) != 1:
+        raise RuntimeError(
+            "expected one deployment of '%s', found %d" % (stateroot, len(names)))
+    return names[0]
+
 # 'deploy' makes each deployment root immutable, and the timestamp pass
 # that follows (touch) cannot change an immutable directory. The mke2fs
 # rebuild would drop the flag anyway; ostree sets it on the next deploy.
 def unlock_deployments(g, stateroot):
-    base = "%s/ostree/deploy/%s/deploy" % (SYSROOT, stateroot)
-    for name in g.ls(base):
-        if not name.endswith(".origin"):
-            g.set_e2attrs("%s/%s" % (base, name), "i", clear=True)
+    base = "%s/%s" % (SYSROOT, _deploy_dir(stateroot))
+    for name in deployments(g, stateroot):
+        g.set_e2attrs("%s/%s" % (base, name), "i", clear=True)
 
 # The ESP, mounted next to the sysroot's own mounts.
 ESP_PREFIX = "/efi/"
