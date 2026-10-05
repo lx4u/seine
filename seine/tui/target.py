@@ -50,12 +50,12 @@ HISTORY_GROUP = "target"
 # own subprocesses around this via posix_spawn, but libguestfs's own
 # qemu appliance launch does a real fork()+exec() in C that seine can't
 # avoid. os.register_at_fork and pthread_atfork don't help here (neither
-# fires for this C-level fork on this glibc), so instead imager.py's
+# fires for this C-level fork on this glibc), so instead imager/imager.py's
 # before_launch()/after_launch() hooks are wired here to disconnect the
 # channel before g.launch() and reconnect after, only if this call was
 # the one that actually disconnected it.
 def _wire_launch_guard(app):
-    from seine import imager
+    from seine.imager import imager
     def before():
         app._launch_guard_disconnected = getattr(app, "_target_client", None) is not None
         if app._launch_guard_disconnected:

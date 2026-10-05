@@ -9,7 +9,7 @@ path_to_self = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-from seine.imager_appliance import ImagerAppliance
+from seine.imager.appliance import ImagerAppliance
 
 
 class DummyTargetBootstrap:

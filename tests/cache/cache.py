@@ -656,7 +656,7 @@ class EveryImageSaysWhatItIs(avocado.Test):
     def test(self):
         from seine.bootstrap import HostBootstrap, TargetBootstrap
         from seine.cache import CARRIED_KINDS
-        from seine.imager_appliance import ImagerAppliance
+        from seine.imager.appliance import ImagerAppliance
         from seine.sbuild import BuilderImage
         from seine.sources import SourceBootstrap
         from seine.transport_bootstrap import TransportBootstrap

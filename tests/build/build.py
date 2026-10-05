@@ -360,7 +360,7 @@ class TheDiskImageIsReusedWhileItsInputsAreUnchanged(avocado.Test):
 
     def test_imager_prepare_and_build_skip_when_current(self):
         self.deploy(self.digest)
-        from seine.imager import Imager
+        from seine.imager.imager import Imager
         imager = Imager(self.image)
         imager._prepare()
         self.assertIsNone(imager._output_dir)

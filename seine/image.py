@@ -25,8 +25,8 @@ from seine.utils          import redactions
 from seine.ansible_runner import AnsibleContainerRunner
 from seine.bootstrap      import HostBootstrap
 from seine.bootstrap      import TargetBootstrap
-from seine.imager         import Imager
-from seine.imager_appliance import ImagerAppliance
+from seine.imager.imager    import Imager
+from seine.imager.appliance import ImagerAppliance
 from seine.transport_bootstrap import TransportBootstrap
 from seine.sbom           import SBOM
 from seine.sbuild         import BuilderImage
@@ -632,7 +632,7 @@ class Image:
 
     # Pulled out of the built tarball rather than the tarball itself:
     # more than one match is the same build-time error the imager's own
-    # kernel/initrd pairing check makes of it (imager.py's _boot_files()).
+    # kernel/initrd pairing check makes of it (imager/imager.py's _boot_files()).
     def _deploy_initrd(self):
         with tarfile.open(self._tarball) as tar:
             matches = [m for m in tar.getmembers()

@@ -79,7 +79,7 @@ class IndividualChecks(avocado.Test):
     # another architecture's is only a note (cross-building is optional).
     def test_hypervisors_grade_the_host_architecture_harder(self):
         checks = {c.name: c for c in doctor.check_hypervisors()}
-        from seine.imager import DEFAULT_HYPERVISORS
+        from seine.imager.imager import DEFAULT_HYPERVISORS
         from seine.utils import HOST_ARCH
         host_name = os.path.basename(DEFAULT_HYPERVISORS[HOST_ARCH])
         for architecture, path in DEFAULT_HYPERVISORS.items():

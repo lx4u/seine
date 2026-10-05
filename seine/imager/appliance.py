@@ -41,7 +41,7 @@ ARCH_INFO = {
 APT_PACKAGES = ["squashfs-tools", "erofs-utils", "binutils", "sbsigntool",
                 "cryptsetup-bin", "mtools", "e2fsprogs", "findutils"]
 # Minimal runtime tools required in the shipped appliance container image for
-# UKI anchoring and signing (imager.py runs objcopy, ukify, and sbsign as
+# UKI anchoring and signing (imager/imager.py runs objcopy, ukify, and sbsign as
 # container commands against this image).
 RUNTIME_APT_PACKAGES = ["binutils", "sbsigntool", "libfaketime"]
 # Needed inside the built appliance itself (LVM_WRAPPER_SCRIPT's
@@ -50,16 +50,16 @@ RUNTIME_APT_PACKAGES = ["binutils", "sbsigntool", "libfaketime"]
 EXTRA_APPLIANCE_PACKAGES = ["libfaketime", "python3"]
 BINARIES = [
     "/usr/bin/mksquashfs", "/usr/bin/mkfs.erofs",
-    # Rebuilds a verity hash tree, see imager.py's _build_verity().
+    # Rebuilds a verity hash tree, see imager/imager.py's _build_verity().
     "/usr/sbin/veritysetup",
     # Rebuild a FAT partition deterministically, see
-    # imager.py's _normalize_fat_tree().
+    # imager/imager.py's _normalize_fat_tree().
     "/usr/bin/mformat", "/usr/bin/mcopy", "/usr/bin/mmd",
     # Rebuild an ext2/3/4 partition deterministically, see
-    # imager.py's _normalize_ext_mount().
+    # imager/imager.py's _normalize_ext_mount().
     "/usr/sbin/mke2fs", "/usr/sbin/debugfs",
     # Capture a mount's content deterministically, see
-    # imager.py's _normalize_ext_mount().
+    # imager/imager.py's _normalize_ext_mount().
     "/usr/bin/cp", "/usr/bin/mkdir", "/usr/bin/find", "/usr/bin/touch",
     "/usr/bin/xargs",
 ]
@@ -277,7 +277,7 @@ class ImagerAppliance(Bootstrap):
 
 APPLIANCE_README = """\
 This is a "fixed appliance" for libguestfs, built by seine using supermin
-directly (see seine/imager_appliance.py). Point LIBGUESTFS_PATH at this
+directly (see seine/imager/appliance.py). Point LIBGUESTFS_PATH at this
 directory to use it in place of libguestfs's own supermin auto-build.
 """
 

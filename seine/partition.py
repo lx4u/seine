@@ -477,7 +477,7 @@ class PartitionHandler:
 
     # Every 'verity: true' partition needs one 'verity-hash' partition
     # naming it via 'verity-for:', sharing its 'source:', mounted at
-    # '/' or '/usr' (see imager.py's GPT_TYPE_ROOT_VERITY/_USR_VERITY).
+    # '/' or '/usr' (see imager/imager.py's GPT_TYPE_ROOT_VERITY/_USR_VERITY).
     def _validate_verity(self, spec):
         by_label = {p["label"]: p for p in self.partitions}
         protected = {p["label"] for p in self.partitions if p.get("verity")}

@@ -51,7 +51,7 @@ sys.path.insert(0, HERE)
 
 from seine.bootstrap import HostBootstrap, TargetBootstrap
 from seine.container import ContainerEngine
-from seine.imager_appliance import ImagerAppliance
+from seine.imager.appliance import ImagerAppliance
 from seine.utils import HOST_ARCH, distribution
 
 HOSTARCH = os.environ.get("HOSTARCH", HOST_ARCH)

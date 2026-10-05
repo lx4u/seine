@@ -10,7 +10,7 @@ import shutil
 import subprocess
 
 from seine import settings
-from seine.imager import DEFAULT_HYPERVISORS
+from seine.imager.imager import DEFAULT_HYPERVISORS
 from seine.sbom import DEBSBOM_IMAGE
 from seine.container import ContainerEngine
 from seine.utils import HOST_ARCH

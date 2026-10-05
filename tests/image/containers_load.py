@@ -17,7 +17,7 @@ from seine.containers.ingest import (
     ContainerdIngestionHandler,
     DockerIngestionHandler,
 )
-from seine.imager import Imager
+from seine.imager.imager import Imager
 from seine.utils import HOST_ARCH
 from tests.testutils import prune_on_pass
 

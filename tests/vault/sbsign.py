@@ -24,7 +24,7 @@ from cryptography import x509
 from seine import pe_cert
 from seine import vault
 from seine.container import ContainerEngine
-from seine.imager import Imager
+from seine.imager.imager import Imager
 from seine.vault.dev import CUSTOM_IMAGE, DevVault, ensure_image
 
 TOKEN = "sbsign-contract-token"

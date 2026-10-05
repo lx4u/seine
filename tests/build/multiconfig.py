@@ -198,7 +198,7 @@ class GroupsShareOneHostBootstrap(avocado.Test):
         self.assertIn("trixie-amd64:packages", by_name["pc:rootfs"].needs)
         self.assertIn("trixie-arm64:packages", by_name["rpi4:rootfs"].needs)
         self.assertIn("trixie-arm64:packages", by_name["rpi5:rootfs"].needs)
-        # imager.py's own hardcoded 'packages' need, threaded the same way.
+        # imager/imager.py's own hardcoded 'packages' need, threaded the same way.
         self.assertIn("trixie-amd64:packages", by_name["pc:appliance"].needs)
 
 class OneArchCohortKeepsBareNames(avocado.Test):
@@ -810,7 +810,7 @@ image:
 # 'source:' on a partition routes it to a declared 'multiconfig:' group's
 # own rootfs -- Image._referenced_sources()/_source_task_names() are what
 # 'disk' (own_tasks()) and _size_partitions()/Imager.create() (image.py/
-# imager.py) both read to know which groups' tarballs the outer disk
+# imager/imager.py) both read to know which groups' tarballs the outer disk
 # actually needs.
 class SourcedPartitionsRouteEachGroupsOwnTarball(avocado.Test):
     def setUp(self):

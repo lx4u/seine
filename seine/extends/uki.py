@@ -92,7 +92,7 @@ def uki_packaging(tool):
     return templates.load_templates(directory)
 
 # Shared between package-build (extend(), rendered into debian/rules as
-# shell), image-build (imager.py, real paths), and a cmdline-only addon
+# shell), image-build (imager/imager.py, real paths), and a cmdline-only addon
 # (uki_addon.py, linux=initrd=None -- no kernel/initrd of its own).
 # Quoting is the caller's job -- pre-quoted for the shell-rendered
 # caller, plain for argv.

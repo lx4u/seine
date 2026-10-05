@@ -9,7 +9,7 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-from seine.imager import Imager
+from seine.imager.imager import Imager
 
 
 class XattrRestoreUnitTests(avocado.Test):

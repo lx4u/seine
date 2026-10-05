@@ -283,7 +283,7 @@ class AnsibleContainerRunner:
 
     # Rebuilds every kernel's initrd with whichever generator is installed
     # (only one ever is: dracut Conflicts: initramfs-tools). dracut's
-    # output name is spelled out to match what imager.py expects.
+    # output name is spelled out to match what imager/imager.py expects.
     def _finalize(self):
         # mkinitramfs needs SOURCE_DATE_EPOCH for reproducible zstd.
         # dracut also needs '--reproducible', or its own generated

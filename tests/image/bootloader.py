@@ -8,7 +8,7 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-from seine.bootloader import GrubBootloader, SystemdBootBootloader, detect
+from seine.imager.bootloader import GrubBootloader, SystemdBootBootloader, detect
 
 # Plain Python, no guestfs appliance involved -- a fake stands in for 'g'
 # and records what was called against it.

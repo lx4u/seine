@@ -20,7 +20,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 from seine import pe_cert
-from seine.imager import Imager
+from seine.imager.imager import Imager
 
 def _self_signed(common_name):
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)

@@ -17,8 +17,8 @@ import guestfs
 
 from seine                   import pe_cert
 from seine                   import utils
-from seine.bootloader        import detect as detect_bootloader
-from seine.imager_appliance import ImagerAppliance
+from seine.imager.bootloader import detect as detect_bootloader
+from seine.imager.appliance import ImagerAppliance
 from seine.packages          import FALLBACK_EPOCH
 from seine.partition        import RO_FSTYPES
 from seine.partition        import VERITY_HASH_TYPE
@@ -1182,7 +1182,7 @@ class Imager:
             if ph.groups:
                 # pvcreate/vgcreate/lvcreate stamp wall-clock time and a
                 # random UUID into their metadata; the appliance's wrapper
-                # (imager_appliance.py) freezes the time and pins the UUIDs.
+                # (imager/appliance.py) freezes the time and pins the UUIDs.
                 g.set_append("faketime=%d seed=%s" % (
                     self.source._epoch(), self.source.spec_digest()))
             # Wraps the whole session, not just g.launch(): libguestfs forks

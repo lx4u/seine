@@ -11,7 +11,7 @@ from seine.utils import HOST_ARCH
 
 # Sibling of reproducible_disk.py's test, but with an LVM PV/VG/LV layout:
 # one GPT partition, one VG, two linear LVs. lvm2 stamps random UUIDs and
-# wall-clock time with no override; imager_appliance.py's wrapper pins both.
+# wall-clock time with no override; imager/appliance.py's wrapper pins both.
 class DiskImageWithLvmIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avocado.Test):
     """
     :avocado: tags=full,container
