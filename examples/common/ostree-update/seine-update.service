@@ -1,0 +1,13 @@
+[Unit]
+Description=Apply an OSTree update
+Wants=network-online.target time-sync.target
+After=network-online.target time-sync.target seine-update-reconcile.service
+StartLimitIntervalSec=6h
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/seine-update/seine-update
+TimeoutStartSec=30min
+Restart=on-failure
+RestartSec=10min

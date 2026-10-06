@@ -1,0 +1,11 @@
+[Unit]
+Description=Repair what a cut OSTree update left behind
+After=local-fs.target
+Before=seine-update.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/seine-update/seine-update reconcile
+
+[Install]
+WantedBy=multi-user.target

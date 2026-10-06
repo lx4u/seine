@@ -1,0 +1,152 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Lets an ostree image update itself from a server (docs/ostree.md). The
+# including spec sets:
+#   update.url              where the payload is served
+#   image.ostree.stateroot  and image.ostree.ref
+# dev-ostree-key and dev-update-manifest-key sign what these public
+# keys check; a real project replaces both keys and both key files.
+
+playbook:
+    - name: install the update tools
+      priority: 500
+      tasks:
+          - name: install the packages the update script uses
+            apt:
+                name:
+                    - dbus
+                    - gpgv
+                    - ostree
+                    - ostree-boot
+                    - systemd-boot
+                    - systemd-container
+                state: present
+
+    - name: configure the updates
+      priority: 800
+      tasks:
+          - name: refuse to build without an update url
+            assert:
+                that: "'[[ update.url ]]' | length > 0"
+                fail_msg: "update.url is empty"
+
+          - name: create the directories
+            file:
+                path: '{{ item }}'
+                state: directory
+                mode: '0755'
+            loop:
+                - /etc/ostree/remotes.d
+                - /etc/sysupdate.d
+                - /usr/lib/systemd/system/boot-complete.target.d
+                - /usr/lib/systemd/system.conf.d
+                - /usr/libexec/seine-update
+                - /usr/share/ostree/trusted.gpg.d
+
+          - name: install the update script
+            copy:
+                src: ostree-update/seine-update
+                dest: /usr/libexec/seine-update/seine-update
+                mode: '0755'
+
+          - name: install the update service
+            copy:
+                src: ostree-update/seine-update.service
+                dest: /usr/lib/systemd/system/seine-update.service
+                mode: '0644'
+
+          - name: install the update timer
+            copy:
+                src: ostree-update/seine-update.timer
+                dest: /usr/lib/systemd/system/seine-update.timer
+                mode: '0644'
+
+          - name: install the repair service
+            copy:
+                src: ostree-update/seine-update-reconcile.service
+                dest: /usr/lib/systemd/system/seine-update-reconcile.service
+                mode: '0644'
+
+          - name: reset a boot that never completes
+            copy:
+                src: ostree-update/boot-complete.conf
+                dest: /usr/lib/systemd/system/boot-complete.target.d/10-seine.conf
+                mode: '0644'
+
+          - name: enable the watchdog
+            copy:
+                src: ostree-update/watchdog.conf
+                dest: /usr/lib/systemd/system.conf.d/10-seine-watchdog.conf
+                mode: '0644'
+
+          - name: install the commit key
+            copy:
+                src: ostree-update/commit-key.gpg
+                dest: /usr/share/ostree/trusted.gpg.d/seine.gpg
+                mode: '0644'
+
+          - name: install the manifest key
+            copy:
+                src: ostree-update/manifest-key.gpg
+                dest: /etc/systemd/import-pubring.gpg
+                mode: '0644'
+
+          - name: tell the script about this device
+            copy:
+                dest: /etc/seine-update.conf
+                content: |
+                    STATEROOT=[[ image.ostree.stateroot ]]
+                    REF=[[ image.ostree.ref ]]
+                    REMOTE=seine
+                    ESP=/efi/EFI/Linux
+
+          - name: add the remote
+            copy:
+                dest: /etc/ostree/remotes.d/seine.conf
+                content: |
+                    [remote "seine"]
+                    url=[[ update.url ]]/repo
+                    gpg-verify=true
+                    gpg-verify-summary=true
+
+          - name: say where the UKIs come from
+            copy:
+                dest: /etc/sysupdate.d/50-uki.transfer
+                content: |
+                    [Transfer]
+                    ProtectVersion=%A
+
+                    [Source]
+                    Type=url-file
+                    Path=[[ update.url ]]/uki/
+                    MatchPattern=[[ image.ostree.stateroot ]]-@v.efi
+
+                    [Target]
+                    Type=regular-file
+                    Path=/EFI/Linux
+                    PathRelativeTo=boot
+                    MatchPattern=[[ image.ostree.stateroot ]]-@v+@l-@d.efi \
+                                 [[ image.ostree.stateroot ]]-@v+@l.efi \
+                                 [[ image.ostree.stateroot ]]-@v.efi
+                    Mode=0644
+                    TriesLeft=3
+                    TriesDone=0
+                    InstancesMax=4
+
+          - name: enable the update units
+            systemd:
+                name: '{{ item }}'
+                enabled: true
+            loop:
+                - seine-update.timer
+                - seine-update-reconcile.service
+                - systemd-boot-check-no-failures.service
+
+          - name: keep systemd's own update timers off
+            systemd:
+                name: '{{ item }}'
+                masked: true
+            loop:
+                - systemd-sysupdate.timer
+                - systemd-sysupdate-reboot.timer

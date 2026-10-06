@@ -184,6 +184,57 @@ so a test can cut the power. The steps are `after-elect`, `after-pull`,
 `after-denylist` and `after-undeploy`. Leave the variable unset on a
 device.
 
+## Updating a device
+
+`examples/common/ostree-update.yaml` is a fragment that makes an image
+update itself. It installs the update script, its units and the public
+keys, and it enables the timer. The including specification sets where
+the updates are served and which stateroot and ref the image uses:
+
+```
+requires:
+    - ../common/ostree-update
+update:
+    url: http://updates.example.com/pc
+image:
+    ostree:
+        stateroot: debian
+        ref: debian/amd64
+```
+
+The URL is baked into the image, so changing it changes the root file
+system. The build stops when it is empty.
+
+What the fragment puts in the image:
+
+* `/usr/libexec/seine-update/seine-update`, and `seine-update.service`
+  with its timer. The timer starts a run 15 minutes after boot and then
+  every hour. A failed run is tried again after 10 minutes, three times
+  in six hours.
+* `seine-update-reconcile.service`, which runs `seine-update reconcile`
+  at boot, before the first update run. It does not wait for the good
+  boot mark: the next run moves the last-known-good pin.
+* the remote `seine` in `/etc/ostree/remotes.d/`, which checks the
+  signature of every commit and of the summary, and the key it checks
+  them with in `/usr/share/ostree/trusted.gpg.d/`.
+* `/etc/sysupdate.d/50-uki.transfer`, which names the UKI directory of
+  the server, and `/etc/systemd/import-pubring.gpg`, the key that checks
+  the signed list of files (`SHA256SUMS`).
+* `/etc/seine-update.conf`, read by the script.
+* a drop-in that resets a boot that never completes after five minutes,
+  and a watchdog setting that resets a hung system. Both count as a
+  failed try of the new UKI.
+* `systemd-boot-check-no-failures.service`, enabled, so a boot with a
+  failed unit is not marked good. `systemd-sysupdate.timer` and
+  `systemd-sysupdate-reboot.timer` are masked: the script is what runs
+  `systemd-sysupdate`, and it never reboots.
+
+The two public keys are the halves of the development keys
+`dev-ostree-key.yaml` and `dev-update-manifest-key.yaml`, which sign
+the commit and the list of files. They are for development only. A
+project exports its own public keys and replaces both files in the
+fragment's directory, or copies the fragment.
+
 ## Requirements
 
 The root file system needs `dracut`, `ostree` and `ostree-boot`, and no
