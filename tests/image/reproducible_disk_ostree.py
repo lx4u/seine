@@ -28,6 +28,7 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
             "    - %(common)s/amd64\n")
     BOOT_PLAYBOOK = ""
     ESP_SIZE = "64MiB"
+    OSTREE_KEYS = ""
 
     def setUp(self):
         super().setUp()
@@ -76,7 +77,8 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
                 "    table: gpt\n"
                 "    ostree:\n"
                 "        mode: standard\n"
-                "        gpg-key: vault:ostree-commits\n"
+                "        gpg-key: vault:ostree-commits\n" +
+                self.OSTREE_KEYS +
                 "    partitions:\n"
                 "        - label: efi\n"
                 "          type: vfat\n"
@@ -117,13 +119,15 @@ class OstreeSystemdBootDiskImageIsByteIdenticalAcrossTwoBuilds(
 
 
 # The same with a UKI of the kernel, rebuilt with the deployment's command
-# line: the rebuilt UKI must not differ between builds either.
+# line and a version: the rebuilt UKI must not differ between builds either.
 class OstreeUkiDiskImageIsByteIdenticalAcrossTwoBuilds(
         OstreeSystemdBootDiskImageIsByteIdenticalAcrossTwoBuilds):
     """
     :avocado: tags=full,container
     """
     FILENAME = "reproducible-ostree-uki.img"
+    # The stamped version reaches the commit, the os-release of the UKI and its name.
+    OSTREE_KEYS = '        version: "23"\n'
     BOOT_PLAYBOOK = (
         OstreeSystemdBootDiskImageIsByteIdenticalAcrossTwoBuilds.BOOT_PLAYBOOK +
         "    - name: a UKI of the kernel\n"

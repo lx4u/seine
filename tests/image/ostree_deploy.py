@@ -119,6 +119,16 @@ class Commands(avocado.Test):
         self.assertEqual(sorted(g.removed),
                          sorted([ostree.SKIP_LIST, ostree.SKELETON]))
 
+    def test_commit_records_the_version_as_metadata(self):
+        g = FakeGuestfs()
+        ostree.commit(g, "debian/amd64", 0, "23")
+        self.assertIn("--add-metadata-string=version=23", g.commands[0])
+
+    def test_commit_has_no_version_metadata_by_default(self):
+        g = FakeGuestfs()
+        ostree.commit(g, "debian/amd64", 0)
+        self.assertFalse([a for a in g.commands[0] if "metadata" in a])
+
     def test_deploy_passes_the_kernel_args_before_the_ref(self):
         g = FakeGuestfs()
         ostree.deploy(g, "main", "main/amd64", ["root=PARTUUID=abc", "rw", "console=ttyS0"])
@@ -138,6 +148,30 @@ class FakeVault:
     def pgp_detach_sign(self, name, data, timestamp):
         self.args = (name, data, timestamp)
         return b"signature"
+
+class StampVersion(avocado.Test):
+    def guest(self, text):
+        g = FakeGuestfs()
+        g.files = {ostree.OS_RELEASE: text}
+        g.is_file = lambda path: path in g.files
+        return g
+
+    def test_the_version_is_appended(self):
+        g = self.guest(b"ID=debian\n")
+        text = ostree.stamp_version(g, "23")
+        self.assertEqual(text, "ID=debian\nIMAGE_VERSION=23\n")
+        self.assertEqual(g.written[ostree.OS_RELEASE], text.encode())
+
+    def test_an_existing_version_is_replaced(self):
+        g = self.guest(b"IMAGE_VERSION=1\nID=debian\nIMAGE_VERSION=2\n")
+        self.assertEqual(ostree.stamp_version(g, "23"),
+                         "ID=debian\nIMAGE_VERSION=23\n")
+
+    def test_a_missing_os_release_is_refused(self):
+        g = self.guest(b"")
+        g.files = {}
+        with self.assertRaises(RuntimeError):
+            ostree.stamp_version(g, "23")
 
 class SignedCommit(avocado.Test):
     def setUp(self):
@@ -330,8 +364,8 @@ class UkiRebuild(avocado.Test):
             self._output_dir = output_dir
             self.rebuilt = []
 
-        def _rebuild_uki(self, workdir, original, extra):
-            self.rebuilt.append((original, extra))
+        def _rebuild_uki(self, workdir, original, extra, osrel=None):
+            self.rebuilt.append((original, extra, osrel))
             return "rebuilt.efi"
 
     def setUp(self):
@@ -364,8 +398,22 @@ class UkiRebuild(avocado.Test):
         group = {"entries": [dict(ENTRY)]}
         sysroot._rebuild_ukis(FakeGuestfs(), group, "main", [("os.efi", "/w/os.efi")])
         self.assertEqual(sysroot.rebuilt, [
-            ("/w/os.efi", "root=PARTUUID=abc rw ostree=/ostree/main-abc")])
+            ("/w/os.efi", "root=PARTUUID=abc rw ostree=/ostree/main-abc", None)])
         self.assertEqual(group["ukis"], ["main-os.efi"])
+
+    def test_a_version_names_the_uki_and_sets_its_os_release(self):
+        sysroot = self.Fake(self.dir)
+        group = {"entries": [dict(ENTRY)]}
+        sysroot._rebuild_ukis(FakeGuestfs(), group, "main",
+                              [("os.efi", "/w/os.efi")], "23", "IMAGE_VERSION=23\n")
+        self.assertEqual(sysroot.rebuilt[0][2], "IMAGE_VERSION=23\n")
+        self.assertEqual(group["ukis"], ["main-23.efi"])
+
+    def test_a_version_needs_exactly_one_uki(self):
+        for ukis in ([], [("a.efi", "/w/a.efi"), ("b.efi", "/w/b.efi")]):
+            with self.assertRaises(RuntimeError):
+                self.Fake(self.dir)._rebuild_ukis(
+                    FakeGuestfs(), {"entries": [dict(ENTRY)]}, "main", ukis, "23")
 
     def test_several_boot_entries_are_refused(self):
         group = {"entries": [dict(ENTRY), dict(ENTRY)]}

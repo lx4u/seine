@@ -1752,6 +1752,9 @@ characters (as text); a version that is a prefix of another is lower.
 Plain or dotted numbers (`22`, `1.10.3`) order the same way in
 `systemd-boot` and `systemd-sysupdate`, so prefer them. `version` is a
 disk-only key: changing it does not rebuild the root file system.
+The imager stamps it as `IMAGE_VERSION` in the os-release of the commit,
+records it as the commit's `version` and names the UKI after it; the
+root file system must then ship exactly one UKI.
 
 See [OSTree sysroots](ostree.md) for what the imager builds.
 

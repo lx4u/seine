@@ -80,6 +80,16 @@ UKI = """    - name: a UKI of the kernel
                     --cmdline=systemd.hostname=uki-host --output=/boot/EFI/Linux/os.efi
 """
 
+# agetty prints the IMAGE_VERSION of the booted /etc/os-release.
+VERSION_BANNER = """    - name: the version in the banner
+      priority: 960
+      tasks:
+          - name: set what getty prints before the login prompt
+            copy:
+                content: "uki-os version \\\\S{{IMAGE_VERSION}}\\n"
+                dest: /etc/issue
+"""
+
 SINGLE_DISK = """
 image:
     filename: {disk}
@@ -262,12 +272,21 @@ class OstreeImageBoots(avocado.Test):
     def test_a_single_sysroot_boots_from_its_uki_with_systemd_boot(self):
         self.uki_boots(GROUP_SYSTEMD_BOOT, "systemd-boot")
 
-    def uki_boots(self, group, loader):
+    # The version is stamped in the commit: the UKI is named after it and
+    # the booted system reads it from its own os-release.
+    def test_a_versioned_sysroot_boots_from_its_uki_with_systemd_boot(self):
+        self.uki_boots(GROUP_SYSTEMD_BOOT, "systemd-boot", "23")
+
+    def uki_boots(self, group, loader, version=None):
         disk = os.path.join(self.workdir, "uki.img")
-        spec = self.write("uki.yaml", (group + UKI + SINGLE_DISK).format(
+        keys = "" if version is None else '        version: "%s"\n' % version
+        banner = "" if version is None else VERSION_BANNER
+        spec = self.write("uki.yaml", (group + UKI + banner + SINGLE_DISK.replace(
+                "        mode: standard\n", "        mode: standard\n" + keys)).format(
             common=COMMON, pc_image=os.path.join(EXAMPLES, "pc-image"),
             name="uki-os", disk=disk))
         self.build(spec, "uki")
+        efi_name = "debian-os.efi" if version is None else "debian-%s.efi" % version
 
         import guestfs
         g = guestfs.GuestFS(python_return_dict=True)
@@ -281,11 +300,13 @@ class OstreeImageBoots(avocado.Test):
             self.assertTrue(g.is_dir("/ostree/%s" % target))
             g.umount("/")
             g.mount_ro("/dev/sda1", "/")
-            self.assertTrue(g.is_file("/EFI/Linux/debian-os.efi"))
-            self.assertIn(b"ostree=/ostree/debian-%s" % commit.encode(),
-                          g.read_file("/EFI/Linux/debian-os.efi"))
+            self.assertEqual(g.ls("/EFI/Linux"), [efi_name])
+            uki = g.read_file("/EFI/Linux/" + efi_name)
+            self.assertIn(b"ostree=/ostree/debian-%s" % commit.encode(), uki)
+            if version is not None:
+                self.assertIn(b"IMAGE_VERSION=%s" % version.encode(), uki)
             if loader == "grub":
-                self.assertIn("chainloader /EFI/Linux/debian-os.efi",
+                self.assertIn("chainloader /EFI/Linux/%s" % efi_name,
                               g.cat("/grub/grub.cfg"))
             else:
                 self.assertFalse(g.exists("/ostree"), "kernel files on the ESP")
@@ -302,3 +323,5 @@ class OstreeImageBoots(avocado.Test):
         self.assertTrue(found, "no 'login:' on the serial console")
         self.assertIn("uki-host login:", text, "the system did not boot from the UKI")
         self.assertIn("uki-os", text)
+        if version is not None:
+            self.assertIn("uki-os version %s" % version, text)

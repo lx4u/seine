@@ -82,6 +82,14 @@ For each root file system, in the imager appliance:
    ESP: systemd-boot finds the UKI by itself, and GRUB gets a menu entry
    that chainloads it. A root file system with a UKI needs a boot loader.
 
+   With `image: ostree: version:` set, the imager first writes
+   `IMAGE_VERSION=<version>` into `/usr/lib/os-release` of the tree, so
+   the commit and the booted system carry it, and the commit gets a
+   `version` metadata key. The UKI takes that os-release (systemd-boot
+   sorts by it) and lands on the ESP as
+   `EFI/Linux/<stateroot>-<version>.efi`. The root file system must ship
+   exactly one UKI then. Its digest does not change.
+
    The link stays valid when an update flips `boot.<N>`, so the UKI
    keeps booting its deployment, and a rollback to it works. The name
    does not pin the commit: `ostree-prepare-root` does not check it. A

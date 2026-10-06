@@ -158,6 +158,7 @@ def _relocate_kernel(g, at):
 
 SYSROOT = "/sysroot"
 OSTREE = "/usr/bin/ostree"
+OS_RELEASE = "/usr/lib/os-release"
 
 # Both stay under /sysroot, which the commit skips, and are removed
 # right after it.
@@ -189,19 +190,33 @@ def init_sysroot(g, stateroot):
     _ostree(g, "config", "--repo=%s/ostree/repo" % SYSROOT, "set",
             "sysroot.bootloader", "none")
 
+# Sets IMAGE_VERSION in the os-release of the staged root, so the commit
+# and the UKI carry it. Returns the new text.
+def stamp_version(g, version):
+    if not g.is_file(OS_RELEASE):
+        raise RuntimeError(
+            "'image: ostree: version:' needs %s in the root file-system"
+            % OS_RELEASE)
+    lines = [line for line in g.read_file(OS_RELEASE).decode().splitlines()
+             if not line.startswith("IMAGE_VERSION=")]
+    text = "\n".join(lines + ["IMAGE_VERSION=%s" % version]) + "\n"
+    g.write(OS_RELEASE, text.encode())
+    return text
+
 # Commits the staged root ('/'), whatever is mounted under it aside.
 # Returns the commit checksum.
-def commit(g, ref, epoch):
+def commit(g, ref, epoch, version=None):
     g.write(SKIP_LIST, ("\n".join(SKIPPED) + "\n").encode())
     for name in ("sysroot", "dev", "proc", "sys", "run"):
         directory = "%s/%s" % (SKELETON, name)
         g.mkdir_p(directory)
         g.chmod(0o755, directory)
+    metadata = ["--add-metadata-string=version=%s" % version] if version else []
     checksum = _ostree(
         g, "--repo=%s/ostree/repo" % SYSROOT, "commit", "-b", ref,
         "--tree=dir=/", "--tree=dir=%s" % SKELETON,
         "--skip-list=%s" % SKIP_LIST, "--timestamp=@%d" % epoch,
-        "--no-bindings").strip()
+        "--no-bindings", *metadata).strip()
     g.rm_rf(SKIP_LIST)
     g.rm_rf(SKELETON)
     return checksum
@@ -416,6 +431,8 @@ class OstreeSysroot:
         self._write_fstab(g, others, mount_devices, part_index)
         ukis = self._take_ukis(g)
         sanitize(g, "/", [m["_prefix"] for m in others])
+        version = settings.get("version")
+        osrel = stamp_version(g, version) if version else None
 
         self._guest_paths = {id(m): target_path(m["_prefix"], stateroot)
                              for m in mounts}
@@ -431,7 +448,7 @@ class OstreeSysroot:
             g.mount(mount_devices[id(m)], path)
 
         print("Committing and deploying...")
-        checksum = commit(g, ref, self.source._epoch())
+        checksum = commit(g, ref, self.source._epoch(), version)
         if settings.get("gpg-key"):
             sign_commit(g, self._vault_provider(), checksum,
                         settings["gpg-key"], self.source._epoch())
@@ -439,7 +456,7 @@ class OstreeSysroot:
         deploy(g, stateroot, ref, kargs)
         print("  %s %s" % (ref, checksum))
         self._boot_ostree(g, source, mounts, mount_devices, stateroot,
-                          distro, boot_owner, boot_entries, ukis)
+                          distro, boot_owner, boot_entries, ukis, version, osrel)
         unlock_deployments(g, stateroot)
         self._normalize_mount_timestamps(g, mounts, mount_devices)
         return mount_devices
@@ -462,8 +479,14 @@ class OstreeSysroot:
 
     # Appends the command line the deployment boots with (root, ostree=...)
     # to each UKI. 'group' gets the names they have on the ESP, and the
-    # rebuilt files for the boot owner to upload.
-    def _rebuild_ukis(self, g, group, stateroot, ukis):
+    # rebuilt files for the boot owner to upload. With a 'version', the
+    # one UKI is named after it and takes 'osrel' as its os-release.
+    def _rebuild_ukis(self, g, group, stateroot, ukis, version=None,
+                      osrel=None):
+        if version and len(ukis) != 1:
+            raise RuntimeError(
+                "'image: ostree: version:' needs one UKI in the root "
+                "file-system, found %d" % len(ukis))
         if len(group["entries"]) != 1:
             raise RuntimeError(
                 "expected one boot entry to name in the UKI, found %d"
@@ -474,8 +497,9 @@ class OstreeSysroot:
         for name, original in ukis:
             print("Adding the ostree command line to '%s'..." % name)
             workdir = os.path.dirname(original)
-            result = self._rebuild_uki(workdir, original, options)
-            esp_name = "%s-%s" % (stateroot, name)
+            result = self._rebuild_uki(workdir, original, options, osrel)
+            esp_name = ("%s-%s.efi" % (stateroot, version) if version
+                        else "%s-%s" % (stateroot, name))
             group["ukis"].append(esp_name)
             group["built"].append((esp_name, workdir, result))
 
@@ -483,7 +507,8 @@ class OstreeSysroot:
     # the boot loader and writes every group's menu on the shared ESP,
     # as _install_boot_entry() does for a plain layout.
     def _boot_ostree(self, g, source, mounts, mount_devices, stateroot,
-                     distro, boot_owner, boot_entries, ukis):
+                     distro, boot_owner, boot_entries, ukis, version=None,
+                     osrel=None):
         root = next(m for m in mounts if m["_prefix"] == "/")
         boot = next((m for m in mounts if m["_prefix"] == "/boot/"), None)
         boot_device = mount_devices[id(boot or root)]
@@ -495,7 +520,8 @@ class OstreeSysroot:
             "entries": read_entries(g),
         })
         if ukis:
-            self._rebuild_ukis(g, boot_entries[-1], stateroot, ukis)
+            self._rebuild_ukis(
+                g, boot_entries[-1], stateroot, ukis, version, osrel)
         if source is not None and source != boot_owner:
             return
         bootloader = detect_bootloader(g, DEVICE)
