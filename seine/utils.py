@@ -34,6 +34,12 @@ WORKDIR = "/src"
 GIT_NAME  = "seine"
 GIT_EMAIL = "seine@localhost"
 
+# Sort key of an image version (see 'image: ostree: version'): runs of
+# digits compare as numbers, other runs as text, a prefix sorts lower.
+def version_key(version):
+    return [(int(run), "") if run.isdigit() else (-1, run)
+            for run in re.findall(r"\d+|\D+", version)]
+
 # Defaults/validates the 'distribution' section once, shared by
 # Image.parse() and VendorCmd.
 def distribution(spec):

@@ -1729,7 +1729,8 @@ layout.
 | stateroot | no       | OSTree stateroot, defaults to the `multiconfig:` group name, else `debian` |
 | ref       | no       | Commit ref, defaults to `<stateroot>/<arch>`         |
 | gpg-key   | no       | `vault:<name>`: signs the commit with this vault pgp key, unsigned if unset |
-| sources   | no       | Per `multiconfig:` group overrides of the four above |
+| version   | no       | Image version, a quoted string such as `"23"`: a digit first, then letters, digits, `.` or `_`, at most 64 characters. Needs `mode: standard`, and one stateroot. Not allowed in `sources:` |
+| sources   | no       | Per `multiconfig:` group overrides of `mode`, `stateroot`, `ref` and `gpg-key` |
 
 When `mode` is not `disabled`, the build is refused unless:
 
@@ -1745,6 +1746,12 @@ When `mode` is not `disabled`, the build is refused unless:
  * `/boot`, if mounted, is not `vfat`;
  * there are no `bootlets` and no read-only (`squashfs`/`erofs`) partitions
    yet.
+
+Versions order by their runs of digits (as numbers) and of other
+characters (as text); a version that is a prefix of another is lower.
+Plain or dotted numbers (`22`, `1.10.3`) order the same way in
+`systemd-boot` and `systemd-sysupdate`, so prefer them. `version` is a
+disk-only key: changing it does not rebuild the root file system.
 
 See [OSTree sysroots](ostree.md) for what the imager builds.
 

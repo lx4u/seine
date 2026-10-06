@@ -35,6 +35,10 @@ OSTREE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 # Same rule as VaultSigner for the name of a vault key.
 OSTREE_KEY_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
 
+# No '-', '+', '~', '^' or '/': they mean something in a UKI file name,
+# a ref name or systemd's version compare.
+OSTREE_VERSION = re.compile(r"^[0-9][0-9A-Za-z._]{0,63}$")
+
 class PartitionHandler:
 
     START_OFFSET_KB  = 1 * 1024
@@ -498,7 +502,7 @@ class PartitionHandler:
             raise ValueError("'%s' shall be a mapping" % where)
         allowed = ("mode", "stateroot", "ref", "gpg-key")
         if where == "image: ostree":
-            allowed += ("sources",)
+            allowed += ("sources", "version")
         for key in settings:
             if key not in allowed:
                 raise ValueError("'%s' has no '%s' attribute" % (where, key))
@@ -522,6 +526,17 @@ class PartitionHandler:
                 and OSTREE_KEY_NAME.match(key[len("vault:"):])):
             raise ValueError(
                 "'%s: gpg-key: %s' shall be 'vault:<name>'" % (where, key))
+        version = settings.get("version")
+        if version is not None:
+            if type(version) != type(""):
+                raise ValueError(
+                    "'%s: version: %s' shall be a string (quote it)"
+                    % (where, version))
+            if not OSTREE_VERSION.match(version):
+                raise ValueError(
+                    "'%s: version: %s' shall start with a digit, hold "
+                    "only letters, digits, '.' and '_', and have at most "
+                    "64 characters" % (where, version))
         return dict(settings)
 
     def _parse_ostree(self, ostree):
@@ -567,8 +582,15 @@ class PartitionHandler:
         enabled = {name: self.ostree_for(name)
                    for name in rooted
                    if self.ostree_for(name)["mode"] != "disabled"}
+        if "version" in self.ostree and self.ostree["mode"] != "standard":
+            raise ValueError(
+                "'image: ostree: version' needs 'mode: standard'")
         if not enabled:
             return
+        if "version" in self.ostree and len(enabled) > 1:
+            raise ValueError(
+                "'image: ostree: version' covers one stateroot, but %d "
+                "groups have ostree on" % len(enabled))
 
         modes = {settings["mode"] for settings in enabled.values()}
         release = utils.distribution(spec)["release"]

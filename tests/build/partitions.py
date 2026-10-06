@@ -10,6 +10,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.build import BuildCmd
+from seine import utils
 from seine.partition import PartitionHandler
 
 class GptPartitionTable(avocado.Test):
@@ -575,6 +576,49 @@ class OstreeSpecification(avocado.Test):
                 PartitionHandler().parse(spec)
             self.assertIn("shall be 'vault:<name>'", str(cm.exception))
 
+    def test_version_is_kept(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["version"] = "23.1_b"
+        ph = PartitionHandler()
+        ph.parse(spec)
+        self.assertEqual(ph.ostree_for(None)["version"], "23.1_b")
+
+    def test_version_must_be_a_string(self):
+        for version in (23, 1.5, ["1"]):
+            spec = ostree_spec()
+            spec["image"]["ostree"]["version"] = version
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse(spec)
+            self.assertIn("shall be a string (quote it)", str(cm.exception))
+
+    def test_version_syntax_is_checked(self):
+        for version in ("", "v1", "1-2", "1+2", "1~rc", "1^2", "1/2", "1 2",
+                        ".1", "1" * 65):
+            spec = ostree_spec()
+            spec["image"]["ostree"]["version"] = version
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse(spec)
+            self.assertIn("'image: ostree: version:", str(cm.exception))
+        spec = ostree_spec()
+        spec["image"]["ostree"]["version"] = "1" * 64
+        PartitionHandler().parse(spec)
+
+    def test_version_needs_standard_mode(self):
+        for mode in ("disabled", "composefs"):
+            spec = ostree_spec(mode=mode, release="forky")
+            spec["image"]["ostree"]["version"] = "1"
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse(spec)
+            self.assertIn("needs 'mode: standard'", str(cm.exception))
+
+    def test_version_is_refused_in_sources(self):
+        spec = ostree_spec()
+        spec["multiconfig"] = {"a": {}}
+        spec["image"]["ostree"]["sources"] = {"a": {"version": "1"}}
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("has no 'version' attribute", str(cm.exception))
+
     def test_unknown_mode_is_refused(self):
         self.refuses("is not one of", mode="bootc")
 
@@ -658,6 +702,41 @@ def two_groups(**sources):
     spec["multiconfig"] = {"a": ["a.yaml"], "b": ["b.yaml"]}
     spec["image"]["ostree"]["sources"] = sources
     return spec
+
+class OstreeVersionNeedsOneStateroot(avocado.Test):
+    def test_two_groups_with_ostree_are_refused(self):
+        spec = two_groups()
+        spec["image"]["ostree"]["version"] = "1"
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("covers one stateroot", str(cm.exception))
+
+    def test_a_group_with_ostree_off_does_not_count(self):
+        spec = two_groups(b={"mode": "disabled"})
+        spec["image"]["ostree"]["version"] = "1"
+        PartitionHandler().parse(spec)
+
+
+class OstreeVersionOrder(avocado.Test):
+    def order(self, *versions):
+        return sorted(versions, key=utils.version_key)
+
+    def test_numbers_compare_as_numbers(self):
+        self.assertEqual(self.order("10", "9", "100"), ["9", "10", "100"])
+
+    def test_dotted_versions(self):
+        self.assertEqual(self.order("1.10", "1.9", "1.9.1", "2"),
+                         ["1.9", "1.9.1", "1.10", "2"])
+
+    def test_a_prefix_is_lower(self):
+        self.assertEqual(self.order("23a", "23", "23.1"), ["23", "23.1", "23a"])
+
+    def test_letters_compare_as_text(self):
+        self.assertEqual(self.order("1b", "1a", "1_c"), ["1_c", "1a", "1b"])
+
+    def test_equal_versions_have_equal_keys(self):
+        self.assertEqual(utils.version_key("1.2"), utils.version_key("1.2"))
+
 
 class OstreePerGroupSettings(avocado.Test):
     def test_a_group_can_opt_out_and_keep_a_plain_layout(self):
