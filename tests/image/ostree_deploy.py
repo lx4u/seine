@@ -10,7 +10,9 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
+from seine.container import ContainerEngine
 from seine.imager import ostree
+from seine.imager import uki
 
 # Plain Python, no guestfs appliance involved -- records what is run.
 class FakeGuestfs:
@@ -370,3 +372,68 @@ class UkiRebuild(avocado.Test):
         with self.assertRaises(RuntimeError):
             self.Fake(self.dir)._rebuild_ukis(
                 FakeGuestfs(), group, "main", [("os.efi", "/w/os.efi")])
+
+
+class UkiOsRelease(avocado.Test):
+    class Tools:
+        name = "tools"
+
+    class Source:
+        partitionHandler = type("H", (), {"secure_boot": None})()
+
+        def _epoch(self):
+            return 1
+
+    class Fake(uki.UkiAnchor):
+        def __init__(self):
+            self.source = UkiOsRelease.Source()
+            self._extra_tools = UkiOsRelease.Tools()
+
+        def _pin_pe_timestamp(self, path, epoch):
+            pass
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="seine-test-osrel-")
+        self.argvs = []
+        self.has_osrel = True
+        self.saved = ContainerEngine.run
+        ContainerEngine.run = staticmethod(self.run)
+
+    def tearDown(self):
+        ContainerEngine.run = self.saved
+        shutil.rmtree(self.dir)
+
+    # Dumping '.osrel' writes the file only when the UKI has the section.
+    def run(self, args, check=False):
+        argv = args[args.index("tools") + 1:]
+        self.argvs.append(argv)
+        if ".osrel=osrel.txt" in argv and self.has_osrel:
+            with open(os.path.join(self.dir, "osrel.txt"), "w") as f:
+                f.write("ID=debian\n")
+        return None
+
+    def ukify(self):
+        return [a for a in self.argvs if a[0] == "ukify"][0]
+
+    def rebuild(self, **kwargs):
+        with open(os.path.join(self.dir, "cmdline.txt"), "w") as f:
+            f.write("quiet")
+        self.Fake()._rebuild_uki(
+            self.dir, os.path.join(self.dir, "o.efi"), "x=1", **kwargs)
+
+    def test_the_os_release_of_the_uki_is_kept(self):
+        self.rebuild()
+        self.assertIn("--os-release=@osrel.txt", self.ukify())
+
+    def test_a_uki_without_os_release_is_tolerated(self):
+        self.has_osrel = False
+        self.rebuild()
+        self.assertFalse(
+            [a for a in self.ukify() if a.startswith("--os-release")])
+
+    def test_the_osrel_argument_wins(self):
+        self.rebuild(osrel="ID=seine\n")
+        self.assertIn("--os-release=@osrel.txt", self.ukify())
+        self.assertFalse([a for a in self.argvs if ".osrel=osrel.txt" in a])
+        with open(os.path.join(self.dir, "osrel.txt")) as f:
+            self.assertEqual(f.read(), "ID=seine\n")

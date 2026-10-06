@@ -97,17 +97,18 @@ class UkiAnchor:
     # objcopy/ukify/sbsign run as container commands, not inside the
     # appliance. Appends 'extra' to the command line of 'original' (a file
     # of 'workdir'), returns the rebuilt, possibly signed file's name there.
-    def _rebuild_uki(self, workdir, original, extra):
+    # 'osrel' (text) replaces the os-release of 'original'.
+    def _rebuild_uki(self, workdir, original, extra, osrel=None):
         original = os.path.relpath(original, workdir)
         # ukify stamps the PE header's build time from this unless told
         # otherwise, which would make the .efi differ build to build.
         epoch = self.source._epoch()
 
-        def run(args):
+        def run(args, check=True):
             ContainerEngine.run(
                 ["container", "run", "--rm", "-v", "%s:/work" % workdir,
                  "-e", "SOURCE_DATE_EPOCH=%d" % epoch,
-                 "-w", "/work", self._extra_tools.name] + args, check=True)
+                 "-w", "/work", self._extra_tools.name] + args, check=check)
 
         # One objcopy dumps all three sections byte-identical to build time.
         # '/dev/null' as output makes objcopy exit 1 despite success, so use
@@ -118,13 +119,25 @@ class UkiAnchor:
              "--dump-section", ".cmdline=cmdline.txt",
              original, "discard.efi"])
 
+        # A UKI without '.osrel' is fine: objcopy fails and we keep none.
+        osrel_path = os.path.join(workdir, "osrel.txt")
+        if osrel is not None:
+            with open(osrel_path, "w") as f:
+                f.write(osrel)
+        else:
+            run(["objcopy", "--dump-section", ".osrel=osrel.txt",
+                 original, "discard.efi"], check=False)
+        ukify_extra = (("--os-release=@osrel.txt",)
+                       if os.path.exists(osrel_path) else ())
+
         base_cmdline = open(os.path.join(workdir, "cmdline.txt")).read().strip()
         cmdline = ("%s %s" % (base_cmdline, extra)) if base_cmdline else extra
 
         # A real 'ukify build', not an 'objcopy --update-section' patch, so
         # a future PCR-policy pass only extends 'extra' here instead of a
         # second code path.
-        run(ukify_argv("linux.bin", "initrd.bin", cmdline, "rebuilt.efi"))
+        run(ukify_argv("linux.bin", "initrd.bin", cmdline, "rebuilt.efi",
+                         extra=ukify_extra))
         # ukify stamps the PE header with the real build time regardless
         # of SOURCE_DATE_EPOCH -- pin it directly, before signing folds
         # it into the signature.
