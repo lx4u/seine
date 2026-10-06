@@ -200,29 +200,44 @@ class OstreeImageBoots(avocado.Test):
         self.assertIn(name, text, "the banner of '%s' was not shown" % name)
         self.assertNotIn("emergency mode", text)
 
+    # The ESP tells which boot loader was installed: a boot to the login
+    # prompt works with either.
+    def assert_loader(self, disk, loader):
+        import guestfs
+        g = guestfs.GuestFS(python_return_dict=True)
+        g.add_drive_opts(disk, format="raw", readonly=True)
+        g.launch()
+        try:
+            g.mount_ro("/dev/sda1", "/")
+            self.assertEqual(g.is_file("/loader/loader.conf"), loader == "systemd-boot")
+            self.assertEqual(g.is_file("/grub/grub.cfg"), loader == "grub")
+        finally:
+            g.close()
+
     def test_a_single_sysroot_boots(self):
-        self.single_sysroot_boots(GROUP)
+        self.single_sysroot_boots(GROUP, "grub")
 
     def test_a_single_sysroot_boots_with_systemd_boot(self):
-        self.single_sysroot_boots(GROUP_SYSTEMD_BOOT)
+        self.single_sysroot_boots(GROUP_SYSTEMD_BOOT, "systemd-boot")
 
-    def single_sysroot_boots(self, group):
+    def single_sysroot_boots(self, group, loader):
         disk = os.path.join(self.workdir, "single.img")
         spec = self.write("single.yaml", (group + SINGLE_DISK).format(
             common=COMMON, pc_image=os.path.join(EXAMPLES, "pc-image"),
             name="single-os", disk=disk))
         self.build(spec, "single")
+        self.assert_loader(disk, loader)
         self.boots(disk, "single-os")
 
     # The boot owner is the first menu entry, so building with each in
     # turn boots each group's own sysroot.
     def test_each_group_of_a_two_sysroot_disk_boots(self):
-        self.each_group_boots(GROUP)
+        self.each_group_boots(GROUP, "grub")
 
     def test_each_group_of_a_two_sysroot_disk_boots_with_systemd_boot(self):
-        self.each_group_boots(GROUP_SYSTEMD_BOOT)
+        self.each_group_boots(GROUP_SYSTEMD_BOOT, "systemd-boot")
 
-    def each_group_boots(self, group):
+    def each_group_boots(self, group, loader):
         pc_image = os.path.join(EXAMPLES, "pc-image")
         groups = {}
         for name in ("main", "other"):
@@ -234,6 +249,7 @@ class OstreeImageBoots(avocado.Test):
                 common=COMMON, main=groups["main"], other=groups["other"],
                 owner=owner, disk=disk))
             self.build(spec, "disk-%s" % owner)
+            self.assert_loader(disk, loader)
             self.boots(disk, "%s-os" % owner)
             os.remove(disk)
 
