@@ -72,6 +72,26 @@ class NetrcOnlyAppearsOnceSet(avocado.Test):
                          ["-o", "Dir::Etc::netrc=/run/seine/netrc"])
         self.assertIn("/run/user/1000/seine/x:/run/seine:ro", cmd._volumes())
 
+# 'defaults: apt: install_recommends:' only reaches the apt action when
+# it is false: the action's own default is already true.
+class RecommendsDefaultReachesThePlaybooks(avocado.Test):
+    def env(self, **kwargs):
+        cmd = AnsibleContainerRunner(None, online_distro(), {}, host_image="host",
+                                     **kwargs)
+        cmd.cid = b"cid"
+        with patch("seine.ansible_runner.spawn_own_pgroup") as spawn, \
+             patch("seine.ansible_runner.ContainerEngine.root", return_value="/r"):
+            spawn.return_value.returncode = 0
+            cmd._run_playbooks([{"name": "p", "tasks": []}])
+        return spawn.call_args.kwargs["env"]
+
+    def test_true_exports_nothing(self):
+        self.assertNotIn("SEINE_APT_INSTALL_RECOMMENDS", self.env())
+
+    def test_false_is_exported(self):
+        env = self.env(install_recommends=False)
+        self.assertEqual(env["SEINE_APT_INSTALL_RECOMMENDS"], "false")
+
 # _configure_feeds() -- offline mode replaces every apt source with a
 # single vendor entry for the build's own release: one deb line and one
 # deb-src line, both naming 'main extra' together, never one pair per

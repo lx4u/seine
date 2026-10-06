@@ -49,8 +49,9 @@ class AnsibleContainerRunner:
     # vendor_digest is passed through to TransportBootstrap. host_image
     # (always host-arch) is what the 'apt' action plugin runs natively.
     # locales is 'overrides: locales:', defaulting to English alone.
+    # install_recommends is 'defaults: apt: install_recommends:'.
     def __init__(self, baseline, distro, options, verbose=False, vendor_digest=None,
-                epoch=None, host_image=None, locales=None):
+                epoch=None, host_image=None, locales=None, install_recommends=True):
         self.baseline = baseline
         self.distro = distro
         self.options = options
@@ -59,6 +60,7 @@ class AnsibleContainerRunner:
         self.epoch = epoch
         self.host_image = host_image
         self.locales = locales or ["en"]
+        self.install_recommends = install_recommends
         self.cid = None
         # Set for the lifetime of run(), by netrc_for() -- 'exported' as
         # a bind mount, never as filesystem content, so it never reaches
@@ -260,6 +262,8 @@ class AnsibleContainerRunner:
         env["SEINE_APT_HOST_IMAGE"] = self.host_image
         if self._netrc_path:
             env["SEINE_APT_NETRC"] = self._netrc_path
+        if not self.install_recommends:
+            env["SEINE_APT_INSTALL_RECOMMENDS"] = "false"
         # The 'apt' action plugin's own container only bind-mounts the
         # target root file-system, not this repository -- without it, a
         # 'file:/packages' source there would find nothing.

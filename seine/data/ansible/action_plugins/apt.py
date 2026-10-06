@@ -21,6 +21,8 @@ ENV_PACKAGES_DIR = "SEINE_APT_PACKAGES_DIR"
 # Set by ansible_runner.py only when a feed is authenticated -- the host
 # path of the netrc seine.utils.netrc_for() wrote for this build.
 ENV_NETRC = "SEINE_APT_NETRC"
+# 'false' when the spec says 'defaults: apt: install_recommends: false'.
+ENV_RECOMMENDS = "SEINE_APT_INSTALL_RECOMMENDS"
 
 MERGED = "/rootfs"
 # Where a spec's rebuilt packages live, if any -- must match
@@ -117,7 +119,8 @@ class ActionModule(ActionBase):
         if "name" not in args:
             raise AnsibleActionFail("apt: 'name' is required")
         names = _names(args["name"])
-        recommends = boolean(args.get("install_recommends", True))
+        recommends = boolean(args.get(
+            "install_recommends", os.environ.get(ENV_RECOMMENDS, True)))
 
         merged_dir = _merged_dir(_env(ENV_CID))
         action = "install" if state == "present" else "remove"

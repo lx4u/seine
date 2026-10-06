@@ -1493,7 +1493,8 @@ Only these arguments are supported, any other is ignored:
  * `name`: a list of packages, or a string separated by commas or spaces.
  * `state`: `present` (the default) or `absent`.
  * `install_recommends`: install recommended packages too. The default is
-   `true`, as for `apt-get`.
+   `true`, as for `apt-get`, unless [`defaults: apt`](#defaults) says
+   otherwise.
 
 ```
 - name: install a shell without what it recommends

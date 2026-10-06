@@ -244,7 +244,8 @@ class Image:
             self._from, distro, self.options, verbose=self._verbose,
             vendor_digest=vendor_digest,
             epoch=self._epoch(), host_image=self.hostBootstrap.name,
-            locales=self._locales_override())
+            locales=self._locales_override(),
+            install_recommends=self._install_recommends())
         self._cid = runner.run(self.spec["playbook"])
         self._export(digest, recipe=self._rootfs_recipe(vendor_digest))
         self._tarball = self._rootfs
@@ -508,6 +509,11 @@ class Image:
     # SEINE_SIGN_KEY -- see signing.signer().
     def _sign_key_default(self):
         return (self.spec.get("defaults") or {}).get("sign-key")
+
+    # 'defaults: apt: install_recommends:', true unless a spec says false.
+    def _install_recommends(self):
+        apt = (self.spec.get("defaults") or {}).get("apt") or {}
+        return apt.get("install_recommends", True)
 
     # Which locales a package install may leave translations/man pages
     # for -- see AnsibleContainerRunner._finalize().

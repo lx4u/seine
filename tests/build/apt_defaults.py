@@ -81,3 +81,17 @@ class OnlyFalseMovesTheRootfsDigest(avocado.Test):
 
     def test_false_moves_it(self):
         self.assertNotEqual(self.digest(SPEC), self.digest(SPEC, defaults("false")))
+
+class ImageReadsTheDefaultBack(avocado.Test):
+    def recommends(self, *texts):
+        build = BuildCmd()
+        for text in texts:
+            build.loads(text)
+        build.parse()
+        return build.image._install_recommends()
+
+    def test_true_without_a_setting(self):
+        self.assertTrue(self.recommends(SPEC))
+
+    def test_false_when_a_file_says_so(self):
+        self.assertFalse(self.recommends(SPEC, defaults("false")))

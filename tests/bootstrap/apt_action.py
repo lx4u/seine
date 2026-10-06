@@ -82,6 +82,31 @@ class RecommendsAreInstalledUnlessTurnedOff(avocado.Test):
             action.run()
         self.assertFalse(get.call_args.args[4])
 
+class TheEnvironmentSetsWhatATaskLeavesOut(avocado.Test):
+    def recommends(self, args, **env):
+        class Proc:
+            returncode = 0
+            stdout = ""
+        action = apt_action.ActionModule.__new__(apt_action.ActionModule)
+        action._task = type("Task", (), {"args": dict(name="vim", **args),
+                                         "check_mode": False})()
+        with patch.dict(os.environ, dict(ENV, **env)), \
+             patch.object(apt_action.ActionBase, "run", return_value={}), \
+             patch.object(apt_action, "_merged_dir", return_value="/merged"), \
+             patch.object(apt_action, "_apt_get", return_value=Proc()) as get:
+            action.run()
+        return get.call_args.args[4]
+
+    def test_recommends_are_installed_without_either(self):
+        self.assertTrue(self.recommends({}))
+
+    def test_the_environment_turns_them_off(self):
+        self.assertFalse(self.recommends({}, **{apt_action.ENV_RECOMMENDS: "false"}))
+
+    def test_a_task_that_asks_for_them_beats_the_environment(self):
+        self.assertTrue(self.recommends({"install_recommends": True},
+                                        **{apt_action.ENV_RECOMMENDS: "false"}))
+
 class ChangedIsReadFromAptGetsOwnOutput(avocado.Test):
     def test_an_inst_or_remv_line_marks_the_task_changed(self):
         class Proc:
