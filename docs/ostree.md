@@ -343,6 +343,10 @@ the failed UKI and deployment, and sets `result=failed-update` in the
 status file. The device then ignores that version: ship the fix under a
 higher one.
 
+A boot that reaches the login but has a failed unit counts as bad too:
+`systemd-boot-check-no-failures` does not bless it, so each reboot uses
+one try. The last-known-good deployment stays pinned during those boots.
+
 ### Replacing the keys
 
 The development keys are public. Make two keys of your own, one for the

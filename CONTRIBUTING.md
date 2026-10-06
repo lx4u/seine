@@ -121,6 +121,9 @@ the guest's root shell over its serial console (`qemu_guest.py`). They
 run with `SEINE_TEST_PLAN=full` only. The Secure Boot ones also need
 `efitools`, `sbsign` and `ukify` on the host. They build one image and
 keep it in `~/.cache/seine-tests/` until the imager sources change.
+`ostree_update_flow.py` builds the update example several times into one
+payload and updates a guest with the agent. It takes ten minutes and
+serves the payload on port 8000 of the host.
 
 ## Coding style
 

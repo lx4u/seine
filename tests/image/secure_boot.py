@@ -33,14 +33,18 @@ def run(argv):
                    stderr=subprocess.DEVNULL)
 
 # Throw-away PK, KEK and db: PK signs the KEK list and KEK signs the db
-# list, as firmware expects, and db signs the boot files.
+# list, as firmware expects, and db signs the boot files. With 'db_cert'
+# (a PEM file), db is that certificate and 'sign' cannot be used.
 class Keys:
     SIGNED_BY = {"PK": "PK", "KEK": "PK", "db": "KEK"}
 
-    def __init__(self, directory):
+    def __init__(self, directory, db_cert=None):
         self.directory = directory
         os.makedirs(directory, exist_ok=True)
         for name, signer in self.SIGNED_BY.items():
+            if name == "db" and db_cert:
+                shutil.copy(db_cert, self.path(name, "crt"))
+                continue
             run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
                  "-keyout", self.path(name, "key"), "-out", self.path(name, "crt"),
                  "-subj", "/CN=seine-test-%s/" % name, "-days", "2"])
