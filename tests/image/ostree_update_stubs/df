@@ -1,0 +1,3 @@
+#!/bin/sh
+# Free room of the ESP, set by the test.
+printf 'Avail\n%s\n' "$(cat "$STUB_DIR/esp-free" 2>/dev/null || echo 1073741824)"

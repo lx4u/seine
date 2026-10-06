@@ -121,6 +121,69 @@ holds a fixed key for development only (`ostree-commits`). The
 The signature is not checked on the device yet: that needs a remote with
 `gpg-verify`, which comes with updates.
 
+## The update script
+
+`examples/common/ostree-update/seine-update` is a shell script that a
+device runs to apply an update: it pulls the new commit, deploys it, and
+adds the UKI of the new version to the ESP last, because the UKI is what
+the boot loader picks. A crash before that step leaves the old system
+untouched. It needs `systemd-sysupdate` (for the UKI), `ostree` and
+`bootctl`.
+
+```
+seine-update             one update run
+seine-update reconcile   repair what a cut run left behind, then check
+seine-update check       only check the invariants
+```
+
+It reads `/etc/seine-update.conf` (shell syntax): `STATEROOT`, `REF`,
+`REMOTE` and `ESP` are required. `KEEP_FAILED=1` keeps the files of a
+failed update for diagnosis.
+
+Exit code 0 means done, nothing new, waiting or busy. Exit code 1 means
+a failure, which also shows in the unit that runs the script. Only one
+run happens at a time (`/run/seine-update.lock`). A run waits while a
+UKI still has boot tries counted: the last update has not had its good
+boot yet.
+
+`/var/lib/seine-update/status` is rewritten after every run, whole, with
+four lines: `time` (epoch), `result`, `version` and `message`. The
+`result` is `ok`, `nothing`, `waiting`, `busy`, `failed` or
+`failed-update` (see below).
+
+The script only removes files and deployments through two functions that
+keep the last-known-good, the booted and the pinned deployment. The
+last-known-good is the blessed UKI with the highest version whose
+deployment still exists, together with that deployment. The script pins
+that deployment in ostree and never removes that UKI. Before a deploy it
+removes the other UKIs, because the deploy drops the old rollback
+deployment. After a good update the device keeps the new last-known-good
+and the previous one as the rollback.
+
+A UKI that ran out of boot tries (`+0-N`) is a failed update. At the next
+run, or at boot with `reconcile`, its version goes to
+`/var/lib/seine-update/failed`, the UKI, its deployment and its link are
+removed, and the status says `failed-update`. A version on that list is
+not fetched again: ship a fix with a higher version. The list is the
+durable record, the status line is replaced by the next run.
+
+If `bootctl` or `ostree admin status` print nothing, the script deletes
+nothing and stops: what it cannot read is not treated as gone.
+
+The script never reboots the device: that policy belongs to the image.
+
+Tests can set `SEINE_UPDATE_CONF`, `SEINE_UPDATE_ESP`,
+`SEINE_UPDATE_SYSROOT`, `SEINE_UPDATE_STATE`, `SEINE_UPDATE_LOCK` and
+`SEINE_UPDATE_SYSUPDATE`, `SEINE_UPDATE_OSTREE`, `SEINE_UPDATE_BOOTCTL`
+to run it on a temporary tree with stand-in commands. With
+`SEINE_UPDATE_FAILPOINT=<step>` the script stops dead after that step
+(`kill`, the default) or sleeps (`SEINE_UPDATE_FAILPOINT_ACTION=hold`),
+so a test can cut the power. The steps are `after-elect`, `after-pull`,
+`after-prune-ukis`, `after-deploy`, `after-link`, `after-prune`,
+`after-uki`, `after-bind`, and, when a failed update is cleaned up,
+`after-denylist` and `after-undeploy`. Leave the variable unset on a
+device.
+
 ## Requirements
 
 The root file system needs `dracut`, `ostree` and `ostree-boot`, and no

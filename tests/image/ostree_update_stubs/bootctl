@@ -1,0 +1,8 @@
+#!/bin/sh
+# Lists the fake UKIs of $SEINE_UPDATE_ESP: the text of a file is its command line.
+[ "$1" = list ] || exit 2
+[ ! -e "$STUB_DIR/bootctl-empty" ] || exit 0
+for f in "$SEINE_UPDATE_ESP"/*.efi; do
+    [ -e "$f" ] || continue
+    printf 'title: Debian\n  source: /efi//EFI/Linux/%s\n options: %s\n\n' "${f##*/}" "$(cat "$f")"
+done

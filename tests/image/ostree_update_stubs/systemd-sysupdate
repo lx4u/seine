@@ -1,0 +1,19 @@
+#!/bin/sh
+# Offers the version in $STUB_DIR/new-version, installs $STUB_DIR/payload/<version>.
+d=$STUB_DIR
+echo "sysupdate $*" >> "$d/calls"
+case $1 in
+list)
+    [ ! -e "$d/list-fail" ] || { echo "DOWNLOAD INVALID: BAD signature" >&2; exit 1; }
+    ;;
+check-new)
+    [ -s "$d/new-version" ] || exit 1
+    cat "$d/new-version"
+    ;;
+vacuum)
+    rm -f "$SEINE_UPDATE_ESP"/.#sysupdate*
+    ;;
+update)
+    cp "$d/payload/$2" "$SEINE_UPDATE_ESP/debian-$2+3.efi"
+    ;;
+esac

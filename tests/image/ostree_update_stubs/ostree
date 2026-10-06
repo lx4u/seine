@@ -1,0 +1,53 @@
+#!/bin/sh
+# A small model of the ostree commands the update script uses. The deployments,
+# newest first, are listed in $STUB_DIR/order; ostree keeps the new, the booted
+# and the pinned ones on a deploy.
+d=$STUB_DIR
+root=$SEINE_UPDATE_SYSROOT/ostree/deploy/debian/deploy
+echo "ostree $*" >> "$d/calls"
+booted=$(cat "$d/booted" 2>/dev/null)
+nth() { sed -n "$(($1 + 1))p" "$d/order"; }
+case "$1 $2" in
+"pull "*)
+    [ ! -e "$d/pull-fail" ] || { echo "error: pull failed" >&2; exit 1; }
+    ;;
+"rev-parse "*)
+    cat "$d/commit"
+    ;;
+"show --print-metadata-key=version")
+    printf "'%s'\n" "$(cat "$d/commit-version")"
+    ;;
+"admin status")
+    while read -r n; do
+        mark=' '; [ "$n" = "$booted" ] && mark='*'
+        printf '%s debian %s\n    origin refspec: seine:debian/amd64\n' "$mark" "$n"
+        [ ! -e "$d/pinned/$n" ] || echo '    Pinned: yes'
+    done < "$d/order"
+    ;;
+"admin deploy")
+    k=0; while [ -e "$root/$3.$k" ]; do k=$((k + 1)); done
+    new=$3.$k
+    mkdir -p "$root/$new"; : > "$root/$new.origin"
+    { echo "$new"
+      while read -r n; do
+          if [ "$n" = "$booted" ] || [ -e "$d/pinned/$n" ]; then echo "$n"
+          else rm -rf "${root:?}/$n" "${root:?}/$n.origin"; fi
+      done < "$d/order"; } > "$d/order.new"
+    mv "$d/order.new" "$d/order"
+    ;;
+"admin pin")
+    if [ "$3" = --unpin ]; then i=$4; else i=$3; fi
+    n=$(nth "$i"); [ -n "$n" ] || { echo "error: Out of range deployment index" >&2; exit 1; }
+    mkdir -p "$d/pinned"
+    if [ "$3" = --unpin ]; then rm -f "$d/pinned/$n"; else : > "$d/pinned/$n"; fi
+    ;;
+"admin undeploy")
+    n=$(nth "$3"); [ -n "$n" ] || { echo "error: Out of range deployment index" >&2; exit 1; }
+    [ "$n" != "$booted" ] || { echo "error: Cannot undeploy the booted deployment" >&2; exit 1; }
+    rm -rf "${root:?}/$n" "${root:?}/$n.origin" "$d/pinned/$n"
+    grep -vx "$n" "$d/order" > "$d/order.new"; mv "$d/order.new" "$d/order"
+    ;;
+*)
+    echo "ostree stub: unexpected: $*" >&2; exit 2
+    ;;
+esac

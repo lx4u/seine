@@ -1,0 +1,429 @@
+#!/bin/bash
+# Apply an OSTree update to this device.
+#   seine-update             pull, deploy and add the UKI of a newer version
+#   seine-update reconcile   repair what a cut run left behind, then check
+#   seine-update check       only check the invariants
+set -eu
+shopt -s nullglob
+
+CONF=${SEINE_UPDATE_CONF:-/etc/seine-update.conf}
+# shellcheck disable=SC1090
+. "$CONF"
+: "${STATEROOT:?}" "${REF:?}" "${REMOTE:?}"
+KEEP_FAILED=${KEEP_FAILED:-0}
+ESP=${SEINE_UPDATE_ESP:-${ESP:?}}
+SU=${SEINE_UPDATE_SYSUPDATE:-/usr/lib/systemd/systemd-sysupdate}
+OSTREE=${SEINE_UPDATE_OSTREE:-ostree}
+BOOTCTL=${SEINE_UPDATE_BOOTCTL:-bootctl}
+SYSROOT=${SEINE_UPDATE_SYSROOT:-/sysroot}
+STATE=${SEINE_UPDATE_STATE:-/var/lib/seine-update}
+LOCK=${SEINE_UPDATE_LOCK:-/run/seine-update.lock}
+DEPLOYS=$SYSROOT/ostree/deploy/$STATEROOT/deploy
+ESP_SLACK=$((5 * 1024 * 1024))
+
+reported=
+v=
+BAD=0
+first=
+
+status() {   # result [version] [message]
+    mkdir -p "$STATE"
+    printf 'time=%s\nresult=%s\nversion=%s\nmessage=%s\n' \
+        "$(date +%s)" "$1" "${2:-}" "${3:-}" > "$STATE/status.new"
+    mv "$STATE/status.new" "$STATE/status"
+    reported=1
+}
+
+fail() {
+    printf 'seine-update: %s\n' "$1" >&2
+    status failed "$v" "$1"
+    exit 1
+}
+
+problem() {
+    printf 'seine-update: %s\n' "$1" >&2
+    BAD=1
+    first=${first:-$1}
+}
+
+# A test hook: stop dead (or hold) after a step so a power cut can be tried.
+failpoint() {
+    [[ ${SEINE_UPDATE_FAILPOINT:-} == "$1" ]] || return 0
+    echo "seine-update: FAILPOINT $1"
+    if [[ ${SEINE_UPDATE_FAILPOINT_ACTION:-kill} == hold ]]; then exec sleep 3600; fi
+    kill -9 $$
+}
+
+# The link a UKI names (ostree=), from 'bootctl list'. Empty when unknown.
+uki_link() {
+    "$BOOTCTL" list --no-pager | awk -v f="$1" '
+        $1 == "source:" { n = split($2, p, "/"); s = p[n] }
+        $1 == "options:" && s == f {
+            for (i = 2; i <= NF; i++)
+                if ($i ~ /^ostree=/) { sub(/^ostree=/, "", $i); print $i; exit }
+        }'
+}
+
+# Name of the deployment a UKI file boots. Empty when unknown.
+uki_deployment() {
+    local t
+    t=$(uki_link "$1")
+    if [[ -n $t && -L $SYSROOT$t ]]; then
+        basename "$(readlink "$SYSROOT$t")"
+    fi
+}
+
+uki_alive() {
+    local t
+    t=$(uki_link "$1")
+    [[ -n $t && -d $SYSROOT$t ]]
+}
+
+uki_version() {   # debian-23+3.efi -> 23
+    local f=${1#"$STATEROOT"-}
+    f=${f%.efi}
+    printf '%s\n' "${f%%+*}"
+}
+
+# One line per deployment of the stateroot: index name booted|- pinned|-
+# The index counts the deployments of all staterooots, as ostree does.
+status_rows() {
+    "$OSTREE" admin status | awk -v s="$STATEROOT" '
+        function flush() {
+            if (name != "") print idx - 1, name, (booted ? "booted" : "-"), (pinned ? "pinned" : "-")
+            name = ""; booted = 0; pinned = 0
+        }
+        $1 == "*" && $2 == s && $3 ~ /^[0-9a-f]+\.[0-9]+/ {
+            flush(); idx++
+            name = $3; booted = 1
+            next
+        }
+        $1 == s && $2 ~ /^[0-9a-f]+\.[0-9]+/ {
+            flush(); idx++
+            name = $2; booted = 0
+            next
+        }
+        /^[ \t]*Pinned:[ \t]*yes/ { pinned = 1 }
+        END { flush() }'
+}
+
+# The last-known-good is a blessed UKI with a live deployment, the highest version.
+# Prints "<uki file> <deployment>"; fails when there is none.
+lkg() {
+    local u f best
+    best=$(for u in "$ESP/$STATEROOT"-*.efi; do
+        f=${u##*/}
+        [[ $f == *+* ]] && continue
+        uki_alive "$f" && uki_version "$f"
+    done | sort -V | tail -n 1)
+    [[ -n $best ]] || return 1
+    printf '%s %s\n' "$STATEROOT-$best.efi" "$(uki_deployment "$STATEROOT-$best.efi")"
+}
+
+# Booted, pinned and last-known-good deployments must stay. Unknown counts as protected.
+deployment_protected() {
+    local l rows
+    [[ -d $DEPLOYS/$1 ]] || return 1
+    l=$(lkg) || l=
+    [[ ${l#* } != "$1" ]] || return 0
+    rows=$(status_rows)
+    [[ -n $rows ]] || return 0
+    printf '%s\n' "$rows" | awk -v n="$1" '
+        $2 == n { found = 1; if ($3 == "booted" || $4 == "pinned") keep = 1 }
+        END { exit !(keep) }'
+}
+
+# The only places that delete a file or a deployment.
+drop_file() {
+    local f=${1##*/} d='' l keep=''
+    case $f in
+    *.efi)
+        l=$(lkg) || l=
+        [[ $f == "${l%% *}" ]] && keep=1
+        d=$(uki_deployment "$f")
+        ;;
+    *)
+        if [[ -L $1 ]]; then
+            d=$(basename "$(readlink "$1")")
+        elif [[ -d $1 ]]; then
+            d=$f
+        fi
+        ;;
+    esac
+    if [[ -n $keep ]] || { [[ -n $d ]] && deployment_protected "$d"; }; then
+        echo "seine-update: keeping $f (last-known-good, booted or pinned)"
+        return 0
+    fi
+    rm -rf "${1:?}"
+}
+
+drop_deployment() {
+    local i
+    if deployment_protected "$1"; then
+        echo "seine-update: keeping deployment $1 (last-known-good, booted or pinned)"
+        return 0
+    fi
+    i=$(status_rows | awk -v n="$1" '$2 == n { print $1 }')
+    [[ -n $i ]] || return 0
+    "$OSTREE" admin undeploy "$i" || fail "cannot undeploy $1"
+}
+
+drop_dead_links() {
+    local l
+    for l in "$SYSROOT/ostree/$STATEROOT"-*; do
+        if [[ ! -e $l ]]; then drop_file "$l"; fi
+    done
+}
+
+drop_incomplete_deploys() {
+    local d n rows
+    rows=$(status_rows)
+    [[ -n $rows ]] || return 0
+    for d in "$DEPLOYS"/*; do
+        n=${d##*/}
+        [[ $n == *.origin ]] && continue
+        if ! printf '%s\n' "$rows" | awk -v n="$n" '$2 == n { found = 1 } END { exit !found }'; then
+            drop_file "$d"
+            drop_file "$d.origin"
+        fi
+    done
+}
+
+repair_links() {
+    local n rows
+    drop_dead_links
+    drop_incomplete_deploys
+    rows=$(status_rows)
+    [[ -n $rows ]] || return 0
+    while read -r _ n _ _; do
+        if [[ ! -e $SYSROOT/ostree/$STATEROOT-${n%.*} ]]; then
+            ln -sfn "deploy/$STATEROOT/deploy/$n" "$SYSROOT/ostree/$STATEROOT-${n%.*}"
+        fi
+    done <<< "$rows"
+}
+
+# A UKI whose deployment is gone. If bootctl shows nothing, delete nothing.
+drop_orphan_ukis() {
+    local u f t list
+    list=$("$BOOTCTL" list --no-pager)
+    [[ -n $list ]] || fail "cannot read the bootloader entries from bootctl"
+    for u in "$ESP/$STATEROOT"-*.efi; do
+        f=${u##*/}
+        t=$(uki_link "$f")
+        if [[ -z $t ]]; then
+            if [[ $f == *+* ]]; then
+                echo "seine-update: removing corrupt trial UKI $f"
+                drop_file "$u"
+                continue
+            fi
+            fail "cannot read the command line of $f from bootctl"
+        fi
+        if [[ ! -e $SYSROOT$t ]]; then
+            echo "seine-update: removing $f (its deployment is gone)"
+            drop_file "$u"
+        fi
+    done
+}
+
+# Exactly one deployment is pinned: the last-known-good. Pin it first.
+elect() {
+    local l rows i n p
+    l=$(lkg) || return 0
+    l=${l#* }
+    rows=$(status_rows)
+    while read -r i n _ p; do
+        if [[ $n == "$l" && $p != pinned ]]; then
+            "$OSTREE" admin pin "$i" || fail "cannot pin $n"
+        fi
+    done <<< "$rows"
+    while read -r i n _ p; do
+        if [[ $n != "$l" && $p == pinned ]]; then
+            "$OSTREE" admin pin --unpin "$i" || fail "cannot unpin $n"
+        fi
+    done <<< "$rows"
+    failpoint after-elect
+}
+
+# A failed UKI is denied for good, then removed with its deployment and link.
+cleanup_failed() {
+    local u f fv d t
+    for u in "$ESP/$STATEROOT"-*+0-*.efi; do
+        f=${u##*/}
+        fv=$(uki_version "$f")
+        t=$(uki_link "$f")
+        [[ -n $t ]] || fail "cannot read the command line of $f from bootctl"
+        d=
+        if [[ -L $SYSROOT$t ]]; then d=$(basename "$(readlink "$SYSROOT$t")"); fi
+        if ! denied "$fv"; then
+            mkdir -p "$STATE"
+            printf '%s %s %s\n' "$fv" "${d:--}" "$(date +%s)" >> "$STATE/failed"
+            sync -f "$STATE/failed" 2>/dev/null || sync
+        fi
+        failpoint after-denylist
+        status failed-update "$fv" "the update to $fv did not boot"
+        [[ $KEEP_FAILED != 1 ]] || continue
+        drop_file "$u"
+        if [[ -n $d ]]; then drop_deployment "$d"; fi
+        sync
+        failpoint after-undeploy
+        drop_file "$SYSROOT$t"
+    done
+}
+
+denied() {
+    [[ -f $STATE/failed ]] && awk -v v="$1" '$1 == v { f = 1 } END { exit !f }' "$STATE/failed"
+}
+
+esp_room() {   # room for one more UKI as big as the biggest one here
+    local u max=0 size free
+    for u in "$ESP/$STATEROOT"-*.efi; do
+        size=$(stat -c %s "$u")
+        if ((size > max)); then max=$size; fi
+    done
+    free=$(df -B1 --output=avail "$ESP" | tail -n 1 | tr -d ' ')
+    [[ $free =~ ^[0-9]+$ ]] || { problem "cannot read the free room of the ESP"; return; }
+    if ((free < max + ESP_SLACK)); then problem "not enough room on the ESP"; fi
+}
+
+invariants() {
+    local u f t l rows n b count=0 limit=2
+    BAD=0
+    for u in "$SYSROOT/ostree/$STATEROOT"-*; do
+        [[ -e $u ]] || problem "dead link ${u##*/}"
+    done
+    for u in "$ESP/$STATEROOT"-*.efi; do
+        f=${u##*/}
+        t=$(uki_link "$f")
+        if [[ -z $t ]]; then
+            problem "cannot read the command line of $f"
+        elif [[ ! -e $SYSROOT$t ]]; then
+            problem "$f names a missing deployment"
+        fi
+    done
+    for u in "$ESP"/.#sysupdate* "$ESP"/*.tmp; do
+        problem "left-over file ${u##*/} on the ESP"
+    done
+    esp_room
+    l=$(lkg) || l=
+    [[ -n $l ]] || problem "no last-known-good"
+    rows=$(status_rows)
+    if [[ -z $rows ]]; then
+        problem "cannot read the deployments"
+    else
+        while read -r _ n b _; do
+            count=$((count + 1))
+            [[ -e $SYSROOT/ostree/$STATEROOT-${n%.*} ]] || problem "deployment $n has no link"
+            if [[ $b == booted && -n $l && $n != "${l#* }" ]]; then limit=3; fi
+        done <<< "$rows"
+        if ((count > limit)); then problem "$count deployments, at most $limit expected"; fi
+    fi
+    return "$BAD"
+}
+
+reconcile() {
+    repair_links
+    drop_orphan_ukis
+    elect
+    cleanup_failed
+    "$SU" vacuum > /dev/null 2>&1 || true
+}
+
+case ${1:-run} in
+run | reconcile | check) ;;
+*) echo "usage: seine-update [run|reconcile|check]" >&2; exit 2 ;;
+esac
+cmd=${1:-run}
+
+on_exit() {
+    if [[ $1 -ne 0 && -z $reported ]]; then status failed "$v" "unexpected error"; fi
+}
+trap 'on_exit $?' EXIT
+
+if [[ $cmd == check ]]; then
+    invariants
+    exit
+fi
+
+mkdir -p "$STATE"
+exec 9> "$LOCK"
+flock -n 9 || { status busy "" "another run"; exit 0; }
+
+if [[ $cmd == reconcile ]]; then
+    reconcile
+    invariants || fail "invariants broken after reconcile: $first"
+    exit
+fi
+
+reconcile
+invariants || fail "invariants broken before the update: $first"
+
+trial=("$ESP/$STATEROOT"-*+[1-9]*.efi)
+if ((${#trial[@]})); then
+    status waiting "" "an update waits for its good boot"
+    exit 0
+fi
+
+"$SU" list > /dev/null 2> "$STATE/su.err" ||
+    fail "cannot read the update list: $(tail -n 1 "$STATE/su.err")"
+v=$("$SU" check-new 2> /dev/null) || v=
+if [[ -z $v ]]; then
+    status nothing
+    exit 0
+fi
+[[ $v =~ ^[0-9][0-9A-Za-z._]{0,63}$ ]] || fail "unexpected version '$v'"
+if denied "$v"; then
+    status nothing "$v" "denied: it failed before"
+    exit 0
+fi
+
+l=$(lkg) || fail "no last-known-good"
+lv=$(uki_version "${l%% *}")
+if [[ $lv == [0-9]* ]]; then
+    newest=$(printf '%s\n%s\n' "$lv" "$v" | sort -V | tail -n 1)
+    if [[ $newest != "$v" || $lv == "$v" ]]; then fail "version $v is not newer than $lv"; fi
+fi
+
+"$OSTREE" pull "$REMOTE" "$REF" || fail "cannot pull $REMOTE:$REF"
+failpoint after-pull
+c=$("$OSTREE" rev-parse "$REMOTE:$REF") || fail "cannot read $REMOTE:$REF"
+[[ $c =~ ^[0-9a-f]{64}$ ]] || fail "unexpected commit '$c'"
+cv=$("$OSTREE" show --print-metadata-key=version "$c" | tr -d "'") || cv=
+[[ $cv == "$v" ]] || fail "commit version '$cv' differs from $v"
+
+# Keep the last-known-good (and the booted UKI), drop the rest before the deploy does.
+for u in "$ESP/$STATEROOT"-*.efi; do drop_file "$u"; done
+esp_room
+[[ $BAD == 0 ]] || fail "$first"
+failpoint after-prune-ukis
+
+d=$(status_rows | awk -v c="$c" '$2 ~ ("^" c "\\.") { print $2; exit }')
+if [[ -z $d ]]; then
+    for x in "$DEPLOYS/$c".*; do
+        drop_file "$x"
+        drop_file "$x.origin"
+    done
+    "$OSTREE" admin deploy "$c" || fail "cannot deploy $c"
+    failpoint after-deploy
+    d=$(status_rows | awk -v c="$c" '$2 ~ ("^" c "\\.") { print $2; exit }')
+fi
+[[ -n $d ]] || fail "deployment of $c not found"
+ln -sfn "deploy/$STATEROOT/deploy/$d" "$SYSROOT/ostree/$STATEROOT-$c"
+failpoint after-link
+drop_dead_links
+failpoint after-prune
+
+"$SU" update "$v" || fail "cannot install the UKI of $v"
+failpoint after-uki
+
+new=
+for x in "$ESP/$STATEROOT-$v".efi "$ESP/$STATEROOT-$v"+*.efi; do
+    if [[ -e $x ]]; then new=$x; break; fi
+done
+[[ -n $new ]] || fail "no UKI for $v after the update"
+if [[ $(uki_link "${new##*/}") != "/ostree/$STATEROOT-$c" ]]; then
+    drop_file "$new"
+    fail "UKI of $v does not name the commit"
+fi
+failpoint after-bind
+sync
+status ok "$v" "installed, reboot to use it"
