@@ -1758,7 +1758,8 @@ Plain or dotted numbers (`22`, `1.10.3`) order the same way in
 disk-only key: changing it does not rebuild the root file system.
 The imager stamps it as `IMAGE_VERSION` in the os-release of the commit,
 records it as the commit's `version` and names the UKI after it; the
-root file system must then ship exactly one UKI.
+root file system must then ship exactly one UKI. It does not change the
+GUIDs and UUIDs of the disk, see [OSTree sysroots](ostree.md).
 
 See [OSTree sysroots](ostree.md) for what the imager builds.
 

@@ -47,10 +47,24 @@ class NonReproducibleBuildReadsBackTheRealUuid(avocado.Test):
         m = esp_mount()
         g = mock.Mock()
         g.vfs_uuid.return_value = "430F-1BFD"
-        i._write_fstab(g, [m], {id(m): "/dev/sdb1"}, {})
+        with mock.patch.object(Imager, "_pins_fat_serial", return_value=False):
+            i._write_fstab(g, [m], {id(m): "/dev/sdb1"}, {})
         g.vfs_uuid.assert_called_once_with("/dev/sdb1")
         written = g.write.call_args[0][1].decode()
         self.assertIn("UUID=430F-1BFD", written)
+
+# An ostree disk pins the serial without '--reproducible': its updates
+# must name the ESP the flashed device has.
+class PinnedSerialIsPredictedWithoutReproducible(avocado.Test):
+    def test(self):
+        i = imager(reproducible=False)
+        m = esp_mount()
+        g = mock.Mock()
+        with mock.patch.object(Imager, "_pins_fat_serial", return_value=True), \
+                mock.patch.object(Imager, "_fat_serial", return_value="008E79D0"):
+            i._write_fstab(g, [m], {id(m): "/dev/sdb1"}, {})
+        g.vfs_uuid.assert_not_called()
+        self.assertIn("UUID=008E-79D0", g.write.call_args[0][1].decode())
 
 if __name__ == "__main__":
     avocado.main()

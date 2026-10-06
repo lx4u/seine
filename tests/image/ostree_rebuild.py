@@ -92,6 +92,7 @@ class FatSerial(avocado.Test):
         i = imager()
         i.reproducible = False
         g = mock.Mock()
-        with mock.patch.object(Imager, "_uuid_for", return_value="u"):
+        with mock.patch.object(Imager, "_uuid_for", return_value="u"), \
+                mock.patch.object(Imager, "_pins_fat_serial", return_value=False):
             i._mkfs(g, {"type": "vfat", "label": "esp"}, "/dev/sda1")
         g.pwrite_device.assert_not_called()

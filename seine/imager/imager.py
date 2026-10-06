@@ -1,6 +1,7 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import copy
 import os
 import re
 import shutil
@@ -10,6 +11,7 @@ import uuid
 
 import guestfs
 
+from seine                   import analyze
 from seine                   import utils
 from seine.imager.bootloader import detect as detect_bootloader
 from seine.imager.appliance import DEVICE
@@ -91,6 +93,9 @@ from seine.containers.ingest import ContainerdIngestionHandler, DockerIngestionH
 before_launch = lambda: None
 after_launch = lambda: None
 
+# Settings of an ostree image that change with each release, not with its layout.
+OSTREE_RELEASE_KEYS = ("version", "payload", "manifest-key", "gpg-key")
+
 class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor):
     def __init__(self, source):
         self.source = source
@@ -101,6 +106,7 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
         self.reproducible = source.options["reproducible"]
         self._output_dir = None
         self._hypervisor_path = None
+        self._seed = None
 
     def _mkfs(self, g, part, dev):
         ro = part["type"] in RO_FSTYPES
@@ -124,7 +130,7 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
             g.set_uuid(dev, self._uuid_for("fs", label or dev))
         except RuntimeError as e:
             print("  note: could not set a UUID on '%s' (%s): %s" % (dev, fstype, e))
-        if self.reproducible and fstype in ("vfat", "msdos"):
+        if self._pins_fat_serial() and fstype in ("vfat", "msdos"):
             self._pin_fat_serial(g, dev, self._fat_serial(label, dev))
 
 
@@ -145,15 +151,14 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
             elif ro:
                 what = "PARTLABEL=%s" % m["label"]
             elif m["type"] in ("vfat", "msdos"):
-                if self.reproducible:
+                if self._pins_fat_serial():
                     # Not g.vfs_uuid(dev): fstab is written before the
                     # FAT rebuild that actually sets this serial on
                     # the device.
                     serial = self._fat_serial(m.get("label"), dev)
                     what = "UUID=%s-%s" % (serial[:4], serial[4:])
                 else:
-                    # No FAT rebuild this run (--reproducible is off):
-                    # mkfs.vfat's own serial is what actually lands on
+                    # The serial is not pinned: mkfs.vfat's own lands on
                     # the device, so fstab has to name that instead.
                     what = "UUID=%s" % g.vfs_uuid(dev)
             else:
@@ -222,11 +227,42 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
                 parts.append(m.group(1).strip())
         return " ".join(parts)
 
+    # What the disk identifiers come from. An image that is flashed whole
+    # follows the whole spec. An ostree image is updated in the field, so
+    # it follows only its layout and product: not the release, the file
+    # name or what the playbooks install.
+    def _identity_seed(self):
+        if self._seed is None:
+            ph = self.source.partitionHandler
+            if all(ph.ostree_for(s)["mode"] == "disabled"
+                   for s in ph.rooted_sources()):
+                self._seed = self.source.spec_digest()
+            else:
+                self._seed = self._layout_digest()
+        return self._seed
+
+    # An ostree disk keeps its ESP serial from one version to the next,
+    # or the fstab of an update would not find the ESP of a flashed device.
+    def _pins_fat_serial(self):
+        return self.reproducible or self._identity_seed() != self.source.spec_digest()
+
+    def _layout_digest(self):
+        spec = self.source.spec
+        image = copy.deepcopy(spec.get("image") or {})
+        image.pop("filename", None)
+        ostree = image.get("ostree") or {}
+        scopes = [ostree] + list((ostree.get("sources") or {}).values())
+        for scope in scopes:
+            for key in OSTREE_RELEASE_KEYS:
+                scope.pop(key, None)
+        arch = (spec.get("distribution") or {}).get("architecture")
+        return analyze.spec_digest({"image": image, "architecture": arch})
+
     # A GUID/UUID derived from the spec, so a rebuild gets the same one
     # and a changed spec gets a different one. 'parts' picks out which
     # GUID this is (disk, a partition, a filesystem) so none collide.
     def _uuid_for(self, *parts):
-        seed = ":".join([self.source.spec_digest()] + list(parts))
+        seed = ":".join([self._identity_seed()] + list(parts))
         return str(uuid.uuid5(UUID_NAMESPACE, seed))
 
 
@@ -438,7 +474,7 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
                 # random UUID into their metadata; the appliance's wrapper
                 # (imager/appliance.py) freezes the time and pins the UUIDs.
                 g.set_append("faketime=%d seed=%s" % (
-                    self.source._epoch(), self.source.spec_digest()))
+                    self.source._epoch(), self._identity_seed()))
             # Wraps the whole session, not just g.launch(): libguestfs forks
             # again on g.shutdown()/g.close(), which hangs if left unguarded.
             before_launch()

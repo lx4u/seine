@@ -107,6 +107,19 @@ The commit carries an empty `machine-id` and no SSH host keys, so
 every device creates its own. A root file system that ships host keys
 is refused.
 
+## Disk identifiers
+
+A device is updated, not flashed again, so a later build must keep the
+GUIDs and UUIDs of the disk, its partitions and its file systems (the
+serial of the ESP too): `root=PARTUUID=` in the UKI has to find the
+device, and the fstab of an update has to find the ESP. They come from the
+layout and the product: the `image:` section without `filename`,
+`version`, `payload`, `manifest-key` and `gpg-key`, and the
+architecture. A new release, another file name or other packages keep
+them. A change of the partitions, the table, `mode`, `stateroot` or
+`ref` gives new ones, and the devices must be flashed again. Without
+ostree the identifiers follow the whole specification.
+
 ## Signing the commit
 
 Set `gpg-key: vault:<name>` under `image: ostree` (or in a `sources:`
