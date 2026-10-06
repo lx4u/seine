@@ -1,0 +1,109 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# A PC disk that updates itself: an ostree root file system booted from
+# a signed UKI by systemd-boot, and the update script of
+# ../common/ostree-update. The build also writes the payload a device
+# updates from (docs/ostree.md, "Updating a device").
+#   seine build examples/pc-ostree-update-image/main.yaml
+#   dd if=build/deploy/trixie/pc-ostree-update.img of=/dev/sdX bs=4M status=progress conv=fsync
+# For the next version, change 'version:' and build again: the new
+# commit and UKI are added to build/deploy/trixie/pc-ostree-update-payload/.
+
+requires:
+    - ../common/trixie
+    - ../common/debian
+    - ../common/conf-accounts
+    - ../common/conf-locales
+    - ../common/conf-timezone
+    - ../common/networkd
+    - ../common/dev-ostree-key
+    - ../common/dev-secureboot-key
+    - ../common/dev-update-manifest-key
+    - ../common/ostree-update
+
+distribution:
+    architecture: amd64
+    architectures:
+        - amd64
+
+imager:
+    kernel: linux-image-amd64
+
+# Where the payload is served: 10.0.2.2 is the host of a QEMU user network.
+update:
+    url: http://10.0.2.2:8000
+
+playbook:
+    - name: dracut and ostree
+      priority: 700
+      tasks:
+          - name: install dracut, ostree and systemd
+            apt:
+                name:
+                    - dracut
+                    - dracut-config-generic
+                    - ostree
+                    - ostree-boot
+                    - systemd
+                    - systemd-sysv
+                state: present
+
+    - name: systemd-boot and the kernel
+      priority: 800
+      tasks:
+          - name: install systemd-boot, the kernel and firmware blobs
+            apt:
+                name:
+                    - systemd-boot
+                    - linux-image-amd64
+                    - firmware-linux-free
+                state: present
+
+    # The imager adds the deployment's arguments to this command line.
+    - name: a UKI of the kernel
+      priority: 900
+      tasks:
+          - name: install ukify
+            apt:
+                name:
+                    - systemd-ukify
+                    - systemd-boot-efi
+                state: present
+          - name: build the UKI
+            shell: |
+                mkdir -p /boot/EFI/Linux
+                ukify build --linux=$(ls /boot/vmlinuz-*) --initrd=$(ls /boot/initrd.img-*) \
+                    --cmdline="console=tty0 console=ttyS0,115200" \
+                    --output=/boot/EFI/Linux/os.efi
+
+image:
+    filename: pc-ostree-update.img
+    table: gpt
+    secure-boot:
+        private-key: vault:uefi-secureboot
+    ostree:
+        mode: standard
+        stateroot: debian
+        ref: debian/amd64
+        version: "1"
+        gpg-key: vault:ostree-commits
+        manifest-key: vault:update-manifest
+    partitions:
+        # Room for the factory UKI and two updates, plus some.
+        - label: esp
+          type: vfat
+          size: 512MiB
+          where: /efi
+          flags: [boot]
+        - label: sysroot
+          type: ext4
+          where: /
+        - label: var
+          type: ext4
+          size: 1024MiB
+          where: /var
+        - label: home
+          type: ext4
+          size: 256MiB
+          where: /var/home

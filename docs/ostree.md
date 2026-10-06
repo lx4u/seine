@@ -286,6 +286,91 @@ the commit and the list of files. They are for development only. A
 project exports its own public keys and replaces both files in the
 fragment's directory, or copies the fragment.
 
+## A PC image that updates itself
+
+`examples/pc-ostree-update-image/main.yaml` puts the pieces together: an
+ostree root file system, systemd-boot with a UKI signed by the
+development Secure Boot key, DHCP on the wired network, and the update
+fragment. Its `update: url:` points at `10.0.2.2:8000`, which is the
+host as a QEMU guest on the default user network sees it. A real image
+sets its own URL, keys and partitions.
+
+To try it, build version 1 and boot it:
+
+```
+seine build examples/pc-ostree-update-image/main.yaml
+```
+
+The build writes the disk and `pc-ostree-update-payload/` next to it,
+in the deploy directory. Flash or boot the disk. The development key is
+not enrolled in the firmware: either leave Secure Boot off, or enrol the
+`db` certificate of the key first.
+
+To ship version 2, change `version:` and build again, with the same file
+names. The disk identifiers do not change, so the devices keep working,
+and the new commit and UKI are added to the payload directory. Then serve
+the directory so that `<url>/repo` and `<url>/uki/` resolve, for
+instance:
+
+```
+python3 -m http.server 8000 --directory build/deploy/trixie/pc-ostree-update-payload
+```
+
+A running device finds version 2 within an hour. To see it at once, run
+`/usr/libexec/seine-update/seine-update` on the device, then reboot. The
+new UKI is tried three times. When the boot is good, the system is
+marked good and version 2 is the last-known-good one.
+
+An appliance image that was built before the update support was added
+lacks `ostree`: run the build once with `imager: rebuild: different`, or
+clear the cache with `seine cache clear`.
+
+### The payload directory is the history
+
+Every version ever built stays in the payload directory: its ref
+(`<ref>.v<version>`), its UKI and its line in `SHA256SUMS`. Keep it
+like a release archive, and do not clean the deploy directory without
+copying it first: the next build would start a new history, and the
+devices would be offered an older version than the one they run. The
+build refuses a version that is not higher than the newest one.
+
+### What a failed update looks like
+
+A device that cannot boot the new UKI three times falls back to the
+last-known-good system by itself. The next run of the script, or the
+next boot, records the version in `/var/lib/seine-update/failed`, removes
+the failed UKI and deployment, and sets `result=failed-update` in the
+status file. The device then ignores that version: ship the fix under a
+higher one.
+
+### Replacing the keys
+
+The development keys are public. Make two keys of your own, one for the
+commits and one for the list of files, and export their public halves
+(`provider.pgp_public_key`) over `commit-key.gpg` and `manifest-key.gpg`
+in a copy of the fragment. Both files are keyrings, so they can hold
+more than one key. To rotate a key, ship an update whose image trusts the
+old and the new key, wait until the devices run it, and only then sign
+with the new key.
+
+### Limits
+
+* The root file system is not bound to the UKI: the UKI names the
+  deployment by a link, and nothing checks the content of the deployment
+  at boot.
+* Only version checks protect against an old payload. There is no
+  anti-rollback counter, and `dbx` is not updated.
+* `/etc` and `/var` can be changed on a device, and root can write the
+  ESP.
+* A partition without `size:` is sized from the root file system of the
+  first build. A later build that needs more room does not fit the
+  partitions a device already has: set `size:` for what must not move.
+* Only OVMF has been tested, not real hardware. Before relying on it,
+  check on the hardware that the firmware runs systemd-boot with the
+  boot counters in the UKI file names, that its clock is set when the update runs (a signature
+  from the future is refused), that the watchdog resets a hung boot, and
+  that the ESP is big enough for three UKIs.
+
 ## Requirements
 
 The root file system needs `dracut`, `ostree` and `ostree-boot`, and no
