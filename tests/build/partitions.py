@@ -543,6 +543,14 @@ def ostree_spec(mode="standard", release="trixie", partitions=None, **image):
     }
     return spec
 
+SIGNING_KEYS = {"gpg-key": "vault:ostree-commits",
+                "manifest-key": "vault:update-manifest"}
+
+# A version is shipped, so its two keys come with it.
+def versioned(spec, version, **extra):
+    spec["image"]["ostree"].update(SIGNING_KEYS, version=version, **extra)
+    return spec
+
 class OstreeSpecification(avocado.Test):
     def refuses(self, text, **kwargs):
         with self.assertRaises(ValueError) as cm:
@@ -577,8 +585,7 @@ class OstreeSpecification(avocado.Test):
             self.assertIn("shall be 'vault:<name>'", str(cm.exception))
 
     def test_version_is_kept(self):
-        spec = ostree_spec()
-        spec["image"]["ostree"]["version"] = "23.1_b"
+        spec = versioned(ostree_spec(), "23.1_b")
         ph = PartitionHandler()
         ph.parse(spec)
         self.assertEqual(ph.ostree_for(None)["version"], "23.1_b")
@@ -599,9 +606,7 @@ class OstreeSpecification(avocado.Test):
             with self.assertRaises(ValueError) as cm:
                 PartitionHandler().parse(spec)
             self.assertIn("'image: ostree: version:", str(cm.exception))
-        spec = ostree_spec()
-        spec["image"]["ostree"]["version"] = "1" * 64
-        PartitionHandler().parse(spec)
+        PartitionHandler().parse(versioned(ostree_spec(), "1" * 64))
 
     def test_version_needs_standard_mode(self):
         for mode in ("disabled", "composefs"):
@@ -618,6 +623,68 @@ class OstreeSpecification(avocado.Test):
         with self.assertRaises(ValueError) as cm:
             PartitionHandler().parse(spec)
         self.assertIn("has no 'version' attribute", str(cm.exception))
+
+    def test_manifest_key_must_be_a_vault_reference(self):
+        for key in ("/etc/key.pem", "vault:", "vault:a/b", 3):
+            spec = versioned(ostree_spec(), "1")
+            spec["image"]["ostree"]["manifest-key"] = key
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse(spec)
+            self.assertIn("manifest-key", str(cm.exception))
+            self.assertIn("shall be 'vault:<name>'", str(cm.exception))
+
+    def test_a_version_needs_both_keys(self):
+        for key in SIGNING_KEYS:
+            spec = versioned(ostree_spec(), "1")
+            del spec["image"]["ostree"][key]
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse(spec)
+            self.assertIn("needs '%s'" % key, str(cm.exception))
+
+    def test_keys_and_payload_are_refused_in_sources(self):
+        for key, value in (("manifest-key", "vault:a"), ("payload", {})):
+            spec = ostree_spec()
+            spec["multiconfig"] = {"a": {}}
+            spec["image"]["ostree"]["sources"] = {"a": {key: value}}
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse(spec)
+            self.assertIn("has no '%s' attribute" % key, str(cm.exception))
+
+    def test_payload_settings_are_kept(self):
+        spec = versioned(ostree_spec(), "23", payload={
+            "path": "fleet", "deltas-from": ["20", "22"]})
+        ph = PartitionHandler()
+        ph.parse(spec)
+        self.assertEqual(ph.ostree_for(None)["payload"],
+                         {"path": "fleet", "deltas-from": ["20", "22"]})
+
+    def test_payload_needs_a_version(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["payload"] = {"path": "fleet"}
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("'image: ostree: payload' needs 'version'", str(cm.exception))
+
+    def test_bad_payload_settings_are_refused(self):
+        for payload, text in (
+                ("fleet", "shall be a mapping"),
+                ({"dir": "x"}, "has no 'dir' attribute"),
+                ({"path": ""}, "path' shall be a non-empty string"),
+                ({"path": 3}, "path' shall be a non-empty string"),
+                ({"deltas-from": "20"}, "shall be a list of different versions"),
+                ({"deltas-from": [20]}, "shall be a list of different versions"),
+                ({"deltas-from": ["20", "20"]}, "shall be a list of different versions"),
+                ({"deltas-from": ["v1"]}, "shall be a list of different versions"),
+                ({"deltas-from": ["23"]}, "is not lower than version '23'"),
+                ({"deltas-from": ["24"]}, "is not lower than version '23'")):
+            spec = versioned(ostree_spec(), "23", payload=payload)
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse(spec)
+            self.assertIn(text, str(cm.exception))
+
+    def test_deltas_compare_as_versions_not_as_text(self):
+        PartitionHandler().parse(versioned(ostree_spec(), "10", payload={
+            "deltas-from": ["9"]}))
 
     def test_unknown_mode_is_refused(self):
         self.refuses("is not one of", mode="bootc")
@@ -705,16 +772,14 @@ def two_groups(**sources):
 
 class OstreeVersionNeedsOneStateroot(avocado.Test):
     def test_two_groups_with_ostree_are_refused(self):
-        spec = two_groups()
-        spec["image"]["ostree"]["version"] = "1"
+        spec = versioned(two_groups(), "1")
         with self.assertRaises(ValueError) as cm:
             PartitionHandler().parse(spec)
         self.assertIn("covers one stateroot", str(cm.exception))
 
     def test_a_group_with_ostree_off_does_not_count(self):
-        spec = two_groups(b={"mode": "disabled"})
-        spec["image"]["ostree"]["version"] = "1"
-        PartitionHandler().parse(spec)
+        PartitionHandler().parse(
+            versioned(two_groups(b={"mode": "disabled"}), "1"))
 
 
 class OstreeVersionOrder(avocado.Test):

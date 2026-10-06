@@ -98,6 +98,18 @@ class UkiAnchor:
     # appliance. Appends 'extra' to the command line of 'original' (a file
     # of 'workdir'), returns the rebuilt, possibly signed file's name there.
     # 'osrel' (text) replaces the os-release of 'original'.
+    # Runs a command of the tools container. 'volumes' maps host
+    # directories to where the command sees them (with ':ro' if wanted).
+    def _run_tool(self, args, volumes, epoch=None, workdir=None, check=True):
+        argv = ["container", "run", "--rm"]
+        for host, guest in volumes.items():
+            argv += ["-v", "%s:%s" % (host, guest)]
+        if epoch is not None:
+            argv += ["-e", "SOURCE_DATE_EPOCH=%d" % epoch]
+        if workdir:
+            argv += ["-w", workdir]
+        ContainerEngine.run(argv + [self._extra_tools.name] + args, check=check)
+
     def _rebuild_uki(self, workdir, original, extra, osrel=None):
         original = os.path.relpath(original, workdir)
         # ukify stamps the PE header's build time from this unless told
@@ -105,10 +117,8 @@ class UkiAnchor:
         epoch = self.source._epoch()
 
         def run(args, check=True):
-            ContainerEngine.run(
-                ["container", "run", "--rm", "-v", "%s:/work" % workdir,
-                 "-e", "SOURCE_DATE_EPOCH=%d" % epoch,
-                 "-w", "/work", self._extra_tools.name] + args, check=check)
+            self._run_tool(args, {workdir: "/work"}, epoch=epoch,
+                           workdir="/work", check=check)
 
         # One objcopy dumps all three sections byte-identical to build time.
         # '/dev/null' as output makes objcopy exit 1 despite success, so use

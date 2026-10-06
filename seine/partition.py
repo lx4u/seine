@@ -502,7 +502,7 @@ class PartitionHandler:
             raise ValueError("'%s' shall be a mapping" % where)
         allowed = ("mode", "stateroot", "ref", "gpg-key")
         if where == "image: ostree":
-            allowed += ("sources", "version")
+            allowed += ("sources", "version", "manifest-key", "payload")
         for key in settings:
             if key not in allowed:
                 raise ValueError("'%s' has no '%s' attribute" % (where, key))
@@ -520,12 +520,13 @@ class PartitionHandler:
             if not ok or (key == "stateroot" and "/" in value):
                 raise ValueError(
                     "'%s: %s: %s' is not a valid name" % (where, key, value))
-        key = settings.get("gpg-key")
-        if key is not None and not (
-                type(key) == type("") and key.startswith("vault:")
-                and OSTREE_KEY_NAME.match(key[len("vault:"):])):
-            raise ValueError(
-                "'%s: gpg-key: %s' shall be 'vault:<name>'" % (where, key))
+        for name in ("gpg-key", "manifest-key"):
+            key = settings.get(name)
+            if key is not None and not (
+                    type(key) == type("") and key.startswith("vault:")
+                    and OSTREE_KEY_NAME.match(key[len("vault:"):])):
+                raise ValueError(
+                    "'%s: %s: %s' shall be 'vault:<name>'" % (where, name, key))
         version = settings.get("version")
         if version is not None:
             if type(version) != type(""):
@@ -537,7 +538,27 @@ class PartitionHandler:
                     "'%s: version: %s' shall start with a digit, hold "
                     "only letters, digits, '.' and '_', and have at most "
                     "64 characters" % (where, version))
+        if "payload" in settings:
+            self._check_payload_settings(settings["payload"])
         return dict(settings)
+
+    def _check_payload_settings(self, payload):
+        where = "image: ostree: payload"
+        if type(payload) != type({}):
+            raise ValueError("'%s' shall be a mapping" % where)
+        for key in payload:
+            if key not in ("path", "deltas-from"):
+                raise ValueError("'%s' has no '%s' attribute" % (where, key))
+        path = payload.get("path")
+        if path is not None and not (type(path) == type("") and path):
+            raise ValueError("'%s: path' shall be a non-empty string" % where)
+        deltas = payload.get("deltas-from", [])
+        if type(deltas) != type([]) or len(set(map(str, deltas))) != len(deltas) \
+                or not all(type(v) == type("") and OSTREE_VERSION.match(v)
+                           for v in deltas):
+            raise ValueError(
+                "'%s: deltas-from' shall be a list of different versions "
+                "(strings, as for 'version')" % where)
 
     def _parse_ostree(self, ostree):
         parsed = self._parse_ostree_settings("image: ostree", ostree)
@@ -585,8 +606,21 @@ class PartitionHandler:
         if "version" in self.ostree and self.ostree["mode"] != "standard":
             raise ValueError(
                 "'image: ostree: version' needs 'mode: standard'")
+        if "payload" in self.ostree and "version" not in self.ostree:
+            raise ValueError("'image: ostree: payload' needs 'version'")
         if not enabled:
             return
+        if "version" in self.ostree:
+            for key in ("gpg-key", "manifest-key"):
+                if not any(s.get(key) for s in enabled.values()):
+                    raise ValueError(
+                        "'image: ostree: version' needs '%s'" % key)
+            version = self.ostree["version"]
+            for old in self.ostree.get("payload", {}).get("deltas-from", []):
+                if utils.version_key(old) >= utils.version_key(version):
+                    raise ValueError(
+                        "'image: ostree: payload: deltas-from: %s' is not "
+                        "lower than version '%s'" % (old, version))
         if "version" in self.ostree and len(enabled) > 1:
             raise ValueError(
                 "'image: ostree: version' covers one stateroot, but %d "

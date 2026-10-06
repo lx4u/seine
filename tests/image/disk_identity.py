@@ -41,7 +41,9 @@ def fat_serial(spec, reproducible=False):
 def base():
     spec = ostree_spec()
     spec["distribution"]["architecture"] = "amd64"
-    spec["image"]["ostree"].update({"version": "1", "stateroot": "debian"})
+    spec["image"]["ostree"].update({
+        "version": "1", "stateroot": "debian", "gpg-key": "vault:ostree",
+        "manifest-key": "vault:manifest"})
     spec["playbooks"] = [{"tasks": [{"apt": {"name": "vim"}}]}]
     return spec
 
@@ -60,15 +62,13 @@ class OstreeIdentity(avocado.Test):
     def test_a_new_version_keeps_it(self):
         self.same(lambda s: s["image"]["ostree"].update(version="2"))
 
-    # Not parsed yet, so set after the parse: only the digest sees them.
     def test_the_payload_and_its_keys_keep_it(self):
-        late = lambda s: s["image"]["ostree"].update(
-            {"payload": "out", "manifest-key": "vault:a"})
-        self.assertEqual(sysroot_id(base()), sysroot_id(base(), late))
+        self.same(lambda s: s["image"]["ostree"].update(
+            {"payload": {"path": "out"}, "manifest-key": "vault:other"}))
 
     def test_the_gpg_key_keeps_it(self):
         self.same(lambda s: s["image"]["ostree"].update(
-            {"gpg-key": "vault:ostree"}))
+            {"gpg-key": "vault:other"}))
 
     def test_the_file_name_keeps_it(self):
         self.same(lambda s: s["image"].update(filename="other.img"))

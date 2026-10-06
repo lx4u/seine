@@ -11,6 +11,7 @@ from seine.imager.appliance import DEVICE
 from seine.imager.appliance import SCRATCH_DEVICE
 from seine.imager.bootloader import detect as detect_bootloader
 from seine.imager.bootloader import GrubBootloader
+from seine.imager import payload
 
 # What an ostree sysroot needs from the rootfs: the tool, its initramfs
 # program and the dracut module that puts it in the initramfs.
@@ -242,6 +243,19 @@ def sign_commit(g, provider, checksum, key, epoch):
         key[len("vault:"):], g.read_file(path), epoch)
     g.write(path[:-len("commit")] + "commitmeta", commitmeta([signature]))
 
+# The ref a build commits to and devices follow.
+def ostree_ref(settings, distro):
+    return settings.get("ref") or "%s/%s" % (
+        settings["stateroot"], distro["architecture"])
+
+# Signs the summary of the payload repo like a commit. It is written the
+# way commitmeta() writes the signatures of a commit.
+def sign_summary(directory, provider, key, epoch):
+    path = os.path.join(directory, payload.REPO_DIR, "summary")
+    with open(path, "rb") as f:
+        signature = provider.pgp_detach_sign(key[len("vault:"):], f.read(), epoch)
+    payload.write_atomic(path + ".sig", commitmeta([signature]))
+
 # 'kargs' end up in the boot entry, and a later deploy inherits them.
 def deploy(g, stateroot, ref, kargs=()):
     _ostree(g, "admin", "deploy", "--sysroot=%s" % SYSROOT,
@@ -414,7 +428,7 @@ class OstreeSysroot:
         stateroot = settings["stateroot"]
         distro = self.source.spec["distribution"] if source is None else \
             self.source.subbuilds[source].spec["distribution"]
-        ref = settings.get("ref") or "%s/%s" % (stateroot, distro["architecture"])
+        ref = ostree_ref(settings, distro)
         print("Staging root file-system for ostree '%s'..." % ref)
         g.mkfs("ext4", SCRATCH_DEVICE, features="^dir_index")
         g.mount(SCRATCH_DEVICE, "/")
@@ -457,9 +471,82 @@ class OstreeSysroot:
         print("  %s %s" % (ref, checksum))
         self._boot_ostree(g, source, mounts, mount_devices, stateroot,
                           distro, boot_owner, boot_entries, ukis, version, osrel)
+        if version:
+            self._write_payload(g, settings, mounts, boot_entries[-1], ref,
+                                checksum)
         unlock_deployments(g, stateroot)
         self._normalize_mount_timestamps(g, mounts, mount_devices)
         return mount_devices
+
+    # The directory a build ships its update payload to.
+    def _payload_dir(self, settings):
+        return payload.payload_dir(
+            self.source._output, settings.get("payload"),
+            self.source.spec["distribution"]["release"])
+
+    # Refuses a payload that cannot take this build, before any disk work.
+    def _check_payload(self, ph):
+        shipping = False
+        for source in ph.rooted_sources():
+            settings = ph.ostree_for(source)
+            if settings["mode"] == "disabled" or not settings.get("version"):
+                continue
+            shipping = True
+            distro = self.source.spec["distribution"] if source is None else \
+                self.source.subbuilds[source].spec["distribution"]
+            payload.check_payload(
+                self._payload_dir(settings), ostree_ref(settings, distro),
+                settings["stateroot"], settings["version"],
+                (settings.get("payload") or {}).get("deltas-from", []))
+        if shipping:
+            self._need_ostree_tool()
+
+    # An appliance image built before the payload existed has no ostree,
+    # and 'imager: rebuild: missing' (the default) keeps reusing it.
+    def _need_ostree_tool(self):
+        try:
+            self._run_tool(["ostree", "--version"], {})
+        except Exception as e:
+            raise RuntimeError(
+                "the imager appliance image has no ostree, which the update "
+                "payload needs: rebuild it with 'imager: rebuild: different' "
+                "or 'seine cache clear' (%s)" % e)
+
+    # Exports the commit through the target's own ostree, as root, to an
+    # archive repo on the scratch disk, then lets the tools container add
+    # it to the payload. Never copies the bare sysroot repo out: that loses
+    # ownership and the copy is corrupt.
+    def _write_payload(self, g, settings, mounts, group, ref, checksum):
+        built = group.get("built")
+        if not built:
+            raise RuntimeError(
+                "'image: ostree: version:' needs a UKI in the root file-system")
+        name, uki_dir, result = built[0]
+        uki = os.path.join(uki_dir, result)
+        esp = next((m for m in mounts if m["_prefix"] == ESP_PREFIX), None)
+        if esp is not None:
+            payload.check_esp(esp["_size"], os.path.getsize(uki))
+        directory = self._payload_dir(settings)
+        print("Writing the update payload to '%s'..." % directory)
+        guest = "/.seine-payload"
+        g.mkdir_p(guest)
+        _ostree(g, "--repo=%s/export" % guest, "init", "--mode=archive")
+        _ostree(g, "--repo=%s/export" % guest, "pull-local",
+                "%s/ostree/repo" % SYSROOT, ref)
+        host = tempfile.mkdtemp(dir=self._output_dir, prefix="payload-")
+        g.copy_out("%s/export" % guest, host)
+        g.rm_rf(guest)
+        deltas = (settings.get("payload") or {}).get("deltas-from", [])
+        version, stateroot = settings["version"], settings["stateroot"]
+        payload.check_version(directory, ref, version, checksum)
+        payload.add_uki(self._run_tool, directory, stateroot, version, uki, host)
+        payload.add_commit(self._run_tool, directory, os.path.join(host, "export"),
+                           ref, checksum, version, deltas)
+        provider, epoch = self._vault_provider(), self.source._epoch()
+        sign_summary(directory, provider, settings["gpg-key"], epoch)
+        key = settings["manifest-key"][len("vault:"):]
+        payload.write_manifest(
+            directory, lambda text: provider.pgp_detach_sign(key, text, epoch))
 
     # The UKIs of the root file system leave the commit: they cannot name
     # the deployment yet, and they live on the ESP. Returns their names

@@ -1733,7 +1733,9 @@ layout.
 | stateroot | no       | OSTree stateroot, defaults to the `multiconfig:` group name, else `debian` |
 | ref       | no       | Commit ref, defaults to `<stateroot>/<arch>`         |
 | gpg-key   | no       | `vault:<name>`: signs the commit with this vault pgp key, unsigned if unset |
-| version   | no       | Image version, a quoted string such as `"23"`: a digit first, then letters, digits, `.` or `_`, at most 64 characters. Needs `mode: standard`, and one stateroot. Not allowed in `sources:` |
+| version   | no       | Image version, a quoted string such as `"23"`: a digit first, then letters, digits, `.` or `_`, at most 64 characters. Needs `mode: standard`, one stateroot, `gpg-key` and `manifest-key`. Not allowed in `sources:` |
+| manifest-key | no     | `vault:<name>`: signs the list of UKIs (`SHA256SUMS`) of the update payload. Needed with `version`. Not allowed in `sources:` |
+| payload   | no       | With `version`: `path` of the update payload directory, and `deltas-from`, the versions that get a static delta to this one (strings, lower than `version`). Not allowed in `sources:` |
 | sources   | no       | Per `multiconfig:` group overrides of `mode`, `stateroot`, `ref` and `gpg-key` |
 
 When `mode` is not `disabled`, the build is refused unless:
@@ -1760,6 +1762,17 @@ The imager stamps it as `IMAGE_VERSION` in the os-release of the commit,
 records it as the commit's `version` and names the UKI after it; the
 root file system must then ship exactly one UKI. It does not change the
 GUIDs and UUIDs of the disk, see [OSTree sysroots](ostree.md).
+
+With a `version`, the build also writes an update payload that devices
+update from (see [OSTree sysroots](ostree.md#the-update-payload)). The
+directory is `<image file name without its extension>-payload` next to the
+image, unless `payload: path` is set: a relative path is resolved like a
+relative `image: filename` (under the deploy directory for the release),
+an absolute path is used as it is. The directory is the history of what
+was shipped, so keep it between builds. The build is refused when the
+version is lower than one already in it, when a `deltas-from` version is
+not in it, when the disk layout changed since the newest UKI of the
+directory, or when the ESP cannot hold three UKIs and some room.
 
 See [OSTree sysroots](ostree.md) for what the imager builds.
 

@@ -46,7 +46,8 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
         with open(where, "w") as f:
             f.write((
                 self.BOOT.replace(
-                    "requires:\n", "requires:\n    - %(common)s/dev-ostree-key\n", 1) +
+                    "requires:\n", "requires:\n    - %(common)s/dev-ostree-key\n"
+                    "    - %(common)s/dev-update-manifest-key\n", 1) +
                 "distribution:\n"
                 "    release: trixie\n"
                 "    architecture: amd64\n"
@@ -127,7 +128,8 @@ class OstreeUkiDiskImageIsByteIdenticalAcrossTwoBuilds(
     """
     FILENAME = "reproducible-ostree-uki.img"
     # The stamped version reaches the commit, the os-release of the UKI and its name.
-    OSTREE_KEYS = '        version: "23"\n'
+    OSTREE_KEYS = ('        version: "23"\n'
+                   '        manifest-key: vault:update-manifest\n')
     BOOT_PLAYBOOK = (
         OstreeSystemdBootDiskImageIsByteIdenticalAcrossTwoBuilds.BOOT_PLAYBOOK +
         "    - name: a UKI of the kernel\n"

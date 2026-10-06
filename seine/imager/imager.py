@@ -344,6 +344,7 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
         try:
             hypervisor = self._hypervisor_path
 
+            self._check_payload(ph)
             print("Starting imager appliance...")
             g = guestfs.GuestFS(python_return_dict=True)
             imagerAppliance = ImagerAppliance(self.source)

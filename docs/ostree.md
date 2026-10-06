@@ -131,8 +131,46 @@ same key stay byte-identical. `examples/common/dev-ostree-key.yaml`
 holds a fixed key for development only (`ostree-commits`). The
 [vault guide](vault-openbao.md) shows how to create a real one.
 
-The signature is not checked on the device yet: that needs a remote with
-`gpg-verify`, which comes with updates.
+The device checks it with a remote that has `gpg-verify` (see the update
+fragment below).
+
+## The update payload
+
+With `version:` set under `image: ostree`, the build also writes what a
+device updates from, into a directory next to the disk image (see
+`docs/specification.md` for its name and `payload:`):
+
+* `repo/`: an `archive` ostree repo with the commit of the build. The
+  moving ref (`debian/amd64`) goes to the new commit, and the ref
+  `debian/amd64.v<version>` keeps it. The summary and its signature
+  (`summary.sig`) are signed with `gpg-key`, so a remote with
+  `gpg-verify-summary` accepts them. The summary holds a time, so it
+  differs between builds of the same image; commits and objects do not.
+* `uki/`: the UKI of each version, named `<stateroot>-<version>.efi`, and
+  the list `SHA256SUMS` of all of them with `SHA256SUMS.gpg`, signed with
+  `manifest-key`. This is what `systemd-sysupdate` reads. The list is
+  written last.
+
+A later build with a higher version adds to the same directory: devices
+keep the objects they have, and the older UKIs stay available. The build
+is refused for a lower version, and for the same version with another
+commit. A rebuild of the same version and commit is accepted.
+
+The UKI is the one of the image, with the command line of the
+deployment. A device can boot it because `root=PARTUUID=` does not change
+between builds of the same layout. A build whose command line differs
+(outside `ostree=`) from the newest UKI of the directory is refused: that
+needs a reflash.
+
+`deltas-from` lists versions that devices run in the field. The build
+makes a static delta from each to the new version, so a device on one of
+them downloads less. A device on another version still updates, from
+single objects.
+
+The commit is exported to a small archive repo by the target's own
+`ostree`, on the scratch disk, and only that repo leaves the imager
+appliance. The bare repo of the sysroot is never copied out: ownership is
+lost on the way and the copy is corrupt.
 
 ## The update script
 

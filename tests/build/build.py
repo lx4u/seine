@@ -272,10 +272,12 @@ class TheRootfsTarballIsReusedWhileItsInputsAreUnchanged(avocado.Test):
         self.image.spec["containers"] = [{"image": "x"}]
         self.assertEqual(self.image._rootfs_digest(None), self.digest)
 
-    def test_an_ostree_version_does_not(self):
+    def test_an_ostree_version_and_its_payload_do_not(self):
         self.image.spec["image"] = {"ostree": {"mode": "standard"}}
         before = self.image._rootfs_digest(None)
-        self.image.spec["image"]["ostree"]["version"] = "2"
+        self.image.spec["image"]["ostree"].update(
+            version="2", **{"manifest-key": "vault:m"},
+            payload={"path": "p", "deltas-from": ["1"]})
         self.assertEqual(self.image._rootfs_digest(None), before)
 
     def test_a_host_file_a_playbook_copies_changes_the_digest(self):

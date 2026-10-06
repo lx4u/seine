@@ -48,8 +48,9 @@ APT_PACKAGES = ["squashfs-tools", "erofs-utils", "binutils", "sbsigntool",
                 "cryptsetup-bin", "mtools", "e2fsprogs", "findutils"]
 # Minimal runtime tools required in the shipped appliance container image for
 # UKI anchoring and signing (imager/imager.py runs objcopy, ukify, and sbsign as
-# container commands against this image).
-RUNTIME_APT_PACKAGES = ["binutils", "sbsigntool", "libfaketime"]
+# container commands against this image) and for the update payload's ostree
+# repo (imager/payload.py).
+RUNTIME_APT_PACKAGES = ["binutils", "sbsigntool", "libfaketime", "ostree"]
 # Needed inside the built appliance itself (LVM_WRAPPER_SCRIPT's
 # interpreter and LD_PRELOAD library). Listed both here, so supermin can
 # resolve them, and in its own hint directory, so it bundles them in.

@@ -279,7 +279,13 @@ class OstreeImageBoots(avocado.Test):
 
     def uki_boots(self, group, loader, version=None):
         disk = os.path.join(self.workdir, "uki.img")
-        keys = "" if version is None else '        version: "%s"\n' % version
+        keys = "" if version is None else (
+            '        version: "%s"\n        gpg-key: vault:ostree-commits\n'
+            '        manifest-key: vault:update-manifest\n' % version)
+        if version is not None:
+            group = group.replace("requires:\n", "requires:\n"
+                "    - {common}/dev-ostree-key\n"
+                "    - {common}/dev-update-manifest-key\n", 1)
         banner = "" if version is None else VERSION_BANNER
         spec = self.write("uki.yaml", (group + UKI + banner + SINGLE_DISK.replace(
                 "        mode: standard\n", "        mode: standard\n" + keys)).format(
