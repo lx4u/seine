@@ -44,14 +44,18 @@ def split(args):
 # 'ansible_library' starts empty per group so fragments don't leak
 # between groups. 'defer_uki_check' skips the parse-time check that a
 # named 'initrd:' is already deployed, for a group that runs 'after:'
-# another one that deploys it in this same run.
-def load_group(files, options, defer_uki_check=False):
+# another one that deploys it in this same run. 'apt_defaults' is the
+# root's 'defaults: apt:', which the group's own files may override.
+def load_group(files, options, defer_uki_check=False, apt_defaults=None):
     build = BuildCmd()
     build.options = dict(options, ansible_library=[])
     build.options["files"] = files
     if defer_uki_check:
         build.options["defer_uki_check"] = True
     build.load_all(files)
+    if apt_defaults:
+        defaults = build.spec.setdefault("defaults", {})
+        defaults["apt"] = {**apt_defaults, **(defaults.get("apt") or {})}
     build.parse()
     return build
 

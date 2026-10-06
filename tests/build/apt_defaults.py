@@ -95,3 +95,40 @@ class ImageReadsTheDefaultBack(avocado.Test):
 
     def test_false_when_a_file_says_so(self):
         self.assertFalse(self.recommends(SPEC, defaults("false")))
+
+# Each multiconfig group is a build of its own, so the root's setting is
+# handed to it before its own files are merged.
+class MulticonfigGroupsGetTheRootsAptDefault(avocado.Test):
+    def setUp(self):
+        os.environ["SEINE_CACHE_DIR"] = self.workdir
+        os.environ["SEINE_BUILD_DIR"] = self.workdir
+
+    def recommends(self, root, group):
+        path = os.path.join(self.workdir, "group.yaml")
+        with open(path, "w") as f:
+            f.write(SPEC + group)
+        build = BuildCmd()
+        build.loads(SPEC + root + f"""
+multiconfig:
+    one:
+        - {path}
+image:
+    filename: disk.img
+    partitions:
+        - label: rootfs
+          where: /
+""")
+        build.parse()
+        return build.subbuilds["one"].image._install_recommends()
+
+    def test_a_root_false_reaches_the_group(self):
+        self.assertFalse(self.recommends(defaults("false"), ""))
+
+    def test_a_group_true_overrides_it(self):
+        self.assertTrue(self.recommends(defaults("false"), defaults("true")))
+
+    def test_a_group_false_overrides_a_root_true(self):
+        self.assertFalse(self.recommends(defaults("true"), defaults("false")))
+
+    def test_nothing_set_keeps_the_default(self):
+        self.assertTrue(self.recommends("", ""))

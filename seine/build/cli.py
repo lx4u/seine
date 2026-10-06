@@ -172,9 +172,11 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
         parsed = {name: multiconfig._parse_group(name, value)
                   for name, value in groups.items()}
         after = multiconfig.resolve_order(parsed)
+        apt = (self.spec.get("defaults") or {}).get("apt")
         self.subbuilds = {
             name: multiconfig.load_group(files, self.options,
-                                    defer_uki_check=len(after[name]) > 0)
+                                    defer_uki_check=len(after[name]) > 0,
+                                    apt_defaults=apt)
             for name, (files, _after, _before) in parsed.items()}
         self.image.subbuilds = self.subbuilds
         self.image.multiconfig_after = after

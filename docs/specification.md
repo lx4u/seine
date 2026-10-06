@@ -509,6 +509,9 @@ defaults:
 As above, the last file loaded wins, so a particular file may turn
 recommends back on. Only a `false` changes the root file-system digest.
 
+A `multiconfig:` group starts from the `apt` defaults of the
+specification that declares it, and its own files may override them.
+
 `defaults` holds package entries, `extends` settings, `vault` seeds for
 the dev vault, a `sign-key` fallback for repository signing, and `apt`
 settings. Playbooks and tests already

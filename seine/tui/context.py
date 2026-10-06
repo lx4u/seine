@@ -64,7 +64,9 @@ class Context:
                 "empty" % group)
         build.spec["multiconfig"][group] = files
         previous_spec = build.subbuilds[group].spec
-        build.subbuilds[group] = multiconfig.load_group(files, build.options)
+        build.subbuilds[group] = multiconfig.load_group(
+            files, build.options,
+            apt_defaults=(build.spec.get("defaults") or {}).get("apt"))
         self.changed_from = previous_spec
 
     # One more fragment appended to the active group's file list, same
