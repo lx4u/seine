@@ -1467,6 +1467,28 @@ Frequently used tasks include:
  * `apt`
  * `debconf`
 
+### The apt action
+
+An `apt` task does not run Ansible's own `apt` module. seine shadows it
+with an action that runs `apt-get` on the build host against the target
+root file-system, so a foreign-architecture target is not emulated.
+Only these arguments are supported, any other is ignored:
+
+ * `name`: a list of packages, or a string separated by commas or spaces.
+ * `state`: `present` (the default) or `absent`.
+ * `install_recommends`: install recommended packages too. The default is
+   `true`, as for `apt-get`.
+
+```
+- name: install a shell without what it recommends
+  apt:
+      name: [dash, busybox]
+      install_recommends: false
+```
+
+Check mode is honoured: nothing is installed, and the task reports
+whether it would have changed something.
+
 ### Host files a playbook reads
 
 A change to a file a playbook reads must change the root file-system, and a

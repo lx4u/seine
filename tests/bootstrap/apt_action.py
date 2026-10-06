@@ -55,6 +55,33 @@ class ApptGetBuildsTheChrootRecipe(avocado.Test):
         # Still simulated once, so a would-be change is still reported.
         self.assertIn("-s | grep", script)
 
+class RecommendsAreInstalledUnlessTurnedOff(avocado.Test):
+    def script(self, **kwargs):
+        with patch.dict(os.environ, ENV), patch("subprocess.run") as run:
+            apt_action._apt_get("/merged", "install", ["vim"], False, **kwargs)
+        return run.call_args.args[0][-1]
+
+    def test_apt_keeps_its_default_without_the_option(self):
+        self.assertNotIn("Install-Recommends", self.script())
+
+    def test_turning_it_off_reaches_every_apt_get_call(self):
+        script = self.script(recommends=False)
+        self.assertEqual(script.count("APT::Install-Recommends=false"), 2)
+
+    def test_the_task_argument_is_read_as_a_boolean(self):
+        class Proc:
+            returncode = 0
+            stdout = ""
+        action = apt_action.ActionModule.__new__(apt_action.ActionModule)
+        action._task = type("Task", (), {"args": {"name": "vim", "install_recommends": "no"},
+                                         "check_mode": False})()
+        with patch.dict(os.environ, ENV), \
+             patch.object(apt_action.ActionBase, "run", return_value={}), \
+             patch.object(apt_action, "_merged_dir", return_value="/merged"), \
+             patch.object(apt_action, "_apt_get", return_value=Proc()) as get:
+            action.run()
+        self.assertFalse(get.call_args.args[4])
+
 class ChangedIsReadFromAptGetsOwnOutput(avocado.Test):
     def test_an_inst_or_remv_line_marks_the_task_changed(self):
         class Proc:

@@ -2,14 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Shadows ansible.builtin.apt: runs apt-get on the build host, not
-# inside the (maybe foreign-arch) target. Only 'name' and 'state:
-# present|absent' are supported -- all any seine playbook uses.
+# inside the (maybe foreign-arch) target. Only 'name', 'state:
+# present|absent' and 'install_recommends' are supported.
 
 import os
 import subprocess
 
 from ansible.plugins.action import ActionBase
 from ansible.errors import AnsibleActionFail
+from ansible.module_utils.parsing.convert_bool import boolean
 
 ENV_CID = "SEINE_ROOTFS_CID"
 ENV_ROOT = "SEINE_CONTAINER_ROOT"
@@ -65,9 +66,10 @@ CHANGED_MARKER = "SEINE_APT_CHANGED"
 # real install/remove: apt-get's own '-s' already answers "would this
 # change anything", so a separate dpkg-query pass (and container) buys
 # nothing a second apt-get invocation doesn't already tell us.
-def _apt_get(merged_dir, action, names, simulate):
+def _apt_get(merged_dir, action, names, simulate, recommends=True):
     arch = _env(ENV_ARCH)
     netrc = os.environ.get(ENV_NETRC)
+    recommends_opt = "" if recommends else "-o APT::Install-Recommends=false "
     netrc_opt = f'-o Dir::Etc::netrc="{NETRC_MOUNT}" ' if netrc else ""
     apt_get = (f"apt-get "
               f"-o Dir::State={MERGED}/var/lib/apt "
@@ -80,6 +82,7 @@ def _apt_get(merged_dir, action, names, simulate):
               f"-o DPkg::Options::=--force-unsafe-io "
               f"-o APT::Architecture={arch} "
               f"-o APT::Architectures::={arch} "
+              f"{recommends_opt}"
               f"{netrc_opt}"
               f"-qqy {action} {' '.join(names)}")
     script = (
@@ -114,10 +117,12 @@ class ActionModule(ActionBase):
         if "name" not in args:
             raise AnsibleActionFail("apt: 'name' is required")
         names = _names(args["name"])
+        recommends = boolean(args.get("install_recommends", True))
 
         merged_dir = _merged_dir(_env(ENV_CID))
         action = "install" if state == "present" else "remove"
-        proc = _apt_get(merged_dir, action, names, self._task.check_mode)
+        proc = _apt_get(merged_dir, action, names, self._task.check_mode,
+                         recommends)
         if proc.returncode != 0:
             result["failed"] = True
             result["msg"] = f"apt-get {action} failed: {proc.stderr.strip()}"
