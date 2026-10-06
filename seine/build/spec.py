@@ -4,6 +4,7 @@ import os
 import re
 import yaml
 
+from seine.build import playbook
 from seine.extends import texts
 from seine.extends.templates import TEMPLATE
 from seine.utils import lock_sibling
@@ -191,6 +192,12 @@ class SpecLoader:
             self._resolve_files(package, os.path.dirname(yaml_filename))
             self._record_origins(package, yaml_filename)
 
+        # Host files a playbook reads are relative to the file naming them,
+        # like patches: resolve now, while we still know which file that was.
+        if yaml_filename != "<string>" and type(spec.get("playbook")) == type([]):
+            spec["playbook"] = playbook.resolve(
+                spec["playbook"], self._next_to(os.path.dirname(yaml_filename)))
+
         # A fragment ships its own Ansible modules the way it ships kconfig
         # fragments: 'library/' beside it, found by convention rather than a
         # setting naming it.
@@ -225,6 +232,23 @@ class SpecLoader:
                         % (yaml_filename, req, os.path.dirname(req_path)))
                 self.load(req_path)
         return self.spec
+
+    # The path to a file that sits next to the spec naming it; a name that
+    # is not there, or leaves the project, stays as written for the
+    # playbook scan to judge (it may be for the target to find).
+    def _next_to(self, dirname):
+        files = self.options.get("files") or []
+        roots = [os.getcwd()]
+        if files:
+            roots.append(os.path.dirname(os.path.abspath(files[0])))
+
+        def fix(name):
+            if os.path.isabs(name):
+                return name
+            path = os.path.normpath(os.path.join(dirname, name))
+            inside = any(os.path.commonpath([os.path.abspath(path), r]) == r for r in roots)
+            return path if inside and os.path.exists(path) else name
+        return fix
 
     # Every package entry a file holds, whether it is asking for a build or
     # only describing one: both name files relative to the file they are in.

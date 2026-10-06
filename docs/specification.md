@@ -1517,8 +1517,12 @@ playbook: `src:` and `script:`, the tasks loaded by `include_tasks` and
 `import_tasks`, `vars_files`, `include_vars`, `with_file`,
 `lookup('file', ...)`, the `roles/<name>/` tree of each role, and the
 templates a template `{% include %}`s or `{% extends %}`. Paths are looked up
-next to the file that names them, then next to the specification, then in
-the current directory, and may not leave the project directory.
+next to the file that names them, so a fragment in `examples/common/` finds
+`files/motd` in `examples/common/files/`, whichever specification asked for
+it. A path that is not there is looked up next to the first specification,
+then in the current directory. No path may leave the project directory.
+`uses:` and `roles/` are the exception: they are found from the first
+specification, not from the fragment.
 
 It cannot follow a computed path, `with_fileglob` or `import_playbook`. Name
 the files with `uses:` on the play, as paths, directories or globs:

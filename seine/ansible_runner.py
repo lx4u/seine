@@ -42,6 +42,9 @@ FEEDS_LIST = "/etc/apt/sources.list.d/seine-feeds.list"
 ACTION_PLUGINS = os.path.join(os.path.dirname(__file__), "data", "ansible",
                               "action_plugins")
 
+def absolute_if_present(name):
+    return os.path.abspath(name) if not os.path.isabs(name) and os.path.exists(name) else name
+
 # Runs the spec's playbooks with a host-side ansible-playbook connecting
 # into the (possibly foreign-arch) target container over containers.podman,
 # instead of running ansible inside the target under qemu emulation.
@@ -201,9 +204,11 @@ class AnsibleContainerRunner:
 
         # Mutate copies, not 'playbooks' itself (it's 'spec["playbook"]'):
         # changing the spec here would break digest matching in 'seine analyze'.
+        from seine.build import playbook as build_playbook
         run = []
         for playbook in playbooks:
-            playbook = dict(playbook)
+            # ansible looks next to its temporary playbook, not here.
+            playbook = build_playbook.resolve(playbook, absolute_if_present)
             # Ours, not Ansible's: the host files this play reads.
             playbook.pop("uses", None)
             # Individual package installs skip their own initramfs regen,

@@ -52,6 +52,54 @@ _DYNAMIC_KEYS = {"import_playbook", "include_playbook", "with_fileglob"}
 _MAX_TEMPLATE = 1 << 20
 
 
+def resolve(node, fix):
+    """Return a copy of a playbook with each static host path run through fix().
+
+    These are the paths that scan() follows. fix() gets the path as written
+    and returns the one to use instead (or the same one).
+    """
+    def path(value):
+        return fix(value) if isinstance(value, str) and "{{" not in value else value
+
+    def command(value):
+        if not isinstance(value, str):
+            return value
+        head, _, rest = value.partition(" ")
+        return (path(head) + " " + rest).strip()
+
+    def paths(value):
+        return [path(v) for v in value] if isinstance(value, list) else path(value)
+
+    if isinstance(node, list):
+        return [resolve(item, fix) for item in node]
+    if not isinstance(node, dict):
+        return node
+    out = {}
+    for key, value in node.items():
+        name = str(key).rsplit(".", 1)[-1]
+        value = resolve(value, fix)
+        if name == "src":
+            # The src of a link is where it points, not a file to read.
+            if node.get("state") not in ("link", "hard"):
+                value = paths(value)
+        elif name in ("vars_files", "with_file"):
+            value = paths(value)
+        elif name in _FILE_MODULES and isinstance(value, str):
+            value = _SRC_ARG.sub(lambda m: "src=" + path(m.group(1)), value)
+        elif name == "script":
+            if isinstance(value, dict) and "cmd" in value:
+                value = dict(value, cmd=command(value["cmd"]))
+            else:
+                value = command(value)
+        elif name in ("include_tasks", "import_tasks", "include_vars"):
+            if isinstance(value, dict):
+                value = {k: path(v) if k in ("file", "dir") else v for k, v in value.items()}
+            else:
+                value = path(value)
+        out[key] = value
+    return out
+
+
 def scan(playbooks, spec_files=None):
     """Return (host files, dynamic keys) of 'playbooks'.
 
@@ -85,8 +133,9 @@ class _Scanner:
         return any(path == r or path.startswith(r + os.sep) for r in roots)
 
     def _find(self, name, base):
+        # An absolute name is a project file only when it is inside the project.
         if os.path.isabs(name):
-            return None
+            return name if os.path.exists(name) and self._inside(name) else None
         for where in (base, self.spec_dir, "."):
             path = os.path.join(where, name)
             if os.path.exists(path):
