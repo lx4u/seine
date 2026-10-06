@@ -14,11 +14,10 @@ from seine.utils import netrc_for
 from seine.utils import release_feeds
 
 # The disks the appliance boots with, as the guest sees them: the image
-# being built, a scratch disk for the ext and FAT rebuilds, and the stage
-# disk an ostree build unpacks its root file system onto.
+# being built, and a scratch disk for the ext and FAT rebuilds, which an
+# ostree build also unpacks its root file system onto.
 DEVICE = "/dev/sda"
 SCRATCH_DEVICE = "/dev/sdb"
-STAGE_DEVICE = "/dev/sdc"
 
 # Fallback kernel per arch when the spec has no 'imager: kernel:'.
 DEFAULT_PACKAGES = {

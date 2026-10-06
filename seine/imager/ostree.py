@@ -8,7 +8,7 @@ import tarfile
 import tempfile
 
 from seine.imager.appliance import DEVICE
-from seine.imager.appliance import STAGE_DEVICE
+from seine.imager.appliance import SCRATCH_DEVICE
 from seine.imager.bootloader import detect as detect_bootloader
 from seine.imager.bootloader import GrubBootloader
 
@@ -401,7 +401,7 @@ def copy_boot_files(g, directories, esp_path):
 # Part of Imager, like PartitionRebuild: it relies on the imager's own
 # helpers (fstab, kernel arguments, boot loader signing, timestamps).
 class OstreeSysroot:
-    # Unpacks the rootfs onto the stage disk, which becomes the chroot
+    # Unpacks the rootfs onto the scratch disk, which becomes the chroot
     # the target's own ostree runs from, then commits and deploys it
     # into the real sysroot mounted under '/sysroot'. Leaves everything
     # mounted, timestamps normalized, and returns the mount devices.
@@ -416,8 +416,8 @@ class OstreeSysroot:
             self.source.subbuilds[source].spec["distribution"]
         ref = settings.get("ref") or "%s/%s" % (stateroot, distro["architecture"])
         print("Staging root file-system for ostree '%s'..." % ref)
-        g.mkfs("ext4", STAGE_DEVICE, features="^dir_index")
-        g.mount(STAGE_DEVICE, "/")
+        g.mkfs("ext4", SCRATCH_DEVICE, features="^dir_index")
+        g.mount(SCRATCH_DEVICE, "/")
         g.tar_in_opts(self.source._tarball_for(source), "/", xattrs=True)
 
         mount_devices = {id(m): part_devices.get(id(m)) or vol_devices.get(id(m))

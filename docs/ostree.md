@@ -28,7 +28,7 @@ partition under `/var` instead, for instance `where: /var/home`.
 
 For each root file system, in the imager appliance:
 
-1. Unpack the tarball onto a throwaway stage disk. The target's own
+1. Unpack the tarball onto the imager's scratch disk. The target's own
    `ostree` runs from there, so the commit is made by the version the device
    will run later.
 2. Reshape the tree: usr-merge links, an empty `/sysroot`, links into

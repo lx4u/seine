@@ -12,7 +12,7 @@ from seine.partition import RO_FSTYPES
 # An ext or FAT rebuild needs room for a content copy plus the new
 # image at once, more than any partition has spare. A throwaway second
 # disk (SCRATCH_DEVICE) gives that room without touching real partitions;
-# it is mounted here.
+# it is mounted here, or already holds the root of an ostree build.
 SCRATCH_MOUNT = "/.ext-scratch-disk"
 
 # The only types _normalize_ext_mount() (mke2fs/debugfs based) knows how
@@ -65,7 +65,9 @@ class PartitionRebuild:
             # Unmounted again by this source's own g.umount_all(), same as
             # every other mount here -- freshly (re)mounted per source.
             g.mkdir_p(SCRATCH_MOUNT)
-            g.mount(SCRATCH_DEVICE, SCRATCH_MOUNT)
+            # An ostree build has it mounted at '/' already (the stage).
+            if SCRATCH_DEVICE not in g.mountpoints():
+                g.mount(SCRATCH_DEVICE, SCRATCH_MOUNT)
             scratch_mounted = True
         staging = SCRATCH_MOUNT if scratch_mounted else ""
         for m in mounts:
@@ -79,7 +81,8 @@ class PartitionRebuild:
                  "--date=@%d {} +" % (self._where(m), started, epoch))
             if self.reproducible and m["type"] in ("vfat", "msdos"):
                 self._normalize_fat_tree(g, m, mount_devices[id(m)], staging=staging)
-        if scratch_mounted and not ext_mounts:
+        if scratch_mounted and not ext_mounts \
+                and g.mountpoints().get(SCRATCH_DEVICE) == SCRATCH_MOUNT:
             g.umount(SCRATCH_MOUNT)
         if self.reproducible:
             for m in sorted(ext_mounts, key=lambda m: m["_depth"], reverse=True):

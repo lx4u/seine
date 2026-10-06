@@ -378,39 +378,36 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
 
             need_ext = any(m["type"] in EXT_FSTYPES for m in ph.mounts)
             need_fat = any(m["type"] in ("vfat", "msdos") for m in ph.mounts)
-            if need_ext or need_fat:
-                sizes = []
-                if need_ext:
-                    ext_mounts = [m for m in ph.mounts if m["type"] in EXT_FSTYPES]
-                    # Room for one mount's captured content plus its rebuilt
-                    # image at once -- never more than twice its own biggest
-                    # partition, plus a little slack for filesystem overhead.
-                    largest = max(m["_size"] for m in ext_mounts)
-                    sizes.append(2 * largest + 128 * 1024 * 1024)
-                if need_fat:
-                    # Room for the biggest FAT partition's own copy plus
-                    # the mtools, staged for its rebuild (see
-                    # _normalize_fat_tree()).
-                    largest_fat = max(m["_size"] for m in ph.mounts
-                                      if m["type"] in ("vfat", "msdos"))
-                    sizes.append(largest_fat + 128 * 1024 * 1024)
-                # Shared one source at a time, so the biggest single need
-                # covers every rebuild.
-                scratch_size = max(sizes)
-                scratch_disk = os.path.join(output_dir, "ext-scratch.raw")
-                with open(scratch_disk, "wb") as f:
-                    f.truncate(scratch_size)
-                g.add_drive_opts(scratch_disk, format="raw", readonly=False)
-
-            # Staged rootfs of an ostree build, sized like the sysroot
-            # partition that will hold it (sparse, so cheap).
+            sizes = []
+            if need_ext:
+                ext_mounts = [m for m in ph.mounts if m["type"] in EXT_FSTYPES]
+                # Room for one mount's captured content plus its rebuilt
+                # image at once -- never more than twice its own biggest
+                # partition, plus a little slack for filesystem overhead.
+                largest = max(m["_size"] for m in ext_mounts)
+                sizes.append(2 * largest + 128 * 1024 * 1024)
+            if need_fat:
+                # Room for the biggest FAT partition's own copy plus
+                # the mtools, staged for its rebuild (see
+                # _normalize_fat_tree()).
+                largest_fat = max(m["_size"] for m in ph.mounts
+                                  if m["type"] in ("vfat", "msdos"))
+                sizes.append(largest_fat + 128 * 1024 * 1024)
+            # Shared one source at a time, so the biggest single need
+            # covers every rebuild.
+            scratch_size = max(sizes, default=0)
+            # An ostree build unpacks its root file-system onto this disk
+            # too (sized like the sysroot partition that will hold it),
+            # and the rebuilds then work in a directory of it.
             stage_sizes = [m["_size"] for m in ph.mounts if m["_prefix"] == "/"
                            and ph.ostree_for(m.get("source"))["mode"] != "disabled"]
             if stage_sizes:
-                stage_disk = os.path.join(output_dir, "ostree-stage.raw")
-                with open(stage_disk, "wb") as f:
-                    f.truncate(max(stage_sizes) + 128 * 1024 * 1024)
-                g.add_drive_opts(stage_disk, format="raw", readonly=False)
+                scratch_size += max(stage_sizes) + 128 * 1024 * 1024
+            if scratch_size:
+                scratch_disk = os.path.join(output_dir, "scratch.raw")
+                with open(scratch_disk, "wb") as f:
+                    f.truncate(scratch_size)
+                g.add_drive_opts(scratch_disk, format="raw", readonly=False)
 
             archive_to_guest_path = {}
             if all_container_archives:
@@ -447,7 +444,7 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
             before_launch()
             try:
                 g.launch()
-                if need_ext or need_fat:
+                if scratch_size:
                     # No htree hashing: its read order uses a random per-build
                     # seed, silently reordering mke2fs -d's layout for this
                     # rebuild or the FAT staging area below.
@@ -469,6 +466,9 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
                             g, ph, source, mounts, part_devices, vol_devices,
                             part_index, container_devs, boot_owner, boot_entries)
                         g.umount_all()
+                        # Fresh again for the next source: the stage held
+                        # the whole root file-system.
+                        g.mkfs("ext4", SCRATCH_DEVICE, features="^dir_index")
                         self._guest_paths = {}
                         if self.reproducible:
                             self._pin_ext_mtimes(g, mounts, mount_devices)
