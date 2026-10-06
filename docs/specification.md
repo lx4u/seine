@@ -494,8 +494,24 @@ A default is parsed whether or not anything uses it: a misspelt setting
 in an architecture file is reported by the file that holds it rather than
 waiting for the one image that rebuilds a kernel.
 
+`apt` under `defaults` sets what the `apt` tasks of every playbook do
+(see [The apt action](#the-apt-action)). `install_recommends` is the only
+setting. It is `true` unless a file says `false`, and a task's own
+`install_recommends` beats it:
+
+```
+# examples/common/debian.yaml
+defaults:
+    apt:
+        install_recommends: false
+```
+
+As above, the last file loaded wins, so a particular file may turn
+recommends back on. Only a `false` changes the root file-system digest.
+
 `defaults` holds package entries, `extends` settings, `vault` seeds for
-the dev vault, and a `sign-key` fallback for repository signing. Playbooks and tests already
+the dev vault, a `sign-key` fallback for repository signing, and `apt`
+settings. Playbooks and tests already
 merge by name (see [`playbook`](#playbook)/[`test`](#test)), and the
 other sections are merged by key.
 

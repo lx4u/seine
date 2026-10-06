@@ -272,6 +272,9 @@ class SpecMerger:
     # --sign-key nor SEINE_SIGN_KEY does -- weakest of the three, so the
     # machine always wins over the spec. A later file overrides.
     #
+    # 'defaults: apt:' sets what a playbook's apt tasks do unless a task
+    # says otherwise. A later file overrides, setting by setting.
+    #
     # direction: most-specific file wins (docs/merging.md).
     def _merge_defaults(self, spec):
         if "defaults" not in spec:
@@ -280,10 +283,10 @@ class SpecMerger:
         if type(defaults) != type({}):
             raise ValueError("'defaults' shall be a dictionary!")
         for setting in defaults:
-            if setting not in ("packages", "extends", "vault", "sign-key"):
+            if setting not in ("packages", "extends", "vault", "sign-key", "apt"):
                 raise ValueError(
-                    "'defaults' holds package entries, 'extends', 'vault' or "
-                    "'sign-key', not '%s'" % setting)
+                    "'defaults' holds package entries, 'extends', 'vault', "
+                    "'sign-key' or 'apt', not '%s'" % setting)
 
         merged = self.spec.setdefault("defaults", {}).setdefault("packages", [])
         for package in defaults.get("packages") or []:
@@ -310,6 +313,21 @@ class SpecMerger:
             if type(sign_key) != type(""):
                 raise ValueError("'defaults: sign-key' shall be a key name")
             self.spec["defaults"]["sign-key"] = sign_key
+
+        apt = defaults.get("apt")
+        if apt is not None:
+            if type(apt) != type({}):
+                raise ValueError("'defaults: apt' shall be a dictionary")
+            for setting, value in apt.items():
+                if setting != "install_recommends":
+                    raise ValueError(
+                        "'defaults: apt' holds 'install_recommends', not '%s'"
+                        % setting)
+                if type(value) != type(True):
+                    raise ValueError(
+                        "'defaults: apt: install_recommends' shall be true "
+                        "or false")
+            self.spec["defaults"].setdefault("apt", {}).update(apt)
 
     # 'overrides' changes seine's own default behaviour (e.g. installing
     # every locale) rather than standing in for a value found elsewhere.
@@ -363,6 +381,13 @@ class SpecMerger:
         held = self.spec.get("defaults") or {}
         defaults = held.pop("packages", None) or []
         kinds = held.pop("extends", None) or {}
+        # True is apt's own default: only a false moves the rootfs digest.
+        # Dropped here, not per file, so a later true can undo a false.
+        apt = held.get("apt") or {}
+        if apt.get("install_recommends") is True:
+            del apt["install_recommends"]
+        if len(apt) == 0:
+            held.pop("apt", None)
         # 'vault' stays: Builder/Imager read it later, once the vault is
         # actually needed. Only drop 'defaults' once nothing is left.
         if len(held) == 0:
