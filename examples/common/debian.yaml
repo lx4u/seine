@@ -1,6 +1,10 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+defaults:
+    apt:
+        install_recommends: false
+
 playbook:
     - name: init packages
       priority: 100
