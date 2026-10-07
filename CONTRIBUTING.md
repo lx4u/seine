@@ -127,7 +127,8 @@ serves the payload on port 8000 of the host. `ostree_update_secure_boot.py`
 runs it again with the dev key enrolled (it needs `efitools`, `sbsign`
 and `sbattach` on the host). `ostree_update_powercut.py` cuts power to QEMU
 across update failpoints and random moments to verify recovery and
-invariants.
+invariants. `ostree_update_soak.py` verifies updates across five versions,
+self-updating the script and refusing updates on a full ESP.
 
 
 ## Coding style

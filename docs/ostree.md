@@ -388,6 +388,11 @@ last-known-good UKI. The test `tests/image/ostree_update_watchdog.py` verifies
 this watchdog reset and fallback under QEMU with an emulated hardware watchdog
 device (`-device i6300esb -watchdog-action reset`).
 
+The test `tests/image/ostree_update_soak.py` verifies sequential updates
+applied across five versions in a row, updating across an update-script
+change, and refusing an update when the ESP lacks sufficient free space
+while keeping the running system intact.
+
 ### Replacing the keys
 
 The development keys are public. Make two keys of your own, one for the
