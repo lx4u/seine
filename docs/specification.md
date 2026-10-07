@@ -1847,6 +1847,13 @@ When watchdog arming is enabled (`watchdog > 0`):
    provided without mountpoints (`where`).
  * If config partitions are omitted, two 16 MiB partitions labeled `BGENV1`
    and `BGENV2` (`type: vfat`) are automatically allocated.
+ * The EFI Boot Guard binary is placed at `\EFI\BOOT\BOOT<ARCH>.EFI`
+   (`BOOTX64.EFI` on `amd64`, `BOOTAA64.EFI` on `arm64`) as the removable boot
+   loader.
+ * `systemd-boot` is placed at `\EFI\systemd\systemd-boot<arch>.efi` and
+   chainloaded by EFI Boot Guard after arming the hardware watchdog.
+ * If `secure-boot` is configured, both the removable EFI Boot Guard binary
+   and the chained `systemd-boot` binary are Authenticode-signed.
 
 ### bootlets
 

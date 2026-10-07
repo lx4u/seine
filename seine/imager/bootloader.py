@@ -13,8 +13,9 @@ set default=0
 
 
 class Bootloader:
-    def __init__(self, device):
+    def __init__(self, device, arch=None):
         self.device = device
+        self.arch = arch
 
     def detect(self, g):
         raise NotImplementedError
@@ -80,7 +81,9 @@ class GrubBootloader(Bootloader):
     # Only the EFI target moves a binary onto the ESP; the caller
     # checks it exists, so a BIOS-only install is a no-op here.
     def paths_to_sign(self, esp_mount):
-        return ["%s/EFI/boot/bootx64.efi" % esp_mount]
+        if self.arch == "arm64":
+            return [f"{esp_mount}/EFI/boot/bootaa64.efi"]
+        return [f"{esp_mount}/EFI/boot/bootx64.efi"]
 
 
 # A Unified Kernel Image needs no boot entry: the Boot Loader
@@ -108,16 +111,19 @@ class SystemdBootBootloader(Bootloader):
     # 'bootctl install' writes both the removable fallback path and its
     # own, neither signed on its own.
     def paths_to_sign(self, esp_mount):
-        return ["%s/EFI/BOOT/BOOTX64.EFI" % esp_mount,
-                "%s/EFI/systemd/systemd-bootx64.efi" % esp_mount]
+        if self.arch == "arm64":
+            return [f"{esp_mount}/EFI/BOOT/BOOTAA64.EFI",
+                    f"{esp_mount}/EFI/systemd/systemd-bootaa64.efi"]
+        return [f"{esp_mount}/EFI/BOOT/BOOTX64.EFI",
+                f"{esp_mount}/EFI/systemd/systemd-bootx64.efi"]
 
 
 REGISTRY = [GrubBootloader, SystemdBootBootloader]
 
 
-def detect(g, device):
+def detect(g, device, arch=None):
     for cls in REGISTRY:
-        bootloader = cls(device)
+        bootloader = cls(device, arch=arch)
         if bootloader.detect(g):
             return bootloader
     return None

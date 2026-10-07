@@ -6,6 +6,7 @@ import tempfile
 import zlib
 
 from seine.imager.appliance import SCRATCH_DEVICE
+from seine.imager.bootloader import SystemdBootBootloader
 
 ENV_STRING_LENGTH = 255
 ENV_MEM_USERVARS = 128 * 1024
@@ -15,6 +16,32 @@ BGENV_FILENAME = "BGENV.DAT"
 EBG_CHAINLOAD_KERNEL = {
     "amd64": r"\EFI\systemd\systemd-bootx64.efi",
     "arm64": r"\EFI\systemd\systemd-bootaa64.efi",
+}
+
+# Candidate source paths for the EFI Boot Guard binary inside the appliance.
+EBG_EFI_BINARIES = {
+    "amd64": [
+        "/usr/lib/x86_64-linux-gnu/efibootguard/efibootguardx64.efi",
+        "/usr/lib/x86_64-linux-gnu/efibootguard/efibootguard.efi",
+        "/usr/lib/efibootguard/efibootguardx64.efi",
+        "/usr/lib/efibootguard/efibootguard.efi",
+    ],
+    "arm64": [
+        "/usr/lib/aarch64-linux-gnu/efibootguard/efibootguardaa64.efi",
+        "/usr/lib/aarch64-linux-gnu/efibootguard/efibootguard.efi",
+        "/usr/lib/efibootguard/efibootguardaa64.efi",
+        "/usr/lib/efibootguard/efibootguard.efi",
+    ],
+}
+
+EBG_ESP_REMOVABLE = {
+    "amd64": "BOOTX64.EFI",
+    "arm64": "BOOTAA64.EFI",
+}
+
+SYSTEMD_BOOT_FILENAME = {
+    "amd64": "systemd-bootx64.efi",
+    "arm64": "systemd-bootaa64.efi",
 }
 
 
@@ -132,5 +159,46 @@ class EfiBootGuard:
             finally:
                 if mountpoint != "/":
                     g.rmdir(mountpoint)
+
+    def _install_efibootguard(self, g, bootloader, esp_path):
+        ph = self.source.partitionHandler
+        if not (ph.watchdog and ph.watchdog > 0):
+            return
+        if not bootloader:
+            return
+        if not isinstance(bootloader, SystemdBootBootloader):
+            raise NotImplementedError(
+                "EFI Boot Guard watchdog support requires systemd-boot")
+
+        target_arch = self.source.spec.get("distribution", {}).get("architecture")
+        if target_arch not in EBG_EFI_BINARIES:
+            raise NotImplementedError(
+                f"EFI Boot Guard watchdog support is not implemented for architecture '{target_arch}'")
+
+        esp_clean = esp_path.rstrip("/")
+        systemd_boot_file = f"{esp_clean}/EFI/systemd/{SYSTEMD_BOOT_FILENAME[target_arch]}"
+        if not g.is_file(systemd_boot_file):
+            raise FileNotFoundError(
+                f"systemd-boot binary not found at '{systemd_boot_file}'")
+
+        src = None
+        for candidate in EBG_EFI_BINARIES[target_arch]:
+            if g.is_file(candidate):
+                src = candidate
+                break
+        if src is None:
+            raise FileNotFoundError(
+                f"EFI Boot Guard binary not found for architecture '{target_arch}'")
+
+        removable_dir = f"{esp_clean}/EFI/BOOT"
+        removable_file = f"{removable_dir}/{EBG_ESP_REMOVABLE[target_arch]}"
+        g.mkdir_p(removable_dir)
+        if g.is_file(removable_file):
+            g.rm(removable_file)
+        print("Installing EFI Boot Guard as removable boot loader...")
+        g.cp(src, removable_file)
+        if self.reproducible:
+            epoch = self.source._epoch()
+            g.utimens(removable_file, epoch, 0, epoch, 0)
 
 

@@ -645,13 +645,15 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
         # instead records its boot info; the boot owner (last) writes every
         # group's menuentry, itself first as the static default.
         root_m = next((m for m in mounts if m["_prefix"] == "/"), None)
+        arch = self.source.spec.get("distribution", {}).get("architecture")
         if root_m is not None and source is None:
-            bootloader = detect_bootloader(g, DEVICE)
+            bootloader = detect_bootloader(g, DEVICE, arch=arch)
             if bootloader:
                 print("Installing boot loader and entries...")
                 bootloader.install(g, "/efi")
                 bootloader.add_entry(g)
                 self._normalize_grub_lvmid(g)
+                self._install_efibootguard(g, bootloader, "/efi")
                 self._sign_bootloader_files(g, bootloader, "/efi")
         elif root_m is not None:
             boot_files = self._boot_files(g)
@@ -671,7 +673,7 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
                     "cmdline": self._grub_cmdline(g),
                 })
             if source == boot_owner:
-                bootloader = detect_bootloader(g, DEVICE)
+                bootloader = detect_bootloader(g, DEVICE, arch=arch)
                 if bootloader:
                     print("Installing boot loader and entries...")
                     bootloader.install(g, "/efi", boot_directory="/efi")
@@ -684,6 +686,7 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
                             root_partuuid=entry["root_partuuid"],
                             root_label=entry["root_label"],
                             cmdline=entry["cmdline"])
+                    self._install_efibootguard(g, bootloader, "/efi")
                     self._sign_bootloader_files(g, bootloader, "/efi")
 
 

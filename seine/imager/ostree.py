@@ -611,7 +611,8 @@ class OstreeSysroot:
                 g, boot_entries[-1], stateroot, ukis, version, osrel)
         if source is not None and source != boot_owner:
             return
-        bootloader = detect_bootloader(g, DEVICE)
+        arch = distro.get("architecture")
+        bootloader = detect_bootloader(g, DEVICE, arch=arch)
         if bootloader is None:
             if ukis:
                 raise RuntimeError(
@@ -646,6 +647,7 @@ class OstreeSysroot:
         else:
             bootloader.install(g, esp_path, boot_path=None)
             self._write_systemd_boot(g, esp_path, ordered)
+        self._install_efibootguard(g, bootloader, esp_path)
         self._sign_bootloader_files(g, bootloader, esp_path)
 
     # The ESP gets the entries and the kernel files of every sysroot.

@@ -16,15 +16,28 @@ from seine.imager.efibootguard import (
     EBG_CHAINLOAD_KERNEL,
     BGENV_FILENAME,
 )
+from seine.imager.bootloader import GrubBootloader, SystemdBootBootloader
 from seine.imager.gpt import GPT_TYPE_BASIC_DATA
 from seine.imager.imager import Imager
 from seine.partition import PartitionHandler
 
 
 class MockGuestfs:
-    def __init__(self):
+    def __init__(self, existing_files=None, existing_dirs=None):
         self.calls = []
         self.files = {}
+        self.existing_files = set(existing_files or [])
+        self.existing_dirs = set(existing_dirs or [])
+
+    def is_file(self, path):
+        return path in self.existing_files
+
+    def is_dir(self, path):
+        return path in self.existing_dirs
+
+    def cp(self, src, dst):
+        self.calls.append(("cp", src, dst))
+        self.existing_files.add(dst)
 
     def part_add(self, dev, prlogex, start, end):
         self.calls.append(("add", prlogex, start, end))
@@ -46,11 +59,13 @@ class MockGuestfs:
 
     def mkdir_p(self, path):
         self.calls.append(("mkdir_p", path))
+        self.existing_dirs.add(path)
 
     def sh(self, cmd):
         self.calls.append(("sh", cmd))
 
     def rm(self, path):
+        self.existing_files.discard(path)
         self.calls.append(("rm", path))
 
     def rm_rf(self, path):
@@ -277,3 +292,131 @@ class EfiBootGuardImager(avocado.Test):
         with self.assertRaises(NotImplementedError) as cm:
             imager._initialize_bgenv(g, ph, part_devices)
         self.assertIn("not implemented for architecture 'mips'", str(cm.exception))
+
+    def test_install_efibootguard_noop_when_watchdog_not_enabled(self):
+        imager = Imager.__new__(Imager)
+        imager.source = type("Source", (), {
+            "spec": {"distribution": {"architecture": "amd64"}},
+            "partitionHandler": type("PH", (), {"watchdog": None})(),
+        })()
+        bootloader = SystemdBootBootloader("/dev/sda", arch="amd64")
+        g = MockGuestfs()
+        imager._install_efibootguard(g, bootloader, "/efi")
+        self.assertEqual(g.calls, [])
+
+    def test_install_efibootguard_raises_on_grub(self):
+        imager = Imager.__new__(Imager)
+        imager.source = type("Source", (), {
+            "spec": {"distribution": {"architecture": "amd64"}},
+            "partitionHandler": type("PH", (), {"watchdog": 30})(),
+        })()
+        bootloader = GrubBootloader("/dev/sda", arch="amd64")
+        g = MockGuestfs()
+        with self.assertRaises(NotImplementedError) as cm:
+            imager._install_efibootguard(g, bootloader, "/efi")
+        self.assertIn("requires systemd-boot", str(cm.exception))
+
+    def test_install_efibootguard_raises_on_unsupported_arch(self):
+        imager = Imager.__new__(Imager)
+        imager.source = type("Source", (), {
+            "spec": {"distribution": {"architecture": "mips"}},
+            "partitionHandler": type("PH", (), {"watchdog": 30})(),
+        })()
+        bootloader = SystemdBootBootloader("/dev/sda")
+        g = MockGuestfs()
+        with self.assertRaises(NotImplementedError) as cm:
+            imager._install_efibootguard(g, bootloader, "/efi")
+        self.assertIn("not implemented for architecture 'mips'", str(cm.exception))
+
+    def test_install_efibootguard_raises_when_systemd_boot_missing_on_esp(self):
+        imager = Imager.__new__(Imager)
+        imager.source = type("Source", (), {
+            "spec": {"distribution": {"architecture": "amd64"}},
+            "partitionHandler": type("PH", (), {"watchdog": 30})(),
+        })()
+        bootloader = SystemdBootBootloader("/dev/sda", arch="amd64")
+        g = MockGuestfs()
+        with self.assertRaises(FileNotFoundError) as cm:
+            imager._install_efibootguard(g, bootloader, "/efi")
+        self.assertIn("systemd-boot binary not found", str(cm.exception))
+
+    def test_install_efibootguard_raises_when_efibootguard_missing_in_appliance(self):
+        imager = Imager.__new__(Imager)
+        imager.source = type("Source", (), {
+            "spec": {"distribution": {"architecture": "amd64"}},
+            "partitionHandler": type("PH", (), {"watchdog": 30})(),
+        })()
+        bootloader = SystemdBootBootloader("/dev/sda", arch="amd64")
+        g = MockGuestfs(existing_files=["/efi/EFI/systemd/systemd-bootx64.efi"])
+        with self.assertRaises(FileNotFoundError) as cm:
+            imager._install_efibootguard(g, bootloader, "/efi")
+        self.assertIn("EFI Boot Guard binary not found", str(cm.exception))
+
+    def test_install_efibootguard_copies_removable_binary_amd64(self):
+        imager = Imager.__new__(Imager)
+        imager.source = type("Source", (), {
+            "spec": {"distribution": {"architecture": "amd64"}},
+            "partitionHandler": type("PH", (), {"watchdog": 30})(),
+            "_epoch": lambda *args: 1700000000,
+        })()
+        imager.reproducible = True
+        bootloader = SystemdBootBootloader("/dev/sda", arch="amd64")
+        g = MockGuestfs(existing_files=[
+            "/efi/EFI/systemd/systemd-bootx64.efi",
+            "/efi/EFI/BOOT/BOOTX64.EFI",
+            "/usr/lib/x86_64-linux-gnu/efibootguard/efibootguardx64.efi",
+        ])
+        imager._install_efibootguard(g, bootloader, "/efi")
+
+        self.assertIn(("rm", "/efi/EFI/BOOT/BOOTX64.EFI"), g.calls)
+        self.assertIn((
+            "cp",
+            "/usr/lib/x86_64-linux-gnu/efibootguard/efibootguardx64.efi",
+            "/efi/EFI/BOOT/BOOTX64.EFI",
+        ), g.calls)
+        self.assertIn(("utimens", "/efi/EFI/BOOT/BOOTX64.EFI", 1700000000), g.calls)
+
+    def test_install_efibootguard_copies_removable_binary_arm64(self):
+        imager = Imager.__new__(Imager)
+        imager.source = type("Source", (), {
+            "spec": {"distribution": {"architecture": "arm64"}},
+            "partitionHandler": type("PH", (), {"watchdog": 45})(),
+            "_epoch": lambda *args: 1700000000,
+        })()
+        imager.reproducible = True
+        bootloader = SystemdBootBootloader("/dev/sda", arch="arm64")
+        g = MockGuestfs(existing_files=[
+            "/efi/EFI/systemd/systemd-bootaa64.efi",
+            "/usr/lib/aarch64-linux-gnu/efibootguard/efibootguardaa64.efi",
+        ])
+        imager._install_efibootguard(g, bootloader, "/efi")
+
+        self.assertIn((
+            "cp",
+            "/usr/lib/aarch64-linux-gnu/efibootguard/efibootguardaa64.efi",
+            "/efi/EFI/BOOT/BOOTAA64.EFI",
+        ), g.calls)
+        self.assertIn(("utimens", "/efi/EFI/BOOT/BOOTAA64.EFI", 1700000000), g.calls)
+
+    def test_sign_bootloader_files_with_efibootguard_signs_both_binaries(self):
+        imager = Imager.__new__(Imager)
+        imager.source = type("Source", (), {
+            "spec": {"distribution": {"architecture": "amd64"}},
+            "partitionHandler": type("PH", (), {
+                "watchdog": 30,
+                "secure_boot": {"private-key": "vault:db"},
+            })(),
+        })()
+        bootloader = SystemdBootBootloader("/dev/sda", arch="amd64")
+        g = MockGuestfs(existing_files=[
+            "/efi/EFI/BOOT/BOOTX64.EFI",
+            "/efi/EFI/systemd/systemd-bootx64.efi",
+        ])
+        signed_files = []
+        imager._sign_pe_in_place = lambda _g, path: signed_files.append(path)
+
+        imager._sign_bootloader_files(g, bootloader, "/efi")
+        self.assertEqual(signed_files, [
+            "/efi/EFI/BOOT/BOOTX64.EFI",
+            "/efi/EFI/systemd/systemd-bootx64.efi",
+        ])

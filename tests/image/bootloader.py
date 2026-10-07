@@ -55,10 +55,19 @@ class PathsToSign(avocado.Test):
         paths = GrubBootloader("/dev/sda").paths_to_sign("/efi")
         self.assertEqual(paths, ["/efi/EFI/boot/bootx64.efi"])
 
+    def test_grub_names_the_efi_binary_for_arm64(self):
+        paths = GrubBootloader("/dev/sda", arch="arm64").paths_to_sign("/efi")
+        self.assertEqual(paths, ["/efi/EFI/boot/bootaa64.efi"])
+
     def test_systemd_boot_names_both_binaries_it_installs(self):
         paths = SystemdBootBootloader("/dev/sda").paths_to_sign("/efi")
         self.assertEqual(paths, ["/efi/EFI/BOOT/BOOTX64.EFI",
                                  "/efi/EFI/systemd/systemd-bootx64.efi"])
+
+    def test_systemd_boot_names_both_binaries_for_arm64(self):
+        paths = SystemdBootBootloader("/dev/sda", arch="arm64").paths_to_sign("/efi")
+        self.assertEqual(paths, ["/efi/EFI/BOOT/BOOTAA64.EFI",
+                                 "/efi/EFI/systemd/systemd-bootaa64.efi"])
 
 class GrubInstall(avocado.Test):
     def test_efi_reproduces_todays_inline_block(self):
