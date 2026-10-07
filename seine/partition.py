@@ -57,6 +57,8 @@ class PartitionHandler:
         self.secure_boot = None
         self.volumes = []
         self.size = None
+        self.watchdog = None
+        self._raw_watchdog = None
 
     def _align_up(self, n, align):
         return math.ceil(n / align) * align
@@ -84,14 +86,25 @@ class PartitionHandler:
         return math.ceil(size / 1024 / 1024)
 
     def _parse_part_flags(self, part):
-        valid_flags = [ "boot", "lvm", "xbootldr", "primary", "extended", "logical" ]
+        valid_flags = [ "bgenv", "boot", "lvm", "xbootldr", "primary", "extended", "logical" ]
         incompatible_flags = [
-            [ "primary", "extended", "logical" ]
+            [ "primary", "extended", "logical" ],
+            [ "bgenv", "boot" ],
+            [ "bgenv", "lvm" ],
+            [ "bgenv", "xbootldr" ],
         ]
 
         for f in part["flags"]:
             if f not in valid_flags:
                 raise ValueError("'%s' is not a valid partition flag!" % f)
+            if f == "bgenv" and self._table != "gpt":
+                raise ValueError(
+                    f"partition '{part['label']}' has flag 'bgenv', which needs "
+                    f"a 'gpt' partition table (this image's table is '{self._table}')")
+            if f == "bgenv" and "where" in part:
+                raise ValueError(
+                    f"partition '{part['label']}' has flag 'bgenv', which is "
+                    "never mounted -- drop its 'where'")
             if f == "lvm":
                 part["_lvm"] = True
             if f in ("boot", "xbootldr") and part["type"] != "vfat":
@@ -171,6 +184,36 @@ class PartitionHandler:
 
         return part
 
+    def _is_bgenv(self, part):
+        if "bgenv" in part.get("flags", []):
+            return True
+        if self.watchdog and self.watchdog > 0:
+            label = part.get("label", "")
+            if label and label.lower().startswith("bgenv"):
+                return True
+        return False
+
+    def _parse_watchdog(self, watchdog):
+        if isinstance(watchdog, bool) or watchdog is None:
+            raise ValueError(f"'image: watchdog: {watchdog}' is not a valid duration")
+        if isinstance(watchdog, (int, float)):
+            if watchdog < 0:
+                raise ValueError(f"'image: watchdog: {watchdog}' is not a valid duration")
+            return int(watchdog)
+        if isinstance(watchdog, str):
+            m = re.match(r"^(\d+)([smhd])?$", watchdog.strip())
+            if not m:
+                raise ValueError(f"'image: watchdog: {watchdog}' is not a valid duration")
+            val, unit = int(m.group(1)), m.group(2)
+            if unit == "m":
+                val *= 60
+            elif unit == "h":
+                val *= 3600
+            elif unit == "d":
+                val *= 86400
+            return val
+        raise ValueError(f"'image: watchdog: {watchdog}' is not a valid duration")
+
     def _parse_part(self, part):
         if "label" not in part:
             raise ValueError("one of the partitions does not have a 'label' defined!")
@@ -228,8 +271,13 @@ class PartitionHandler:
                         f"partition '{label}' has 'type-guid' and flag '{f}', "
                         "which may not be used together")
 
+        if "where" in part and self._is_bgenv(part):
+            raise ValueError(
+                f"partition '{label}' is an EFI Boot Guard config partition, "
+                "which is never mounted -- drop its 'where'")
+
         if "where" not in part and part["_lvm"] == False and not is_verity_hash:
-            if "type-guid" in part:
+            if "type-guid" in part or self._is_bgenv(part):
                 if "size" not in part:
                     raise ValueError(
                         f"'size' of unmounted partition '{label}' was not defined")
@@ -525,6 +573,14 @@ class PartitionHandler:
         if "secure-boot" in image:
             self.secure_boot = self._parse_secure_boot(image["secure-boot"])
 
+        if "watchdog" in image:
+            self._raw_watchdog = image["watchdog"]
+            self.watchdog = self._parse_watchdog(image["watchdog"])
+            image["watchdog"] = self.watchdog
+        else:
+            self._raw_watchdog = None
+            self.watchdog = None
+
         partitions = image["partitions"]
         for part in partitions:
             part = self._parse_part(part)
@@ -547,6 +603,7 @@ class PartitionHandler:
         if "ostree" in image:
             self.ostree = self._parse_ostree(image["ostree"])
         self._validate_ostree(spec)
+        self._validate_watchdog(spec)
         return spec
 
     def _parse_ostree_settings(self, where, settings):
@@ -815,4 +872,36 @@ class PartitionHandler:
                 "the following partitions have 'verity: true' but no "
                 "'verity-hash' partition names them in 'verity-for:': %s"
                 % ", ".join(sorted(missing)))
+
+    def _validate_watchdog(self, spec):
+        bgenv_partitions = [p for p in self.partitions if self._is_bgenv(p)]
+        if self.watchdog and self.watchdog > 0:
+            has_esp = any(
+                p.get("where", "").rstrip("/") == "/efi" and p.get("type") == "vfat"
+                for p in self.partitions
+            )
+            if self._table != "gpt" or not has_esp:
+                raise ValueError(
+                    f"'image: watchdog: {self._raw_watchdog}' requires a UEFI "
+                    "disk with an EFI system partition mounted at /efi")
+        if bgenv_partitions:
+            if len(bgenv_partitions) < 2:
+                raise ValueError(
+                    f"image needs at least 2 EFI Boot Guard config "
+                    f"partitions for redundancy (found {len(bgenv_partitions)})")
+            for part in bgenv_partitions:
+                label = part["label"]
+                if part.get("type") != "vfat":
+                    raise ValueError(
+                        f"partition '{label}' is an EFI Boot Guard config "
+                        f"partition, which needs 'type: vfat' (this one is '{part.get('type')}')")
+                if "where" in part:
+                    raise ValueError(
+                        f"partition '{label}' is an EFI Boot Guard config "
+                        "partition, which is never mounted -- drop its 'where'")
+                if part["_size"] < 16 * 1024 * 1024:
+                    raise ValueError(
+                        f"partition '{label}' is an EFI Boot Guard config "
+                        f"partition, which needs at least 16 MiB (this one is {self._to_human_size(part['_size'])})")
+
 

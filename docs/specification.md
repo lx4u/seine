@@ -1715,6 +1715,7 @@ created in the disk image. The following top-level attributes are supported:
  * `size`
  * `table`
  * `volumes`
+ * `watchdog`
 
 An `image` shall have at least one partition defined and an output `filename`
 specified. The `size` of the disk `image` may be omitted and it will then be
@@ -1830,6 +1831,21 @@ This signs a UKI the imager finds and rebuilds for dm-verity. A UKI
 can also be signed at build time, through its own package instead of
 the disk -- see [`extends: uki: signing-key`](kernels.md#unified-kernel-images).
 
+### watchdog
+
+Enables hardware watchdog arming before `ExitBootServices()` using EFI Boot
+Guard on UEFI systems. Accepts a duration string (such as `30s`, `1m`, `45`)
+or an integer number of seconds. Omit or set to `0` to leave watchdog arming
+disabled.
+
+When watchdog arming is enabled (`watchdog > 0`):
+ * The disk image must use a `gpt` partition `table`.
+ * An EFI System Partition (`vfat`) mounted at `/efi` must be defined.
+ * If user-defined EFI Boot Guard config partitions are declared (identified
+   by flag `bgenv` or labels starting with `bgenv`), at least two redundant
+   partitions with `type: vfat` and a minimum size of 16 MiB each must be
+   provided without mountpoints (`where`).
+
 ### bootlets
 
 Bootlets are binary firmware files placed at specific locations on the boot
@@ -1866,7 +1882,8 @@ Disk partitions are defined with the following attributes:
 | where       | yes*     | Where to mount the partition file-system |
 
 (*) Required unless the partition is a LVM physical volume, has
-    `type: verity-hash`, or defines `type-guid` (an unmounted partition).
+    `type: verity-hash`, defines `type-guid` (an unmounted partition),
+    or has flag `bgenv` (an EFI Boot Guard config partition).
 
 `guid` sets the partition's unique GUID (PARTUUID) on a `gpt` partition table.
 When omitted, the imager derives a deterministic UUID from the partition label.
@@ -1936,6 +1953,7 @@ A partition may have the following flags:
 
 | Flag     | Description                                          |
 | -------- | ---------------------------------------------------- |
+| bgenv    | config partition for EFI Boot Guard environment      |
 | boot     | system may boot from this partition                  |
 | lvm      | partition will be used as a physical volume for LVM  |
 

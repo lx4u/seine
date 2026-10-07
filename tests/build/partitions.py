@@ -1068,3 +1068,290 @@ class PartitionTypeGuid(avocado.Test):
             })
         self.assertIn("'size' of unmounted partition 'bgenv0' was not defined", str(cm.exception))
 
+
+class WatchdogDuration(avocado.Test):
+    def test_duration_strings_and_numbers_are_parsed(self):
+        cases = [
+            ("30s", 30),
+            ("1m", 60),
+            ("2h", 7200),
+            ("1d", 86400),
+            ("45", 45),
+            (45, 45),
+            (0, 0),
+            ("0", 0),
+            ("0s", 0),
+        ]
+        for val, expected in cases:
+            ph = PartitionHandler()
+            ph.parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "watchdog": val,
+                    "partitions": [
+                        {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+            self.assertEqual(ph.watchdog, expected)
+
+    def test_invalid_duration_formats_are_refused(self):
+        invalid = ["-10", "-5s", "invalid", "10x", True, False, None, []]
+        for val in invalid:
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse({
+                    "image": {
+                        "filename": "disk.img",
+                        "table": "gpt",
+                        "watchdog": val,
+                        "partitions": [
+                            {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                            {"label": "root", "where": "/"},
+                        ],
+                    },
+                })
+            self.assertIn("is not a valid duration", str(cm.exception))
+
+
+class WatchdogUefiValidation(avocado.Test):
+    def test_watchdog_enabled_requires_gpt_table(self):
+        for arch in ("amd64", "arm64"):
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse({
+                    "architecture": arch,
+                    "image": {
+                        "filename": "disk.img",
+                        "table": "msdos",
+                        "watchdog": "30s",
+                        "partitions": [
+                            {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                            {"label": "root", "where": "/"},
+                        ],
+                    },
+                })
+            self.assertEqual(
+                str(cm.exception),
+                "'image: watchdog: 30s' requires a UEFI disk with an EFI system partition mounted at /efi",
+            )
+
+    def test_watchdog_enabled_requires_esp_mounted_at_efi(self):
+        for arch in ("amd64", "arm64"):
+            with self.assertRaises(ValueError) as cm:
+                PartitionHandler().parse({
+                    "architecture": arch,
+                    "image": {
+                        "filename": "disk.img",
+                        "table": "gpt",
+                        "watchdog": "30s",
+                        "partitions": [
+                            {"label": "root", "where": "/"},
+                        ],
+                    },
+                })
+            self.assertEqual(
+                str(cm.exception),
+                "'image: watchdog: 30s' requires a UEFI disk with an EFI system partition mounted at /efi",
+            )
+
+    def test_watchdog_enabled_requires_vfat_on_efi_mount(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "watchdog": "30s",
+                    "partitions": [
+                        {"label": "esp", "where": "/efi", "type": "ext4", "size": "64MiB"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+        self.assertEqual(
+            str(cm.exception),
+            "'image: watchdog: 30s' requires a UEFI disk with an EFI system partition mounted at /efi",
+        )
+
+    def test_watchdog_zero_does_not_require_uefi(self):
+        for val in (0, "0", "0s"):
+            ph = PartitionHandler()
+            ph.parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "msdos",
+                    "watchdog": val,
+                    "partitions": [
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+            self.assertEqual(ph.watchdog, 0)
+
+    def test_watchdog_enabled_accepts_valid_uefi_layout(self):
+        for arch in ("amd64", "arm64"):
+            ph = PartitionHandler()
+            ph.parse({
+                "architecture": arch,
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "watchdog": "30s",
+                    "partitions": [
+                        {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+            self.assertEqual(ph.watchdog, 30)
+
+
+class EfiBootGuardConfigPartitions(avocado.Test):
+    def test_user_defined_config_partitions_with_bgenv_flag(self):
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "table": "gpt",
+                "watchdog": "30s",
+                "partitions": [
+                    {"label": "cfg1", "flags": ["bgenv"], "type": "vfat", "size": "16MiB"},
+                    {"label": "cfg2", "flags": ["bgenv"], "type": "vfat", "size": "16MiB"},
+                    {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                    {"label": "root", "where": "/"},
+                ],
+            },
+        })
+        self.assertNotIn("cfg1", [m["label"] for m in ph.mounts])
+        self.assertNotIn("cfg2", [m["label"] for m in ph.mounts])
+        self.assertEqual(len(ph.partitions), 4)
+
+    def test_user_defined_config_partitions_with_label_convention(self):
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "table": "gpt",
+                "watchdog": "30s",
+                "partitions": [
+                    {"label": "BGENV1", "type": "vfat", "size": "16MiB"},
+                    {"label": "BGENV2", "type": "vfat", "size": "16MiB"},
+                    {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                    {"label": "root", "where": "/"},
+                ],
+            },
+        })
+        self.assertNotIn("BGENV1", [m["label"] for m in ph.mounts])
+        self.assertNotIn("BGENV2", [m["label"] for m in ph.mounts])
+
+    def test_config_partitions_require_at_least_two_for_redundancy(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "watchdog": "30s",
+                    "partitions": [
+                        {"label": "BGENV1", "type": "vfat", "size": "16MiB"},
+                        {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("needs at least 2 EFI Boot Guard config partitions", str(cm.exception))
+
+    def test_config_partition_must_be_vfat(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "watchdog": "30s",
+                    "partitions": [
+                        {"label": "BGENV1", "type": "ext4", "size": "16MiB"},
+                        {"label": "BGENV2", "type": "vfat", "size": "16MiB"},
+                        {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("needs 'type: vfat'", str(cm.exception))
+
+    def test_config_partition_cannot_have_mountpoint(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "watchdog": "30s",
+                    "partitions": [
+                        {"label": "BGENV1", "where": "/bgenv", "type": "vfat", "size": "16MiB"},
+                        {"label": "BGENV2", "type": "vfat", "size": "16MiB"},
+                        {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("never mounted -- drop its 'where'", str(cm.exception))
+
+    def test_config_partition_needs_minimum_16_mib(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "watchdog": "30s",
+                    "partitions": [
+                        {"label": "BGENV1", "type": "vfat", "size": "8MiB"},
+                        {"label": "BGENV2", "type": "vfat", "size": "16MiB"},
+                        {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("needs at least 16 MiB", str(cm.exception))
+
+    def test_config_partition_flag_cannot_combine_with_boot_flag(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "partitions": [
+                        {"label": "cfg", "flags": ["bgenv", "boot"], "type": "vfat", "size": "16MiB"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("may not be used together", str(cm.exception))
+
+    def test_config_partition_flag_requires_gpt(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "msdos",
+                    "partitions": [
+                        {"label": "cfg", "flags": ["bgenv"], "type": "vfat", "size": "16MiB"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("needs a 'gpt' partition table", str(cm.exception))
+
+    def test_config_partition_flag_without_size_is_refused(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "partitions": [
+                        {"label": "cfg1", "flags": ["bgenv"], "type": "vfat"},
+                        {"label": "cfg2", "flags": ["bgenv"], "type": "vfat", "size": "16MiB"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("'size' of unmounted partition 'cfg1' was not defined", str(cm.exception))
+
+
