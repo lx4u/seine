@@ -361,7 +361,30 @@ more than one key. To rotate a key, ship an update whose image trusts the
 old and the new key, wait until the devices run it, and only then sign
 with the new key.
 
-### Limits
+### What the device checks
+
+* Manifest signature: `systemd-sysupdate` verifies `SHA256SUMS.gpg`
+  against `/etc/systemd/import-pubring.gpg`. If the signature is bad,
+  missing or made by another key, the update list cannot be read.
+* UKI checksum: during download, the SHA256 digest of the UKI must match
+  its entry in `SHA256SUMS`.
+* Summary and commit signatures: `ostree` verifies `summary.sig` and the
+  GPG signature of the commit against
+  `/usr/share/ostree/trusted.gpg.d/seine.gpg`. An unsigned commit, missing
+  summary, or signature from an untrusted key fails the pull.
+* Version matching: the `version` metadata stamped in the commit must
+  equal the version of the UKI.
+* UKI binding: after installing the UKI, `bootctl list` is read to check
+  that the UKI's command line names the newly deployed commit
+  (`ostree=/ostree/<stateroot>-<commit>`). If a signed UKI of another
+  commit was substituted, it is removed from the ESP and the update
+  fails.
+* Monotonic version: an update must be strictly newer than the
+  last-known-good version. A replayed older payload is ignored.
+* Denied versions: any version whose UKI exhausted its boot tries is
+  recorded in `/var/lib/seine-update/failed` and never retried.
+
+### Limits (what the device does not check)
 
 * The root file system is not bound to the UKI: the UKI names the
   deployment by a link, and nothing checks the content of the deployment
