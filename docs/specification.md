@@ -1798,8 +1798,11 @@ image:
 
 Two groups cannot share a `stateroot`, so name each one apart when
 setting it. The checks above apply to the groups that have ostree on.
-The whole `ostree` block is replaced, not merged, when a later file
-sets it again.
+`image: ostree:` merges key by key when a later file sets it again; the
+last-loaded value wins for each setting. Under `sources:`, each group
+merges by name and then key by key. Setting a key (or group) to `null`
+removes it. A `mode` change keeps the other settings; the build
+validates the merged result.
 
 ### secure-boot
 

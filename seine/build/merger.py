@@ -577,18 +577,60 @@ class SpecMerger:
                 parts = self._update_named_part_or_vol(parts, part, kind)
         self.spec["image"][kind] = parts
 
+    # direction: most-specific file wins, key by key; 'sources:' merges by
+    # group name, then key by key (docs/merging.md).
+    def _merge_ostree(self, incoming):
+        if incoming is None:
+            self.spec["image"].pop("ostree", None)
+            return
+        current = self.spec["image"].setdefault("ostree", {})
+        if type(incoming) != type({}):
+            self.spec["image"]["ostree"] = incoming
+            return
+        for key, value in incoming.items():
+            if value is None:
+                current.pop(key, None)
+            elif key == "sources" and type(value) == type({}):
+                sources = current.setdefault("sources", {})
+                for group, settings in value.items():
+                    if settings is None:
+                        sources.pop(group, None)
+                    elif type(settings) == type({}):
+                        group_dict = sources.setdefault(group, {})
+                        for k, v in settings.items():
+                            if v is None:
+                                group_dict.pop(k, None)
+                            else:
+                                group_dict[k] = v
+                    else:
+                        sources[group] = settings
+            elif key == "payload" and type(value) == type({}):
+                payload = current.setdefault("payload", {})
+                for k, v in value.items():
+                    if v is None:
+                        payload.pop(k, None)
+                    else:
+                        payload[k] = v
+            else:
+                current[key] = value
+
     # direction: most-specific file wins for a plain setting;
     # 'partitions'/'volumes' route to _merge_parts_or_vols instead (asking
-    # file wins within 'requires:', matched by 'label') (docs/merging.md).
+    # file wins within 'requires:', matched by 'label'); 'ostree' merges
+    # key by key (docs/merging.md).
     def _merge_image(self, spec, peer=False):
-        if "image" in self.spec:
-            for setting in spec["image"]:
-                if (setting == "partitions" or setting == "volumes") and (setting in self.spec["image"]):
-                    self._merge_parts_or_vols(spec, setting, peer=peer)
-                else:
-                    self.spec["image"][setting] = spec["image"][setting]
-        elif "image" not in self.spec:
-            self.spec["image"] = spec["image"]
+        if type(spec.get("image")) != type({}):
+            self.spec["image"] = spec.get("image")
+            return
+        if "image" not in self.spec or type(self.spec["image"]) != type({}):
+            self.spec["image"] = {}
+        for setting in spec["image"]:
+            if (setting == "partitions" or setting == "volumes") and (setting in self.spec["image"]):
+                self._merge_parts_or_vols(spec, setting, peer=peer)
+            elif setting == "ostree":
+                self._merge_ostree(spec["image"]["ostree"])
+            else:
+                self.spec["image"][setting] = spec["image"][setting]
 
     # Same as '_merge_image''s own plain-setting branch: most-specific
     # file wins. 'initrd:' has no 'partitions'/'volumes' equivalent, so
