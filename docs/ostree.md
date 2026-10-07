@@ -304,7 +304,11 @@ seine build examples/pc-ostree-update-image/main.yaml
 The build writes the disk and `pc-ostree-update-payload/` next to it,
 in the deploy directory. Flash or boot the disk. The development key is
 not enrolled in the firmware: either leave Secure Boot off, or enrol the
-`db` certificate of the key first.
+`db` certificate of the key first. In Setup Mode, `efi-updatevar -f
+db.auth db` (from `efitools`, with the certificate signed by your KEK)
+does it. The test `tests/image/ostree_update_secure_boot.py` enrols the
+key in a QEMU guest this way, runs the update flow with Secure Boot on,
+and checks that a UKI without a signature is not booted.
 
 To ship version 2, change `version:` and build again, with the same file
 names. The disk identifiers do not change, so the devices keep working,

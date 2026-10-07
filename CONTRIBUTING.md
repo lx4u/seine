@@ -123,7 +123,9 @@ run with `SEINE_TEST_PLAN=full` only. The Secure Boot ones also need
 keep it in `~/.cache/seine-tests/` until the imager sources change.
 `ostree_update_flow.py` builds the update example several times into one
 payload and updates a guest with the agent. It takes ten minutes and
-serves the payload on port 8000 of the host.
+serves the payload on port 8000 of the host. `ostree_update_secure_boot.py`
+runs it again with the dev key enrolled (it needs `efitools`, `sbsign`
+and `sbattach` on the host).
 
 ## Coding style
 
