@@ -1855,16 +1855,28 @@ Disk partitions are defined with the following attributes:
 | label       | yes      | Name of the partition                    |
 | flags       | no       | Partition flags (see below)              |
 | group       | no       | Name of the LVM group to join            |
+| guid        | no       | Partition unique GUID (PARTUUID), for `gpt` |
 | size        | no       | Size of the partition                    |
 | type        | no       | File-system type (e.g. `ext4`)           |
+| type-guid   | no       | GPT partition type GUID, for `gpt`        |
 | compression | no       | Compression, for a read-only `type`      |
 | identify    | no       | How a read-only `type` is found at boot  |
 | verity      | no       | Protect a read-only `type` with dm-verity |
 | verity-for  | no       | Label of the partition a `verity-hash` protects |
 | where       | yes*     | Where to mount the partition file-system |
 
-(*) Required unless the partition is a LVM physical volume or has
-    `type: verity-hash`
+(*) Required unless the partition is a LVM physical volume, has
+    `type: verity-hash`, or defines `type-guid` (an unmounted partition).
+
+`guid` sets the partition's unique GUID (PARTUUID) on a `gpt` partition table.
+When omitted, the imager derives a deterministic UUID from the partition label.
+`guid` cannot be set on partitions using `verity: true` or `type: verity-hash`,
+which derive their GUIDs from the root hash.
+
+`type-guid` sets the GPT partition type GUID on a `gpt` partition table,
+overriding any default Discoverable Partitions Specification role. It cannot be
+used with `boot`, `lvm`, or `xbootldr` flags. An unmounted partition with
+`type-guid` does not require `where`, but must specify `size`.
 
 `type` may also be `squashfs` or `erofs`, in which case the partition is built
 read-only and needs a `gpt` partition `table` (see [image](#image) above): the

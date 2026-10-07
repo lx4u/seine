@@ -85,8 +85,11 @@ class GptLayout:
             g.part_set_name(DEVICE, index, part["label"])
             # A verity partition's own GUID is set again later, from its
             # root hash (see _build_verity()) -- this one is overwritten.
-            g.part_set_gpt_guid(DEVICE, index, self._uuid_for("partition", part["label"]))
-            if "boot" in flags:
+            part_guid = part.get("guid") or self._uuid_for("partition", part["label"])
+            g.part_set_gpt_guid(DEVICE, index, part_guid)
+            if "type-guid" in part:
+                g.part_set_gpt_type(DEVICE, index, part["type-guid"])
+            elif "boot" in flags:
                 g.part_set_gpt_type(DEVICE, index, GPT_TYPE_ESP)
             elif "lvm" in flags:
                 g.part_set_gpt_type(DEVICE, index, GPT_TYPE_LVM)

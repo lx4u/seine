@@ -6,6 +6,7 @@ import math
 import os
 import re
 import tarfile
+import uuid
 
 from seine import utils
 
@@ -182,8 +183,59 @@ class PartitionHandler:
         if "flags" in part:
             self._parse_part_flags(part)
 
+        if "guid" in part:
+            if not isinstance(part["guid"], str):
+                raise ValueError(f"partition '{label}': 'guid' shall be a string")
+            try:
+                part["guid"] = str(uuid.UUID(part["guid"])).lower()
+            except (ValueError, AttributeError):
+                raise ValueError(f"partition '{label}' has invalid guid '{part['guid']}'")
+            if self._table != "gpt":
+                raise ValueError(
+                    f"partition '{label}' has 'guid', which needs a 'gpt' "
+                    f"partition table (this image's table is '{self._table}')")
+            if is_verity_hash:
+                raise ValueError(
+                    f"partition '{label}' has type 'verity-hash' and 'guid', "
+                    "which may not be used together -- verity-hash partitions "
+                    "derive their GUIDs from the root hash")
+            if part.get("verity"):
+                raise ValueError(
+                    f"partition '{label}' has 'guid' and 'verity: true', "
+                    "which may not be used together -- verity partitions derive "
+                    "their GUIDs from the root hash")
+
+        if "type-guid" in part:
+            if not isinstance(part["type-guid"], str):
+                raise ValueError(f"partition '{label}': 'type-guid' shall be a string")
+            try:
+                part["type-guid"] = str(uuid.UUID(part["type-guid"])).upper()
+            except (ValueError, AttributeError):
+                raise ValueError(
+                    f"partition '{label}' has invalid type-guid '{part['type-guid']}'")
+            if self._table != "gpt":
+                raise ValueError(
+                    f"partition '{label}' has 'type-guid', which needs a 'gpt' "
+                    f"partition table (this image's table is '{self._table}')")
+            if is_verity_hash:
+                raise ValueError(
+                    f"partition '{label}' has type 'verity-hash' and 'type-guid', "
+                    "which may not be used together -- verity-hash partitions use "
+                    "a dedicated DPS type GUID")
+            for f in part.get("flags", []):
+                if f in ("boot", "lvm", "xbootldr"):
+                    raise ValueError(
+                        f"partition '{label}' has 'type-guid' and flag '{f}', "
+                        "which may not be used together")
+
         if "where" not in part and part["_lvm"] == False and not is_verity_hash:
-            raise ValueError("'where' not defined in partition '%s'!" % label)
+            if "type-guid" in part:
+                if "size" not in part:
+                    raise ValueError(
+                        f"'size' of unmounted partition '{label}' was not defined")
+                part["_size"] = part["size"]
+            else:
+                raise ValueError(f"'where' not defined in partition '{label}'!")
         if is_verity_hash and "where" in part:
             raise ValueError(
                 "partition '%s' has type 'verity-hash', which is never "

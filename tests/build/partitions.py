@@ -881,3 +881,190 @@ class OstreeSysroot(avocado.Test):
                 {"label": "var", "where": "/var"},
                 {"label": "ro", "where": "/data", "type": "squashfs"}]))
         self.assertIn("read-only", str(cm.exception))
+
+
+class PartitionGuid(avocado.Test):
+    def test_explicit_guid_is_accepted_on_gpt_table(self):
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "table": "gpt",
+                "partitions": [
+                    {"label": "root", "where": "/",
+                     "guid": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"},
+                ],
+            },
+        })
+        self.assertEqual(ph.partitions[0]["guid"],
+                         "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+
+    def test_guid_must_be_a_string(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "partitions": [{"label": "root", "where": "/", "guid": 1234}],
+                },
+            })
+        self.assertIn("shall be a string", str(cm.exception))
+
+    def test_invalid_guid_syntax_is_refused(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "partitions": [{"label": "root", "where": "/", "guid": "not-a-guid"}],
+                },
+            })
+        self.assertIn("invalid guid", str(cm.exception))
+
+    def test_guid_is_refused_on_msdos_table(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "msdos",
+                    "partitions": [
+                        {"label": "root", "where": "/",
+                         "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+                    ],
+                },
+            })
+        self.assertIn("needs a 'gpt' partition table", str(cm.exception))
+
+    def test_guid_is_refused_on_verity_hash_partition(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "partitions": [
+                        {"label": "usr", "where": "/usr", "type": "erofs", "verity": True},
+                        {"label": "usr-verity", "type": "verity-hash", "verity-for": "usr",
+                         "size": "64MiB", "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+                        {"label": "rootfs", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("verity-hash partitions derive their GUIDs", str(cm.exception))
+
+    def test_guid_is_refused_on_verity_protected_partition(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "partitions": [
+                        {"label": "usr", "where": "/usr", "type": "erofs", "verity": True,
+                         "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+                        {"label": "usr-verity", "type": "verity-hash", "verity-for": "usr",
+                         "size": "64MiB"},
+                        {"label": "rootfs", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("verity partitions derive their GUIDs", str(cm.exception))
+
+
+class PartitionTypeGuid(avocado.Test):
+    def test_explicit_type_guid_is_accepted_on_gpt_table(self):
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "table": "gpt",
+                "partitions": [
+                    {"label": "root", "where": "/",
+                     "type-guid": "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"},
+                ],
+            },
+        })
+        self.assertEqual(ph.partitions[0]["type-guid"],
+                         "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7")
+
+    def test_type_guid_must_be_a_string(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "partitions": [{"label": "root", "where": "/", "type-guid": 1234}],
+                },
+            })
+        self.assertIn("shall be a string", str(cm.exception))
+
+    def test_invalid_type_guid_syntax_is_refused(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "partitions": [{"label": "root", "where": "/", "type-guid": "invalid"}],
+                },
+            })
+        self.assertIn("invalid type-guid", str(cm.exception))
+
+    def test_type_guid_is_refused_on_msdos_table(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "msdos",
+                    "partitions": [
+                        {"label": "root", "where": "/",
+                         "type-guid": "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"},
+                    ],
+                },
+            })
+        self.assertIn("needs a 'gpt' partition table", str(cm.exception))
+
+    def test_type_guid_cannot_combine_with_boot_flag(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "partitions": [
+                        {"label": "esp", "where": "/efi", "type": "vfat", "flags": ["boot"],
+                         "type-guid": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("may not be used together", str(cm.exception))
+
+    def test_unmounted_partition_with_type_guid_and_size_is_accepted(self):
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "table": "gpt",
+                "partitions": [
+                    {"label": "bgenv0", "type": "vfat", "size": "16MiB",
+                     "type-guid": "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"},
+                    {"label": "root", "where": "/"},
+                ],
+            },
+        })
+        self.assertNotIn("bgenv0", [m["label"] for m in ph.mounts])
+        bgenv = next(p for p in ph.partitions if p["label"] == "bgenv0")
+        self.assertEqual(bgenv["_size"], 16 * 1024 * 1024)
+
+    def test_unmounted_partition_with_type_guid_needs_size(self):
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse({
+                "image": {
+                    "filename": "disk.img",
+                    "table": "gpt",
+                    "partitions": [
+                        {"label": "bgenv0", "type": "vfat",
+                         "type-guid": "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"},
+                        {"label": "root", "where": "/"},
+                    ],
+                },
+            })
+        self.assertIn("'size' of unmounted partition 'bgenv0' was not defined", str(cm.exception))
+

@@ -594,6 +594,66 @@ class DiscoverablePartitionsAreIdentifiedByRole(avocado.Test):
                     {"type": "verity-hash", "verity-for": "root"}, architecture, by_label),
                 guid)
 
+
+class PartitionDeviceGuids(avocado.Test):
+    def setUp(self):
+        try:
+            from seine.imager.imager import Imager
+        except ImportError as e:
+            self.cancel("python3-guestfs is missing: %s" % e)
+        self.imager = Imager.__new__(Imager)
+
+    def test_explicit_guid_and_type_guid_are_set(self):
+        class MockGuestfs:
+            def __init__(self):
+                self.calls = []
+            def part_add(self, dev, prlogex, start, end):
+                self.calls.append(("add", prlogex, start, end))
+            def part_set_name(self, dev, idx, name):
+                self.calls.append(("name", idx, name))
+            def part_set_gpt_guid(self, dev, idx, guid):
+                self.calls.append(("guid", idx, guid))
+            def part_set_gpt_type(self, dev, idx, gpt_type):
+                self.calls.append(("type", idx, gpt_type))
+
+        g = MockGuestfs()
+        part = {
+            "label": "custom",
+            "_start_mib": 1,
+            "_end_mib": 17,
+            "guid": "12345678-1234-5678-1234-567812345678",
+            "type-guid": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+        }
+        self.imager._partition_device(g, "gpt", part, 1, "amd64", {})
+        self.assertIn(("guid", 1, "12345678-1234-5678-1234-567812345678"), g.calls)
+        self.assertIn(("type", 1, "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7"), g.calls)
+
+    def test_default_guid_is_derived_when_omitted(self):
+        class MockGuestfs:
+            def __init__(self):
+                self.calls = []
+            def part_add(self, dev, prlogex, start, end): pass
+            def part_set_name(self, dev, idx, name): pass
+            def part_set_gpt_guid(self, dev, idx, guid):
+                self.calls.append(("guid", idx, guid))
+            def part_set_gpt_type(self, dev, idx, gpt_type):
+                self.calls.append(("type", idx, gpt_type))
+
+        g = MockGuestfs()
+        self.imager.source = type("Source", (), {"spec": {"imager": {}}})()
+        self.imager._identity_seed = lambda: "test-seed"
+        part = {
+            "label": "data",
+            "_start_mib": 1,
+            "_end_mib": 17,
+            "_prefix": "/var/",
+        }
+        self.imager._partition_device(g, "gpt", part, 1, "amd64", {})
+        guid_calls = [c for c in g.calls if c[0] == "guid"]
+        self.assertEqual(len(guid_calls), 1)
+        self.assertEqual(guid_calls[0][2], self.imager._uuid_for("partition", "data"))
+
+
 class CarriedCache(avocado.Test):
     """
     :avocado: disable
