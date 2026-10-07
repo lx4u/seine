@@ -129,6 +129,8 @@ and `sbattach` on the host). `ostree_update_powercut.py` cuts power to QEMU
 across update failpoints and random moments to verify recovery and
 invariants. `ostree_update_soak.py` verifies updates across five versions,
 self-updating the script and refusing updates on a full ESP.
+`ostree_update_delta.py` tests static deltas, verifying updates via
+delta and object-fetch paths.
 
 
 ## Coding style

@@ -130,13 +130,17 @@ class UpdateGuest:
 
     # Builds the example as 'version' into the payload. 'extra' is a spec
     # that is loaded after the example. Returns the disk image.
-    def build(self, version, extra=""):
+    def build(self, version, extra="", deltas_from=None):
         disk = os.path.join(self.workdir, f"disk-{version}.img")
         peer = os.path.join(self.workdir, f"version-{version}.yml")
+        deltas = ""
+        if deltas_from:
+            deltas_list = ", ".join(f'"{d}"' for d in deltas_from)
+            deltas = f"            deltas-from: [{deltas_list}]\n"
         with open(peer, "w") as f:
             f.write(f"image:\n    filename: {disk}\n    ostree:\n"
                     f'        version: "{version}"\n'
-                    f"        payload:\n            path: {self.payload}\n")
+                    f"        payload:\n            path: {self.payload}\n{deltas}")
         specs = [peer]
         # The same tools in every version keep the rootfs the same.
         extras = ([EFITOOLS] if self.secure_boot else []) + ([extra] if extra else [])
@@ -156,10 +160,44 @@ class UpdateGuest:
         self.assertTrue(os.path.isfile(os.path.join(self.payload, "uki", f"debian-{version}.efi")))
         return disk
 
+    # Runs a build that is expected to fail. Returns the build log.
+    def build_fails(self, version, extra="", deltas_from=None):
+        disk = os.path.join(self.workdir, f"disk-{version}.img")
+        peer = os.path.join(self.workdir, f"version-{version}.yml")
+        deltas = ""
+        if deltas_from:
+            deltas_list = ", ".join(f'"{d}"' for d in deltas_from)
+            deltas = f"            deltas-from: [{deltas_list}]\n"
+        with open(peer, "w") as f:
+            f.write(f"image:\n    filename: {disk}\n    ostree:\n"
+                    f'        version: "{version}"\n'
+                    f"        payload:\n            path: {self.payload}\n{deltas}")
+        specs = [peer]
+        extras = ([EFITOOLS] if self.secure_boot else []) + ([extra] if extra else [])
+        for number, text in enumerate(extras):
+            specs.append(os.path.join(self.workdir, f"extra-{version}-{number}.yml"))
+            with open(specs[-1], "w") as f:
+                f.write(text)
+        environment = dict(os.environ)
+        environment["PATH"] = f"{os.path.dirname(sys.executable)}:{environment.get('PATH', '')}"
+        log = os.path.join(self.outputdir, f"build-{version}.log")
+        with open(log, "w") as f:
+            built = subprocess.run(
+                [sys.executable, "-u", "./seine.py", "build", "-v", EXAMPLE] + specs,
+                cwd=path_to_sources, env=environment, stdout=f,
+                stderr=subprocess.STDOUT)
+        self.assertNotEqual(built.returncode, 0, f"build of {version} unexpectedly succeeded")
+        with open(log) as f:
+            return f.read()
+
     # Starts the guest on a copy-on-write overlay of 'disk' and logs in. With
     # Secure Boot, the first start enrols the keys.
     def start(self, disk=None, watchdog=None):
         if disk:
+            if self.guest:
+                self.guest.close()
+                self.guest = None
+            shutil.copy(os.path.join(qemu_guest.OVMF, "OVMF_VARS_4M.fd"), self.variables)
             self.disk = os.path.join(self.workdir, "disk.qcow2")
             qemu_guest.overlay(disk, self.disk)
         self.starts = getattr(self, "starts", 0) + 1
@@ -213,7 +251,7 @@ class UpdateGuest:
     # Runs the agent once. Returns its status file as a dict.
     def update(self):
         self.wait_for_network()
-        self.sh(AGENT, 300)
+        self.last_update_output = self.sh(AGENT, 300)
         lines = self.sh("cat /var/lib/seine-update/status").splitlines()
         return dict(line.split("=", 1) for line in lines)
 
