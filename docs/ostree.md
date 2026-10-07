@@ -235,6 +235,26 @@ so a test can cut the power. The steps are `after-elect`, `after-pull`,
 `after-denylist` and `after-undeploy`. Leave the variable unset on a
 device.
 
+### State after a power cut
+
+If power is cut during an update, the device boots into a safe
+state. At boot, `seine-update-reconcile.service` repairs any partial
+filesystem changes before the next update run:
+
+| Failpoint | State when power is cut | Booted version | Action of `reconcile` | Outcome of subsequent run |
+|---|---|---|---|---|
+| `after-elect` | Running system pinned in ostree; pull not started | Current | None | Applies update normally |
+| `after-pull` | New commit fetched into repo; no deployment | Current | None | Deploys and installs UKI |
+| `after-prune-ukis` | Non-last-known-good UKIs pruned from ESP | Current | None | Deploys and installs UKI |
+| `after-deploy` | New deployment exists; deployment symlink missing | Current | Recreates deployment symlink | Reuses deployment, installs UKI |
+| `after-link` | New deployment and symlink exist | Current | None | Installs UKI |
+| `after-prune` | Dead symlinks pruned; UKI not on ESP | Current | None | Installs UKI |
+| `after-uki` | New trial UKI written to ESP; sync not called yet | Current or new | Blesses new UKI if booted, or repairs | Applies update or already on new version |
+| `after-bind` | New UKI written and verified; status not written | New (trial) | Blesses new UKI, pins new deployment | Already on new version |
+| `after-denylist` | Failed version added to denylist; UKI and deployment present | Current | Removes failed UKI, deployment, link | Failed version remains denied |
+| `after-undeploy` | Failed UKI and deployment removed; symlink dangling | Current | Removes dangling symlink | Failed version remains denied |
+
+
 ## Updating a device
 
 `examples/common/ostree-update.yaml` is a fragment that makes an image

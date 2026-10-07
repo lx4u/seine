@@ -125,7 +125,10 @@ keep it in `~/.cache/seine-tests/` until the imager sources change.
 payload and updates a guest with the agent. It takes ten minutes and
 serves the payload on port 8000 of the host. `ostree_update_secure_boot.py`
 runs it again with the dev key enrolled (it needs `efitools`, `sbsign`
-and `sbattach` on the host).
+and `sbattach` on the host). `ostree_update_powercut.py` cuts power to QEMU
+across update failpoints and random moments to verify recovery and
+invariants.
+
 
 ## Coding style
 
