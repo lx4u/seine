@@ -69,6 +69,8 @@ playbook:
 class UpdateGuest:
     # True: the guest runs with Secure Boot on, the dev key enrolled as db.
     secure_boot = False
+    # Watchdog device: True ("i6300esb"), device name string, or None (disabled).
+    watchdog = None
 
     def setUp(self):
         self.guest = None
@@ -156,14 +158,16 @@ class UpdateGuest:
 
     # Starts the guest on a copy-on-write overlay of 'disk' and logs in. With
     # Secure Boot, the first start enrols the keys.
-    def start(self, disk=None):
+    def start(self, disk=None, watchdog=None):
         if disk:
             self.disk = os.path.join(self.workdir, "disk.qcow2")
             qemu_guest.overlay(disk, self.disk)
         self.starts = getattr(self, "starts", 0) + 1
         log = os.path.join(self.outputdir, f"serial-{self.starts}.log")
+        effective_watchdog = self.watchdog if watchdog is None else watchdog
         self.guest = qemu_guest.Guest(self.disk, self.variables, log,
-                                      secure_boot=self.secure_boot, share=self.share)
+                                      secure_boot=self.secure_boot, share=self.share,
+                                      watchdog=effective_watchdog)
         self.login()
         if disk and self.secure_boot:
             self.enrol()

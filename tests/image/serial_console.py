@@ -84,6 +84,37 @@ class QemuCommand(avocado.Test):
         argv = qemu_guest.qemu_argv("d.qcow2", "vars.fd", share="/x")
         self.assertIn("local,path=/x,mount_tag=host,security_model=none,id=host", argv)
 
+    def test_watchdog_adds_i6300esb_and_reset_action(self):
+        argv = qemu_guest.qemu_argv("d.qcow2", "vars.fd", watchdog=True)
+        self.assertIn("-device", argv)
+        idx = argv.index("-device")
+        self.assertEqual(argv[idx + 1], "i6300esb")
+        self.assertIn("-watchdog-action", argv)
+        idx_act = argv.index("-watchdog-action")
+        self.assertEqual(argv[idx_act + 1], "reset")
+
+    def test_watchdog_named_device_on_arm64(self):
+        argv = qemu_guest.qemu_argv("d.qcow2", "vars.fd", watchdog="sbsa-gwdt", arch="arm64")
+        self.assertIn("qemu-system-aarch64", argv)
+        self.assertIn("virt", argv)
+        self.assertIn("-device", argv)
+        idx = argv.index("-device")
+        self.assertEqual(argv[idx + 1], "sbsa-gwdt")
+        self.assertIn("-watchdog-action", argv)
+        idx_act = argv.index("-watchdog-action")
+        self.assertEqual(argv[idx_act + 1], "reset")
+
+    def test_arm64_plain_firmware_and_virt_machine(self):
+        argv = qemu_guest.qemu_argv("d.qcow2", "vars.fd", arch="arm64")
+        self.assertIn("qemu-system-aarch64", argv)
+        self.assertIn("virt", argv)
+        self.assertTrue(any(a.endswith("AAVMF_CODE.fd") for a in argv))
+
+    def test_arm64_secure_boot_needs_virt_secure(self):
+        argv = qemu_guest.qemu_argv("d.qcow2", "vars.fd", secure_boot=True, arch="arm64")
+        self.assertIn("virt,secure=on", argv)
+        self.assertTrue(any(a.endswith("AAVMF_CODE.secboot.fd") for a in argv))
+
 class Overlay(avocado.Test):
     def setUp(self):
         if shutil.which("qemu-img") is None:

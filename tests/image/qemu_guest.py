@@ -7,6 +7,8 @@ import subprocess
 import threading
 import time
 
+from seine.utils import HOST_ARCH
+
 END = "@@END@@"
 
 # Terminal escape sequences, and the start of one that has not ended yet.
@@ -99,6 +101,7 @@ class Console:
         self.log.close()
 
 OVMF = "/usr/share/OVMF"
+AAVMF = "/usr/share/AAVMF"
 
 # A qcow2 file on top of the raw 'base', which is never written, so a
 # guest can write and reboot.
@@ -110,21 +113,43 @@ def overlay(base, path):
 # The QEMU command line: serial console on stdio, 'disk' (qcow2) and the
 # UEFI variables file 'variables'. The Secure Boot firmware needs SMM and a
 # locked flash. 'share' is a host directory the guest sees as 9p 'host'.
-def qemu_argv(disk, variables, secure_boot=False, share=None):
-    code = "OVMF_CODE_4M.secboot.fd" if secure_boot else "OVMF_CODE_4M.fd"
-    argv = [
-        "qemu-system-x86_64", "-machine",
-        "q35,smm=on" if secure_boot else "q35",
-        "-enable-kvm", "-cpu", "host", "-m", "2048", "-smp", "2",
-        "-display", "none", "-monitor", "none", "-serial", "stdio",
-        "-drive", "if=pflash,format=raw,readonly=on,file=%s" % os.path.join(OVMF, code),
-        "-drive", "if=pflash,format=raw,file=%s" % variables,
-        "-drive", "file=%s,format=qcow2,if=virtio" % disk,
-    ]
-    if secure_boot:
-        argv += ["-global", "driver=cfi.pflash01,property=secure,value=on"]
+# 'watchdog' adds an emulated hardware watchdog device (e.g. i6300esb).
+def qemu_argv(disk, variables, secure_boot=False, share=None, watchdog=None,
+              arch="amd64"):
+    if arch == "arm64":
+        code = "AAVMF_CODE.secboot.fd" if secure_boot else "AAVMF_CODE.fd"
+        argv = [
+            "qemu-system-aarch64", "-machine",
+            "virt,secure=on" if secure_boot else "virt",
+            "-m", "2048", "-smp", "2",
+            "-display", "none", "-monitor", "none", "-serial", "stdio",
+            "-drive", f"if=pflash,format=raw,readonly=on,file={os.path.join(AAVMF, code)}",
+            "-drive", f"if=pflash,format=raw,file={variables}",
+            "-drive", f"file={disk},format=qcow2,if=virtio",
+        ]
+        if HOST_ARCH == "arm64" and os.access("/dev/kvm", os.W_OK):
+            argv += ["-enable-kvm", "-cpu", "host"]
+        else:
+            argv += ["-cpu", "max"]
+    else:
+        code = "OVMF_CODE_4M.secboot.fd" if secure_boot else "OVMF_CODE_4M.fd"
+        argv = [
+            "qemu-system-x86_64", "-machine",
+            "q35,smm=on" if secure_boot else "q35",
+            "-enable-kvm", "-cpu", "host", "-m", "2048", "-smp", "2",
+            "-display", "none", "-monitor", "none", "-serial", "stdio",
+            "-drive", f"if=pflash,format=raw,readonly=on,file={os.path.join(OVMF, code)}",
+            "-drive", f"if=pflash,format=raw,file={variables}",
+            "-drive", f"file={disk},format=qcow2,if=virtio",
+        ]
+        if secure_boot:
+            argv += ["-global", "driver=cfi.pflash01,property=secure,value=on"]
+
+    if watchdog:
+        device = "i6300esb" if watchdog is True else watchdog
+        argv += ["-device", device, "-watchdog-action", "reset"]
     if share:
-        argv += ["-virtfs", "local,path=%s,mount_tag=host,security_model=none,id=host" % share]
+        argv += ["-virtfs", f"local,path={share},mount_tag=host,security_model=none,id=host"]
     return argv
 
 # What the root shell of the guest prints before it is silenced.
@@ -136,9 +161,13 @@ SHARE = "/var/host"
 
 # A QEMU guest with a root shell on its serial console.
 class Guest(Console):
-    def __init__(self, disk, variables, log, secure_boot=False, share=None):
+    def __init__(self, disk, variables, log, secure_boot=False, share=None,
+                 watchdog=None, arch="amd64"):
         self.share = share
-        super().__init__(qemu_argv(disk, variables, secure_boot, share), log)
+        self.watchdog = watchdog
+        self.arch = arch
+        super().__init__(qemu_argv(disk, variables, secure_boot, share,
+                                   watchdog=watchdog, arch=arch), log)
 
     # Waits for the shell and silences it, so that long lines are not echoed
     # back garbled.

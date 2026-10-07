@@ -371,6 +371,15 @@ A boot that reaches the login but has a failed unit counts as bad too:
 `systemd-boot-check-no-failures` does not bless it, so each reboot uses
 one try. The last-known-good deployment stays pinned during those boots.
 
+When `image: watchdog` is enabled, EFI Boot Guard arms a hardware watchdog
+timer before chainloading `systemd-boot`. If a new UKI hangs during early boot
+before userspace starts (for example during kernel decompression or
+initramfs execution), the hardware watchdog timer expires and resets the
+machine. Once boot tries are exhausted, `systemd-boot` falls back to the
+last-known-good UKI. The test `tests/image/ostree_update_watchdog.py` verifies
+this watchdog reset and fallback under QEMU with an emulated hardware watchdog
+device (`-device i6300esb -watchdog-action reset`).
+
 ### Replacing the keys
 
 The development keys are public. Make two keys of your own, one for the
