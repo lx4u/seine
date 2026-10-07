@@ -1352,6 +1352,67 @@ class EfiBootGuardConfigPartitions(avocado.Test):
                     ],
                 },
             })
-        self.assertIn("'size' of unmounted partition 'cfg1' was not defined", str(cm.exception))
+    def test_auto_creates_config_partitions_when_omitted(self):
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "table": "gpt",
+                "watchdog": "30s",
+                "partitions": [
+                    {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                    {"label": "root", "where": "/"},
+                ],
+            },
+        })
+        bgenv = [p for p in ph.partitions if ph._is_bgenv(p)]
+        self.assertEqual([p["label"] for p in bgenv], ["BGENV1", "BGENV2"])
+        for p in bgenv:
+            self.assertEqual(p["type"], "vfat")
+            self.assertEqual(p["_size"], 16 * 1024 * 1024)
+            self.assertIn("bgenv", p.get("flags", []))
+            self.assertNotIn(p["label"], [m["label"] for m in ph.mounts])
+        ph.compute_sizes()
+        self.assertEqual(bgenv[0]["_end_mib"] - bgenv[0]["_start_mib"], 16)
+        self.assertEqual(bgenv[1]["_end_mib"] - bgenv[1]["_start_mib"], 16)
+
+    def test_suppresses_auto_creation_when_config_partitions_declared(self):
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "table": "gpt",
+                "watchdog": "30s",
+                "partitions": [
+                    {"label": "cfg1", "flags": ["bgenv"], "type": "vfat", "size": "16MiB"},
+                    {"label": "cfg2", "flags": ["bgenv"], "type": "vfat", "size": "16MiB"},
+                    {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                    {"label": "root", "where": "/"},
+                ],
+            },
+        })
+        self.assertEqual(len(ph.partitions), 4)
+        labels = [p["label"] for p in ph.partitions]
+        self.assertNotIn("BGENV1", labels)
+        self.assertNotIn("BGENV2", labels)
+        self.assertIn("cfg1", labels)
+        self.assertIn("cfg2", labels)
+
+    def test_watchdog_zero_does_not_auto_create_config_partitions(self):
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "table": "gpt",
+                "watchdog": 0,
+                "partitions": [
+                    {"label": "esp", "where": "/efi", "type": "vfat", "size": "64MiB"},
+                    {"label": "root", "where": "/"},
+                ],
+            },
+        })
+        self.assertEqual(len(ph.partitions), 2)
+        self.assertEqual([p for p in ph.partitions if ph._is_bgenv(p)], [])
+
 
 

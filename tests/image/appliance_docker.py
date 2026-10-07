@@ -148,10 +148,10 @@ class ApplianceDockerTest(avocado.Test):
             },
         }
         dockerfile = build_dockerfile(ImagerAppliance(DummySource(spec)))
-        self.assertIn("FROM target-bootstrap:latest AS builder", dockerfile)
-        self.assertIn("FROM target-bootstrap:latest AS base", dockerfile)
+        builder_stage = dockerfile.split("FROM target-bootstrap:latest AS base")[0]
+        self.assertIn("efibootguard", builder_stage)
         runtime_stage = dockerfile.split("FROM target-bootstrap:latest AS base")[1]
-        for tool in ["binutils", "sbsigntool", "libfaketime", "systemd-ukify"]:
+        for tool in ["binutils", "sbsigntool", "libfaketime", "systemd-ukify", "efibootguard"]:
             self.assertIn(tool, runtime_stage)
         self.assertIn("COPY --from=builder /appliance /appliance", runtime_stage)
         self.assertIn("COPY --from=builder /extra-tools /extra-tools", runtime_stage)

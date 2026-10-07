@@ -603,7 +603,7 @@ class PartitionHandler:
         if "ostree" in image:
             self.ostree = self._parse_ostree(image["ostree"])
         self._validate_ostree(spec)
-        self._validate_watchdog(spec)
+        self._validate_watchdog(spec, image)
         return spec
 
     def _parse_ostree_settings(self, where, settings):
@@ -873,7 +873,20 @@ class PartitionHandler:
                 "'verity-hash' partition names them in 'verity-for:': %s"
                 % ", ".join(sorted(missing)))
 
-    def _validate_watchdog(self, spec):
+    def _auto_create_bgenv(self, image):
+        for label in ("BGENV1", "BGENV2"):
+            cfg_part = {
+                "label": label,
+                "type": "vfat",
+                "size": "16MiB",
+                "flags": ["bgenv"],
+                "type-guid": "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7",
+            }
+            parsed_cfg = self._parse_part(cfg_part)
+            self.partitions.append(parsed_cfg)
+        image["partitions"] = sorted(self.partitions, key=lambda p: p["priority"])
+
+    def _validate_watchdog(self, spec, image):
         bgenv_partitions = [p for p in self.partitions if self._is_bgenv(p)]
         if self.watchdog and self.watchdog > 0:
             has_esp = any(
@@ -884,6 +897,9 @@ class PartitionHandler:
                 raise ValueError(
                     f"'image: watchdog: {self._raw_watchdog}' requires a UEFI "
                     "disk with an EFI system partition mounted at /efi")
+            if not bgenv_partitions:
+                self._auto_create_bgenv(image)
+                bgenv_partitions = [p for p in self.partitions if self._is_bgenv(p)]
         if bgenv_partitions:
             if len(bgenv_partitions) < 2:
                 raise ValueError(

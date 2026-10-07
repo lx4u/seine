@@ -8,6 +8,7 @@ from seine.partition import VERITY_HASH_TYPE
 GPT_TYPE_ESP = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B"
 GPT_TYPE_LVM = "E6D6D379-F507-44C2-A23C-238F2A3DF928"
 GPT_TYPE_XBOOTLDR = "BC13C2FF-59E6-4262-A352-B275FD6F7172"
+GPT_TYPE_BASIC_DATA = "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7"
 
 # DPS: root and '/usr' GUIDs are arch-specific (auto-discovery must not
 # pick the wrong kernel's root on a mixed-arch disk); '/var', '/var/tmp',
@@ -95,6 +96,8 @@ class GptLayout:
                 g.part_set_gpt_type(DEVICE, index, GPT_TYPE_LVM)
             elif "xbootldr" in flags:
                 g.part_set_gpt_type(DEVICE, index, GPT_TYPE_XBOOTLDR)
+            elif "bgenv" in flags or part.get("label", "").lower().startswith("bgenv"):
+                g.part_set_gpt_type(DEVICE, index, GPT_TYPE_BASIC_DATA)
             else:
                 dps_type = self._dps_gpt_type(part, target_arch, partitions_by_label)
                 if dps_type is not None:

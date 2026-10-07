@@ -23,6 +23,7 @@ from seine.imager.ostree    import OstreeSysroot
 from seine.imager.uki       import UkiAnchor
 from seine.imager.signers   import BootSigners
 from seine.imager.gpt       import GptLayout
+from seine.imager.efibootguard import EfiBootGuard
 from seine.partition        import RO_FSTYPES
 from seine.tasks import Task
 from seine.container import ContainerEngine
@@ -96,7 +97,7 @@ after_launch = lambda: None
 # Settings of an ostree image that change with each release, not with its layout.
 OSTREE_RELEASE_KEYS = ("version", "payload", "manifest-key", "gpg-key")
 
-class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor):
+class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor, EfiBootGuard):
     def __init__(self, source):
         self.source = source
         # Mount -> where an ostree build mounted it, see _where().
@@ -502,6 +503,8 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
                         mount_devices = self._deploy_ostree(
                             g, ph, source, mounts, part_devices, vol_devices,
                             part_index, container_devs, boot_owner, boot_entries)
+                        if source == boot_owner or source is None:
+                            self._initialize_bgenv(g, ph, part_devices)
                         g.umount_all()
                         # Fresh again for the next source: the stage held
                         # the whole root file-system.
@@ -515,6 +518,8 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor)
                         container_devices=container_devs)
                     self._install_boot_entry(
                         g, part_index, source, mounts, boot_owner, boot_entries)
+                    if source == boot_owner or source is None:
+                        self._initialize_bgenv(g, ph, part_devices)
                     self._normalize_mount_timestamps(g, mounts, mount_devices)
                     self._scan_boot_signers(g, mounts)
                     built_sizes = self._build_ro_images(

@@ -1845,6 +1845,8 @@ When watchdog arming is enabled (`watchdog > 0`):
    by flag `bgenv` or labels starting with `bgenv`), at least two redundant
    partitions with `type: vfat` and a minimum size of 16 MiB each must be
    provided without mountpoints (`where`).
+ * If config partitions are omitted, two 16 MiB partitions labeled `BGENV1`
+   and `BGENV2` (`type: vfat`) are automatically allocated.
 
 ### bootlets
 
