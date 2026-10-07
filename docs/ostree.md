@@ -371,6 +371,14 @@ A boot that reaches the login but has a failed unit counts as bad too:
 `systemd-boot-check-no-failures` does not bless it, so each reboot uses
 one try. The last-known-good deployment stays pinned during those boots.
 
+A boot where userspace starts but never reaches `boot-complete.target`
+(for instance, a unit ordered before it never completes) is reset by the
+job timeout (`JobTimeoutSec=300`, `JobTimeoutAction=reboot-force` in
+`/usr/lib/systemd/system/boot-complete.target.d/10-seine.conf`). Each
+timeout reset consumes one try. After three failed tries, `systemd-boot`
+falls back to the last-known-good UKI. The test
+`tests/image/ostree_update_hang.py` verifies this reset and fallback.
+
 When `image: watchdog` is enabled, EFI Boot Guard arms a hardware watchdog
 timer before chainloading `systemd-boot`. If a new UKI hangs during early boot
 before userspace starts (for example during kernel decompression or
