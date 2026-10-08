@@ -183,8 +183,6 @@ def render_remote_artifacts(
     if not artifacts:
         lines.append("")
         lines.append("   No artifacts found in remote builds.")
-        lines.append("")
-        lines.append(" [Enter] Download Artifact   [d] Download All   [↑/↓] Select")
         return "\n".join(lines)
 
     lines.append(
@@ -208,8 +206,6 @@ def render_remote_artifacts(
             f"{prefix}{short_name:<26} {size_str:<10} {short_id:<14} {short_proj:<14} {arch:<8} {download}".rstrip()
         )
 
-    lines.append("")
-    lines.append(" [Enter] Download Artifact   [d] Download All   [↑/↓] Select")
     return "\n".join(lines)
 
 def render_remote_users(

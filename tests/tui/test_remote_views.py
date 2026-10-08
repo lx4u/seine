@@ -418,7 +418,7 @@ class RemoteViewsTest(avocado.Test):
         rendered = self.render_remote_artifacts([])
         self.assertIn("REMOTE ARTIFACTS", rendered)
         self.assertIn("No artifacts found in remote builds.", rendered)
-        self.assertIn("[Enter] Download Artifact", rendered)
+        self.assertNotIn("[Enter] Download Artifact", rendered)
 
     def test_render_artifacts_marks_expired_ones(self):
         rendered = self.render_remote_artifacts([
@@ -459,10 +459,23 @@ class RemoteViewsTest(avocado.Test):
         self.assertIn("b11111111111", rendered0)
         self.assertIn("distro-core", rendered0)
         self.assertIn("amd64", rendered0)
+        self.assertNotIn("[Enter] Download Artifact", rendered0)
 
         rendered1 = self.render_remote_artifacts(artifacts, selected_index=1)
         self.assertIn("   pc-image.img", rendered1)
         self.assertIn(" ▸ pc-image.rootfs.tar", rendered1)
+        self.assertNotIn("[Enter] Download Artifact", rendered1)
+
+    def test_download_artifact_key_on_artifacts_tab_is_noop(self):
+        screen = self.RemoteScreen()
+        screen.say = mock.Mock()
+        screen.active_tab = 3
+        screen.remote_artifacts = [
+            {"name": "disk.raw", "build_id": "bld-1", "project": "demo"}
+        ]
+        screen.selected_indices[3] = 0
+        screen.action_download_artifact()
+        screen.say.assert_not_called()
 
     def test_extract_remote_artifacts(self):
         builds = [

@@ -569,14 +569,11 @@ class RemoteScreen(BaseScreen):
             _worker()
 
     def action_download_artifact(self):
-        if self.active_tab not in (1, 3):
+        if self.active_tab != 1:
             return
         item = self._selected_item()
         if not item:
-            lbl = "build" if self.active_tab == 1 else "artifact"
-            self.say(f"no {lbl} selected", warning=True)
-            return
-        if self.active_tab == 3 and self._warn_if_expired(item):
+            self.say("no build selected", warning=True)
             return
         build_id = str(item.get("id") or item.get("build_id") or "")
         self._trigger_download(build_id, artifact_name=None)

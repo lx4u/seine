@@ -185,9 +185,10 @@ class RemoteScreenTest(avocado.Test):
         screen._trigger_download = mock.Mock()
         with mock.patch.object(self.RemoteScreen, "app", new_callable=mock.PropertyMock, return_value=mock_app):
             screen.action_download_artifact()
+            self.assertEqual(screen.say.call_count, 0)
             screen.action_view_logs()
         screen._trigger_download.assert_not_called()
-        self.assertEqual(screen.say.call_count, 2)
+        self.assertEqual(screen.say.call_count, 1)
         screen.say.assert_called_with(
             f"artifacts of build {'b' * 12} expired (storage pressure); rebuild to get them again",
             warning=True,
