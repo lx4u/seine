@@ -96,6 +96,10 @@ def child_env(
         env[FEED_AUTH_ENV] = feedauth_file
     env["SEINE_BUILD_DIR"] = build_dir
     env["SEINE_BUILD_ID"] = manifest.build_id
+    env.pop("SEINE_STDLIB_DIR", None)
+    stdlib_dir = os.path.join(os.path.dirname(build_dir), ".seine-stdlib")
+    if os.path.isdir(stdlib_dir):
+        env["SEINE_STDLIB_DIR"] = stdlib_dir
     # Ensure child seine process flushes stdout/stderr line by line.
     env["PYTHONUNBUFFERED"] = "1"
     return env
@@ -107,15 +111,23 @@ class SpecPathError(ValueError):
 
 def resolve_spec(job_dir: str, spec_file: str) -> str:
     """Return spec_file relative to job_dir, refusing anything that leaves it."""
+    root = os.path.realpath(job_dir)
+    if spec_file.startswith("stdlib:"):
+        subpath = spec_file[len("stdlib:"):].lstrip("/")
+        staged_dir = os.path.join(root, ".seine-stdlib")
+        for cand in [subpath, f"{subpath}.yml", f"{subpath}.yaml"]:
+            target = os.path.realpath(os.path.join(staged_dir, cand))
+            if target.startswith(root + os.sep) and os.path.isfile(target):
+                return os.path.relpath(target, root)
     if os.path.isabs(spec_file):
         raise SpecPathError(f"spec path {spec_file!r} is absolute")
-    root = os.path.realpath(job_dir)
     path = os.path.realpath(os.path.join(root, spec_file))
     if path == root or not path.startswith(root + os.sep):
         raise SpecPathError(f"spec path {spec_file!r} escapes the job directory")
     if not os.path.isfile(path):
         raise SpecPathError(f"spec file {spec_file!r} not found in the job directory")
     return os.path.relpath(path, root)
+
 
 
 class SubprocessExecutor:

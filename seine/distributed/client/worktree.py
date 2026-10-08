@@ -128,7 +128,16 @@ def _ignore_filter(root_dir: str, ignore_rules: Optional[list[str]]) -> IgnoreFi
 def _add_staged(tar: tarfile.TarFile, staged: Optional[dict[str, str]]) -> None:
     """Add files from outside the project under the archive names given."""
     for arcname, source in sorted((staged or {}).items()):
-        tar.add(source, arcname=arcname, recursive=False, filter=_normalise)
+        if os.path.isdir(source) and not os.path.islink(source):
+            for dirpath, dirnames, filenames in os.walk(source):
+                rel = os.path.relpath(dirpath, source).replace(os.sep, "/")
+                arc_dir = f"{arcname}/{rel}" if rel != "." else arcname
+                tar.add(dirpath, arcname=arc_dir, recursive=False, filter=_normalise_dir)
+                for f in sorted(filenames):
+                    tar.add(os.path.join(dirpath, f), arcname=f"{arc_dir}/{f}",
+                            recursive=False, filter=_normalise)
+        else:
+            tar.add(source, arcname=arcname, recursive=False, filter=_normalise)
 
 
 def _is_suspicious(name: str) -> bool:
@@ -297,8 +306,19 @@ def pack_sparse_worktree(
     """
     root_dir = os.path.abspath(root_dir)
     outside = {os.path.realpath(p) for p in (staged or {}).values()}
-    paths = [p for p in paths if os.path.realpath(p) not in outside]
+
+    def _is_outside(path: str) -> bool:
+        real = os.path.realpath(path)
+        if real in outside:
+            return True
+        for out in outside:
+            if real.startswith(out + os.sep) or (os.path.isdir(real) and out.startswith(real + os.sep)):
+                return True
+        return False
+
+    paths = [p for p in paths if not _is_outside(p)]
     entries = _sparse_entries(root_dir, paths, _ignore_filter(root_dir, None))
+
     if out_path is None:
         fd, out_path = tempfile.mkstemp(suffix=".tar.zst", prefix="worktree-")
         os.close(fd)

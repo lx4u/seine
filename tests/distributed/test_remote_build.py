@@ -868,9 +868,52 @@ class RemoteBuildTest(Test):
         self.run_build()
         self.assertEqual(self.submitted()["json"]["spec_files"], ["main.yaml"])
 
+    def test_spec_requiring_stdlib_is_staged_in_bundle(self):
+        self.write_spec("distribution:\n  release: trixie\n  architecture: amd64\n"
+                        "requires:\n  - stdlib:debian/amd64.yml\n")
+        code, out, err = self.run_build()
+        self.assertEqual(code, 0)
+        self.assertTrue(any(k.startswith(".seine-stdlib/debian/amd64.yml") for k in (self.sparse_staged or {})))
+
+    def test_cli_stdlib_spec_is_staged_in_bundle(self):
+        with mock.patch("sys.stdout", io.StringIO()):
+            code = build_remote(SERVER, project="proj", spec_files=["stdlib:debian/amd64.yml"],
+                                token="pat-test", root_dir=self.tmp_dir)
+        self.assertEqual(code, 0)
+        sent = self.submitted()["json"]["spec_files"]
+        self.assertEqual(sent, [".seine-stdlib/debian/amd64.yml"])
+        self.assertTrue(any(k == ".seine-stdlib/debian/amd64.yml" for k in (self.sparse_staged or {})))
+
+    def test_child_env_points_stdlib_dir_to_staged_worktree(self):
+        from seine.distributed.agent.executor import child_env
+        from seine.distributed.common.models import JobManifest
+        job_dir = os.path.join(self.tmp_dir, "job-env")
+        build_dir = os.path.join(job_dir, "build")
+        stdlib_dir = os.path.join(job_dir, ".seine-stdlib")
+        os.makedirs(stdlib_dir, exist_ok=True)
+        manifest = JobManifest(job_id="j", build_id="bld-env", project="proj")
+        env = child_env(manifest, build_dir, environ={"SEINE_STDLIB_DIR": "/ambient/stdlib"})
+        self.assertEqual(env.get("SEINE_STDLIB_DIR"), stdlib_dir)
+
+        os.rmdir(stdlib_dir)
+        env = child_env(manifest, build_dir, environ={"SEINE_STDLIB_DIR": "/ambient/stdlib"})
+        self.assertNotIn("SEINE_STDLIB_DIR", env)
+
+    def test_resolve_spec_handles_stdlib_prefix(self):
+        from seine.distributed.agent.executor import resolve_spec
+        job_dir = os.path.join(self.tmp_dir, "job-spec")
+        stdlib_dir = os.path.join(job_dir, ".seine-stdlib", "debian")
+        os.makedirs(stdlib_dir, exist_ok=True)
+        with open(os.path.join(stdlib_dir, "amd64.yml"), "w") as f:
+            f.write("architecture: amd64\n")
+        rel = resolve_spec(job_dir, "stdlib:debian/amd64.yml")
+        self.assertEqual(rel, os.path.join(".seine-stdlib", "debian", "amd64.yml"))
+
     def test_the_spec_digest_is_submitted(self):
         self.run_build(spec_digest="abc123")
         self.assertEqual(self.submitted()["json"]["spec_digest"], "abc123")
+
+
 
     def test_build_remote_entry_point(self):
         with mock.patch("sys.stdout", io.StringIO()):

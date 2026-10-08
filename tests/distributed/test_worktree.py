@@ -745,3 +745,39 @@ class TestSparseWorktree(avocado.Test):
         with mock.patch("sys.stderr", io.StringIO()) as err:
             self._pack(["pkg"])
         self.assertIn("token.txt", err.getvalue())
+
+    def test_staged_stdlib_specs_and_trees_pack_and_unpack_cleanly(self):
+        outside_stdlib = os.path.join(self.temp_dir.name, "stdlib")
+        spec_file = os.path.join(outside_stdlib, "debian", "amd64.yml")
+        lib_dir = os.path.join(outside_stdlib, "services", "library")
+        mod_file = os.path.join(lib_dir, "custom_mod.py")
+        os.makedirs(os.path.dirname(spec_file), exist_ok=True)
+        os.makedirs(lib_dir, exist_ok=True)
+        with open(spec_file, "w") as f:
+            f.write("architecture: amd64\n")
+        with open(mod_file, "w") as f:
+            f.write("# module\n")
+
+        staged = {
+            ".seine-stdlib/debian/amd64.yml": spec_file,
+            ".seine-stdlib/services/library": lib_dir,
+        }
+        out_sparse = os.path.join(self.temp_dir.name, "sparse.tar.zst")
+        pack_sparse_worktree(
+            self.root,
+            [os.path.join(self.root, "main.yaml"), spec_file, lib_dir],
+            out_path=out_sparse,
+            staged=staged,
+        )
+        dest_sparse = os.path.join(self.temp_dir.name, "dest_sparse")
+        unpack_worktree(out_sparse, dest_sparse)
+        self.assertTrue(os.path.isfile(os.path.join(dest_sparse, ".seine-stdlib/debian/amd64.yml")))
+        self.assertTrue(os.path.isfile(os.path.join(dest_sparse, ".seine-stdlib/services/library/custom_mod.py")))
+
+        out_full = os.path.join(self.temp_dir.name, "full.tar.zst")
+        pack_worktree(self.root, out_path=out_full, staged=staged)
+        dest_full = os.path.join(self.temp_dir.name, "dest_full")
+        unpack_worktree(out_full, dest_full)
+        self.assertTrue(os.path.isfile(os.path.join(dest_full, ".seine-stdlib/debian/amd64.yml")))
+        self.assertTrue(os.path.isfile(os.path.join(dest_full, ".seine-stdlib/services/library/custom_mod.py")))
+

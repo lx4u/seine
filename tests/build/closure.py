@@ -86,6 +86,15 @@ class ClosureNamesEveryLocalInput(avocado.Test):
         found = closure.collect([self.parse("main.yaml")])
         self.assertIn(os.path.abspath(link), found)
 
+    def test_stdlib_spec_and_ansible_library_are_tracked(self):
+        self.write("main.yaml", "distribution:\n    release: trixie\n"
+                   "    architecture: amd64\nrequires:\n    - stdlib:services/sshd\n")
+        build = self.parse("main.yaml")
+        stdlib_items = closure.stdlib_files([build])
+        self.assertTrue(any(p.endswith("services/sshd.yml") for p in stdlib_items))
+        self.assertTrue(any(p.endswith("sshd_config.py") for p in stdlib_items))
+
+
 
 class UnmodeledKeysAreReported(avocado.Test):
     def parse(self, playbook):

@@ -456,12 +456,22 @@ class RemoteBuild:
         Files are as on the command line, "--" between multiconfig groups. One outside
         the project (a gist, say) travels in the bundle as .seine-sideload/<n>-<name>.
         """
+        from seine import stdlib
+
         given = [spec_file] if isinstance(spec_file, str) else list(spec_file)
         sent, local, staged = [], [], {}
         for name in given:
             if name == "--":
                 sent.append(name)
                 local.append(name)
+                continue
+            if isinstance(name, str) and name.startswith(stdlib.PREFIX):
+                path = stdlib.resolve(name, project_root=self.root_dir)
+                rel_std = stdlib.stdlib_relpath(path)
+                rel = f".seine-stdlib/{rel_std}" if rel_std else f".seine-stdlib/{os.path.basename(path)}"
+                staged[rel] = path
+                sent.append(rel)
+                local.append(path)
                 continue
             path = os.path.abspath(os.path.join(self.root_dir, name))
             rel = os.path.relpath(path, self.root_dir)
@@ -705,9 +715,23 @@ class RemoteBuild:
             return self.storage_info["endpoint"], self._storage_credential
         return None
 
+    def _stage_stdlib(self, builds) -> None:
+        """Stage referenced standard library files and assets into .seine-stdlib/."""
+        from seine import stdlib
+        from seine.build import closure
+
+        for path in closure.stdlib_files(builds):
+            rel = stdlib.stdlib_relpath(path)
+            if rel:
+                arcname = f".seine-stdlib/{rel}"
+                self.staged[arcname] = path
+
     def _pack(self) -> tuple[str, str]:
         """Pack what the spec reads; the whole tree on worktree=full, or on auto if it must."""
         from seine.distributed.client import worktree
+
+        builds = self._loaded_builds()
+        self._stage_stdlib(builds)
 
         mode = self.options.get("worktree", "auto")
         if mode == "full":
@@ -716,7 +740,6 @@ class RemoteBuild:
         from seine.build import closure
 
         try:
-            builds = self._loaded_builds()
             unmodeled = closure.unmodeled(builds)
             if unmodeled and mode == "sparse":
                 raise RemoteError(
@@ -735,6 +758,7 @@ class RemoteBuild:
             raise RemoteError(f"worktree: {e}; move it under the project directory") from e
         except (ValueError, OSError, yaml.YAMLError) as e:
             raise RemoteError(f"worktree: {e} (--worktree=full packs the whole tree)") from e
+
 
     def _upload(self) -> str:
         self._say(f"[client] Packaging worktree at {self.root_dir}...")
