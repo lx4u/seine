@@ -168,6 +168,6 @@ recursion on top, `_merge_part_or_vol()` the equivalent for
 `image.partitions`/`volumes`. `distribution`/`imager`/`image`'s own
 scalars don't go through either helper -- they're a plain
 "later file's value replaces" loop, which is already what `peer` would
-ask for, so they ignore it. `tests/build/merge.py` is the executable
-version of the table above: a merge rule that isn't covered by a test
-there is one nobody has actually pinned down yet.
+ask for, so they ignore it. The `tests/build/merge*.py` files are the
+executable version of the table above: a merge rule that isn't
+covered by a test there is one nobody has actually pinned down yet.
