@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 
-from seine            import gists, settings
+from seine            import gists, settings, stdlib
 from seine.credentials import CredentialError
 from seine.image      import Image
 from seine.extends import module
@@ -352,8 +352,8 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
             sys.exit(1)
 
         try:
-            args = [gists.resolve(arg) for arg in args]
-        except ValueError as e:
+            args = [stdlib.resolve(gists.resolve(arg)) for arg in args]
+        except (ValueError, FileNotFoundError) as e:
             sys.stderr.write("error: %s\n" % e)
             sys.exit(1)
 

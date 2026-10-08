@@ -5,7 +5,7 @@
 # Overview/Plan act on. '/use a.yaml -- b.yaml' groups the same way
 # 'seine build a.yaml -- b.yaml' does.
 
-from seine import gists, multiconfig
+from seine import gists, multiconfig, stdlib
 from seine.build import BuildCmd
 
 class Context:
@@ -20,7 +20,7 @@ class Context:
     # Loads/parses each group like 'seine build' does; nothing is
     # built, so this is instant and side-effect-free.
     def use(self, args):
-        groups = multiconfig.split([gists.resolve(arg) for arg in args])
+        groups = multiconfig.split([stdlib.resolve(gists.resolve(arg)) for arg in args])
         builds = []
         for files in groups:
             build = BuildCmd()
@@ -73,7 +73,7 @@ class Context:
     # '--' composition as the CLI -- or, with 'group' given, to that
     # sub-build's file list instead, reparsing only that sub-build.
     def side_load(self, fragment, group=None):
-        fragment = gists.resolve(fragment)
+        fragment = stdlib.resolve(gists.resolve(fragment))
         self._one_active_group()
         build = self.builds[0]
         if group is None:
@@ -88,7 +88,7 @@ class Context:
     # list and reparses the rest. Works on any file in the list, not
     # only one side_load() itself added.
     def side_unload(self, fragment, group=None):
-        fragment = gists.resolve(fragment)
+        fragment = stdlib.resolve(gists.resolve(fragment))
         self._one_active_group()
         build = self.builds[0]
         if group is None:

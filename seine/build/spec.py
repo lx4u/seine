@@ -4,6 +4,7 @@ import os
 import re
 import yaml
 
+from seine import stdlib
 from seine.build import playbook
 from seine.extends import texts
 from seine.extends.templates import TEMPLATE
@@ -27,6 +28,7 @@ class SpecLoader:
     # name a later file sets. Each file's lock sibling (foo.yaml ->
     # foo.lock.yaml) is auto-spliced in right after it.
     def load_all(self, yaml_files):
+        yaml_files = [stdlib.resolve(f) for f in yaml_files]
         self.options.setdefault("files", list(yaml_files))
         expanded = []
         for yaml_file in yaml_files:
@@ -70,6 +72,7 @@ class SpecLoader:
     # traceback). A file reached twice via different paths is not a loop
     # and loads again, on purpose.
     def load(self, yaml_file):
+        yaml_file = stdlib.resolve(yaml_file)
         if not self.options.get("files"):
             self.options["files"] = [yaml_file]
         if self._probing is False and len(self._loading) == 0 \
@@ -220,16 +223,25 @@ class SpecLoader:
 
         if "requires" in spec:
             for req in spec["requires"]:
-                req_path = os.path.join(os.path.dirname(yaml_filename), req)
-                req_yml = os.path.normpath("%s.yml" % req_path)
-                req_yaml = os.path.normpath("%s.yaml" % req_path)
-                if os.path.isfile(req_yml):
-                    req_path = req_yml
-                elif os.path.isfile(req_yaml):
-                    req_path = req_yaml
+                if req.startswith(stdlib.PREFIX):
+                    project_root = None
+                    if self.options.get("files"):
+                        project_root = os.path.dirname(os.path.abspath(self.options["files"][0]))
+                    try:
+                        req_path = stdlib.resolve(req, project_root=project_root)
+                    except FileNotFoundError as e:
+                        raise FileNotFoundError(f"{yaml_filename}: {e}") from e
                 else:
-                    raise FileNotFoundError("%s: '%s' could not be found in %s/!"
-                        % (yaml_filename, req, os.path.dirname(req_path)))
+                    req_path = os.path.join(os.path.dirname(yaml_filename), req)
+                    req_yml = os.path.normpath("%s.yml" % req_path)
+                    req_yaml = os.path.normpath("%s.yaml" % req_path)
+                    if os.path.isfile(req_yml):
+                        req_path = req_yml
+                    elif os.path.isfile(req_yaml):
+                        req_path = req_yaml
+                    else:
+                        raise FileNotFoundError("%s: '%s' could not be found in %s/!"
+                            % (yaml_filename, req, os.path.dirname(req_path)))
                 self.load(req_path)
         return self.spec
 
