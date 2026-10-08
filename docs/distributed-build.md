@@ -82,6 +82,20 @@ a build reads from outside the project directory is refused in every mode:
 the worker could not find it. That includes what a gist itself refers to, so
 a gist sent to a remote build shall be self-contained.
 
+### Standard library specifications in remote builds
+
+When a build references standard library specifications (`stdlib:`), the client
+detects every standard library specification and co-located asset (such as
+custom Ansible modules under `library/`) loaded by the specification closure.
+These files are packaged into the worktree archive under `.seine-stdlib/`.
+
+When the worker agent unpacks the archive into the job directory, it sets
+`SEINE_STDLIB_DIR` in the execution environment to point to this `.seine-stdlib/`
+directory. The worker build process therefore resolves standard specifications
+against the exact files sent by the client, ignoring any version installed on
+the worker host. This guarantees that remote builds remain fully reproducible
+even when client and worker run different versions of seine.
+
 ### Several specification files
 
 `seine build --remote URL a.yaml b.yaml -- c.yaml` sends the whole list, with

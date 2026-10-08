@@ -34,6 +34,7 @@ release-as-debs
 
 caching
 worker-setup
+stdlib
 ```
 
 ## Project resources

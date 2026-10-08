@@ -335,6 +335,7 @@ class ToolTable(avocado.Test):
         text = self.ai.TOOLS["docs"].run(app, {})
         self.assertIn("specification.md", text)
         self.assertIn("kernels.md", text)
+        self.assertIn("stdlib.md", text)
 
     def test_docs_returns_a_chunk_of_a_real_file(self):
         app = self.SeineApp()
@@ -342,6 +343,12 @@ class ToolTable(avocado.Test):
         self.assertTrue(text.startswith("lines 1-"))
         self.assertIn(" of ", text.splitlines()[0])
         self.assertIn("# Specification files", text)
+
+    def test_docs_returns_stdlib_reference(self):
+        app = self.SeineApp()
+        text = self.ai.TOOLS["docs"].run(app, {"name": "stdlib.md"})
+        self.assertTrue(text.startswith("lines 1-"))
+        self.assertIn("Standard specification library", text)
 
     def test_docs_refuses_an_unknown_name(self):
         app = self.SeineApp()

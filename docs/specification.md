@@ -34,6 +34,29 @@ either the `.yml` or `.yaml` suffix shall be found in the folder of the yaml
 file requiring them. See [docs/merging.md](merging.md) for how two files
 touching the same section combine.
 
+### Standard specification library (`stdlib:`)
+
+Specifications may also reference standard specifications shipped with `seine`
+by prefixing the path with `stdlib:`, either with an explicit extension or
+without one:
+
+```yaml
+requires:
+    - stdlib:debian/amd64
+    - stdlib:debian/bookworm.yml
+    - stdlib:services/sshd
+```
+
+Standard specifications are resolved in the following order:
+1. `.seine-stdlib/` in the project root or job directory (staged bundle for remote builds).
+2. The directory pointed to by the `SEINE_STDLIB_DIR` environment variable.
+3. The `stdlib/` directory in the repository checkout when running from source.
+4. Installed system directory under `/usr/share/seine/stdlib/`.
+5. Packaged Python resources via `importlib.resources`.
+
+If the file does not include an extension, `.yml` and `.yaml` are tried in order.
+See [docs/stdlib.md](stdlib.md) for the full catalog of standard specifications.
+
 ## Variables
 
 A file may read what the specification sets, written `[[ ... ]]`, so that
