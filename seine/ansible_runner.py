@@ -211,6 +211,7 @@ class AnsibleContainerRunner:
             playbook = build_playbook.resolve(playbook, absolute_if_present)
             # Ours, not Ansible's: the host files this play reads.
             playbook.pop("uses", None)
+            playbook.pop("wave", None)
             # Individual package installs skip their own initramfs regen,
             # _finalize() does one pass instead.
             playbook["environment"] = {"INITRD": "No"}

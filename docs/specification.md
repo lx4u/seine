@@ -1497,6 +1497,9 @@ its plays. `priority` decides the order of playbooks inside their wave.
 Constraints win over it: wave dependencies determine which wave runs first,
 and `priority` only orders plays within each wave.
 
+The TUI spec tree lists the playbooks in execution order and, when a
+specification uses several waves, groups them under one branch per wave.
+
 Naming a wave that no playbook defines is an error rather than a constraint
 that is quietly ignored, as is a wave naming itself or a set of waves whose
 constraints depend on each other in a circle.

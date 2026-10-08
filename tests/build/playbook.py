@@ -157,7 +157,7 @@ class PlaybookWaves(avocado.Test):
         self.assertIn("play one", str(caught.exception))
         self.assertIn("play two", str(caught.exception))
 
-    def test_seine_only_keys_are_popped(self):
+    def test_seine_only_keys_are_popped_except_a_named_wave(self):
         playbooks = self.parse("""
     - name: play
       wave: accounts
@@ -167,8 +167,15 @@ class PlaybookWaves(avocado.Test):
       wave: base
 """)
         for play in playbooks:
-            for key in ("wave", "after", "before", "priority"):
+            for key in ("after", "before", "priority"):
                 self.assertNotIn(key, play)
+        self.assertEqual([p["wave"] for p in playbooks], ["base", "accounts"])
+
+    def test_the_default_wave_is_not_kept(self):
+        playbooks = self.parse("""
+    - name: play
+""")
+        self.assertNotIn("wave", playbooks[0])
 
     def test_file_order_breaks_ties(self):
         playbooks = self.parse("""

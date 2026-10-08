@@ -11,6 +11,7 @@ from textual.widgets import Tree
 
 from seine import multiconfig
 from seine import tasks
+from seine.build import playbook as playbook_rules
 from seine.utils import feeds as list_feeds
 from seine.utils import redact as redact_value
 from seine.utils import redactions
@@ -44,6 +45,23 @@ def _item_label(item, index):
             return "[%d] %s" % (index, only)
     # '[0]', not '0': a bare number reads like a value, not a position.
     return "[%d]" % index
+
+# Where each entry of a list goes, as (index, item, wave). Playbooks come
+# back in execution order, with their wave when the spec has several;
+# an invalid ordering falls back to the file order, 'seine' reports it.
+def _slots(key, value):
+    slots = [(i, item, None) for i, item in enumerate(value)]
+    if key != "playbook" or not all(isinstance(p, dict) for p in value):
+        return slots
+    try:
+        ordered = playbook_rules.order(value)
+    except ValueError:
+        return slots
+    waves = {p.get("wave") or "main" for p in value}
+    if len(waves) < 2:
+        return slots
+    index = {id(p): i for i, p in enumerate(value)}
+    return [(index[id(p)], p, p.get("wave") or "main") for p in ordered]
 
 # 'old': this key/item's value before /side-load (or /side-unload)
 # changed the active spec, or NO_DIFF when not diffing at all. MISSING
@@ -87,14 +105,20 @@ def _populate(node, key, value, old, changed, redact, path=(), distro=None):
                                {f["suite"] for f in release_feeds(distro)})
             except (KeyError, ValueError):
                 inapplicable = None
-        for index, item in enumerate(value):
+        waves = {}
+        for index, item, wave in _slots(key, value):
+            parent = branch
+            if wave is not None:
+                if wave not in waves:
+                    waves[wave] = branch.add(wave, expand=True, data=wave)
+                parent = waves[wave]
             if isinstance(item, (dict, list)):
                 label = _item_label(item, index)
                 child_old = old_by_label.get(label, MISSING) if diffing else NO_DIFF
-                _populate(branch, label, item, child_old, changed, redact, path, distro)
+                _populate(parent, label, item, child_old, changed, redact, path, distro)
                 if (inapplicable and isinstance(item, dict)
                         and item.get("suite") in inapplicable):
-                    branch.children[-1].set_label(Text(label, style=INAPPLICABLE_STYLE))
+                    parent.children[-1].set_label(Text(label, style=INAPPLICABLE_STYLE))
             else:
                 text = str(redact(item, path))
                 leaf = branch.add_leaf(text, data=text)
@@ -314,6 +338,16 @@ class SpecTree(Tree):
         for node in reversed(old):
             self._release(node)
 
+    # Labels of a play under 'playbook', through its wave branch when
+    # the spec groups playbooks by wave.
+    def play_path(self, play):
+        branch = self._child(self.root.children[0], "playbook") if self.root.children else None
+        if branch is not None and self._child(branch, play) is None:
+            for wave in branch.children:
+                if self._child(wave, play) is not None:
+                    return ["playbook", wave.data, play]
+        return ["playbook", play]
+
     # Keys with a path currently active, so a caller tracking its own
     # running tasks can retire the ones no longer active.
     def active_keys(self):
@@ -433,7 +467,7 @@ def highlight_active(tree, state):
     wanted = set()
     for name in running:
         if name == "rootfs" and state.play:
-            key, labels = ROOTFS_ANSIBLE_KEY, ["playbook", state.play]
+            key, labels = ROOTFS_ANSIBLE_KEY, tree.play_path(state.play)
             if state.ansible_task:
                 labels += ["tasks", state.ansible_task]
         else:

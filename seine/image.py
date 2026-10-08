@@ -244,7 +244,9 @@ class Image:
         # Remove seine-only keys before Ansible sees them
         for playbook in playbooks:
             playbook.pop("baseline", None)
-            playbook.pop("wave", None)
+            # Kept for the spec tree, the default is not worth a rebuild.
+            if playbook.get("wave") == "main":
+                playbook.pop("wave")
             playbook.pop("after", None)
             playbook.pop("before", None)
             playbook.pop("priority", None)

@@ -268,6 +268,51 @@ class InapplicableFeeds(avocado.Test):
         self.assertIsNotNone(bookworm)
         self.assertNotEqual(bookworm.label.style, self.INAPPLICABLE_STYLE)
 
+# Playbooks sit under their wave branch, waves and plays in the order
+# they run: 'late' is listed first but must come after 'early'.
+class PlaybookWaves(avocado.Test):
+    """
+    :avocado: tags=tui
+    """
+    def setUp(self):
+        with _tui_required(self):
+            from seine.tui.context import Context
+            from seine.tui.spectree import SpecTree
+        self.Context = Context
+        self.SpecTree = SpecTree
+        os.environ["SEINE_CACHE_DIR"] = self.workdir
+        os.environ["XDG_CONFIG_HOME"] = self.workdir
+
+    def _tree(self, plays):
+        path = os.path.join(self.workdir, "waves.yaml")
+        with open(path, "w") as f:
+            f.write(
+                "distribution:\n"
+                "    release: trixie\n"
+                "    architecture: amd64\n"
+                "playbook:\n" + plays)
+        context = self.Context()
+        context.use([path])
+        tree = self.SpecTree()
+        tree.load(context)
+        return tree
+
+    def test_plays_are_grouped_by_wave_in_execution_order(self):
+        tree = self._tree(
+            "    - name: b\n      wave: late\n      after: early\n      tasks: []\n"
+            "    - name: a2\n      wave: early\n      priority: 600\n      tasks: []\n"
+            "    - name: a1\n      wave: early\n      tasks: []\n")
+        playbook = _descend(self, tree.root.children[0], "playbook")
+        self.assertEqual([n.data for n in playbook.children], ["early", "late"])
+        self.assertEqual([n.data for n in playbook.children[0].children], ["a1", "a2"])
+        self.assertEqual(tree.play_path("b"), ["playbook", "late", "b"])
+
+    def test_a_single_wave_keeps_the_flat_list(self):
+        tree = self._tree("    - name: a\n      tasks: []\n")
+        playbook = _descend(self, tree.root.children[0], "playbook")
+        self.assertEqual([n.data for n in playbook.children], ["a"])
+        self.assertEqual(tree.play_path("a"), ["playbook", "a"])
+
 # Full app, real Textual event loop -- highlight_active()/branch_for()
 # only prove they route a namespaced task name to the right subtree when
 # a build is actually running and ticking the tree, same as
