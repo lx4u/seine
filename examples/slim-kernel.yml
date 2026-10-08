@@ -18,7 +18,7 @@
 # the first with nothing here changing.
 #
 # The flavour is not named either: it is a property of the architecture,
-# and examples/common/<arch>.yaml says it under 'defaults'.
+# and stdlib:debian/<arch>.yml says it under 'defaults'.
 
 packages:
     - source: apt://linux

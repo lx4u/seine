@@ -8,12 +8,12 @@
 # Boots via systemd-boot's own auto-discovery -- no linux-image, no grub.
 
 requires:
-    - ../common/trixie
-    - ../common/debian
+    - stdlib:debian/trixie.yml
+    - stdlib:debian/base.yml
     - ../common/conf-accounts
-    - ../common/conf-locales
-    - ../common/conf-timezone
-    - ../common/sshd
+    - stdlib:debian/locales.yml
+    - stdlib:debian/timezone.yml
+    - stdlib:services/sshd.yml
 
 distribution:
     architecture: amd64

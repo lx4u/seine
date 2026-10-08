@@ -26,7 +26,7 @@ class UkiDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avocado.
         if HOST_ARCH != "amd64":
             self.cancel("this spec's kernel/bootloader packages are amd64-only")
 
-    # Overrides examples/common/trixie's live feeds with a snapshot-pinned
+    # Overrides stdlib:debian/trixie.yml's live feeds with a snapshot-pinned
     # 'distribution:', field by field (a side-loaded file peer-amends,
     # rather than winning outright like a 'requires:' fragment).
     def specification(self):

@@ -30,7 +30,7 @@ class MinimalInitrdBuilds(avocado.Test):
         if PLAN != "full":
             self.cancel("SEINE_TEST_PLAN=full builds an image; this takes a while")
         if HOST_ARCH != "amd64":
-            self.cancel("examples/common/amd64.yaml is amd64-only")
+            self.cancel("stdlib:debian/amd64.yml is amd64-only")
         if shutil.which("podman") is None:
             self.cancel("podman is needed to build a root file-system")
         if shutil.which("file") is None:

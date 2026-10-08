@@ -5,9 +5,9 @@
 # says what kernel to build and nothing about the image being built, so
 # it is added to a specification rather than being one.
 #
-#   ./seine.py build examples/common/trixie.yaml \
-#              examples/common/amd64.yaml       \
-#              examples/common/pc-image.yaml    \
+#   ./seine.py build stdlib:debian/trixie.yml \
+#              stdlib:debian/amd64.yml       \
+#              examples/common/pc-image.yaml \
 #              examples/linux-6.18/kernel.yml
 #
 # What comes out replaces the distribution's kernel rather than sitting
@@ -22,7 +22,7 @@
 # beside this, which is that file and nothing more.
 #
 # Which flavour to build is not here either, for the same reason: it is a
-# property of the architecture, and examples/common/amd64.yaml says it
+# property of the architecture, and stdlib:debian/amd64.yml says it
 # under 'defaults'. An image wanting another one -- a realtime kernel,
 # say -- says so the same way, in the file that wants it.
 

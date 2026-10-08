@@ -13,8 +13,8 @@
 # both installed would let its hook overwrite dracut's initrd.
 
 requires:
-    - ../common/amd64
-    - ../common/trixie
+    - stdlib:debian/amd64.yml
+    - stdlib:debian/trixie.yml
 
 playbook:
     - name: build the initrd with dracut instead of initramfs-tools
@@ -34,7 +34,7 @@ playbook:
                 state: present
           # Not auto-included just by installing the packages above --
           # Debian's dracut ships these as inactive template profiles.
-          # Must be written before '../common/amd64's priority-800
+          # Must be written before 'stdlib:debian/amd64.yml's priority-800
           # kernel install triggers dracut.
           - name: force dracut to include the systemd and verity generators
             lineinfile:

@@ -21,7 +21,7 @@ PLAN = os.environ.get("SEINE_TEST_PLAN", "")
 # of its own to tell the two sysroots apart.
 GROUP = """
 requires:
-    - {common}/trixie
+    - stdlib:debian/trixie.yml
 
 distribution:
     architecture: amd64
@@ -45,7 +45,7 @@ playbook:
 
 DISK = """
 requires:
-    - {common}/trixie
+    - stdlib:debian/trixie.yml
 
 distribution:
     architecture: amd64

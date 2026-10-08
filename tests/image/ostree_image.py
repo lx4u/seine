@@ -21,8 +21,8 @@ PLAN = os.environ.get("SEINE_TEST_PLAN", "")
 
 SPEC = """
 requires:
-    - {common}/amd64
-    - {common}/trixie
+    - stdlib:debian/amd64.yml
+    - stdlib:debian/trixie.yml
 
 playbook:
     - name: dracut and ostree

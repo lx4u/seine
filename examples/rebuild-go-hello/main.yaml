@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 requires:
-    - ../common/amd64
-    - ../common/bookworm
-    - ../common/golang
+    - stdlib:debian/amd64.yml
+    - stdlib:debian/bookworm.yml
+    - stdlib:extends/golang.yml
     - ../common/pc-image
     - hello

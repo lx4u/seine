@@ -25,7 +25,7 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
     # The common amd64 fragment brings grub and the kernel; the
     # systemd-boot variant below lists its own.
     BOOT = ("requires:\n"
-            "    - %(common)s/amd64\n")
+            "    - stdlib:debian/amd64.yml\n")
     BOOT_PLAYBOOK = ""
     ESP_SIZE = "64MiB"
     OSTREE_KEYS = ""
@@ -106,7 +106,7 @@ class OstreeSystemdBootDiskImageIsByteIdenticalAcrossTwoBuilds(
     """
     FILENAME = "reproducible-ostree-sdboot.img"
     BOOT = ("requires:\n"
-            "    - %(common)s/trixie\n"
+            "    - stdlib:debian/trixie.yml\n"
             "imager:\n"
             "    kernel: linux-image-amd64\n")
     BOOT_PLAYBOOK = ("    - name: systemd-boot and the kernel\n"

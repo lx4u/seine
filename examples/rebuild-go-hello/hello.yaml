@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # A Go program built from source with a pinned Go toolchain, its own
-# rather than the one in ../common/golang. 'weave' is the only command
+# rather than the one in stdlib:extends/golang.yml. 'weave' is the only command
 # in golang/example's root module: the other examples there are modules
 # of their own.
 

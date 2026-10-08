@@ -6,4 +6,4 @@ distribution:
         - arm64
 
 requires:
-    - ../common/arm64
+    - stdlib:debian/arm64.yml

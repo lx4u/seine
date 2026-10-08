@@ -24,8 +24,8 @@
 # either signer.
 
 requires:
-    - ../common/amd64
-    - ../common/trixie
+    - stdlib:debian/amd64.yml
+    - stdlib:debian/trixie.yml
     - ../common/dev-secureboot-key
     - ../common/dev-uki-addon-key
 

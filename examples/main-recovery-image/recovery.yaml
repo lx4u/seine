@@ -7,7 +7,7 @@
 # kernel -- one boot entry per group reads straight off each group's
 # own /boot -- and dropbear for a way in.
 requires:
-    - ../common/trixie
+    - stdlib:debian/trixie.yml
     - ../common/conf-accounts
     - ../pc-image/grub-serial-console
 

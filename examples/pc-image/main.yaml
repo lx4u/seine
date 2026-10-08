@@ -2,13 +2,13 @@
 # SPDX-License-Identifier Apache-2.0
 
 requires:
-    - ../common/amd64
-    - ../common/bookworm
+    - stdlib:debian/amd64.yml
+    - stdlib:debian/bookworm.yml
     - ../common/conf-accounts
-    - ../common/conf-locales
-    - ../common/conf-sysctl
-    - ../common/conf-timezone
-    - ../common/sshd
+    - stdlib:debian/locales.yml
+    - stdlib:debian/sysctl.yml
+    - stdlib:debian/timezone.yml
+    - stdlib:services/sshd.yml
     - ../common/pc-image
     - french
     - selinux

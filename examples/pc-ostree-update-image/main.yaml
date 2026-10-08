@@ -11,12 +11,12 @@
 # commit and UKI are added to build/deploy/trixie/pc-ostree-update-payload/.
 
 requires:
-    - ../common/trixie
-    - ../common/debian
+    - stdlib:debian/trixie.yml
+    - stdlib:debian/base.yml
     - ../common/conf-accounts
-    - ../common/conf-locales
-    - ../common/conf-timezone
-    - ../common/networkd
+    - stdlib:debian/locales.yml
+    - stdlib:debian/timezone.yml
+    - stdlib:services/networkd.yml
     - ../common/dev-ostree-key
     - ../common/dev-secureboot-key
     - ../common/dev-update-manifest-key

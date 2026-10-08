@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 requires:
-    - ../common/golang
+    - stdlib:extends/golang.yml
 
 # k3s and the programs it runs are built from source, so their dependencies
 # are known to seine. Each one is built like k3s' own scripts/build does,

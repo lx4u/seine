@@ -6,8 +6,8 @@
 # is not optional. Built here rather than left to dkms since an image
 # is not administered to compile at first boot.
 #
-#   ./seine.py build examples/common/trixie.yaml     \
-#              examples/common/amd64.yaml           \
+#   ./seine.py build stdlib:debian/trixie.yml        \
+#              stdlib:debian/amd64.yml              \
 #              examples/common/pc-image.yaml        \
 #              examples/linux-6.18/kernel.yml       \
 #              examples/bcachefs/bcachefs.yml

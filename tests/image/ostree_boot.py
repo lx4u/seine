@@ -24,8 +24,8 @@ PLAN = os.environ.get("SEINE_TEST_PLAN", "")
 # common amd64 fragment, a serial console and a banner of its own.
 GROUP = """
 requires:
-    - {common}/amd64
-    - {common}/trixie
+    - stdlib:debian/amd64.yml
+    - stdlib:debian/trixie.yml
     - {pc_image}/grub-serial-console
 
 playbook:
@@ -55,7 +55,7 @@ distribution:
 
 imager:
     kernel: linux-image-amd64
-""" + GROUP.replace("    - {common}/amd64\n", "") + """    - name: systemd-boot and the kernel
+""" + GROUP.replace("    - stdlib:debian/amd64.yml\n", "") + """    - name: systemd-boot and the kernel
       priority: 800
       tasks:
           - name: install systemd-boot, kernel and firmware blobs
@@ -113,7 +113,7 @@ image:
 
 DISK = """
 requires:
-    - {common}/trixie
+    - stdlib:debian/trixie.yml
 
 distribution:
     architecture: amd64

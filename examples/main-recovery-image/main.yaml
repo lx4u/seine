@@ -6,12 +6,12 @@
 # produces main.tar, the same rootfs disk.yaml pulls in as 'main'.
 # Installs grub and a kernel since 'main' owns the boot here.
 requires:
-    - ../common/amd64
-    - ../common/trixie
+    - stdlib:debian/amd64.yml
+    - stdlib:debian/trixie.yml
     - ../common/conf-accounts
-    - ../common/conf-locales
-    - ../common/conf-timezone
-    - ../common/sshd
+    - stdlib:debian/locales.yml
+    - stdlib:debian/timezone.yml
+    - stdlib:services/sshd.yml
     - ../pc-image/grub-serial-console
 
 playbook:

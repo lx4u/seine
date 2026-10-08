@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 requires:
-    - ../common/arm64
-    - ../common/trixie
+    - stdlib:debian/arm64.yml
+    - stdlib:debian/trixie.yml
     - ../common/rpi4-image
     - ../common/conf-accounts
-    - ../common/conf-locales
-    - ../common/conf-sysctl
-    - ../common/conf-timezone
-    - ../common/sshd
+    - stdlib:debian/locales.yml
+    - stdlib:debian/sysctl.yml
+    - stdlib:debian/timezone.yml
+    - stdlib:services/sshd.yml
 
 playbook:
     - name: some great packages

@@ -6,4 +6,4 @@ distribution:
         - amd64
 
 requires:
-    - ../common/amd64
+    - stdlib:debian/amd64.yml

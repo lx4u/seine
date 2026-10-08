@@ -21,7 +21,9 @@ from . import (Plan, Preview, Tool, _detect_indent, _doc_sources, _no_args,
 # ancestor. A single loaded directory never climbs to its parent, so
 # one spec file doesn't sweep unrelated directories. Non-recursive.
 def _sibling_files(build):
-    directories = {os.path.dirname(f) for f in build.loaded_files}
+    from seine import stdlib
+    files = [f for f in build.loaded_files if not stdlib.is_stdlib_path(f)] or build.loaded_files
+    directories = {os.path.dirname(f) for f in files}
     search_dirs = set(directories)
     if len(directories) > 1:
         ancestor = os.path.commonpath(sorted(directories))

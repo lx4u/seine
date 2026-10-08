@@ -5,9 +5,9 @@
 # of the specification that includes this file. Added to one rather than
 # being one:
 #
-#   ./seine.py build examples/common/trixie.yaml \
-#              examples/common/amd64.yaml       \
-#              examples/common/pc-image.yaml    \
+#   ./seine.py build stdlib:debian/trixie.yml \
+#              stdlib:debian/amd64.yml       \
+#              examples/common/pc-image.yaml \
 #              examples/nvidia-open.yml
 #
 # The tree carries a makefile and no debian/ directory, so seine writes
@@ -85,7 +85,7 @@ packages:
               # rebuilds the modules when the answer changes.
               #
               # A specification that builds a kernel of its own adds it
-              # to these -- see examples/common/amd64.yaml, which says so
+              # to these -- see stdlib:debian/amd64.yml, which says so
               # for every amd64 image that builds one.
               amd64-kernels:
                   - apt://linux-headers-amd64

@@ -3,8 +3,8 @@
 
 # The 6.18.y kernel of kernel.yml beside this, built for bookworm:
 #
-#   ./seine.py build examples/common/bookworm.yaml \
-#              examples/common/amd64.yaml         \
+#   ./seine.py build stdlib:debian/bookworm.yml \
+#              stdlib:debian/amd64.yml         \
 #              examples/common/pc-image.yaml      \
 #              examples/linux-6.18/bookworm.yml
 #
@@ -18,7 +18,7 @@
 # That is the whole of what bookworm needs saying about it, so it is the
 # whole of this file. Backports is NotAutomatic, so the version has to be
 # named: unpinned, apt would hand out bookworm's own kernel. The feed
-# itself is listed by examples/common/bookworm.yaml, where the rest of
+# itself is listed by stdlib:debian/bookworm.yml, where the rest of
 # the release's feeds are.
 #
 # trixie needs no file of its own: its own packaging builds this tree, so

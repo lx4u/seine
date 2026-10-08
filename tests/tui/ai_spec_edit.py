@@ -359,15 +359,15 @@ class ToolTable(avocado.Test):
         self.assertTrue(preview.ok)
         # 'requires:' -- a sibling section, several lines away from the
         # edit -- is untouched: no '-'/'+' mark on any of its lines.
-        self.assertNotIn("-    - ../common/amd64", preview.message)
-        self.assertNotIn("+- ../common/amd64", preview.message)
+        self.assertNotIn("-    - stdlib:debian/amd64.yml", preview.message)
+        self.assertNotIn("+- stdlib:debian/amd64.yml", preview.message)
         self.assertIn("+                    - sudo", preview.message)
 
         self.ai.TOOLS["spec-update"].run(app, args)
         with open(main) as f:
             written = f.read()
         self.assertIn("- sudo", written)
-        self.assertIn("    - ../common/amd64", written)  # 'requires:' untouched on disk too
+        self.assertIn("    - stdlib:debian/amd64.yml", written)  # 'requires:' untouched on disk too
 
     def test_spec_create_needs_path_and_content(self):
         app = self.SeineApp(files=[self._copied_pc_image()])

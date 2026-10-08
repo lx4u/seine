@@ -7,12 +7,12 @@
 #   dd if=build/deploy/trixie/pc-ostree.img of=/dev/sdX bs=4M status=progress conv=fsync
 
 requires:
-    - ../common/amd64
-    - ../common/trixie
-    - ../common/debian
+    - stdlib:debian/amd64.yml
+    - stdlib:debian/trixie.yml
+    - stdlib:debian/base.yml
     - ../common/conf-accounts
-    - ../common/conf-locales
-    - ../common/conf-timezone
+    - stdlib:debian/locales.yml
+    - stdlib:debian/timezone.yml
     - ../pc-image/grub-serial-console
     - ostree
 

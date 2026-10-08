@@ -3,9 +3,9 @@
 
 requires:
     - ../common/nanopi-neo-image
-    - ../common/bookworm
+    - stdlib:debian/bookworm.yml
     - ../common/conf-accounts
-    - ../common/conf-locales
+    - stdlib:debian/locales.yml
 
 playbook:
     - name: some great packages

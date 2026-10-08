@@ -96,7 +96,7 @@ defaults:
 requires:
     - ./amd64
     - ./arm64
-    - ../common/debian-feeds
+    - stdlib:debian/feeds.yml
 
 vendor:
     - name: acl

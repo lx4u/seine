@@ -16,6 +16,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.container import ContainerEngine
+from seine import stdlib
 from seine.utils import HOST_ARCH
 from tests.testutils import prune_on_pass
 
@@ -135,17 +136,18 @@ class Image(avocado.Test):
 
     def specification(self):
         names = [
-            "common/%s.yaml" % self.release,
-            "common/%s.yaml" % self.architecture,
+            "stdlib:debian/%s.yml" % self.release,
+            "stdlib:debian/%s.yml" % self.architecture,
             "common/%s.yaml" % self.image,
             "common/conf-accounts.yaml",
-            "common/conf-locales.yaml",
+            "stdlib:debian/locales.yml",
         ] + ([KERNELS[self.release], "slim-kernel.yml"] if self.grafted else []) \
           + (["nvidia-open.yml"] if builds_nvidia(self) else []) \
           + (["bcachefs/bcachefs.yml"] if builds_bcachefs(self) else [])
-        specs = [os.path.join(EXAMPLES, name) for name in names]
+        specs = [name if name.startswith("stdlib:") else os.path.join(EXAMPLES, name) for name in names]
         for spec in specs:
-            self.assertTrue(os.path.isfile(spec), "no such specification: %s" % spec)
+            resolved = stdlib.resolve(spec) if spec.startswith("stdlib:") else spec
+            self.assertTrue(os.path.isfile(resolved), "no such specification: %s" % spec)
 
         # Where to write it, which is the one thing the examples cannot
         # say for a test building four of them.
@@ -715,14 +717,15 @@ class CarriedCache(avocado.Test):
 
     def specification(self, filename):
         names = [
-            "common/%s.yaml" % self.release,
-            "common/%s.yaml" % self.architecture,
+            "stdlib:debian/%s.yml" % self.release,
+            "stdlib:debian/%s.yml" % self.architecture,
             "common/%s.yaml" % NATIVE[self.architecture],
             "rebuild-busybox/busybox.yaml",
         ]
-        specs = [os.path.join(EXAMPLES, name) for name in names]
+        specs = [name if name.startswith("stdlib:") else os.path.join(EXAMPLES, name) for name in names]
         for spec in specs:
-            self.assertTrue(os.path.isfile(spec), "no such specification: %s" % spec)
+            resolved = stdlib.resolve(spec) if spec.startswith("stdlib:") else spec
+            self.assertTrue(os.path.isfile(resolved), "no such specification: %s" % spec)
 
         where = os.path.join(self.workdir, "%s.yml" % os.path.basename(filename))
         with open(where, "w") as f:
@@ -946,10 +949,11 @@ class ScopedRebuild(avocado.Test):
     # rebuild written here: what the example says about busybox is right,
     # and what this test adds is who it is for.
     def specification(self):
-        names = ["common/bookworm.yaml", "common/%s.yaml" % self.architecture]
-        specs = [os.path.join(EXAMPLES, name) for name in names]
+        names = ["stdlib:debian/bookworm.yml", "stdlib:debian/%s.yml" % self.architecture]
+        specs = [name if name.startswith("stdlib:") else os.path.join(EXAMPLES, name) for name in names]
         for spec in specs:
-            self.assertTrue(os.path.isfile(spec), "no such specification: %s" % spec)
+            resolved = stdlib.resolve(spec) if spec.startswith("stdlib:") else spec
+            self.assertTrue(os.path.isfile(resolved), "no such specification: %s" % spec)
 
         where = os.path.join(self.workdir, "scoped.yml")
         with open(where, "w") as f:
@@ -1084,10 +1088,11 @@ class AllDerivedFlavoursAreBuilt(avocado.Test):
     # chains off 'alpha' so the real sbuild -- not a scripted control
     # regeneration -- checks a chained flavour actually compiles.
     def specification(self):
-        names = ["common/trixie.yaml", "common/%s.yaml" % HOST_ARCH]
-        specs = [os.path.join(EXAMPLES, name) for name in names]
+        names = ["stdlib:debian/trixie.yml", "stdlib:debian/%s.yml" % HOST_ARCH]
+        specs = [name if name.startswith("stdlib:") else os.path.join(EXAMPLES, name) for name in names]
         for spec in specs:
-            self.assertTrue(os.path.isfile(spec), "no such specification: %s" % spec)
+            resolved = stdlib.resolve(spec) if spec.startswith("stdlib:") else spec
+            self.assertTrue(os.path.isfile(resolved), "no such specification: %s" % spec)
 
         where = os.path.join(self.workdir, "derived.yml")
         with open(where, "w") as f:
@@ -1243,10 +1248,11 @@ class SignedRebuild(avocado.Test):
                          "'%s' failed, see %s" % (" ".join(args), where))
 
     def specification(self):
-        names = ["common/bookworm.yaml", "common/%s.yaml" % HOST_ARCH]
-        specs = [os.path.join(EXAMPLES, name) for name in names]
+        names = ["stdlib:debian/bookworm.yml", "stdlib:debian/%s.yml" % HOST_ARCH]
+        specs = [name if name.startswith("stdlib:") else os.path.join(EXAMPLES, name) for name in names]
         for spec in specs:
-            self.assertTrue(os.path.isfile(spec), "no such specification: %s" % spec)
+            resolved = stdlib.resolve(spec) if spec.startswith("stdlib:") else spec
+            self.assertTrue(os.path.isfile(resolved), "no such specification: %s" % spec)
 
         where = os.path.join(self.workdir, "signed.yml")
         with open(where, "w") as f:
