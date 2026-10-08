@@ -649,7 +649,7 @@ class VendorExcludeIsAdditive(avocado.Test):
 # Unlike every other 'distribution:' setting (last-loaded wins),
 # 'architectures:' is additive and deduplicated, the same as
 # 'vendor-exclude:' above -- so a specification composing
-# examples/common/amd64.yaml and .../arm64.yaml (each naming its own
+# examples/vendor/amd64.yaml and .../arm64.yaml (each naming its own
 # one) ends up with both, not whichever was required last.
 # 'architecture' itself (singular) still overwrites.
 class DistributionArchitecturesIsAdditive(avocado.Test):
@@ -679,6 +679,28 @@ class DistributionArchitecturesIsAdditive(avocado.Test):
         """)
         self.assertEqual(build.spec["distribution"]["architectures"],
                          ["amd64", "arm64"])
+
+    def test_vendor_example_architectures(self):
+        vendor_dir = os.path.join(path_to_sources, "examples", "vendor")
+        common_dir = os.path.join(path_to_sources, "examples", "common")
+
+        # common/amd64.yaml and common/arm64.yaml only set singular architecture
+        amd64 = BuildCmd().load(os.path.join(common_dir, "amd64.yaml"))
+        self.assertEqual(amd64["distribution"]["architecture"], "amd64")
+        self.assertNotIn("architectures", amd64["distribution"])
+
+        arm64 = BuildCmd().load(os.path.join(common_dir, "arm64.yaml"))
+        self.assertEqual(arm64["distribution"]["architecture"], "arm64")
+        self.assertNotIn("architectures", arm64["distribution"])
+
+        # vendor/amd64.yaml and vendor/arm64.yaml augment architectures
+        vendor_build = BuildCmd()
+        vendor_build.load(os.path.join(vendor_dir, "amd64.yaml"))
+        vendor_build.load(os.path.join(vendor_dir, "arm64.yaml"))
+        self.assertEqual(vendor_build.spec["distribution"]["architecture"], "arm64")
+        self.assertEqual(vendor_build.spec["distribution"]["architectures"],
+                         ["amd64", "arm64"])
+
 
 class FilesAreResolvedAgainstTheFileThatListedThem(avocado.Test):
     def test(self):

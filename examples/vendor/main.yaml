@@ -94,8 +94,8 @@ defaults:
                 -----END PGP PRIVATE KEY BLOCK-----
 
 requires:
-    - ../common/amd64
-    - ../common/arm64
+    - ./amd64
+    - ./arm64
     - ../common/debian-feeds
 
 vendor:

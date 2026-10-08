@@ -1,0 +1,9 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+distribution:
+    architectures:
+        - arm64
+
+requires:
+    - ../common/arm64
