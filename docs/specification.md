@@ -1485,19 +1485,50 @@ playbook:
 ```
 
 Playbooks may be given a priority between `0` and `999` with `0` being the
-highest priority and `500` the default:
+highest priority and `500` the default. When `wave:` is omitted, all playbooks
+belong to the `main` wave, where they execute in `priority` order.
+
+Playbooks may also be grouped into waves with `wave:` and ordered with
+`after:` and `before:`, naming other waves (as a string or a list of strings).
+A wave exists when a playbook names it in `wave:`.
+
+A wave's constraints are the union of the `after:` and `before:` settings of
+its plays. `priority` decides the order of playbooks inside their wave.
+Constraints win over it: wave dependencies determine which wave runs first,
+and `priority` only orders plays within each wave.
+
+Naming a wave that no playbook defines is an error rather than a constraint
+that is quietly ignored, as is a wave naming itself or a set of waves whose
+constraints depend on each other in a circle.
 
 ```
 playbook:
-    - name: first playbook but apply towards the end
-      priority: 900
+    - name: app high
+      wave: app
+      priority: 800
+      after: [accounts]
       tasks:
           ...
-    - name: second playbook but apply early
+    - name: accounts high
+      wave: accounts
+      priority: 800
+      tasks:
+          ...
+    - name: app low
+      wave: app
+      priority: 100
+      tasks:
+          ...
+    - name: accounts low
+      wave: accounts
       priority: 100
       tasks:
           ...
 ```
+
+Here, the `accounts` wave runs before the `app` wave because of
+`after: [accounts]`. Inside each wave, playbooks execute in `priority` order:
+`accounts low`, `accounts high`, `app low`, and `app high`.
 
 Composed across `requires` the same way `test` entries are: an entry
 named the same as one already loaded is merged into it -- `tasks` add
@@ -1706,8 +1737,10 @@ just `python3`/`python3-apt` to it (removed again once the build is
 done) and runs `ansible-playbook` from the host, connecting into the
 container instead of installing `ansible` there -- this keeps ansible
 itself off the (possibly foreign-architecture, emulated) target entirely.
-Playbooks execute according to their `priority`. A different starting point
-may be specified with the `baseline` keyword in the `playbook`:
+Playbooks execute in wave order, and by `priority` within each wave. When
+more than one playbook specifies a `baseline`, the first playbook in wave
+order that defines one wins. A different starting point may be specified
+with the `baseline` keyword in the `playbook`:
 
 ```
 playbook:
