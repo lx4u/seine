@@ -641,11 +641,8 @@ class SeineApp(App):
         # No spec at all, not a bad one -- a spec given but failed to
         # load still opens on Overview, where its error is expected.
         self._no_spec_given = not files
-        if files:
-            try:
-                self.context.use(files)
-            except (OSError, ValueError) as e:
-                self._startup_error = str(e)
+        self._pending_files = files
+        self.load_pending_spec()
         # Interaction socket, enabled via --interaction-socket: creates
         # the socket (overwriting any stale file) and starts a background
         # thread accepting newline-delimited JSON messages, dispatched
@@ -655,6 +652,14 @@ class SeineApp(App):
         self._socket_lock = threading.Lock()
         if self._socket_path:
             self._start_socket_server()
+
+    def load_pending_spec(self):
+        if not self._pending_files:
+            return
+        try:
+            self.context.use(self._pending_files)
+        except (OSError, ValueError) as e:
+            self._startup_error = str(e)
 
     # Interaction-socket helpers, only reachable when --interaction-socket
     # is passed. Run in background threads and marshal UI actions via
