@@ -34,12 +34,14 @@ class ImpureLookupsAreBlocked(avocado.Test):
 
 
 class PlaybookWaves(avocado.Test):
-    def parse(self, playbook_yaml):
+    def parse_spec(self, playbook_yaml):
         build = BuildCmd()
         build.loads("distribution:\n    release: trixie\n"
                     "    architecture: amd64\nplaybook:\n" + playbook_yaml)
-        build.parse()
-        return build.spec["playbook"]
+        return build.parse()
+
+    def parse(self, playbook_yaml):
+        return self.parse_spec(playbook_yaml)["playbook"]
 
     def test_default_wave_keeps_old_order_without_priority(self):
         playbooks = self.parse("""
@@ -186,3 +188,17 @@ class PlaybookWaves(avocado.Test):
 """)
         self.assertEqual([p["name"] for p in playbooks],
                          ["wave a play", "wave b play"])
+
+    def test_baseline_from_first_wave_wins(self):
+        spec = self.parse_spec("""
+    - name: play in second wave
+      wave: second
+      baseline: second-wave-base
+      priority: 100
+      after: [first]
+    - name: play in first wave
+      wave: first
+      baseline: first-wave-base
+      priority: 900
+""")
+        self.assertEqual(spec.get("baseline"), "first-wave-base")

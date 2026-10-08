@@ -234,11 +234,10 @@ class Image:
         # Order playbooks by wave, then priority, then file order
         playbooks = playbook_rules.order(playbooks)
 
-        # Get selected baseline (highest priority across playbooks)
-        for playbook in sorted(playbooks, key=lambda p: p.get("priority", 500)):
+        # Get selected baseline from the first play in wave order
+        for playbook in playbooks:
             if "baseline" in playbook:
                 if self._from is None:
-                    # highest prio 'baseline' wins
                     self._from = playbook["baseline"]
                 break
 
