@@ -201,26 +201,53 @@ class Image:
         from seine.build import playbook as playbook_rules
         playbook_rules.check(playbooks)
         # Check provided playbooks
-        index = 1
-        for playbook in playbooks:
+        for index, playbook in enumerate(playbooks, 1):
             if type(playbook) != type({}):
-                raise ValueError("playbook #%d is not a dictionary!" % index)
+                raise ValueError(f"playbook #{index} is not a dictionary!")
             playbook["hosts"] = "all"
             if "priority" not in playbook:
                 playbook["priority"] = 500
-            index = index + 1
+            elif type(playbook["priority"]) != type(0) or type(playbook["priority"]) == type(True):
+                play_name = f"playbook '{playbook['name']}'" if playbook.get("name") else f"playbook #{index}"
+                raise ValueError(f"{play_name}: 'priority' shall be an integer")
+            if not playbook.get("wave"):
+                playbook["wave"] = "main"
+            elif type(playbook["wave"]) != type(""):
+                play_name = f"playbook '{playbook['name']}'" if playbook.get("name") else f"playbook #{index}"
+                raise ValueError(f"{play_name}: 'wave' shall be a string")
+            for key in ("after", "before"):
+                val = playbook.get(key)
+                if val is None:
+                    playbook[key] = []
+                elif type(val) == type(""):
+                    playbook[key] = [val]
+                elif type(val) == type([]):
+                    for item in val:
+                        if type(item) != type(""):
+                            play_name = f"playbook '{playbook['name']}'" if playbook.get("name") else f"playbook #{index}"
+                            raise ValueError(f"{play_name}: '{key}' shall be a string or a list of strings")
+                    playbook[key] = list(val)
+                else:
+                    play_name = f"playbook '{playbook['name']}'" if playbook.get("name") else f"playbook #{index}"
+                    raise ValueError(f"{play_name}: '{key}' shall be a string or a list of strings")
 
-        # Order them by ascending priority
-        playbooks = sorted(playbooks, key=lambda p: p["priority"])
+        # Order playbooks by wave, then priority, then file order
+        playbooks = playbook_rules.order(playbooks)
 
-        # Get selected baseline and remove the "priority" setting since not understood
-        # by Ansible (and not needed anymore)
-        for playbook in playbooks:
+        # Get selected baseline (highest priority across playbooks)
+        for playbook in sorted(playbooks, key=lambda p: p.get("priority", 500)):
             if "baseline" in playbook:
                 if self._from is None:
                     # highest prio 'baseline' wins
                     self._from = playbook["baseline"]
-                playbook.pop("baseline", None)
+                break
+
+        # Remove seine-only keys before Ansible sees them
+        for playbook in playbooks:
+            playbook.pop("baseline", None)
+            playbook.pop("wave", None)
+            playbook.pop("after", None)
+            playbook.pop("before", None)
             playbook.pop("priority", None)
 
         spec["playbook"] = playbooks

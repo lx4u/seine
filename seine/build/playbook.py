@@ -38,6 +38,80 @@ def check(playbooks):
                 "'credentials:' for values, or build a package." % found.group(1))
 
 
+def _play_name(play, index):
+    return f"playbook '{play['name']}'" if play.get("name") else f"playbook #{index}"
+
+
+def order(playbooks):
+    """Return playbooks ordered by wave, then priority, then file order.
+
+    Waves are ordered with a Kahn walk over dependencies declared with
+    'after:' and 'before:'. Plays inside each wave are ordered by lowest
+    'priority:' first, ties broken by file order.
+    """
+    if not playbooks:
+        return []
+
+    # Waves in order of their first appearance.
+    waves = []
+    seen = set()
+    for play in playbooks:
+        w = play.get("wave") or "main"
+        if w not in seen:
+            seen.add(w)
+            waves.append(w)
+
+    # Validate wave references and build predecessors per wave.
+    predecessors = {w: set() for w in waves}
+    for index, play in enumerate(playbooks, 1):
+        wave = play.get("wave") or "main"
+        for key in ("after", "before"):
+            val = play.get(key) or []
+            refs = [val] if isinstance(val, str) else list(val)
+            for ref in refs:
+                if ref not in seen:
+                    raise ValueError(
+                        f"{_play_name(play, index)}: '{key}' names '{ref}', "
+                        f"which no wave in this specification defines")
+                if ref == wave:
+                    raise ValueError(
+                        f"{_play_name(play, index)}: '{key}' names the wave itself")
+                if key == "after":
+                    predecessors[wave].add(ref)
+                else:
+                    predecessors[ref].add(wave)
+
+    # Kahn's algorithm: among ready waves, pick the earliest listed.
+    ordered_waves = []
+    remaining = set(waves)
+    while len(remaining) > 0:
+        ready = [w for w in waves if w in remaining and len(predecessors[w] & remaining) == 0]
+        if len(ready) == 0:
+            involved = [
+                _play_name(p, idx)
+                for idx, p in enumerate(playbooks, 1)
+                if (p.get("wave") or "main") in remaining
+            ]
+            raise ValueError(
+                f"'before'/'after' settings of these waves depend on each other "
+                f"in a circle: {', '.join(sorted(remaining))} ({', '.join(involved)})")
+        chosen = ready[0]
+        ordered_waves.append(chosen)
+        remaining.discard(chosen)
+
+    # Order plays inside each wave by priority, then file order.
+    wave_plays = {w: [] for w in waves}
+    for index, play in enumerate(playbooks, 1):
+        wave = play.get("wave") or "main"
+        wave_plays[wave].append((play.get("priority", 500), index, play))
+
+    ordered = []
+    for wave in ordered_waves:
+        for _, _, play in sorted(wave_plays[wave], key=lambda item: (item[0], item[1])):
+            ordered.append(play)
+    return ordered
+
+
 # Plays that name files or trees these static forms can list. Anything else
 # that reads files is 'dynamic' and needs a 'uses:' on its play.
 _LOOKUP = re.compile(r"lookup\(")
