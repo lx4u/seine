@@ -6,6 +6,12 @@ playbook:
       wave: config
       after: [kernel]
       tasks:
+        - name: install the sysctl tool the module needs
+          apt:
+              state: present
+              name:
+                  - procps
+
         # the build container has no write access to /proc/sys, so this
         # only writes the config file for the booted target to apply
         - name: lower swappiness for an appliance workload
