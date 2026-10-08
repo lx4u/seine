@@ -36,7 +36,8 @@ packages:
 
 playbook:
     - name: uki boot packages
-      priority: 800
+      wave: kernel
+      after: [base]
       tasks:
           - name: install systemd-boot, udev, kmod and the uki package
             apt:
@@ -51,7 +52,9 @@ playbook:
                     - uefi-provision-keys
                 state: present
     - name: a few real-hardware conveniences
-      priority: 850
+      wave: packages
+      after: [base]
+      before: [kernel]
       tasks:
           - name: install common utilities
             apt:

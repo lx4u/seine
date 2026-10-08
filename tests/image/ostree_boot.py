@@ -56,7 +56,8 @@ distribution:
 imager:
     kernel: linux-image-amd64
 """ + GROUP.replace("    - stdlib:debian/amd64.yml\n", "") + """    - name: systemd-boot and the kernel
-      priority: 800
+      wave: kernel
+      after: [main]
       tasks:
           - name: install systemd-boot, kernel and firmware blobs
             apt:
@@ -67,6 +68,7 @@ imager:
 # A UKI of the rootfs' own kernel and initramfs, made at build time
 # without the deployment's command line: the imager adds it.
 UKI = """    - name: a UKI of the kernel
+      wave: config
       priority: 900
       tasks:
           - name: install ukify

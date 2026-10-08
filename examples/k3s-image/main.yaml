@@ -15,6 +15,9 @@ requires:
 
 playbook:
     - name: Install K3s control-plane
+      wave: packages
+      after: [base]
+      before: [kernel]
       tasks:
           - name: Set KUBECONFIG in environment and profile
             copy:

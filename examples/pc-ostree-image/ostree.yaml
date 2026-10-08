@@ -3,14 +3,16 @@
 
 # What a root file system needs to become an OSTree sysroot: dracut
 # (ostree's initramfs module) and ostree itself, with no
-# initramfs-tools. Installed before the kernel (priority 700 vs 800) so
-# dracut's own Provides pre-empts initramfs-tools, as in
-# examples/minimal-initrd/. The build stops before any disk work if one
-# is missing.
+# initramfs-tools. Installed before the kernel (wave 'initramfs'
+# before 'kernel') so dracut's own Provides pre-empts initramfs-tools,
+# as in examples/minimal-initrd/. The build stops before any disk work if
+# one is missing.
 
 playbook:
     - name: build the initramfs with dracut and add ostree
-      priority: 700
+      wave: initramfs
+      after: [base]
+      before: [kernel]
       tasks:
           - name: install dracut, ostree and systemd
             apt:

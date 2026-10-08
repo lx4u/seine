@@ -3,7 +3,8 @@
 
 playbook:
     - name: tune kernel parameters
-      priority: 900
+      wave: config
+      after: [kernel]
       tasks:
         # the build container has no write access to /proc/sys, so this
         # only writes the config file for the booted target to apply

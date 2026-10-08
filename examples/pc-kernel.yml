@@ -31,7 +31,8 @@ packages:
 # result of this rather than what came before it.
 playbook:
     - name: boot the pc kernel instead of the distribution's
-      priority: 850
+      wave: kernel
+      after: [base]
       tasks:
           - name: install the pc kernel
             apt:

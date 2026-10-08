@@ -3,7 +3,8 @@
 
 playbook:
     - name: set the system timezone
-      priority: 900
+      wave: config
+      after: [kernel]
       tasks:
         # trixie split hwclock out of util-linux into util-linux-extra;
         # community.general.timezone needs it even just to set Etc/UTC.

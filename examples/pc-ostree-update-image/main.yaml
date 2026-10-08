@@ -36,7 +36,9 @@ update:
 
 playbook:
     - name: dracut and ostree
-      priority: 700
+      wave: initramfs
+      after: [base]
+      before: [kernel]
       tasks:
           - name: install dracut, ostree and systemd
             apt:
@@ -50,7 +52,8 @@ playbook:
                 state: present
 
     - name: systemd-boot and the kernel
-      priority: 800
+      wave: kernel
+      after: [base]
       tasks:
           - name: install systemd-boot, the kernel and firmware blobs
             apt:
@@ -62,7 +65,8 @@ playbook:
 
     # The imager adds the deployment's arguments to this command line.
     - name: a UKI of the kernel
-      priority: 900
+      wave: kernel
+      after: [base]
       tasks:
           - name: install ukify
             apt:

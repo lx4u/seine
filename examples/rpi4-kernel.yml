@@ -34,7 +34,8 @@ packages:
 # might come along later.
 playbook:
     - name: boot the rpi4 kernel instead of the distribution's
-      priority: 850
+      wave: kernel
+      after: [base]
       tasks:
           - name: install the rpi4 kernel
             apt:

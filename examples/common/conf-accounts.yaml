@@ -16,7 +16,8 @@ defaults:
 
 playbook:
     - name: configure user accounts
-      priority: 900
+      wave: config
+      after: [kernel]
       tasks:
         - name: set root password
           user: name=root update_password=always password=[[ vault("kv/data/accounts/root#hash") ]]

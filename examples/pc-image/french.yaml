@@ -8,7 +8,8 @@ overrides:
 
 playbook:
     - name: configure locales to French
-      priority: 800
+      wave: config
+      after: [kernel]
       tasks:
         - name: set default locale to fr_FR.UTF-8
           debconf:

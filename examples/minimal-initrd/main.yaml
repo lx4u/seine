@@ -8,9 +8,10 @@
 #
 # Built by dracut, not the default initramfs-tools: only dracut's
 # systemd module runs the gpt-auto-generator examples/minimal-uki/'s
-# 'root=gpt-auto' cmdline needs. Installed before the kernel (priority
-# 700 vs 800) so dracut's own Provides pre-empts initramfs-tools --
-# both installed would let its hook overwrite dracut's initrd.
+# 'root=gpt-auto' cmdline needs. Installed before the kernel (wave
+# 'initramfs' before 'kernel') so dracut's own Provides pre-empts
+# initramfs-tools -- both installed would let its hook overwrite
+# dracut's initrd.
 
 requires:
     - stdlib:debian/amd64.yml
@@ -18,7 +19,9 @@ requires:
 
 playbook:
     - name: build the initrd with dracut instead of initramfs-tools
-      priority: 700
+      wave: initramfs
+      after: [base]
+      before: [kernel]
       tasks:
           # 'dracut-config-generic' disables host-only mode, else the
           # initrd only works on this build container. 'systemd'/
@@ -34,8 +37,7 @@ playbook:
                 state: present
           # Not auto-included just by installing the packages above --
           # Debian's dracut ships these as inactive template profiles.
-          # Must be written before 'stdlib:debian/amd64.yml's priority-800
-          # kernel install triggers dracut.
+          # Must be written before the kernel install triggers dracut.
           - name: force dracut to include the systemd and verity generators
             lineinfile:
                 path: /etc/dracut.conf.d/60-uki-verity.conf

@@ -8,7 +8,8 @@
 # is the primary console (getty, kernel messages default there).
 playbook:
     - name: enable a serial console on ttyS0
-      priority: 900
+      wave: config
+      after: [kernel]
       tasks:
           - name: add console=ttyS0 to the kernel command line
             lineinfile:

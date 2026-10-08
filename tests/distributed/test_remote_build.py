@@ -870,19 +870,19 @@ class RemoteBuildTest(Test):
 
     def test_spec_requiring_stdlib_is_staged_in_bundle(self):
         self.write_spec("distribution:\n  release: trixie\n  architecture: amd64\n"
-                        "requires:\n  - stdlib:debian/amd64.yml\n")
+                        "requires:\n  - stdlib:debian/base.yml\n")
         code, out, err = self.run_build()
         self.assertEqual(code, 0)
-        self.assertTrue(any(k.startswith(".seine-stdlib/debian/amd64.yml") for k in (self.sparse_staged or {})))
+        self.assertTrue(any(k.startswith(".seine-stdlib/debian/base.yml") for k in (self.sparse_staged or {})))
 
     def test_cli_stdlib_spec_is_staged_in_bundle(self):
         with mock.patch("sys.stdout", io.StringIO()):
-            code = build_remote(SERVER, project="proj", spec_files=["stdlib:debian/amd64.yml"],
+            code = build_remote(SERVER, project="proj", spec_files=["stdlib:debian/base.yml"],
                                 token="pat-test", root_dir=self.tmp_dir)
         self.assertEqual(code, 0)
         sent = self.submitted()["json"]["spec_files"]
-        self.assertEqual(sent, [".seine-stdlib/debian/amd64.yml"])
-        self.assertTrue(any(k == ".seine-stdlib/debian/amd64.yml" for k in (self.sparse_staged or {})))
+        self.assertEqual(sent, [".seine-stdlib/debian/base.yml"])
+        self.assertTrue(any(k == ".seine-stdlib/debian/base.yml" for k in (self.sparse_staged or {})))
 
     def test_child_env_points_stdlib_dir_to_staged_worktree(self):
         from seine.distributed.agent.executor import child_env

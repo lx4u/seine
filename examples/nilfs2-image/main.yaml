@@ -10,7 +10,7 @@ requires:
 
 playbook:
     - name: add support for the nilfs2 file-system
-      priority: 100
+      wave: base
       tasks:
         - name: install packages required for nilfs2 support
           apt:

@@ -41,7 +41,8 @@ image:
 
 playbook:
     - name: uki boot packages
-      priority: 800
+      wave: kernel
+      after: [base]
       tasks:
           - name: install systemd-boot, udev, kmod and the uki package
             apt:

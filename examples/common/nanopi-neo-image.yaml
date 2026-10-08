@@ -6,7 +6,8 @@ distribution:
 
 playbook:
     - name: boot packages
-      priority: 800
+      wave: kernel
+      after: [base]
       tasks:
           - name: install u-boot
             apt:

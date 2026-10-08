@@ -57,7 +57,9 @@ packages:
 
 playbook:
     - name: install the bcachefs modules
-      priority: 250
+      wave: packages
+      after: [base]
+      before: [kernel]
       tasks:
           # The metapackage: the package it points at is renamed by
           # every kernel update, and this is not. The modules only --

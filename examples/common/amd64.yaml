@@ -38,7 +38,8 @@ imager:
 
 playbook:
     - name: boot packages
-      priority: 800
+      wave: kernel
+      after: [base]
       tasks:
           - name: install grub packages
             apt:

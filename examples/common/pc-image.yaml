@@ -3,7 +3,7 @@
 
 playbook:
     - name: base packages
-      priority: 100
+      wave: base
       tasks:
            - name: install core packages
              apt:

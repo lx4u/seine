@@ -16,7 +16,8 @@ distribution:
 
 playbook:
     - name: recovery packages
-      priority: 250
+      wave: kernel
+      after: [base]
       tasks:
           - name: install a kernel and dropbear
             apt:

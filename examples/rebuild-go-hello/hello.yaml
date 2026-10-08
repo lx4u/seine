@@ -22,7 +22,7 @@ packages:
 
 playbook:
     - name: install the go-built weave example
-      priority: 250
+      wave: packages
       tasks:
           - name: weave
             apt:

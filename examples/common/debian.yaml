@@ -7,7 +7,7 @@ defaults:
 
 playbook:
     - name: init packages
-      priority: 100
+      wave: base
       tasks:
            - name: install init packages
              apt:

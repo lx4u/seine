@@ -7,3 +7,8 @@ requires:
     - stdlib:extends/golang.yml
     - ../common/pc-image
     - hello
+
+playbook:
+    - name: install the go-built weave example
+      wave: packages
+      before: [kernel]

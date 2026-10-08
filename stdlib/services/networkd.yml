@@ -3,7 +3,9 @@
 
 playbook:
     - name: install network packages
-      priority: 500
+      wave: services
+      after: [base]
+      before: [kernel]
       tasks:
           - name: install network and DNS resolution packages
             apt:
@@ -13,7 +15,9 @@ playbook:
                 state: present
 
     - name: configure network via systemd-networkd and systemd-resolved
-      priority: 800
+      wave: services
+      after: [base]
+      before: [kernel]
       tasks:
           - name: enable systemd-networkd and systemd-resolved
             systemd:

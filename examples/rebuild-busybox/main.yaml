@@ -11,3 +11,8 @@ requires:
     - ../common/pc-image
     - ../common/conf-accounts
     - busybox
+
+playbook:
+    - name: install the rebuilt busybox
+      wave: packages
+      before: [kernel]

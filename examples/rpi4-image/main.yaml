@@ -13,7 +13,9 @@ requires:
 
 playbook:
     - name: some great packages
-      priority: 250
+      wave: packages
+      after: [base]
+      before: [kernel]
       tasks:
            - name: install vim
              apt:

@@ -11,6 +11,9 @@ requires:
 
 playbook:
     - name: Install Docker engine
+      wave: packages
+      after: [base]
+      before: [kernel]
       tasks:
           - name: Install Docker engine
             apt:

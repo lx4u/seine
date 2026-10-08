@@ -6,7 +6,9 @@
 
 playbook:
     - name: install and harden sshd
-      priority: 300
+      wave: services
+      after: [base]
+      before: [kernel]
       tasks:
         - name: install the ssh server
           apt:

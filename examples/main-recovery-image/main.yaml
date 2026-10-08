@@ -16,7 +16,9 @@ requires:
 
 playbook:
     - name: everyday packages
-      priority: 250
+      wave: packages
+      after: [base]
+      before: [kernel]
       tasks:
           - name: install a small toolset
             apt:

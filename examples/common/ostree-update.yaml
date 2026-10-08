@@ -10,7 +10,9 @@
 
 playbook:
     - name: install the update tools
-      priority: 500
+      wave: services
+      after: [base]
+      before: [kernel]
       tasks:
           - name: install the packages the update script uses
             apt:
@@ -24,7 +26,9 @@ playbook:
                 state: present
 
     - name: configure the updates
-      priority: 800
+      wave: services
+      after: [base]
+      before: [kernel]
       tasks:
           - name: refuse to build without an update url
             assert:

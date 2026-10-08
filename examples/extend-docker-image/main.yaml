@@ -10,7 +10,11 @@ requires:
 
 playbook:
     - baseline: debian:bookworm
+      wave: base
     - name: install additional packages
+      wave: packages
+      after: [base]
+      before: [kernel]
       tasks:
            - name: install webserver packages
              apt:

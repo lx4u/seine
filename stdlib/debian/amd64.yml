@@ -1,6 +1,9 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+requires:
+    - base
+
 distribution:
     architecture: amd64
 
@@ -38,7 +41,8 @@ imager:
 
 playbook:
     - name: boot packages
-      priority: 800
+      wave: kernel
+      after: [base]
       tasks:
           - name: install grub packages
             apt:
