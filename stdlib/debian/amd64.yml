@@ -1,0 +1,54 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+distribution:
+    architecture: amd64
+
+# Which kernel of this architecture is meant, for a specification that
+# rebuilds one. Under 'defaults' rather than 'packages': naming a package
+# there would ask for it to be built, and every amd64 image would rebuild
+# a kernel whether it wanted one or not.
+defaults:
+    packages:
+        - source: apt://linux
+          extends:
+              kernel:
+                  flavour: amd64
+        # And that a module built for this architecture is built against
+        # that kernel as well as the distribution's. Under 'defaults', so
+        # it asks for nothing: an image that builds no kernel of its own
+        # -- which is most of them -- drops this, and an image that
+        # builds no modules never reads it at all.
+        - name: nvidia-open
+          extends:
+              module:
+                  amd64-kernels:
+                      - linux
+        # bcachefs needs a kernel newer than the distribution ships, so
+        # unlike the modules above, this is where it names one: composing
+        # examples/bcachefs/ without it is refused when parsed.
+        - name: bcachefs
+          extends:
+              module:
+                  amd64-kernels:
+                      - linux
+
+imager:
+    kernel: linux-image-amd64
+
+playbook:
+    - name: boot packages
+      priority: 800
+      tasks:
+          - name: install grub packages
+            apt:
+                name:
+                    - grub-efi-amd64
+                    - grub-efi-amd64-signed
+                state: present
+          - name: install kernel and firmware blobs
+            apt:
+                name:
+                    - linux-image-amd64
+                    - firmware-linux-free
+                state: present

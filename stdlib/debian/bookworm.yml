@@ -1,0 +1,16 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+requires:
+    - base
+    - feeds
+
+distribution:
+    release: bookworm
+    # One feed of its own, on top of the ones debian/feeds already
+    # covers. Backports carries packaging rather than anything installed
+    # by default: NotAutomatic, so a spec asks for it by version
+    # (examples/linux-6.18/bookworm.yml).
+    feeds:
+        - suite: bookworm-backports
+          release: bookworm

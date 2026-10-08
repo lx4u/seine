@@ -1,0 +1,9 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+requires:
+    - base
+    - feeds
+
+distribution:
+    release: trixie

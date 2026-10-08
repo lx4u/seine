@@ -1,0 +1,52 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# demonstrates a spec's own Ansible module: 'library/' beside this file is
+# found by seine automatically -- see docs/specification.md#playbook.
+
+playbook:
+    - name: install and harden sshd
+      priority: 300
+      tasks:
+        - name: install the ssh server
+          apt:
+              state: present
+              name:
+                  - openssh-server
+
+        - name: disable root login over ssh
+          sshd_config:
+              name: PermitRootLogin
+              value: "no"
+
+        - name: disable password authentication
+          sshd_config:
+              name: PasswordAuthentication
+              value: "no"
+
+        - name: drop a cipher, keep the rest of sshd's default
+          sshd_config:
+              name: Ciphers
+              algorithm: aes128-ctr
+              state: absent
+
+        - name: allow a legacy cipher some old hardware still needs
+          sshd_config:
+              name: Ciphers
+              algorithm: aes128-cbc
+              state: present
+
+        # openssh-server's postinst generates these at install time --
+        # every image would share the same keys otherwise. Debian
+        # regenerates any missing one at first real boot.
+        - name: drop the install-time host keys
+          file:
+              path: "{{ item }}"
+              state: absent
+          loop:
+              - /etc/ssh/ssh_host_rsa_key
+              - /etc/ssh/ssh_host_rsa_key.pub
+              - /etc/ssh/ssh_host_ecdsa_key
+              - /etc/ssh/ssh_host_ecdsa_key.pub
+              - /etc/ssh/ssh_host_ed25519_key
+              - /etc/ssh/ssh_host_ed25519_key.pub

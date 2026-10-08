@@ -18,6 +18,10 @@ class build_py(_build_py):
             for name in os.listdir(src):
                 if name.endswith(".md"):
                     shutil.copy2(os.path.join(src, name), os.path.join(dst, name))
+        src_stdlib = os.path.join(here, "stdlib")
+        if os.path.isdir(src_stdlib):
+            dst_stdlib = os.path.join(here, "seine", "stdlib")
+            shutil.copytree(src_stdlib, dst_stdlib, dirs_exist_ok=True)
         super().run()
 
 setup(
@@ -32,7 +36,8 @@ setup(
                             "data/go/*", "data/module/*", "data/cross/*",
                             "data/uki-ukify/*", "data/uki-efibootguard/*",
                             "data/uki-addon/*", "data/uefi-keys/*",
-                            "data/docs/*.md", "data/ansible/action_plugins/*.py"]},
+                            "data/docs/*.md", "data/ansible/action_plugins/*.py",
+                            "stdlib/**/*", "stdlib/*"]},
     cmdclass={"build_py": build_py},
     entry_points = {
         'console_scripts': [

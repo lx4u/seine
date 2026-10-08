@@ -14,8 +14,9 @@ vault/openbao/plugins/sbsign/seine-sbsign.so
 vault/openbao/plugins/sbsign/seine-sbsign
 vault/openbao/plugins/kmod/seine-kmod.so
 vault/openbao/plugins/kmod/seine-kmod
-# Copied in from docs/ by setup.py's build_py override -- generated,
-# not committed.
+# Copied in from docs/ and stdlib/ by setup.py's build_py override --
+# generated, not committed.
 seine/data/docs
+seine/stdlib
 tools/bbolt-normalize/bbolt-normalize
 
