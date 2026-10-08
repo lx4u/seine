@@ -4,6 +4,7 @@
 import contextlib
 import functools
 import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -508,6 +509,29 @@ class Image:
 
         self.partitionHandler.compute_sizes()
         self.partitionHandler.print_stats()
+        self._write_layout()
+
+    def _layout_file(self):
+        return f"{self._output}.layout" if self._output else None
+
+    # Final partition/volume sizes, so the TUI can show them for entries
+    # that declare no 'size:'.
+    def _write_layout(self):
+        path = self._layout_file()
+        if not path:
+            return
+        entries = self.partitionHandler.partitions + self.partitionHandler.volumes
+        sizes = {e["label"]: e["_size"] for e in entries if "_size" in e}
+        with open(path, "w") as f:
+            json.dump(sizes, f)
+
+    def read_layout(self):
+        path = self._layout_file()
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except (OSError, TypeError, ValueError):
+            return {}
 
     # Names the task that finishes writing a referenced group's tarball,
     # so 'disk' can wait for it and never read it mid-write.

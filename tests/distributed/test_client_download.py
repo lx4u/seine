@@ -289,6 +289,18 @@ class TestClientArtifactDownload(Test):
         self.assertIn("Downloaded 2 of 2 artifact(s)", out)
         self.assertNotIn("recipe digest", out)
 
+    def test_the_layout_file_lands_where_the_local_build_reads_it(self):
+        from seine.image import Image
+        from seine.partition import PartitionHandler
+        self._complete({"app.img": b"payload",
+                        "app.img.layout": b'{"root": 100663296}'})
+        out_dir = os.path.join(self.tmp_dir, "out")
+        ret, _, _ = self._run({"dest_dir": out_dir})
+        self.assertEqual(ret, 0)
+        image = Image(PartitionHandler(), {"verbose": False, "keep": False})
+        image._output = os.path.join(out_dir, "app.img")
+        self.assertEqual(image.read_layout(), {"root": 96 << 20})
+
     def test_name_without_manifest_entry_is_an_error(self):
         self._complete({"a.img": b"aaaaaaaa", "b.img": b"bbbbbbbb"})
         self.build["artifacts"] = [a for a in self.build["artifacts"] if a["name"] == "a.img"]

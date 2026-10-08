@@ -99,3 +99,13 @@ class ImageRecipeGeneration(avocado.Test):
     def test_recipe_file_paths(self):
         self.assertEqual(self.image._recipe_file(), f"{self.image._rootfs}.recipe")
         self.assertEqual(self.image._image_recipe_file(), f"{self.image._output}.recipe")
+
+    def test_layout_file_round_trip(self):
+        self.assertEqual(self.image.read_layout(), {})
+        ph = self.image.partitionHandler
+        ph.partitions = [{"label": "root", "_size": 96 << 20}, {"label": "x"}]
+        ph.volumes = [{"label": "var", "_size": 8 << 20}]
+        self.image._write_layout()
+        self.assertEqual(self.image._layout_file(), f"{self.image._output}.layout")
+        self.assertEqual(self.image.read_layout(),
+                         {"root": 96 << 20, "var": 8 << 20})

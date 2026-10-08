@@ -169,6 +169,7 @@ class TestArtifactHarvesting(Test):
             "base.rootfs.tar",
             "system.img.digest",
             "system.img.recipe",
+            "system.img.layout",
             "system.boot-signers",
             "system.boot-signers.json",
             "system.sbom.json",

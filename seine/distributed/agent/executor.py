@@ -480,6 +480,7 @@ DELIVERABLE_PATTERNS = [
     "*.rootfs.tar",
     "*.digest",
     "*.recipe",
+    "*.layout",
     "*.boot-signers*",
     "*.sbom*",
 ]

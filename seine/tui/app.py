@@ -341,7 +341,8 @@ class OverviewScreen(BaseScreen):
             index = tree.root.children.index(node.parent)
             build = self.app.context.builds[index]
             text = render_image_node(build.spec.get("image") or {},
-                                     width=_body_width(self))
+                                     width=_body_width(self),
+                                     actual=build.image.read_layout())
             text = append_logs_section(
                 text, build.spec["distribution"]["release"],
                 build.spec["distribution"]["architecture"], ("image",))

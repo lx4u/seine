@@ -378,6 +378,18 @@ class ImageNodeRendering(avocado.Test):
         self.assertIn("cyan", styles)
         self.assertIn("green", styles)
 
+    def test_unsized_partition_shows_last_build_size_in_italic(self):
+        image_spec = {"partitions": [
+            {"label": "root", "type": "ext4", "where": "/"}]}
+        unknown = self.render_image_node(image_spec)
+        self.assertIn("?", unknown.plain)
+        text = self.render_image_node(
+            image_spec, actual={"root": 96 * 1024 * 1024})
+        self.assertIn("96.0MiB", text.plain)
+        self.assertNotIn("?", text.plain)
+        styles = {str(span.style) for span in text.spans}
+        self.assertIn("green italic", styles)
+
     def test_lvm_partition_nests_its_volumes(self):
         image_spec = {
             "partitions": [

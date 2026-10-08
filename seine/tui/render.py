@@ -149,12 +149,19 @@ def _extra_rows(sizes, budget=EXTRA_ROWS_BUDGET):
         return [0] * len(sizes)
     return [round(budget * size / total) for size in sizes]
 
+# A declared size is fixed. Without one, the size from the last build
+# (if any) is shown and flagged dynamic; 0 means not known yet.
+def _box_size(entry, actual):
+    if entry.get("size"):
+        return {"size": entry["size"], "dynamic": False}
+    return {"size": actual.get(entry["label"], 0), "dynamic": True}
+
 # Leaves only, budgeted across the WHOLE image in one go, not per
 # sibling group: a per-group budget made a small top-level partition
 # look as big as a much larger LVM volume in a smaller group.
-def _leaf_boxes(entries):
+def _leaf_boxes(entries, actual):
     boxes = [{"label": e["label"], "type": e.get("type", ""),
-             "size": e.get("size") or 0, "role": _role(e), "children": []}
+             "role": _role(e), "children": [], **_box_size(e, actual)}
             for e in entries]
     for box, extra in zip(boxes, _extra_rows([b["size"] for b in boxes])):
         box["rows"] = FLOOR_ROWS + extra
@@ -163,7 +170,7 @@ def _leaf_boxes(entries):
 # A container's height is the sum of its own children stacked, not a
 # proportional share against its sibling leaves: what it displays is
 # already exactly what it contains.
-def _layout(image_spec):
+def _layout(image_spec, actual):
     partitions = image_spec.get("partitions") or []
     volumes = image_spec.get("volumes") or []
     by_group = {}
@@ -175,15 +182,15 @@ def _layout(image_spec):
     for entry in container_entries:
         leaf_entries.extend(by_group.get(entry.get("group"), []))
 
-    boxes_by_label = {box["label"]: box for box in _leaf_boxes(leaf_entries)}
+    boxes_by_label = {box["label"]: box for box in _leaf_boxes(leaf_entries, actual)}
     for entry in container_entries:
         children = [boxes_by_label[v["label"]]
                     for v in by_group.get(entry.get("group"), [])]
         rows = 1 + sum(child["rows"] for child in children) if children else FLOOR_ROWS
         boxes_by_label[entry["label"]] = {
             "label": entry["label"], "type": entry.get("type", ""),
-            "size": entry.get("size") or 0, "role": _role(entry),
-            "children": children, "rows": rows,
+            "role": _role(entry), "children": children, "rows": rows,
+            **_box_size(entry, actual),
         }
     # On-disk order, not leaves-then-containers.
     return [boxes_by_label[p["label"]] for p in partitions]
@@ -198,10 +205,12 @@ def _box_lines(box, width):
     role = box["role"]
     size_text = _human_size(box["size"]) if box["size"] else "?"
     detail = "%s  %s" % (box["type"], size_text) if box["type"] else size_text
+    # Dynamic sizes are italic so they read apart from fixed ones.
+    detail_role = f"{role} italic" if box["dynamic"] and box["size"] else role
     lines = [
         [("┌" + "─" * inner + "┐", role)],
         [("│ " + box["label"][:field].ljust(field) + "│", role)],
-        [("│ " + detail[:field].ljust(field) + "│", role)],
+        [("│ " + detail[:field].ljust(field) + "│", detail_role)],
     ]
     if box["children"]:
         for child in box["children"]:
@@ -222,10 +231,11 @@ def _flatten(boxes):
         yield box
         yield from _flatten(box["children"])
 
-def render_image_node(image_spec, width=BOX_WIDTH):
+# 'actual' maps label -> bytes from the last build (see Image._write_layout()).
+def render_image_node(image_spec, width=BOX_WIDTH, actual=None):
     from rich.text import Text
     width = max(MIN_BOX_WIDTH, min(width, BOX_WIDTH))
-    boxes = _layout(image_spec)
+    boxes = _layout(image_spec, actual or {})
     text = Text()
     if not boxes:
         text.append("no partitions defined\n")
@@ -244,7 +254,8 @@ def render_image_node(image_spec, width=BOX_WIDTH):
     for box in boxes:
         for row in _box_lines(box, width):
             for segment, role in row:
-                text.append(segment, style=_ROLE_STYLES.get(role, ""))
+                base, _, extra = role.partition(" ")
+                text.append(segment, style=f"{_ROLE_STYLES.get(base, '')} {extra}".strip())
             text.append("\n")
     return text
 
