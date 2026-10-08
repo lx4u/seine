@@ -596,6 +596,16 @@ class SeineApp(App):
         background: $accent;
         color: $text;
     }
+    StartupModal { align: center middle; }
+    #startuppane {
+        width: 70%; height: 70%;
+        border: round $border;
+        background: $surface;
+        padding: 1 2;
+    }
+    #startuptitle { color: blue; text-style: bold; height: 1; }
+    #startuplog { height: 1fr; border: none; background: $surface; }
+    #startupstatus { height: auto; color: $text-muted; }
     """
 
     def __init__(self, files=None, interaction_socket=None, remote=None, connect_remote=False,
