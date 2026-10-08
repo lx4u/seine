@@ -7,6 +7,7 @@
 # no separate TUI model, beyond build_state which outlives its screen.
 
 import asyncio
+import contextlib
 import os
 import subprocess
 import socket
@@ -504,6 +505,23 @@ class RegistryProvider(command.Provider):
             prompt.focus()
         return callback
 
+class _AppContext(Context):
+    def __init__(self, app):
+        super().__init__()
+        self._app = app
+        self._builds_val = None
+
+    @property
+    def builds(self):
+        if self._builds_val is None and not getattr(self._app, "is_running", False) and not getattr(self._app, "_loading_spec", False):
+            if getattr(self._app, "_pending_files", None):
+                self._app.load_pending_spec()
+        return self._builds_val
+
+    @builds.setter
+    def builds(self, value):
+        self._builds_val = value
+
 class SeineApp(App):
     TITLE = "seine"
     # Commands and the infobar ask the app which screens it has.
@@ -615,7 +633,7 @@ class SeineApp(App):
         self._connect_remote = connect_remote
         self._remote_insecure = remote_insecure
         self._remote_ca_cert = remote_ca_cert
-        self.context = Context()
+        self.context = _AppContext(self)
         self.history = History()
         self.build_state = BuildState()
         # "N build" chip's finish edge; the start edge is start_build()
@@ -652,7 +670,7 @@ class SeineApp(App):
         # load still opens on Overview, where its error is expected.
         self._no_spec_given = not files
         self._pending_files = files
-        self.load_pending_spec()
+        self._loading_spec = False
         # Interaction socket, enabled via --interaction-socket: creates
         # the socket (overwriting any stale file) and starts a background
         # thread accepting newline-delimited JSON messages, dispatched
@@ -662,6 +680,15 @@ class SeineApp(App):
         self._socket_lock = threading.Lock()
         if self._socket_path:
             self._start_socket_server()
+
+    @contextlib.asynccontextmanager
+    async def run_test(self, *args, wait_for_spec=True, **kwargs):
+        async with super().run_test(*args, **kwargs) as pilot:
+            if wait_for_spec and getattr(self, "_loading_spec", False):
+                while getattr(self, "_loading_spec", False):
+                    await asyncio.sleep(0.01)
+                    await pilot.pause()
+            yield pilot
 
     def load_pending_spec(self):
         if not self._pending_files:
@@ -788,6 +815,11 @@ class SeineApp(App):
 
     # Whichever way the app is left, stop the downloads and forget the remote.
     def exit(self, *args, **kwargs):
+        if getattr(self, "_loading_spec", False):
+            from seine import tasks
+            tasks.interrupt()
+            if hasattr(self, "_load_worker") and self._load_worker:
+                self._load_worker.cancel()
         self.download_state.cancel()
         self.remote_session.disconnect()
         super().exit(*args, **kwargs)
@@ -797,26 +829,23 @@ class SeineApp(App):
     async def action_quit(self):
         from seine.tui.credentials import release_pending
         release_pending()
+        if getattr(self, "_loading_spec", False):
+            from seine import tasks
+            tasks.interrupt()
+            if hasattr(self, "_load_worker") and self._load_worker:
+                self._load_worker.cancel()
         await super().action_quit()
 
     # Nothing to build without a spec, so a bare 'seine tui' opens on
     # Doctor rather than an empty Overview.
     def on_mount(self):
         from seine import settings
+        from seine.tui.startup import StartupModal
         current = settings.load()
         # An unset/hand-edited theme is silently skipped, not an error.
         if current["theme"] in commands.THEMES:
             self.theme = commands.THEMES[current["theme"]]
-        # Input stays shut until deferred startup commands have run, so
-        # a command typed in the first tick can't slip in front of them.
-        self._running_startup = len(current["startup_commands"]) > 0
-        if self._no_spec_given:
-            self.push_screen(DoctorScreen())
-        else:
-            self.push_screen(OverviewScreen())
-        # Deferred to after the initial screen's mount -- a startup
-        # command like /plan needs a screen already on the stack.
-        self.call_after_refresh(self._run_startup_commands, current["startup_commands"])
+
         # Auto-connect in a worker thread so UI startup is not blocked by latency.
         remote_target = self._remote or current.get("default_remote")
         should_connect = self._connect_remote or (current.get("auto_connect_remote") and bool(current.get("default_remote")))
@@ -825,6 +854,59 @@ class SeineApp(App):
                 self.run_worker(lambda: self._auto_connect(remote_target), thread=True)
             else:
                 self.say("remote: no URL specified and default_remote not configured", error=True)
+
+        already_loaded = getattr(self.context, "_builds_val", None) is not None
+        if self._no_spec_given or already_loaded:
+            self._running_startup = len(current["startup_commands"]) > 0
+            if self._no_spec_given:
+                self.push_screen(DoctorScreen())
+            else:
+                self.push_screen(OverviewScreen())
+            self.call_after_refresh(self._run_startup_commands, current["startup_commands"])
+        else:
+            self._running_startup = True
+            self._pending_startup_commands = current["startup_commands"]
+            self._loading_spec = True
+            self.push_screen(OverviewScreen())
+            modal = StartupModal()
+            self._startup_modal = modal
+            self.push_screen(modal)
+            self.call_after_refresh(self._start_deferred_spec_load)
+
+    def _start_deferred_spec_load(self):
+        from seine.tui.startup import load_spec_deferred
+        self._load_worker = self.run_worker(
+            lambda: load_spec_deferred(self, self._startup_modal, self._pending_files),
+            thread=True,
+        )
+
+    def _spec_load_finished(self, error):
+        from seine.tui.startup import StartupModal
+        self._loading_spec = False
+        if isinstance(self.screen, StartupModal):
+            self.pop_screen()
+        elif hasattr(self, "_startup_modal") and self._startup_modal:
+            try:
+                self.uninstall_screen(self._startup_modal)
+            except Exception:
+                pass
+        self._startup_modal = None
+
+        if error:
+            self._startup_error = error
+            self.say(error, error=True)
+        else:
+            self._startup_error = None
+            self.refresh_screens()
+            self.remote_session.sync_matches()
+
+        cmds = getattr(self, "_pending_startup_commands", [])
+        self._pending_startup_commands = []
+        if cmds:
+            self._run_startup_commands(cmds)
+        else:
+            self._running_startup = False
+            self._startup_progress(None, 0)
 
     def _auto_connect(self, target):
         session = self.remote_session

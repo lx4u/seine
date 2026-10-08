@@ -46,6 +46,8 @@ def _use(app, argv):
     the same grouping 'seine build' takes on the real command line. Every
     other screen reads whatever '/use' last set.
     """
+    if getattr(app, "_loading_spec", False):
+        raise CommandError("still loading specification")
     if len(argv) == 0:
         raise CommandError("/use expects one or more specification files")
     try:

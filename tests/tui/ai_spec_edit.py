@@ -139,6 +139,7 @@ class ToolTable(avocado.Test):
                         os.path.join(self.workdir, "common"))
         main = os.path.join(self.workdir, "pc-image", "main.yaml")
         app = self.SeineApp(files=[main])
+        app.load_pending_spec()
         with open(main, "a") as f:
             f.write("  - not valid next to a mapping\n")
         text = self.ai.TOOLS["spec-query"].run(app, {"expression": "$..name"})

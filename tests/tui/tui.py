@@ -2129,10 +2129,10 @@ class App(avocado.Test):
                 stdout = ""
 
             # Mounting the app also shells out to git (Overview's
-            # baseline recall) -- accept and skip that call so it
-            # doesn't crash or land in calls[0]/calls[1] below.
+            # baseline recall) and container engine initialization
+            # (chattr) -- accept and skip so they don't land in calls.
             def fake_run(argv, **kwargs):
-                if argv and argv[0] == "git":
+                if argv and argv[0] in ("git", "chattr"):
                     return FakeResult()
                 calls.append(argv)
                 return FakeResult()
