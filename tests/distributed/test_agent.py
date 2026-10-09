@@ -347,7 +347,7 @@ class SubprocessExecutorTest(Test):
             f.write("x")
         with mock.patch("seine.distributed.agent.executor.provider_from") as provider:
             provider.return_value.push_artifact_info.return_value = {"key": "k"}
-            self.assertEqual(upload_artifacts(job_dir, "p", "bld-5", storage=JOB_S3), [{"key": "k"}])
+            self.assertEqual(upload_artifacts(job_dir, "p", "bld-5", storage=JOB_S3), [{"key": "k", "subdir": ""}])
         provider.assert_called_once_with(JOB_S3)
         with self.assertRaises(ValueError):
             upload_artifacts(job_dir, "p", "bld-5")
