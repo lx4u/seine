@@ -406,8 +406,12 @@ class RemoteAdminActionTest(avocado.Test):
 
         self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-admin-action-")
         os.environ["XDG_CONFIG_HOME"] = self.tmp_dir
+        # Keep the developer's real CA out of the tests.
+        self.env = mock.patch.dict(os.environ, {"SEINE_CA_CERT": ""})
+        self.env.start()
 
     def tearDown(self):
+        self.env.stop()
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     def _make_screen(self, is_admin=True):
