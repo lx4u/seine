@@ -123,7 +123,7 @@ class TestBuildArtifactDownloadUrlsAPI(Test):
         )
         self.assertEqual(
             data["artifacts"],
-            [{"name": n, "size": 5, "sha256": "cd" * 32}
+            [{"name": n, "size": 5, "sha256": "cd" * 32, "subdir": None}
              for n in ("pc-image.img", "pc-image.img.digest")],
         )
 
