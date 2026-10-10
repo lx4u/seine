@@ -373,20 +373,27 @@ QEMU_ARCHS_EMULATED = {
 
 # Downloads (never installs) both 'qemu-user' and 'qemu-user-static'
 # .debs and extracts them into one tree, since which package holds the
-# real static binaries vs. just symlinks differs by release. 'true' when
-# there is nothing to cross-bootstrap, so an unlisted HOST_ARCH still
-# builds rather than failing.
+# real static binaries vs. just symlinks differs by release. forky has
+# no 'qemu-user-static' and its 'qemu-user' ships 'qemu-<arch>' without
+# the '-static' suffix: each package is fetched alone, the bare name is
+# the fallback, and a missing binary is skipped (a build that needs it
+# fails where it is used). 'true' when there is nothing to
+# cross-bootstrap, so an unlisted HOST_ARCH still builds.
 def _qemu_fetch(architecture, emulated=False):
     table = QEMU_ARCHS_EMULATED if emulated else QEMU_ARCHS
     archs = table.get(architecture, [])
     if len(archs) == 0:
         return "true"
-    wanted = " ".join("/qemu-extract/usr/bin/qemu-%s-static" % a for a in archs)
+    wanted = " ".join(archs)
     return (
         "mkdir -p /qemu-extract && cd /qemu-extract && "
-        "(apt-get download qemu-user-static qemu-user || true) && "
+        "for p in qemu-user-static qemu-user; do apt-get download $p || true; done && "
         "for deb in *.deb; do dpkg -x \"$deb\" .; done && "
-        "cp -L %s /usr/bin/ && "
+        "for a in %s; do "
+        "for f in qemu-$a-static qemu-$a; do "
+        "if [ -e /qemu-extract/usr/bin/$f ]; then "
+        "cp -L /qemu-extract/usr/bin/$f /usr/bin/qemu-$a-static; break; fi; "
+        "done; done && "
         "cd / && rm -rf /qemu-extract"
     ) % wanted
 
