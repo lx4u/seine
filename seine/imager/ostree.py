@@ -432,7 +432,7 @@ class OstreeSysroot:
         print("Staging root file-system for ostree '%s'..." % ref)
         g.mkfs("ext4", SCRATCH_DEVICE, features="^dir_index")
         g.mount(SCRATCH_DEVICE, "/")
-        g.tar_in_opts(self.source._tarball_for(source), "/", xattrs=True)
+        self._extract_tarball(g, source)
 
         mount_devices = {id(m): part_devices.get(id(m)) or vol_devices.get(id(m))
                          for m in mounts}
