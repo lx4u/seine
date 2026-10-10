@@ -1,3 +1,36 @@
+seine (0.5-1) unstable; urgency=medium
+
+  * Add OSTree image modes: commit and deploy a sysroot from the
+    rootfs, with reproducible disk images, 'image: ostree:' options
+    validated against the partition layout, a version stamped into
+    the commit and the UKI, and commits signed with a vault key.
+    Add an 'update' agent and a payload written next to the disk,
+    and a PC image example that updates itself.
+  * Boot OSTree deployments with grub, systemd-boot or a UKI that
+    carries the ostree command line. Add EFI Boot Guard config
+    partitions and environment block, a watchdog with fallback to
+    the previous deployment, and partition GUIDs in disk layouts.
+  * Test updates under QEMU: Secure Boot with throw-away keys,
+    tampered, replayed and revoked payloads, power cuts, static
+    deltas, repeated updates and boot fallbacks.
+  * Add a standard specification library resolved with a 'stdlib'
+    prefix, populate it, package the specs a remote build uses into
+    its worktree and migrate the examples to it.
+  * Order ansible playbooks in waves with 'after' and 'before',
+    replacing priorities, and group them by wave in the TUI.
+  * Add 'install_recommends' and spec-wide defaults to the apt
+    action, also for multiconfig groups, and skip recommended
+    packages by default in the examples.
+  * Show built partition sizes in the TUI image node, load the spec
+    after the first screen and add a startup modal with a log pane.
+  * Move the imager code into its own package, split by task, and
+    split the merge tests into three files.
+  * Fix playbook files not found next to the file naming them,
+    disk identifiers lost when only the release changes, a build
+    date in mdadm.conf and the FAT serial of the boot loader.
+
+ -- Cedric Hombourger <chombourger@gmail.com>  Sat, 10 Oct 2026 11:00:00 +0200
+
 seine (0.4-1) unstable; urgency=medium
 
   * Add distributed builds: a seine-server with a REST API, database,
