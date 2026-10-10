@@ -44,17 +44,14 @@ class AForeignHostArchitectureAsksForItsOwnPlatform(avocado.Test):
         captured = self.create(host_architecture="arm64")
         self.assertIn("--platform", captured["options"])
         self.assertIn("linux/arm64", captured["options"])
-        self.assertIn("qemu-x86_64-static", captured["dockerfile"])
-        self.assertIn("qemu-i386-static", captured["dockerfile"])
         # Emulated, so no real silicon backs arm64's own armhf compat --
         # that interpreter is needed here too.
-        self.assertIn("qemu-arm-static", captured["dockerfile"])
+        self.assertIn("for a in x86_64 i386 arm;", captured["dockerfile"])
 
     def test_the_native_host_asks_for_no_platform(self):
         captured = self.create()
         self.assertNotIn("--platform", captured["options"])
-        self.assertIn("qemu-aarch64-static", captured["dockerfile"])
-        self.assertIn("qemu-arm-static", captured["dockerfile"])
+        self.assertIn("for a in aarch64 arm;", captured["dockerfile"])
 
     def test_asking_for_the_native_architecture_explicitly_is_the_same(self):
         captured = self.create(host_architecture="amd64")
