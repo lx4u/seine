@@ -4,6 +4,7 @@
 import copy
 import os
 import re
+import shlex
 import shutil
 import stat
 import tempfile
@@ -467,6 +468,8 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
                     % containers_stage_dir,
                 )
 
+            self._share_tarballs(g, sources)
+
             if hypervisor:
                 if self.verbose:
                     print("  hypervisor: %s" % hypervisor)
@@ -542,6 +545,36 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
                 shutil.rmtree(output_dir, ignore_errors=True)
 
 
+    # Shows each tarball's directory (read-only, no copy) to the
+    # appliance over 9p. Must run before g.launch().
+    def _share_tarballs(self, g, sources):
+        self._tar_shares = {}
+        for source in sources:
+            tarball = os.path.realpath(self.source._tarball_for(source))
+            directory = os.path.dirname(tarball)
+            if directory in self._tar_shares:
+                continue
+            tag = f"seine_rootfs{len(self._tar_shares)}"
+            self._tar_shares[directory] = tag
+            g.config("-virtfs", f"local,path={directory},mount_tag={tag},"
+                                "security_model=none,readonly=on")
+
+    # Same as g.tar_in_opts(tarball, "/", xattrs=True), but with the
+    # appliance's own tar: the tar_in wire format changes between
+    # libguestfs releases, and the host and appliance may not match.
+    def _extract_tarball(self, g, source):
+        tarball = os.path.realpath(self.source._tarball_for(source))
+        tag = self._tar_shares[os.path.dirname(tarball)]
+        mnt = f"/run/{tag}"
+        g.debug("sh", [f"mkdir -p {mnt} && modprobe 9pnet_virtio && modprobe 9p"
+                       f" && mount -t 9p -o trans=virtio,version=9p2000.L,ro,"
+                       f"msize=1048576 {tag} {mnt}"])
+        try:
+            g.debug("sh", [f"tar -xf {shlex.quote(mnt + '/' + os.path.basename(tarball))}"
+                           " --xattrs '--xattrs-include=*' -C /sysroot"])
+        finally:
+            g.debug("sh", [f"umount {mnt}"])
+
     def _populate_source(self, g, ph, source, mounts, part_devices, vol_devices, part_index,
                          container_devices=None):
         print("Mounting %s file-systems..."
@@ -559,10 +592,7 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
             g.mount(dev, m["_prefix"])
 
         print("Extracting root file-system...")
-        tarball = self.source._tarball_for(source)
-        # xattrs=True restores file capabilities and the like from the
-        # tarball's PAX headers.
-        g.tar_in_opts(tarball, "/", xattrs=True)
+        self._extract_tarball(g, source)
 
         print("Writing fstab...")
         self._write_fstab(g, mounts, mount_devices, part_index)
