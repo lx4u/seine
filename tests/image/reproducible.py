@@ -7,12 +7,13 @@ import os
 import shutil
 import subprocess
 import sys
-import tarfile
 
 path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
+sys.path.append(os.path.dirname(path_to_self))
 
+from reproducible_base import explain_tar_difference
 from seine.utils import HOST_ARCH
 from tests.testutils import prune_on_pass
 
@@ -99,34 +100,6 @@ class RootfsIsByteIdenticalAcrossTwoBuilds(avocado.Test):
         self.assertEqual(len(found), 1, "no rootfs tarball in %s" % space["SEINE_BUILD_DIR"])
         return found[0]
 
-    def manifest(self, tarball):
-        found = {}
-        with tarfile.open(tarball) as tar:
-            for member in tar.getmembers():
-                content = tar.extractfile(member).read() if member.isfile() else None
-                found[member.name] = (
-                    member.mode, member.mtime, member.type,
-                    member.linkname, member.uid, member.gid,
-                    hashlib.sha256(content).hexdigest() if content is not None else None)
-        return found
-
-    # Says which member differs and how, instead of a bare 'not equal'.
-    def explainDifference(self, first, second):
-        one, two = self.manifest(first), self.manifest(second)
-        only_first = sorted(set(one) - set(two))
-        only_second = sorted(set(two) - set(one))
-        if only_first or only_second:
-            return ("member lists differ: only in the first build: %s; "
-                    "only in the second: %s" % (only_first[:5], only_second[:5]))
-        for name in sorted(one):
-            if one[name] != two[name]:
-                fields = ["mode", "mtime", "type", "linkname", "uid", "gid", "sha256"]
-                changed = [f for f, a, b in zip(fields, one[name], two[name]) if a != b]
-                return "'%s' differs: %s" % (name, ", ".join(changed))
-        return ("every member matches (name, mode, mtime, type, owner and "
-                "content) but the tarballs' own bytes still differ -- header "
-                "padding or member order is not pinned")
-
     def test(self):
         first = self.space("first")
         second = self.space("second")
@@ -144,4 +117,4 @@ class RootfsIsByteIdenticalAcrossTwoBuilds(avocado.Test):
         self.assertEqual(
             first_digest, second_digest,
             "two builds pinned to the same snapshot (%s) produced different "
-            "root file-systems: %s" % (SNAPSHOT, self.explainDifference(one, two)))
+            "root file-systems: %s" % (SNAPSHOT, explain_tar_difference(one, two)))

@@ -28,7 +28,7 @@ Use these options for common variations:
 | `seine build --rootfs-only spec.yaml` | Create a root file-system tarball, but not a disk image. |
 | `seine build --rebuild spec.yaml` | Rebuild packages even when cached results exist. |
 | `seine build --sbom spec.yaml` | Write an SPDX software bill of materials beside the image. |
-| `seine build --reproducible spec.yaml` | Normalize disk image partitions so two builds of the same spec give a byte-identical image. Slower; mainly for CI/release builds. |
+| `seine build --reproducible spec.yaml` | Normalize disk image partitions so two builds of the same spec give a byte-identical image. Root file-system tarballs match across builds with or without it. Slower; mainly for CI/release builds. |
 | `seine build --shared-cache spec.yaml` | Cache packages, chroots, and build artifacts to network S3/Garage storage. |
 | `seine build --cache-rootfs spec.yaml` | Cache and share root file-system tarballs across machines. |
 | `seine build --sign-key KEY spec.yaml` | Sign rebuilt packages with your GPG key. |

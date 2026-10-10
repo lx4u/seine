@@ -526,9 +526,10 @@ Flags:
   --rebuild             rebuild the packages of the 'packages' section even if
                         they were built before
   --reproducible        normalize disk image partitions so two builds of the
-                        same spec produce byte-identical images. Off by
-                        default: slower, only CI/release builds usually
-                        need it
+                        same spec produce byte-identical images. Root
+                        file-system tarballs are byte-identical across builds
+                        with or without it. Off by default: slower, only
+                        CI/release builds usually need it
   --require-hashes      refuse to build when a source is fetched over http with
                         no sha256 to check it against. Reported when the
                         specification is parsed, before anything is downloaded
