@@ -149,6 +149,10 @@ class FakeVault:
         self.args = (name, data, timestamp)
         return b"signature"
 
+    def ed25519_sign(self, name, data):
+        self.ed25519_args = (name, data)
+        return b"ed-signature"
+
 class StampVersion(avocado.Test):
     def guest(self, text):
         g = FakeGuestfs()
@@ -186,10 +190,32 @@ class SignedCommit(avocado.Test):
         path = "/sysroot/ostree/repo/objects/ab/cdef.commit"
         g.files = {path: b"commit"}
         vault = FakeVault()
-        ostree.sign_commit(g, vault, "abcdef", "vault:ostree-commits", 1700000000)
+        ostree.sign_commit(g, vault, "abcdef", 1700000000, gpg_key="vault:ostree-commits")
         self.assertEqual(vault.args, ("ostree-commits", b"commit", 1700000000))
         self.assertEqual(
             g.written, {path[:-6] + "commitmeta": ostree.commitmeta([b"signature"])})
+
+    def test_both_kinds_of_signature_are_kept_in_one_commitmeta(self):
+        g = FakeGuestfs()
+        path = "/sysroot/ostree/repo/objects/ab/cdef.commit"
+        g.files = {path: b"commit"}
+        vault = FakeVault()
+        ostree.sign_commit(g, vault, "abcdef", 1700000000,
+                           gpg_key="vault:ostree-commits",
+                           composefs_key="vault:composefs-commits")
+        self.assertEqual(vault.ed25519_args, ("composefs-commits", b"commit"))
+        self.assertEqual(
+            g.written, {path[:-6] + "commitmeta":
+                        ostree.commitmeta([b"signature"], [b"ed-signature"])})
+
+    def test_ed25519_signatures_have_their_own_key(self):
+        from gi.repository import GLib
+        meta = GLib.Variant.new_from_bytes(
+            GLib.VariantType("a{sv}"),
+            GLib.Bytes.new(ostree.commitmeta([], [b"one"])), False)
+        sigs = meta.lookup_value("ostree.sign.ed25519", GLib.VariantType("aay"))
+        self.assertEqual([bytes(s) for s in sigs], [b"one"])
+        self.assertIsNone(meta.lookup_value("ostree.gpgsigs", GLib.VariantType("aay")))
 
     def test_commitmeta_holds_the_signatures_under_the_ostree_key(self):
         from gi.repository import GLib

@@ -1,0 +1,11 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Signs the composefs commit of the examples and the tests (ed25519; the
+# value is the base64 seed). Fixed dev-only key, so local builds agree; a
+# remote vault ignores this and fails closed. Never use it for anything
+# real.
+defaults:
+    vault:
+        composefs-commits:
+            private_key: uEwklFOOr1/1TseAq5vSvAZ9psyDbDel2wiKONmyHMA=

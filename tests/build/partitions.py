@@ -616,6 +616,25 @@ class OstreeSpecification(avocado.Test):
                 PartitionHandler().parse(spec)
             self.assertIn("shall be 'vault:<name>'", str(cm.exception))
 
+    def test_composefs_key_names_a_vault_key_and_needs_composefs(self):
+        spec = ostree_spec(mode="composefs", release="forky")
+        spec["image"]["ostree"]["composefs-key"] = "vault:composefs-commits"
+        ph = PartitionHandler()
+        ph.parse(spec)
+        self.assertEqual(ph.ostree_for(None)["composefs-key"], "vault:composefs-commits")
+
+        spec = ostree_spec(mode="composefs", release="forky")
+        spec["image"]["ostree"]["composefs-key"] = "composefs-commits"
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("shall be 'vault:<name>'", str(cm.exception))
+
+        spec = ostree_spec()
+        spec["image"]["ostree"]["composefs-key"] = "vault:composefs-commits"
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("needs 'mode: composefs'", str(cm.exception))
+
     def test_version_is_kept(self):
         spec = versioned(ostree_spec(), "23.1_b")
         ph = PartitionHandler()

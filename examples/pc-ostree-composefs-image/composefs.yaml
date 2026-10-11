@@ -1,13 +1,13 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier Apache-2.0
 
-# Turns composefs on. ostree-prepare-root reads this file from the
-# initramfs, so it is written before the kernel installs and dracut
-# builds the initramfs. The build stops before any disk work if it is
-# missing (docs/ostree.md).
+# Turns signed composefs on. ostree-prepare-root reads this file and the
+# public key from the initramfs, so they are written before the kernel
+# installs and dracut builds the initramfs. The build stops before any
+# disk work if they are missing (docs/ostree.md).
 
 playbook:
-    - name: enable composefs
+    - name: enable signed composefs
       wave: initramfs
       after: [base]
       before: [kernel]
@@ -21,4 +21,12 @@ playbook:
                 dest: /usr/lib/ostree/prepare-root.conf
                 content: |
                     [composefs]
-                    enabled = yes
+                    enabled = signed
+          - name: make room for the key
+            file:
+                path: /etc/ostree
+                state: directory
+          - name: write the key the boot trusts
+            copy:
+                dest: /etc/ostree/initramfs-root-binding.key
+                content: "[[ vault_ed25519_public('composefs-commits') ]]\n"
