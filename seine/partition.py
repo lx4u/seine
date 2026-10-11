@@ -12,6 +12,10 @@ from seine import utils
 
 RO_FSTYPES = {"squashfs", "erofs"}
 
+# File-systems without hardlinks. squashfs/erofs are staged as ext4, so
+# they are not listed. Any other type is assumed to have them.
+NOLINK_FSTYPES = {"vfat", "msdos", "fat", "fat32"}
+
 # Raw dm-verity hash tree, never mounted or mkfs'd. Only valid paired with
 # a '/' or '/usr' mount (the only types DPS gives an auto-discovered GUID).
 VERITY_HASH_TYPE = "verity-hash"
@@ -350,9 +354,9 @@ class PartitionHandler:
             raise ValueError("'where' not defined in volume '%s'!" % label)
         return vol
 
-    def _size_file(self, f, part):
+    def _size_file(self, nbytes, part):
         blksz = part["_blksz"]
-        size = math.floor((f.size + blksz - 1) / blksz) * blksz
+        size = math.floor((nbytes + blksz - 1) / blksz) * blksz
         return size if size > 0 else blksz
 
     def disk_size(self):
@@ -378,8 +382,47 @@ class PartitionHandler:
 
         mount = self.mount_for(name, source)
         if mount is not None:
-            mount["_size"] = mount["_size"] + self._size_file(f, mount)
+            mount["_size"] = mount["_size"] + self._size_file(f.size, mount)
         return mount
+
+    # Plans the hardlinks tar cannot extract: the link and its primary are
+    # on two mounts, or the mount has no hardlinks. Returns the names to
+    # leave out of the extraction and the ordered operations
+    # (kind, primary, name, mount, size) to run after it. 'cp' copies the
+    # primary, 'ln' links to the copy made earlier on the same mount.
+    def plan_links(self, members, source=None):
+        sizes = {m.name: m.size for m in members if m.isreg()}
+        groups = {}
+        for m in members:
+            if not m.islnk():
+                continue
+            mount = self.mount_for(m.name, source)
+            primary_mount = self.mount_for(m.linkname, source)
+            if mount is None or primary_mount is None:
+                continue
+            if mount is primary_mount and mount["type"] not in NOLINK_FSTYPES:
+                continue
+            if "\n" in m.name:
+                raise ValueError(f"cannot plan a copy of '{m.name}': its name has a newline")
+            groups.setdefault((mount["where"], m.linkname), (mount, []))[1].append(m.name)
+
+        excluded, ops = [], []
+        for (_, primary), (mount, names) in sorted(groups.items()):
+            first = None
+            for name in sorted(names):
+                excluded.append(name)
+                if first is None or mount["type"] in NOLINK_FSTYPES:
+                    ops.append(("cp", primary, name, mount, sizes.get(primary, 0)))
+                    first = name
+                else:
+                    ops.append(("ln", first, name, mount, 0))
+        return sorted(excluded), ops
+
+    # Adds the space of the copies from plan_links() to their mounts.
+    def distribute_copies(self, ops):
+        for kind, _, _, mount, size in ops:
+            if kind == "cp":
+                mount["_size"] = mount["_size"] + self._size_file(size, mount)
 
     # Returns the mount that holds 'name' (absolute or not), or 'None'.
     # Mounts are sorted deepest first, so the first prefix match wins.

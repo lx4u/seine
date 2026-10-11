@@ -1448,3 +1448,93 @@ class EfiBootGuardConfigPartitions(avocado.Test):
 
 
 
+
+def _tar_members(*entries):
+    members = []
+    for name, link in entries:
+        info = tarfile.TarInfo(name)
+        if link is None:
+            info.size = 5000
+        else:
+            info.type = tarfile.LNKTYPE
+            info.linkname = link
+        members.append(info)
+    return members
+
+def _link_handler(*parts):
+    ph = PartitionHandler()
+    ph.parse({
+        "image": {
+            "filename": "disk.img",
+            "partitions": [{"label": "rootfs", "where": "/"}] + [
+                {"label": p[0], "where": p[1], "type": p[2]} for p in parts],
+        },
+    })
+    return ph
+
+class PlanLinks(avocado.Test):
+    def test_a_link_across_mounts_becomes_a_copy(self):
+        ph = _link_handler(("boot", "/boot", "ext4"))
+        members = _tar_members(
+            ("boot/vmlinuz-1", None), ("usr/lib/modules/1/vmlinuz", "boot/vmlinuz-1"))
+        excluded, ops = ph.plan_links(members)
+        self.assertEqual(excluded, ["usr/lib/modules/1/vmlinuz"])
+        self.assertEqual([op[:3] for op in ops],
+                         [("cp", "boot/vmlinuz-1", "usr/lib/modules/1/vmlinuz")])
+        self.assertEqual(ops[0][4], 5000)
+
+    def test_a_link_on_one_mount_stays_in_the_tar(self):
+        ph = _link_handler(("boot", "/boot", "ext4"))
+        members = _tar_members(("boot/a", None), ("boot/b", "boot/a"),
+                               ("usr/x", None), ("usr/y", "usr/x"))
+        self.assertEqual(ph.plan_links(members), ([], []))
+
+    def test_links_on_one_other_mount_share_a_single_copy(self):
+        ph = _link_handler(("boot", "/boot", "ext4"))
+        members = _tar_members(("boot/a", None), ("usr/z", "boot/a"), ("usr/y", "boot/a"))
+        excluded, ops = ph.plan_links(members)
+        self.assertEqual(excluded, ["usr/y", "usr/z"])
+        self.assertEqual([op[:3] for op in ops],
+                         [("cp", "boot/a", "usr/y"), ("ln", "usr/y", "usr/z")])
+
+    def test_every_link_on_vfat_is_a_copy(self):
+        ph = _link_handler(("efi", "/efi", "vfat"))
+        members = _tar_members(("efi/f", None), ("efi/g", "efi/f"), ("efi/h", "efi/f"))
+        excluded, ops = ph.plan_links(members)
+        self.assertEqual(excluded, ["efi/g", "efi/h"])
+        self.assertEqual([op[0] for op in ops], ["cp", "cp"])
+
+    def test_a_primary_on_vfat_is_copied_to_the_other_mount(self):
+        ph = _link_handler(("efi", "/efi", "vfat"))
+        members = _tar_members(("efi/f", None), ("usr/g", "efi/f"), ("usr/h", "efi/f"))
+        _, ops = ph.plan_links(members)
+        self.assertEqual([op[0] for op in ops], ["cp", "ln"])
+
+    def test_nested_mounts_pick_the_longest_prefix(self):
+        ph = _link_handler(("var", "/var", "ext4"), ("varlib", "/var/lib", "ext4"))
+        members = _tar_members(("var/lib/n", None), ("var/lib/m", "var/lib/n"),
+                               ("var/x", "var/lib/n"))
+        excluded, _ = ph.plan_links(members)
+        self.assertEqual(excluded, ["var/x"])
+
+    def test_the_order_does_not_depend_on_the_tar_order(self):
+        ph = _link_handler(("boot", "/boot", "ext4"))
+        entries = [("boot/a", None), ("usr/z", "boot/a"), ("usr/y", "boot/a")]
+        first = ph.plan_links(_tar_members(*entries))
+        second = ph.plan_links(_tar_members(entries[0], entries[2], entries[1]))
+        self.assertEqual(first, second)
+
+    def test_a_newline_in_a_name_is_refused(self):
+        ph = _link_handler(("boot", "/boot", "ext4"))
+        members = _tar_members(("boot/a", None), ("usr/a\nb", "boot/a"))
+        with self.assertRaises(ValueError):
+            ph.plan_links(members)
+
+    def test_copies_are_added_to_the_size_of_their_mount(self):
+        ph = _link_handler(("boot", "/boot", "ext4"))
+        members = _tar_members(("boot/a", None), ("usr/y", "boot/a"), ("usr/z", "boot/a"))
+        _, ops = ph.plan_links(members)
+        root = ph.mount_for("usr/y")
+        before = root["_size"]
+        ph.distribute_copies(ops)
+        self.assertEqual(root["_size"] - before, ph._size_file(5000, root))
