@@ -122,9 +122,9 @@ directories.
 
 * **Specification**: `stdlib:debian/feeds.yml` (or `stdlib:debian/feeds`)
 * **Purpose**: Declares official Debian repository feeds (main suites, updates,
-  and security suites) for supported releases (`bookworm` and `trixie`).
+  and security suites) for supported releases (`bookworm`, `trixie` and `forky`).
 * **When to Use It**: Required by suite specifications (`bookworm.yml`,
-  `trixie.yml`) or directly by `seine vendor` when vendoring packages without
+  `trixie.yml`, `forky.yml`) or directly by `seine vendor` when vendoring packages without
   loading base distribution tasks.
 * **Extension Points**: Additional custom feeds, local repositories, or
   alternative mirrors can be added in `distribution.feeds`.
@@ -158,6 +158,18 @@ directories.
   `base.yml` and `feeds.yml`.
 * **Relevant Examples**: Target specifications building Trixie-based systems.
 * **Limitations**: Locked to Debian 13 (Trixie).
+* **Vault / Credentials Entries**: None.
+
+#### `stdlib:debian/forky.yml`
+
+* **Specification**: `stdlib:debian/forky.yml` (or `stdlib:debian/forky`)
+* **Purpose**: Sets `distribution.release: forky`, and requires
+  `stdlib:debian/base.yml` and `stdlib:debian/feeds.yml`.
+* **When to Use It**: Standard suite fragment for Debian 14 (Forky) images.
+* **Extension Points**: Inherits repository and package configuration from
+  `base.yml` and `feeds.yml`.
+* **Relevant Examples**: Target specifications building Forky-based systems.
+* **Limitations**: Locked to Debian 14 (Forky), which is still in testing.
 * **Vault / Credentials Entries**: None.
 
 ---

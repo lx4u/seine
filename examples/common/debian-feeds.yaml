@@ -22,3 +22,10 @@ distribution:
         - suite: trixie-security
           release: trixie
           uri: http://security.debian.org/debian-security
+        - suite: forky
+          release: forky
+        - suite: forky-updates
+          release: forky
+        - suite: forky-security
+          release: forky
+          uri: http://security.debian.org/debian-security
