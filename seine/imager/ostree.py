@@ -144,6 +144,14 @@ def _mount_points(g, at, mounts, tmpfiles):
     return lines
 
 # 'deploy' only looks for the kernel and initramfs next to the modules.
+# Forky's kernel package already ships its image there and links it into
+# /boot, so the /boot name is dropped instead of moved.
+def _move_into(g, source, target):
+    if g.exists(target):
+        g.rm(source)
+    else:
+        g.mv(source, target)
+
 def _relocate_kernel(g, at):
     entries = g.ls(at("boot")) if g.is_dir(at("boot")) else []
     kernels = [e[len("vmlinuz-"):] for e in entries if e.startswith("vmlinuz-")]
@@ -156,8 +164,8 @@ def _relocate_kernel(g, at):
         raise RuntimeError("no '/boot/%s' next to the kernel" % initrd)
     modules = at("usr/lib/modules", version)
     g.mkdir_p(modules)
-    g.mv(at("boot", "vmlinuz-%s" % version), "%s/vmlinuz" % modules)
-    g.mv(at("boot", initrd), "%s/initramfs.img" % modules)
+    _move_into(g, at("boot", "vmlinuz-%s" % version), "%s/vmlinuz" % modules)
+    _move_into(g, at("boot", initrd), "%s/initramfs.img" % modules)
     # Debian's links into /boot would dangle now.
     for link in ("vmlinuz", "vmlinuz.old", "initrd.img", "initrd.img.old"):
         if g.is_symlink(at(link)):
