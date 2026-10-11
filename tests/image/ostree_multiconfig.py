@@ -32,8 +32,12 @@ playbook:
       tasks:
           - name: install dracut, ostree and systemd
             apt:
-                name: [dracut, dracut-config-generic, ostree, ostree-boot, systemd, systemd-sysv]
+                name: [dracut, ostree, ostree-boot, systemd, systemd-sysv]
                 state: present
+          - name: make the initrd work outside the build container
+            copy:
+                dest: /etc/dracut.conf.d/50-generic.conf
+                content: 'hostonly="no"'
     - name: kernel and a package of its own
       priority: 800
       tasks:

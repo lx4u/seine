@@ -3,7 +3,8 @@
 
 # What a root file system needs to become an OSTree sysroot: dracut
 # (ostree's initramfs module) and ostree itself, with no
-# initramfs-tools. Installed before the kernel (wave 'initramfs'
+# initramfs-tools. A drop-in turns host-only mode off: forky has no
+# dracut-config-generic. Installed before the kernel (wave 'initramfs'
 # before 'kernel') so dracut's own Provides pre-empts initramfs-tools,
 # as in examples/minimal-initrd/. The build stops before any disk work if
 # one is missing.
@@ -18,9 +19,13 @@ playbook:
             apt:
                 name:
                     - dracut
-                    - dracut-config-generic
                     - ostree
                     - ostree-boot
                     - systemd
                     - systemd-sysv
                 state: present
+          - name: make the initrd work outside the build container
+            copy:
+                dest: /etc/dracut.conf.d/50-generic.conf
+                content: |
+                    hostonly="no"

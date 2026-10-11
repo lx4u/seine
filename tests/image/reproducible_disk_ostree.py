@@ -70,8 +70,11 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
                 "          - name: install dracut, ostree and systemd\n"
                 "            apt:\n"
                 "                state: present\n"
-                "                name: [dracut, dracut-config-generic, ostree, ostree-boot,\n"
-                "                       systemd, systemd-sysv]\n" +
+                "                name: [dracut, ostree, ostree-boot, systemd, systemd-sysv]\n"
+                "          - name: make the initrd work outside the build container\n"
+                "            copy:\n"
+                "                dest: /etc/dracut.conf.d/50-generic.conf\n"
+                "                content: 'hostonly=\"no\"'\n" +
                 self.BOOT_PLAYBOOK +
                 "image:\n"
                 "    filename: %(filename)s\n"
