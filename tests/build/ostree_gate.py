@@ -13,6 +13,8 @@ sys.path.append(path_to_sources)
 from seine.build import BuildCmd
 from seine.imager.ostree import REQUIRED, check_tarball
 
+MODULE = "usr/lib/dracut/modules.d/98ostree/module-setup.sh"
+
 SPEC = """
 distribution:
     release: trixie
@@ -47,7 +49,16 @@ class TheRootfsIsCheckedBeforeTheDisk(avocado.Test):
         return build.image
 
     def test_a_complete_rootfs_passes(self):
-        check_tarball(self.tarball(REQUIRED), "the image")
+        check_tarball(self.tarball(REQUIRED + (MODULE,)), "the image")
+
+    def test_the_dracut_module_may_be_numbered_50(self):
+        module = MODULE.replace("98", "50")
+        check_tarball(self.tarball(REQUIRED + (module,)), "the image")
+
+    def test_a_missing_dracut_module_is_named(self):
+        with self.assertRaises(ValueError) as cm:
+            check_tarball(self.tarball(REQUIRED), "the image")
+        self.assertIn("ostree/module-setup.sh", str(cm.exception))
 
     def test_missing_pieces_are_named(self):
         with self.assertRaises(ValueError) as cm:
@@ -56,7 +67,7 @@ class TheRootfsIsCheckedBeforeTheDisk(avocado.Test):
         self.assertNotIn("'/usr/bin/dracut'", str(cm.exception))
 
     def test_initramfs_tools_is_refused(self):
-        tarball = self.tarball(REQUIRED + ("usr/sbin/update-initramfs",))
+        tarball = self.tarball(REQUIRED + (MODULE, "usr/sbin/mkinitramfs"))
         with self.assertRaises(ValueError) as cm:
             check_tarball(tarball, "the image")
         self.assertIn("needs dracut", str(cm.exception))
