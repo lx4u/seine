@@ -20,6 +20,21 @@ EXAMPLE = os.path.join(path_to_sources, "examples", "pc-ostree-composefs-image")
 
 PLAN = os.environ.get("SEINE_TEST_PLAN", "")
 
+# Rewrites the conf the example ships, before the kernel builds the initramfs.
+VERITY = """\
+playbook:
+    - name: ask for verity
+      wave: verity
+      after: [initramfs]
+      before: [kernel]
+      tasks:
+          - name: enabled = verity
+            lineinfile:
+                path: /usr/lib/ostree/prepare-root.conf
+                regexp: '^enabled ='
+                line: enabled = verity
+"""
+
 # examples/pc-ostree-composefs-image/ built as shipped, only the disk's
 # location changed, then booted under OVMF: / must be the composefs
 # overlay, not the classic ostree bind that a missing conf falls back to.
@@ -43,7 +58,9 @@ class OstreeComposefsExampleBoots(avocado.Test):
     def tearDown(self):
         prune_on_pass(self)
 
-    def test_the_root_is_a_read_only_composefs(self):
+    # Builds the example with 'extra' (spec files) after it, boots it and
+    # returns what the composefs mount logged, and the sysroot's features.
+    def boot(self, extra=()):
         disk = os.path.join(self.workdir, "pc-ostree-composefs.img")
         where = os.path.join(self.workdir, "filename.yml")
         with open(where, "w") as f:
@@ -54,7 +71,7 @@ class OstreeComposefsExampleBoots(avocado.Test):
         with open(log, "w") as f:
             built = subprocess.run(
                 [sys.executable, "-u", "./seine.py", "build", "-v",
-                 os.path.join(EXAMPLE, "main.yaml"), where],
+                 os.path.join(EXAMPLE, "main.yaml"), *extra, where],
                 cwd=path_to_sources, env=environment, stdout=f,
                 stderr=subprocess.STDOUT)
         self.assertEqual(built.returncode, 0, f"build failed, see {log}")
@@ -75,6 +92,19 @@ class OstreeComposefsExampleBoots(avocado.Test):
             status, output = guest.run("touch /opt/x 2>&1")
             self.assertIn("Read-only file system", output)
             status, output = guest.run("journalctl -b -t ostree-prepare-root --no-pager")
-            self.assertIn("composefs: mounted successfully", output)
+            status, features = guest.run("dumpe2fs -h $(findmnt -no SOURCE /sysroot) 2>&1")
+            return output, features
         finally:
             guest.close()
+
+    def test_the_root_is_a_read_only_composefs(self):
+        output, features = self.boot()
+        self.assertIn("composefs: mounted successfully (verity=false)", output)
+
+    def test_verity_is_checked_when_asked_for(self):
+        where = os.path.join(self.workdir, "verity.yml")
+        with open(where, "w") as f:
+            f.write(VERITY)
+        output, features = self.boot([where])
+        self.assertIn("composefs: mounted successfully (verity=true)", output)
+        self.assertRegex(features, r"Filesystem features:.* verity")

@@ -105,6 +105,8 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
         self.source = source
         # Mount -> where an ostree build mounted it, see _where().
         self._guest_paths = {}
+        # Mounts whose file system is not rebuilt, see PartitionRebuild.
+        self._verity_mounts = set()
         self.keep = source.options["keep"]
         self.verbose = source.options["verbose"]
         self.reproducible = source.options["reproducible"]

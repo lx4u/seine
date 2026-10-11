@@ -73,14 +73,26 @@ class CheckComposefs(avocado.Test):
         self.refused(FakeGuestfs(conf="[composefs]\nenabled = maybe\n"), "enabled = maybe")
         self.refused(FakeGuestfs(conf="[sysroot]\nreadonly = true\n"), "enabled = no")
 
-    def test_verity_is_not_supported_yet(self):
-        self.refused(FakeGuestfs(conf="[composefs]\nenabled = verity\n"), "only 'yes'")
+    def test_the_enabled_value_is_returned(self):
+        self.assertEqual(ostree.check_composefs(FakeGuestfs()), "yes")
+        g = FakeGuestfs(conf="[composefs]\nenabled = verity\n")
+        self.assertEqual(ostree.check_composefs(g), "verity")
 
     def test_a_conf_missing_from_the_initramfs_is_refused(self):
         self.refused(FakeGuestfs(initrd=("erofs.ko.xz",)), "initramfs lacks")
 
     def test_erofs_missing_from_the_initramfs_is_refused(self):
         self.refused(FakeGuestfs(initrd=(CONF,)), "initramfs lacks")
+
+class InitSysroot(avocado.Test):
+    def configured(self, **kwargs):
+        g = FakeGuestfs()
+        ostree.init_sysroot(g, "debian", **kwargs)
+        return [c[-1] for c in g.commands if "config" in c]
+
+    def test_fsverity_is_asked_for_in_the_repo_only_when_wanted(self):
+        self.assertNotIn("true", self.configured())
+        self.assertIn("true", self.configured(fsverity=True))
 
 class CommitComposefs(avocado.Test):
     def argv(self, **kwargs):
