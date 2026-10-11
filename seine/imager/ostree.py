@@ -1,6 +1,7 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import configparser
 import os
 import posixpath
@@ -52,6 +53,9 @@ def check_tarball(tarball, what):
 # whichever exists into the initramfs, and only there it takes effect.
 PREPARE_ROOT_CONFS = ("etc/ostree/prepare-root.conf",
                       "usr/lib/ostree/prepare-root.conf")
+
+# Where ostree-prepare-root looks for the keys of 'enabled = signed'.
+COMPOSEFS_KEY = "/etc/ostree/initramfs-root-binding.key"
 
 USRMERGE = ("bin", "sbin", "lib", "lib64")
 
@@ -229,9 +233,11 @@ def init_sysroot(g, stateroot, fsverity=False):
 # Refuses a staged root that would boot as a classic ostree. With the
 # conf only in the tree, or without erofs in the initramfs, the boot
 # silently falls back (or stops in the initramfs). Run before sanitize().
-# Returns the 'enabled' value of the conf, 'yes' or 'verity'.
-def check_composefs(g):
-    if "composefs" not in _ostree(g, "--version"):
+# 'public_key' (raw bytes) is that of the composefs-key, if the spec has
+# one. Returns the 'enabled' value of the conf: 'yes', 'verity' or 'signed'.
+def check_composefs(g, public_key=None):
+    features = _ostree(g, "--version")
+    if "composefs" not in features:
         raise RuntimeError(
             "'mode: composefs' needs an ostree built with composefs, which "
             "the one in the root file-system is not")
@@ -239,21 +245,47 @@ def check_composefs(g):
     if conf is None:
         raise RuntimeError(
             "'mode: composefs' needs '/%s' with '[composefs] enabled = yes' "
-            "(or 'verity') before the initramfs is built" % PREPARE_ROOT_CONFS[-1])
+            "(or 'verity', 'signed') before the initramfs is built"
+            % PREPARE_ROOT_CONFS[-1])
     parser = configparser.ConfigParser()
     parser.read_string(g.read_file("/" + conf).decode())
     enabled = parser.get("composefs", "enabled", fallback="no")
-    if enabled not in ("yes", "verity"):
+    if enabled not in ("yes", "verity", "signed"):
         raise RuntimeError(
-            "'/%s' has 'enabled = %s' in [composefs]: only 'yes' and "
-            "'verity' are supported for 'mode: composefs'" % (conf, enabled))
+            "'/%s' has 'enabled = %s' in [composefs]: only 'yes', 'verity' "
+            "and 'signed' are supported for 'mode: composefs'" % (conf, enabled))
+    if (enabled == "signed") != (public_key is not None):
+        raise RuntimeError(
+            "'enabled = signed' and 'image: ostree: composefs-key' go "
+            "together: the boot checks a signature that the build makes")
     initrds = [n for n in g.ls("/boot") if n.startswith("initrd.img-")]
-    listing = g.command([LSINITRD, "/boot/%s" % initrds[0]]) if initrds else ""
+    initrd = "/boot/%s" % initrds[0] if initrds else None
+    listing = g.command([LSINITRD, initrd]) if initrd else ""
     if conf not in listing or "erofs" not in listing:
         raise RuntimeError(
             "the initramfs lacks '/%s' or the erofs driver: install the "
             "conf before the kernel, so dracut copies it" % conf)
+    if enabled == "signed":
+        _check_signed(g, parser, initrd, listing, features, public_key)
     return enabled
+
+# The key the boot trusts must be in the initramfs, and be the public half
+# of the key that signs the commit.
+def _check_signed(g, parser, initrd, listing, features, public_key):
+    if "sign-ed25519" not in features:
+        raise RuntimeError(
+            "'enabled = signed' needs an ostree built with ed25519 "
+            "(libsodium), which the one in the root file-system is not")
+    keypath = parser.get("composefs", "keypath", fallback=COMPOSEFS_KEY).lstrip("/")
+    if keypath not in listing:
+        raise RuntimeError(
+            "the initramfs lacks '/%s', the public key of the composefs-key: "
+            "install it before the kernel, so dracut copies it" % keypath)
+    shipped = g.command([LSINITRD, initrd, "-f", keypath]).split()
+    if base64.b64encode(public_key).decode() not in shipped:
+        raise RuntimeError(
+            "'/%s' in the initramfs is not the public key of the "
+            "composefs-key" % keypath)
 
 # Sets IMAGE_VERSION in the os-release of the staged root, so the commit
 # and the UKI carry it. Returns the new text.
@@ -289,11 +321,16 @@ def commit(g, ref, epoch, version=None, composefs=False):
     return checksum
 
 # The '.commitmeta' of a commit: an 'a{sv}' with the signatures (one
-# 'ay' each) under 'ostree.gpgsigs'.
-def commitmeta(signatures):
+# 'ay' each) under 'ostree.gpgsigs', and those made with ed25519 under
+# 'ostree.sign.ed25519'.
+def commitmeta(signatures, ed25519=()):
     from gi.repository import GLib
-    meta = GLib.Variant("a{sv}", {
-        "ostree.gpgsigs": GLib.Variant("aay", signatures)})
+    entries = {}
+    if signatures or not ed25519:
+        entries["ostree.gpgsigs"] = GLib.Variant("aay", signatures)
+    if ed25519:
+        entries["ostree.sign.ed25519"] = GLib.Variant("aay", list(ed25519))
+    meta = GLib.Variant("a{sv}", entries)
     return meta.get_data_as_bytes().get_data()
 
 # Where the repo keeps the commit object of 'checksum'.
@@ -301,13 +338,17 @@ def commit_path(checksum):
     return "%s/ostree/repo/objects/%s/%s.commit" % (
         SYSROOT, checksum[:2], checksum[2:])
 
-# Signs the commit object with 'key' ('vault:<name>') at 'epoch'. ostree
-# signs the commit file itself and keeps the signature next to it.
-def sign_commit(g, provider, checksum, key, epoch):
+# Signs the commit object at 'epoch' with the pgp key 'gpg_key' and the
+# ed25519 key 'composefs_key' ('vault:<name>', either may be None).
+# ostree signs the commit file itself and keeps the signatures next to it.
+def sign_commit(g, provider, checksum, epoch, gpg_key=None, composefs_key=None):
     path = commit_path(checksum)
-    signature = provider.pgp_detach_sign(
-        key[len("vault:"):], g.read_file(path), epoch)
-    g.write(path[:-len("commit")] + "commitmeta", commitmeta([signature]))
+    data = g.read_file(path)
+    pgp = [provider.pgp_detach_sign(gpg_key[len("vault:"):], data, epoch)] \
+        if gpg_key else []
+    ed25519 = [provider.ed25519_sign(composefs_key[len("vault:"):], data)] \
+        if composefs_key else []
+    g.write(path[:-len("commit")] + "commitmeta", commitmeta(pgp, ed25519))
 
 # The ref a build commits to and devices follow.
 def ostree_ref(settings, distro):
@@ -511,7 +552,10 @@ class OstreeSysroot:
         self._write_fstab(g, others, mount_devices, part_index)
         ukis = self._take_ukis(g)
         composefs = settings["mode"] == "composefs"
-        verity = composefs and check_composefs(g) == "verity"
+        composefs_key = settings.get("composefs-key")
+        enabled = check_composefs(g, self._composefs_public_key(composefs_key)) \
+            if composefs else None
+        verity = enabled in ("verity", "signed")
         sanitize(g, "/", [m["_prefix"] for m in others], composefs)
         version = settings.get("version")
         osrel = stamp_version(g, version) if version else None
@@ -535,10 +579,12 @@ class OstreeSysroot:
 
         print("Committing and deploying...")
         checksum = commit(g, ref, self.source._epoch(), version, composefs)
-        if settings.get("gpg-key"):
+        if settings.get("gpg-key") or composefs_key:
             sign_commit(g, self._vault_provider(), checksum,
-                        settings["gpg-key"], self.source._epoch())
-            print("  signed with %s" % settings["gpg-key"])
+                        self.source._epoch(), settings.get("gpg-key"),
+                        composefs_key)
+            print("  signed with %s" % ", ".join(
+                k for k in (settings.get("gpg-key"), composefs_key) if k))
         deploy(g, stateroot, ref, kargs)
         print("  %s %s" % (ref, checksum))
         self._boot_ostree(g, source, mounts, mount_devices, stateroot,
@@ -549,6 +595,13 @@ class OstreeSysroot:
         unlock_deployments(g, stateroot)
         self._normalize_mount_timestamps(g, mounts, mount_devices)
         return mount_devices
+
+    # The raw public key of 'composefs_key' ('vault:<name>'), or None.
+    def _composefs_public_key(self, composefs_key):
+        if not composefs_key:
+            return None
+        return self._vault_provider().ed25519_public_key(
+            composefs_key[len("vault:"):])
 
     # The directory a build ships its update payload to.
     def _payload_dir(self, settings):

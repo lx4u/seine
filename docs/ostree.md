@@ -133,9 +133,29 @@ partition is not rebuilt for `--reproducible` (`mke2fs -d` cannot copy
 fsverity), so two builds differ in its creation times and layout. Other
 partitions are rebuilt as usual.
 
-The commit is made with `--generate-composefs-metadata`. Nothing
-signed binds the composefs image to the commit: the digest lives in the
-commit, and authenticity stays with the commit signature and Secure Boot.
+The commit is made with `--generate-composefs-metadata`. The digest of
+the composefs image lives in the commit.
+
+With `enabled = signed` the boot also refuses a commit that no trusted
+key signed, which binds `/usr` to the key and not only to the disk. It
+implies `verity`, and needs an ostree built with ed25519 (libsodium),
+which Debian's is not: `examples/ostree-composefs/packages.yml` rebuilds
+it. Set `composefs-key: vault:<name>` under `image: ostree`, naming an
+ed25519 key of the vault: the commit is signed with it. The initramfs
+carries the public key in `/etc/ostree/initramfs-root-binding.key`
+(`composefs.keypath` in `prepare-root.conf` names another file), which a
+playbook writes before the kernel, like the conf:
+
+```
+content: "[[ vault_ed25519_public('composefs-commits') ]]\n"
+```
+
+The build stops before the commit if the key is not in the initramfs,
+is not the public half of `composefs-key`, or if one of `enabled =
+signed` and `composefs-key` is there without the other. At boot, a
+commit without its signature, or signed with another key, stops the
+boot in the initramfs, and a repo object swapped for another file reads
+as an I/O error (`examples/pc-ostree-composefs-image` shows it).
 
 ## Disk identifiers
 

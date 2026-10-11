@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import avocado
+import base64
 import os
 import sys
 
@@ -12,19 +13,24 @@ from seine.imager import ostree
 
 INITRD = "/boot/initrd.img-6.12.1"
 CONF = "usr/lib/ostree/prepare-root.conf"
+KEYFILE = "etc/ostree/initramfs-root-binding.key"
+PUBLIC = bytes(range(32))
 
 # Plain Python, no guestfs appliance involved -- answers the calls
 # check_composefs() makes and records the commands.
 class FakeGuestfs:
     def __init__(self, features="composefs ex-fsverity", conf="[composefs]\nenabled = yes\n",
-                 initrd=("usr/lib/ostree/prepare-root.conf", "erofs.ko.xz")):
-        self.features, self.initrd = features, initrd
+                 initrd=("usr/lib/ostree/prepare-root.conf", "erofs.ko.xz"),
+                 shipped_key=""):
+        self.features, self.initrd, self.shipped_key = features, initrd, shipped_key
         self.files = {"/" + CONF: conf} if conf is not None else {}
         self.commands = []
         self.written = {}
 
     def command(self, argv):
         self.commands.append(argv)
+        if argv[0] == ostree.LSINITRD and "-f" in argv:
+            return self.shipped_key
         if argv[0] == ostree.LSINITRD:
             return "\n".join(self.initrd)
         if argv[-1] == "--version":
@@ -83,6 +89,44 @@ class CheckComposefs(avocado.Test):
 
     def test_erofs_missing_from_the_initramfs_is_refused(self):
         self.refused(FakeGuestfs(initrd=(CONF,)), "initramfs lacks")
+
+SIGNED = "[composefs]\nenabled = signed\n"
+
+class CheckSignedComposefs(avocado.Test):
+    def ready(self, **kwargs):
+        defaults = dict(
+            features="composefs ex-fsverity sign-ed25519", conf=SIGNED,
+            initrd=(CONF, "erofs.ko.xz", KEYFILE),
+            shipped_key=base64.b64encode(PUBLIC).decode() + "\n")
+        return FakeGuestfs(**dict(defaults, **kwargs))
+
+    def refused(self, g, text, public_key=PUBLIC):
+        with self.assertRaises(RuntimeError) as cm:
+            ostree.check_composefs(g, public_key)
+        self.assertIn(text, str(cm.exception))
+
+    def test_a_ready_root_passes(self):
+        self.assertEqual(ostree.check_composefs(self.ready(), PUBLIC), "signed")
+
+    def test_signed_without_a_key_to_sign_with_is_refused(self):
+        self.refused(self.ready(), "go together", None)
+
+    def test_a_key_to_sign_with_needs_signed(self):
+        self.refused(FakeGuestfs(), "go together")
+
+    def test_an_ostree_without_ed25519_is_refused(self):
+        self.refused(self.ready(features="composefs ex-fsverity"), "ed25519")
+
+    def test_a_key_missing_from_the_initramfs_is_refused(self):
+        self.refused(self.ready(initrd=(CONF, "erofs.ko.xz")), "lacks '/%s'" % KEYFILE)
+
+    def test_another_key_in_the_initramfs_is_refused(self):
+        other = base64.b64encode(bytes(32)).decode()
+        self.refused(self.ready(shipped_key=other), "not the public key")
+
+    def test_the_key_path_of_the_conf_is_followed(self):
+        conf = SIGNED + "keypath = /etc/other.key\n"
+        self.refused(self.ready(conf=conf), "lacks '/etc/other.key'")
 
 class InitSysroot(avocado.Test):
     def configured(self, **kwargs):

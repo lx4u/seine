@@ -658,7 +658,7 @@ class PartitionHandler:
     def _parse_ostree_settings(self, where, settings):
         if type(settings) != type({}):
             raise ValueError("'%s' shall be a mapping" % where)
-        allowed = ("mode", "stateroot", "ref", "gpg-key")
+        allowed = ("mode", "stateroot", "ref", "gpg-key", "composefs-key")
         if where == "image: ostree":
             allowed += ("sources", "version", "manifest-key", "payload")
         for key in settings:
@@ -678,7 +678,7 @@ class PartitionHandler:
             if not ok or (key == "stateroot" and "/" in value):
                 raise ValueError(
                     "'%s: %s: %s' is not a valid name" % (where, key, value))
-        for name in ("gpg-key", "manifest-key"):
+        for name in ("gpg-key", "manifest-key", "composefs-key"):
             key = settings.get(name)
             if key is not None and not (
                     type(key) == type("") and key.startswith("vault:")
@@ -761,6 +761,10 @@ class PartitionHandler:
         enabled = {name: self.ostree_for(name)
                    for name in rooted
                    if self.ostree_for(name)["mode"] != "disabled"}
+        for settings in enabled.values():
+            if settings.get("composefs-key") and settings["mode"] != "composefs":
+                raise ValueError(
+                    "'composefs-key' needs 'mode: composefs'")
         if "version" in self.ostree and self.ostree["mode"] != "standard":
             raise ValueError(
                 "'image: ostree: version' needs 'mode: standard'")
