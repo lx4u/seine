@@ -129,6 +129,7 @@ class ContainersIngestUnitTests(avocado.Test):
 
     def test_populate_source_wires_container_devices(self):
         imager = self._create_imager()
+        imager._extract_tarball = mock.Mock()
         imager._write_fstab = mock.Mock()
         imager._label_selinux = mock.Mock()
         imager._ingest_containers = mock.Mock()
@@ -152,6 +153,7 @@ class ContainersIngestUnitTests(avocado.Test):
 
     def test_populate_source_skips_ingest_when_no_containers(self):
         imager = self._create_imager()
+        imager._extract_tarball = mock.Mock()
         imager._write_fstab = mock.Mock()
         imager._label_selinux = mock.Mock()
         imager._ingest_containers = mock.Mock()

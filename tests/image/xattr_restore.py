@@ -25,11 +25,13 @@ class XattrRestoreUnitTests(avocado.Test):
         g = mock.Mock()
         ph = mock.Mock()
         ph.bootlets = []
+        ph.plan_links.return_value = ([], [])
         mount = {"_prefix": "/", "type": "ext4"}
 
-        imager._populate_source(
-            g, ph, None, [mount], {id(mount): "/dev/sda1"}, {}, {id(mount): 1},
-            container_devices=[])
+        with mock.patch("seine.imager.imager.tarfile.open"):
+            imager._populate_source(
+                g, ph, None, [mount], {id(mount): "/dev/sda1"}, {}, {id(mount): 1},
+                container_devices=[])
 
         # The appliance's own tar, not tar_in: its wire format changes
         # between libguestfs releases.

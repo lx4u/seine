@@ -1,12 +1,14 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 import copy
 import os
 import re
 import shlex
 import shutil
 import stat
+import tarfile
 import tempfile
 import uuid
 
@@ -562,18 +564,53 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
     # Same as g.tar_in_opts(tarball, "/", xattrs=True), but with the
     # appliance's own tar: the tar_in wire format changes between
     # libguestfs releases, and the host and appliance may not match.
-    def _extract_tarball(self, g, source):
+    # With 'ph', the hardlinks that a mount cannot hold (see plan_links)
+    # are left out of the extraction and made as copies afterwards.
+    def _extract_tarball(self, g, source, ph=None):
         tarball = os.path.realpath(self.source._tarball_for(source))
         tag = self._tar_shares[os.path.dirname(tarball)]
         mnt = f"/run/{tag}"
+        excluded, ops = [], []
+        if ph is not None:
+            with tarfile.open(tarball, "r") as tar:
+                excluded, ops = ph.plan_links(tar.getmembers(), source=source)
+        extra = ""
+        if excluded:
+            names = "".join(f"{name}\n" for name in excluded)
+            self._guest_file(g, "/run/seine-links.excl", names)
+            extra = " --no-wildcards --anchored --exclude-from=/run/seine-links.excl"
         g.debug("sh", [f"mkdir -p {mnt} && modprobe 9pnet_virtio && modprobe 9p"
                        f" && mount -t 9p -o trans=virtio,version=9p2000.L,ro,"
                        f"msize=1048576 {tag} {mnt}"])
         try:
             g.debug("sh", [f"tar -xf {shlex.quote(mnt + '/' + os.path.basename(tarball))}"
-                           " --xattrs '--xattrs-include=*' -C /sysroot"])
+                           f" --xattrs '--xattrs-include=*' -C /sysroot{extra}"])
         finally:
             g.debug("sh", [f"umount {mnt}"])
+        if ops:
+            self._guest_file(g, "/run/seine-links.sh", self._links_script(ops))
+            g.debug("sh", ["sh /run/seine-links.sh"])
+
+    # Puts a file in the appliance itself, not in the image being built.
+    @staticmethod
+    def _guest_file(g, path, text):
+        data = base64.b64encode(text.encode()).decode()
+        g.debug("sh", [f"echo {data} | base64 -d > {path}"])
+
+    # The shell script for the (kind, primary, name, ...) operations of
+    # plan_links. A new entry bumps its directory's mtime, so restore it.
+    @staticmethod
+    def _links_script(ops):
+        lines = ["set -e", "ref=$(mktemp)"]
+        for kind, primary, name, _, _ in ops:
+            src = shlex.quote(f"/sysroot/{primary.lstrip('/')}")
+            dst = shlex.quote(f"/sysroot/{name.lstrip('/')}")
+            parent = shlex.quote(os.path.dirname(f"/sysroot/{name.lstrip('/')}"))
+            tool = "cp -a" if kind == "cp" else "ln"
+            lines += [f'touch -r {parent} "$ref"', f"{tool} {src} {dst}",
+                      f'touch -r "$ref" {parent}']
+        lines.append('rm -f "$ref"')
+        return "\n".join(lines) + "\n"
 
     def _populate_source(self, g, ph, source, mounts, part_devices, vol_devices, part_index,
                          container_devices=None):
@@ -592,7 +629,7 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
             g.mount(dev, m["_prefix"])
 
         print("Extracting root file-system...")
-        self._extract_tarball(g, source)
+        self._extract_tarball(g, source, ph)
 
         print("Writing fstab...")
         self._write_fstab(g, mounts, mount_devices, part_index)

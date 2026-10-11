@@ -1963,6 +1963,13 @@ overriding any default Discoverable Partitions Specification role. It cannot be
 used with `boot`, `lvm`, or `xbootldr` flags. An unmounted partition with
 `type-guid` does not require `where`, but must specify `size`.
 
+A hardlink in the root file-system cannot span two partitions, and `vfat`
+has none. When a link and the file it points to land on different
+partitions (for example `/usr/lib/modules/<version>/vmlinuz` and
+`/boot/vmlinuz-<version>`), or on a `vfat` partition, the imager makes
+a copy instead. The copy is counted when the partition is sized. Links
+that stay inside one partition are kept.
+
 `type` may also be `squashfs` or `erofs`, in which case the partition is built
 read-only and needs a `gpt` partition `table` (see [image](#image) above): the
 imager identifies it in `/etc/fstab` by `PARTLABEL=<label>`, which does not
