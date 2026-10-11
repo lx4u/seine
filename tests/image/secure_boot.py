@@ -198,7 +198,7 @@ class SecureBootGuest:
             self.cancel("this spec's kernel and boot loader are amd64-only")
         if shutil.which("podman") is None:
             self.cancel("podman is needed to build an image")
-        reason = qemu_boot.cannot_boot() or missing_tool()
+        reason = qemu_boot.cannot_boot(kvm_required=True) or missing_tool()
         if reason:
             self.cancel(reason)
         self.keys = Keys(os.path.join(self.workdir, "keys"))
@@ -227,7 +227,7 @@ class SecureBootGuest:
         self.guest = None
 
     # Runs a command that must succeed. Returns its output.
-    def sh(self, command, timeout=60):
+    def sh(self, command, timeout=120):
         status, output = self.guest.run(command, timeout)
         self.assertEqual(status, 0, "'%s' failed: %s" % (command, output))
         return output

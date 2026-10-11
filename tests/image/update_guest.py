@@ -81,7 +81,7 @@ class UpdateGuest:
             self.cancel("examples/pc-ostree-update-image is amd64-only")
         if shutil.which("podman") is None:
             self.cancel("podman is needed to build an image")
-        reason = qemu_boot.cannot_boot()
+        reason = qemu_boot.cannot_boot(kvm_required=True)
         if reason:
             self.cancel(reason)
         self.share = None
