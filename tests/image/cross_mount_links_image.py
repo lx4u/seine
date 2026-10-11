@@ -113,5 +113,7 @@ class KernelFilesOnSeparateBoot(avocado.Test):
             hosts = g.stat("/etc/hosts")
             self.assertEqual(hosts["mode"] & 0o777, 0o644)
             self.assertIn("localhost", g.cat("/etc/hosts"))
+            self.assertFalse(g.is_file("/etc/resolv.conf", followsymlinks=False),
+                             "/etc/resolv.conf comes from the build host")
         finally:
             g.close()

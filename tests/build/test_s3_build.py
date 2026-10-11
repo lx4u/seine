@@ -148,7 +148,7 @@ class S3BuildIntegrationTest(avocado.Test):
 
         with mock.patch("seine.container.ContainerEngine.run"), \
              mock.patch.object(img, "_exported"), \
-             mock.patch.object(img, "_normalize_timestamps"), \
+             mock.patch.object(img, "_clean_tarball"), \
              mock.patch("seine.utils.invalidate_digest_file"), \
              mock.patch("os.replace"), \
              mock.patch("seine.utils.write_digest_file"):
@@ -174,7 +174,7 @@ class S3BuildIntegrationTest(avocado.Test):
 
         with mock.patch("seine.container.ContainerEngine.run"), \
              mock.patch.object(img, "_exported"), \
-             mock.patch.object(img, "_normalize_timestamps"), \
+             mock.patch.object(img, "_clean_tarball"), \
              mock.patch("seine.utils.invalidate_digest_file"), \
              mock.patch("os.replace"), \
              mock.patch("seine.utils.write_digest_file"):

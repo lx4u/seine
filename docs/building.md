@@ -47,6 +47,10 @@ is not tracked.
 Extended attributes, such as file capabilities, are carried by the tarball and
 always restored into the disk image.
 
+The tarball has no `/etc/resolv.conf` file, since the build container's one
+comes from the build host. A specification or the network manager creates it
+(a symlink to it is kept as is).
+
 `--target TASK` is useful while working on one part of a build. It builds that
 task and what it needs. Find task names with `seine plan --tasks-only spec.yaml`.
 
