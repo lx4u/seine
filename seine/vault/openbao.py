@@ -130,6 +130,20 @@ class OpenBaoProvider(VaultProvider):
             {"input": _b64(data), "signature": signature}, token=self._token)
         return bool(_field(reply, "data", "valid"))
 
+    # Native Transit with an ed25519 key: the public half is the first
+    # key version, the signature comes back as 'vault:v1:<base64>'.
+    def ed25519_public_key(self, name):
+        reply = self._request(
+            "GET", "/v1/transit/keys/%s" % urllib.parse.quote(name, safe=""),
+            None, token=self._token)
+        keys = _field(reply, "data", "keys")
+        latest = max(keys, key=int)
+        return _b64decode(_field(keys, latest, "public_key"))
+
+    def ed25519_sign(self, name, data):
+        signature = self.sign(name, data)
+        return _b64decode(signature.rsplit(":", 1)[-1])
+
     # Apt signing through the seine-pgp plugin. Unknown keys fail
     # closed; only explicit generate/import calls create keys.
     def pgp_fingerprint(self, name):

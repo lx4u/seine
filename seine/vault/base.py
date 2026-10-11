@@ -31,6 +31,15 @@ class VaultProvider:
     def verify(self, key, data, signature):
         raise NotImplementedError
 
+    # Ed25519 commit signing (transit-style): the raw 32-byte public key,
+    # and a raw 64-byte signature over the data. Deterministic, so a
+    # rebuild signs the same bytes.
+    def ed25519_public_key(self, name):
+        raise NotImplementedError
+
+    def ed25519_sign(self, name, data):
+        raise NotImplementedError
+
     # Apt repository signing through the seine-pgp plugin: named keys
     # via explicit generate/import, bytes in and armor back, public
     # halves out. Timestamps are unix epochs, pinned by the caller.

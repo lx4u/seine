@@ -122,7 +122,7 @@ class TransitMapping(avocado.Test):
     def serving(self, payloads):
         def fake(request, *args, **kwargs):
             self.calls.append((request.get_method(), request.full_url,
-                               json.loads(request.data.decode() or "{}")))
+                               json.loads((request.data or b"{}").decode() or "{}")))
             for suffix, payload in payloads.items():
                 if request.full_url.endswith(suffix):
                     if isinstance(payload, Exception):
@@ -157,6 +157,17 @@ class TransitMapping(avocado.Test):
             signature = provider.sign("mykey", b"hello")
             self.assertEqual(signature, "vault:v1:sig")
             self.assertTrue(provider.verify("mykey", b"hello", signature))
+
+    def test_ed25519_signature_and_public_key_are_raw_bytes(self):
+        raw = base64.b64encode(b"s" * 64).decode()
+        routes = {"/v1/transit/sign/mykey": {"data": {"signature": "vault:v1:%s" % raw}},
+                  "/v1/transit/keys/mykey": {"data": {"keys": {
+                      "1": {"public_key": base64.b64encode(b"old").decode()},
+                      "2": {"public_key": base64.b64encode(b"new").decode()}}}}}
+        with self.serving(routes):
+            provider = OpenBaoProvider()
+            self.assertEqual(provider.ed25519_sign("mykey", b"hello"), b"s" * 64)
+            self.assertEqual(provider.ed25519_public_key("mykey"), b"new")
 
     def test_verify_is_false_on_mismatch(self):
         routes = {"/v1/transit/verify/mykey": {"data": {"valid": False}}}
