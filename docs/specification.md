@@ -738,6 +738,14 @@ Patches are applied in the way the source format calls for. A
 else has them applied to the tree, and committed if that tree came from
 git, so that packaging which records its own revision keeps working.
 
+In a `3.0 (quilt)` package, a patch that only changes files under
+`debian/` is applied to the tree instead, since the series cannot reach
+them: the rebuilt package then carries a new debian tarball, the same
+bytes on every build. Such a patch may touch the top of
+`debian/changelog`, as the local entry is added after patching. A patch
+that changes both `debian/` and the upstream tree is refused; split it in
+two. See `examples/rebuild-busybox/`.
+
 Rebuilt packages are made available to the rest of the build through a
 local apt repository under `./build/cache/packages/` (see [Environment variables](environment.md)): the playbooks
 install them with an ordinary `apt` task, later packages build against

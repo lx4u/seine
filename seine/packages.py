@@ -23,6 +23,7 @@ from email.utils import format_datetime
 from seine        import git
 from seine        import kernel
 from seine        import kmod_sign
+from seine.deb    import patches as debpatches
 from seine.deb    import repack
 from seine.extends import go
 from seine.extends import registry
@@ -806,9 +807,29 @@ class Builder:
             shutil.copy(patch, staged)
 
         if self._is_quilt(sourcedir):
-            self._patch_series(package, sourcedir)
+            tree, series = self._split_patches(package)
+            # debian/ is not in the orig tree series patches apply to, so
+            # those go in directly: dpkg-source packs them in the new
+            # debian tarball.
+            self._patch_tree(tree, sourcedir, epoch)
+            self._patch_series(series, sourcedir)
         else:
-            self._patch_tree(package, sourcedir, epoch)
+            self._patch_tree(package.patch_files(), sourcedir, epoch)
+
+    # Returns (patches for debian/, patches for the upstream tree).
+    def _split_patches(self, package):
+        tree, series = [], []
+        for patch in package.patch_files():
+            paths = debpatches.changed_paths(patch)
+            inside = [p for p in paths if debpatches.in_debian(p)]
+            outside = [p for p in paths if not debpatches.in_debian(p)]
+            if inside and outside:
+                raise ValueError(
+                    f"package '{package.source}': {patch} changes both "
+                    f"debian/ ({', '.join(inside)}) and the upstream "
+                    f"tree ({', '.join(outside)}); split it in two")
+            (tree if inside else series).append(patch)
+        return tree, series
 
     def _is_quilt(self, sourcedir):
         path = os.path.join(sourcedir, "debian", "source", "format")
@@ -819,10 +840,12 @@ class Builder:
         with open(path, "r") as f:
             return "quilt" in f.read()
 
-    def _patch_series(self, package, sourcedir):
+    def _patch_series(self, files, sourcedir):
+        if len(files) == 0:
+            return
         patches = os.path.join(sourcedir, "debian", "patches")
         os.makedirs(patches, exist_ok=True)
-        for patch in package.patch_files():
+        for patch in files:
             shutil.copy(patch, patches)
 
         series = os.path.join(patches, "series")
@@ -836,13 +859,13 @@ class Builder:
             existing += "\n"
         with open(series, "w") as f:
             f.write(existing)
-            for patch in package.patch_files():
+            for patch in files:
                 f.write("%s\n" % os.path.basename(patch))
 
-    def _patch_tree(self, package, sourcedir, epoch):
+    def _patch_tree(self, files, sourcedir, epoch):
         git = os.path.isdir(os.path.join(sourcedir, ".git"))
         source = os.path.join(WORKDIR, os.path.basename(sourcedir))
-        for patch in package.patch_files():
+        for patch in files:
             staged = "%s/%s/%s" % (WORKDIR, Builder.PATCHES, os.path.basename(patch))
             if git:
                 script = ("git apply %s && "
@@ -854,7 +877,7 @@ class Builder:
                     "GIT_COMMITTER_DATE": "@%d +0000" % epoch,
                 }
             else:
-                script = "patch -p1 < %s" % staged
+                script = f"patch -p1 --no-backup-if-mismatch -r - < {staged}"
                 environment = None
             self.builderImage.exec(
                 ["sh", "-c", script],
