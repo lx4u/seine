@@ -343,6 +343,38 @@ class DistributeScopesBySource(avocado.Test):
         self.assertEqual(recovery_root["_size"], recovery_before,
                          "recovery's own partition grew from main's content")
 
+# 'mount_for()' picks the deepest mount holding a path, scoped by source.
+class MountFor(avocado.Test):
+    def test_the_deepest_mount_wins_with_or_without_a_leading_slash(self):
+        ph = PartitionHandler()
+        ph.parse({
+            "image": {
+                "filename": "disk.img",
+                "partitions": [
+                    {"label": "rootfs", "where": "/"},
+                    {"label": "var", "where": "/var"},
+                    {"label": "varlib", "where": "/var/lib"},
+                ],
+            },
+        })
+        self.assertEqual(ph.mount_for("var/lib/x")["label"], "varlib")
+        self.assertEqual(ph.mount_for("/var/log/x")["label"], "var")
+        self.assertEqual(ph.mount_for("usr/bin/ls")["label"], "rootfs")
+
+    def test_a_path_matches_only_mounts_of_its_own_source(self):
+        ph = PartitionHandler()
+        ph.parse({
+            "multiconfig": {"main": ["main.yaml"]},
+            "image": {
+                "filename": "disk.img",
+                "partitions": [
+                    {"label": "main-root", "source": "main", "where": "/"},
+                ],
+            },
+        })
+        self.assertIsNone(ph.mount_for("etc/hostname"))
+        self.assertEqual(ph.mount_for("etc/hostname", "main")["label"], "main-root")
+
 # 'verity: true' pairs a read-only partition with a 'verity-hash' one --
 # see PartitionHandler._validate_verity()/parse's own comment there.
 class VerityHashPartitionIsAccepted(avocado.Test):
