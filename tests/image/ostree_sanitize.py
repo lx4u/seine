@@ -18,6 +18,7 @@ ROOT = "/stage"
 class FakeGuestfs:
     def __init__(self):
         self.nodes = {"/": ("dir",)}
+        self.modes = {}
 
     def _under(self, path):
         prefix = path.rstrip("/") + "/"
@@ -27,6 +28,9 @@ class FakeGuestfs:
         parts = path.strip("/").split("/")
         for i in range(len(parts)):
             self.nodes.setdefault("/" + "/".join(parts[:i + 1]), ("dir",))
+
+    def chmod(self, mode, path):
+        self.modes[path] = mode
 
     def put(self, path, data=b""):
         self.mkdir_p(posixpath.dirname(path))
@@ -178,3 +182,17 @@ class Sanitize(avocado.Test):
         self.g.put(ROOT + "/boot/initrd.img-6.13.0", b"i")
         with self.assertRaises(RuntimeError):
             sanitize(self.g, ROOT)
+
+    def test_composefs_makes_tmp_a_directory_for_a_tmpfs(self):
+        sanitize(self.g, ROOT, composefs=True)
+        self.assertTrue(self.g.is_dir(ROOT + "/tmp"))
+        self.assertEqual(self.g.modes[ROOT + "/tmp"], 0o1777)
+
+    def test_composefs_keeps_opt_and_usr_local_as_directories(self):
+        sanitize(self.g, ROOT, composefs=True)
+        for path in ("/opt", "/usr/local"):
+            self.assertTrue(self.g.is_dir(ROOT + path), path)
+        self.assertEqual(self.link("/home"), "var/home")
+        conf = self.g.nodes[ROOT + "/usr/lib/tmpfiles.d/seine-ostree.conf"][1].decode()
+        self.assertNotIn("/var/opt", conf)
+        self.assertNotIn("/var/usrlocal", conf)

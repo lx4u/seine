@@ -1,6 +1,7 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import configparser
 import os
 import posixpath
 import re
@@ -47,6 +48,11 @@ def check_tarball(tarball, what):
             "%s cannot become an ostree sysroot: its root file-system has "
             "initramfs-tools, and ostree needs dracut instead" % what)
 
+# ostree-prepare-root reads the first of these. The dracut module copies
+# whichever exists into the initramfs, and only there it takes effect.
+PREPARE_ROOT_CONFS = ("etc/ostree/prepare-root.conf",
+                      "usr/lib/ostree/prepare-root.conf")
+
 USRMERGE = ("bin", "sbin", "lib", "lib64")
 
 # Paths the commit turns into links into /var: the link target and the
@@ -60,6 +66,9 @@ VAR_LINKS = (
     ("mnt", "var/mnt", "0755"),
 )
 
+# Read-only anyway with composefs, so these stay real directories there.
+COMPOSEFS_DIRS = ("opt", "usr/local")
+
 TMPFILES = "usr/lib/tmpfiles.d/seine-ostree.conf"
 FACTORY = "usr/share/factory"
 
@@ -70,7 +79,7 @@ def _has_files(g, path):
 # 'ostree admin deploy' accept. 'mounts' are the guest prefixes of the
 # partitions to be mounted ('/efi/', '/var/home/', ...): each needs its
 # mount point in the commit.
-def sanitize(g, root, mounts=()):
+def sanitize(g, root, mounts=(), composefs=False):
     def at(*parts):
         return posixpath.join(root, *parts)
 
@@ -88,6 +97,9 @@ def sanitize(g, root, mounts=()):
 
     tmpfiles = []
     for path, target, mode in VAR_LINKS:
+        if composefs and path in COMPOSEFS_DIRS:
+            g.mkdir_p(at(path))
+            continue
         var = posixpath.basename(target)
         if g.is_dir(at(path)) and not g.is_symlink(at(path)) \
                 and _has_files(g, at(path)):
@@ -103,7 +115,12 @@ def sanitize(g, root, mounts=()):
         g.ln_s(target, at(path))
     if g.is_symlink(at("tmp")) or g.exists(at("tmp")):
         g.rm_rf(at("tmp"))
-    g.ln_s("sysroot/tmp", at("tmp"))
+    if composefs:
+        # /sysroot is read-only there; systemd mounts a tmpfs on this.
+        g.mkdir_p(at("tmp"))
+        g.chmod(0o1777, at("tmp"))
+    else:
+        g.ln_s("sysroot/tmp", at("tmp"))
 
     tmpfiles += _mount_points(g, at, mounts, tmpfiles)
 
@@ -173,6 +190,7 @@ def _relocate_kernel(g, at):
 
 SYSROOT = "/sysroot"
 OSTREE = "/usr/bin/ostree"
+LSINITRD = "/usr/bin/lsinitrd"
 OS_RELEASE = "/usr/lib/os-release"
 
 # Both stay under /sysroot, which the commit skips, and are removed
@@ -205,6 +223,33 @@ def init_sysroot(g, stateroot):
     _ostree(g, "config", "--repo=%s/ostree/repo" % SYSROOT, "set",
             "sysroot.bootloader", "none")
 
+# Refuses a staged root that would boot as a classic ostree. With the
+# conf only in the tree, or without erofs in the initramfs, the boot
+# silently falls back (or stops in the initramfs). Run before sanitize().
+def check_composefs(g):
+    if "composefs" not in _ostree(g, "--version"):
+        raise RuntimeError(
+            "'mode: composefs' needs an ostree built with composefs, which "
+            "the one in the root file-system is not")
+    conf = next((p for p in PREPARE_ROOT_CONFS if g.is_file("/" + p)), None)
+    if conf is None:
+        raise RuntimeError(
+            "'mode: composefs' needs '/%s' with '[composefs] enabled = yes' "
+            "before the initramfs is built" % PREPARE_ROOT_CONFS[-1])
+    parser = configparser.ConfigParser()
+    parser.read_string(g.read_file("/" + conf).decode())
+    enabled = parser.get("composefs", "enabled", fallback="no")
+    if enabled != "yes":
+        raise RuntimeError(
+            "'/%s' has 'enabled = %s' in [composefs]: only 'yes' is "
+            "supported for 'mode: composefs'" % (conf, enabled))
+    initrds = [n for n in g.ls("/boot") if n.startswith("initrd.img-")]
+    listing = g.command([LSINITRD, "/boot/%s" % initrds[0]]) if initrds else ""
+    if conf not in listing or "erofs" not in listing:
+        raise RuntimeError(
+            "the initramfs lacks '/%s' or the erofs driver: install the "
+            "conf before the kernel, so dracut copies it" % conf)
+
 # Sets IMAGE_VERSION in the os-release of the staged root, so the commit
 # and the UKI carry it. Returns the new text.
 def stamp_version(g, version):
@@ -220,13 +265,15 @@ def stamp_version(g, version):
 
 # Commits the staged root ('/'), whatever is mounted under it aside.
 # Returns the commit checksum.
-def commit(g, ref, epoch, version=None):
+def commit(g, ref, epoch, version=None, composefs=False):
     g.write(SKIP_LIST, ("\n".join(SKIPPED) + "\n").encode())
     for name in ("sysroot", "dev", "proc", "sys", "run"):
         directory = "%s/%s" % (SKELETON, name)
         g.mkdir_p(directory)
         g.chmod(0o755, directory)
     metadata = ["--add-metadata-string=version=%s" % version] if version else []
+    if composefs:
+        metadata.append("--generate-composefs-metadata")
     checksum = _ostree(
         g, "--repo=%s/ostree/repo" % SYSROOT, "commit", "-b", ref,
         "--tree=dir=/", "--tree=dir=%s" % SKELETON,
@@ -458,7 +505,10 @@ class OstreeSysroot:
         kargs += shlex.split(self._grub_cmdline(g))
         self._write_fstab(g, others, mount_devices, part_index)
         ukis = self._take_ukis(g)
-        sanitize(g, "/", [m["_prefix"] for m in others])
+        composefs = settings["mode"] == "composefs"
+        if composefs:
+            check_composefs(g)
+        sanitize(g, "/", [m["_prefix"] for m in others], composefs)
         version = settings.get("version")
         osrel = stamp_version(g, version) if version else None
 
@@ -476,7 +526,7 @@ class OstreeSysroot:
             g.mount(mount_devices[id(m)], path)
 
         print("Committing and deploying...")
-        checksum = commit(g, ref, self.source._epoch(), version)
+        checksum = commit(g, ref, self.source._epoch(), version, composefs)
         if settings.get("gpg-key"):
             sign_commit(g, self._vault_provider(), checksum,
                         settings["gpg-key"], self.source._epoch())

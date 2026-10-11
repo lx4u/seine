@@ -1,0 +1,24 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier Apache-2.0
+
+# Turns composefs on. ostree-prepare-root reads this file from the
+# initramfs, so it is written before the kernel installs and dracut
+# builds the initramfs. The build stops before any disk work if it is
+# missing (docs/ostree.md).
+
+playbook:
+    - name: enable composefs
+      wave: initramfs
+      after: [base]
+      before: [kernel]
+      tasks:
+          - name: make room for it
+            file:
+                path: /usr/lib/ostree
+                state: directory
+          - name: write prepare-root.conf
+            copy:
+                dest: /usr/lib/ostree/prepare-root.conf
+                content: |
+                    [composefs]
+                    enabled = yes
