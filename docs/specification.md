@@ -1802,6 +1802,8 @@ When `mode` is not `disabled`, the build is refused unless:
 
  * the release is trixie or newer (`composefs` needs forky or newer),
    since the initramfs is generated with dracut;
+ * with `composefs`, the root file system has `prepare-root.conf` with
+   `[composefs] enabled = yes` in its initramfs (see [OSTree sysroots](ostree.md#composefs));
  * the partition `table` is `gpt`;
  * each rooted source has an `ext4` `/` partition (the physical sysroot)
    and a `/var` partition, as OSTree keeps state there;

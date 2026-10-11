@@ -1,0 +1,39 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier Apache-2.0
+
+# Like ../pc-ostree-image, but the booted root is a composefs: a
+# read-only overlay of the deployment, checked against the commit's
+# digests (docs/ostree.md). It needs an ostree built with composefs, so
+# the release is forky.
+#   seine build examples/pc-ostree-composefs-image/main.yaml
+#   dd if=build/deploy/forky/pc-ostree-composefs.img of=/dev/sdX bs=4M status=progress conv=fsync
+
+requires:
+    - stdlib:debian/amd64.yml
+    - stdlib:debian/forky.yml
+    - stdlib:debian/base.yml
+    - ../common/conf-accounts
+    - stdlib:debian/locales.yml
+    - stdlib:debian/timezone.yml
+    - ../pc-image/grub-serial-console
+    - ../pc-ostree-image/ostree
+    - composefs
+
+image:
+    filename: pc-ostree-composefs.img
+    table: gpt
+    ostree:
+        mode: composefs
+    partitions:
+        - label: esp
+          type: vfat
+          size: 256MiB
+          where: /efi
+          flags: [boot]
+        - label: sysroot
+          type: ext4
+          where: /
+        - label: var
+          type: ext4
+          size: 1024MiB
+          where: /var

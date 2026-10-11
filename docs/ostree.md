@@ -6,7 +6,8 @@ sysroot instead: the root file system becomes a commit in a repository
 on the root partition, and a deployment of that commit is what boots.
 See [ostree](specification.md#ostree) for the attributes.
 
-Only `mode: standard` builds a disk today.
+`mode: standard` and `mode: composefs` build a disk, see
+[Composefs](#composefs).
 
 ## Partitions
 
@@ -106,6 +107,30 @@ deployment root, which ostree sets again on the next deploy.
 The commit carries an empty `machine-id` and no SSH host keys, so
 every device creates its own. A root file system that ships host keys
 is refused.
+
+## Composefs
+
+`mode: composefs` boots `/` as a read-only overlay of the deployment
+(erofs and overlayfs), where `standard` binds the deployment and only
+makes `/usr` read-only. It needs an ostree built with composefs, so the
+release is forky or newer. `/opt` and `/usr/local` stay real
+directories in the commit, read-only at run time. `/tmp` is a real
+directory too, for the tmpfs that systemd mounts on it (`/sysroot` is
+read-only). The other state directories link into `/var` as before.
+
+`ostree-prepare-root` reads `/usr/lib/ostree/prepare-root.conf` from
+the initramfs. Without `enabled = yes` in its `[composefs]` section the
+boot falls back to a classic ostree without any message. So the file
+must exist before the kernel installs and dracut builds the initramfs
+(see `examples/pc-ostree-composefs-image/composefs.yaml`). The build
+stops, before any commit, if the conf, the erofs driver in the
+initramfs or composefs in `ostree` is missing. `enabled = verity` is
+refused: fsverity does not survive the reproducible rebuild of the
+file systems yet.
+
+The commit is made with `--generate-composefs-metadata`. Nothing
+signed binds the composefs image to the commit: the digest lives in the
+commit, and authenticity stays with the commit signature and Secure Boot.
 
 ## Disk identifiers
 
@@ -467,5 +492,5 @@ full deployment, so the first update does not fail on a full disk. Set
 Booting on a non-amd64 architecture (the build stops with a message),
 mixing ostree and plain root file systems on one disk, a separate
 `/boot` partition (its entries are written, but it has not been
-boot-tested), `composefs`, `containers:`, `bootlets:` and read-only
+boot-tested), `enabled = verity` for composefs, `containers:`, `bootlets:` and read-only
 (`squashfs`/`erofs`) partitions.
