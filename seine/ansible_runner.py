@@ -33,6 +33,11 @@ TMPFS = ["--tmpfs", "/run", "--tmpfs", "/tmp"]
 # hostname, so this stays fixed for reproducible builds.
 HOSTNAME = ["--hostname", "target"]
 
+# podman bind-mounts its own hosts file, so the export keeps an empty
+# 0700 placeholder instead. We write a real one (see HOSTS_FILE).
+NO_HOSTS = ["--no-hosts"]
+HOSTS_FILE = "127.0.0.1\\tlocalhost\\n::1\\tlocalhost ip6-localhost ip6-loopback\\n"
+
 ARCHIVES = "/var/cache/apt/archives"
 
 # File TargetBootstrap leaves feeds in. Separate from sources.list so we
@@ -79,7 +84,7 @@ class AnsibleContainerRunner:
 
     # Container the playbooks run against; also what gets exported as the image.
     def container_command(self, image):
-        return (["container", "run", "-d"] + self._volumes() + TMPFS + HOSTNAME
+        return (["container", "run", "-d"] + self._volumes() + TMPFS + HOSTNAME + NO_HOSTS
                 + [image, "sleep", "infinity"])
 
     def _volumes(self):
@@ -180,6 +185,7 @@ class AnsibleContainerRunner:
                 # triggers touch with the real build time (e.g. ldconfig's
                 # cache dirs) back to a fixed epoch.
                 self._exec(["touch", "/.ansible-marker"])
+                self._exec(["sh", "-c", f"printf '{HOSTS_FILE}' > /etc/hosts; chmod 0644 /etc/hosts"])
                 if packages.has_packages(self.distro):
                     self._exec(["sh", "-c", packages.apt_configuration(
                         packages.REPOSITORY,

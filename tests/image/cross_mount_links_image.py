@@ -109,5 +109,9 @@ class KernelFilesOnSeparateBoot(avocado.Test):
                       if g.is_file(f"/usr/bin/{name}", followsymlinks=False)
                       and g.stat(f"/usr/bin/{name}")["nlink"] > 1]
             self.assertTrue(linked, "/usr/bin lost all its hardlinks")
+
+            hosts = g.stat("/etc/hosts")
+            self.assertEqual(hosts["mode"] & 0o777, 0o644)
+            self.assertIn("localhost", g.cat("/etc/hosts"))
         finally:
             g.close()
