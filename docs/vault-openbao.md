@@ -121,6 +121,10 @@ A `kv:` version-2 mount, for `vault('<path>#<field>')` reads:
 bao secrets enable -path=kv -version=2 kv
 ```
 
+`vault_ed25519_public('<name>')` in a spec gives the base64 public key of
+a transit ed25519 key. It is no secret, so a playbook may write it to the
+image (see [Composefs](ostree.md#composefs)).
+
 Each signing plugin needs registering in the catalog (its `.so`'s digest,
 from inside the image) before it can be mounted:
 

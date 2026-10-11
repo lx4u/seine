@@ -120,12 +120,14 @@ class SpecLoader:
             if self._probing:
                 self._names.append((yaml_filename,
                     jinja2.meta.find_undeclared_variables(
-                        template.parse(yaml_spec)) - {"vault"}))
+                        template.parse(yaml_spec)) - {"vault", "vault_ed25519_public"}))
                 return template.from_string(yaml_spec).render(
-                    dict(context or {}, vault=lambda ref: ""))
+                    dict(context or {}, vault=lambda ref: "",
+                         vault_ed25519_public=lambda name: ""))
             self._collect_vault_defaults(yaml_spec)
             rendered = template.from_string(yaml_spec).render(
-                dict(context or {}, vault=self._vault_lookup))
+                dict(context or {}, vault=self._vault_lookup,
+                     vault_ed25519_public=self._vault_ed25519_public))
             return rendered
         except _vault.VaultError as e:
             raise ValueError("%s: %s" % (yaml_filename, e)) from e
@@ -151,9 +153,8 @@ class SpecLoader:
             if type(vault) == type({}):
                 self._vault_defaults.update(vault)
 
-    # One provider per build, started on first use. Resolved values are
-    # recorded so dumps redact them and digests hide them.
-    def _vault_lookup(self, ref):
+    # One provider per build, started on first use.
+    def _vault_lookup_provider(self):
         from seine import vault as _vault
         self._collect_vault_defaults_from_spec()
         if self._vault_provider is None:
@@ -162,9 +163,21 @@ class SpecLoader:
             defaults = getattr(self._vault_provider, "_defaults", None)
             if type(defaults) == type({}) and defaults is not self._vault_defaults:
                 defaults.update(self._vault_defaults)
+
+    # Resolved values are recorded so dumps redact them and digests hide them.
+    def _vault_lookup(self, ref):
+        from seine import vault as _vault
+        self._vault_lookup_provider()
         value = self._vault_provider.kv_read(ref)
         _vault.record_secret(value if isinstance(value, str) else str(value))
         return value
+
+    # The public half of an ed25519 key, base64: not a secret.
+    def _vault_ed25519_public(self, name):
+        import base64
+        self._vault_lookup_provider()
+        return base64.b64encode(
+            self._vault_provider.ed25519_public_key(name)).decode()
 
     # Picks up defaults merged since the current file was collected.
     def _collect_vault_defaults_from_spec(self):
