@@ -481,8 +481,11 @@ class Image:
         main_spec_dir = os.path.dirname(main_files[0]) if len(main_files) > 0 else "."
         for source in [None] + self._referenced_sources():
             tar = tarfile.open(self._tarball_for(source), "r")
-            for f in tar.getmembers():
+            members = tar.getmembers()
+            for f in members:
                 self.partitionHandler.distribute(f, source=source)
+            _, ops = self.partitionHandler.plan_links(members, source=source)
+            self.partitionHandler.distribute_copies(ops)
             tar.close()
 
             containers_list = self.containers if source is None else \
