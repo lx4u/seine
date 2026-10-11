@@ -1,0 +1,19 @@
+Description: mark the description as rebuilt
+ Changes the busybox package's own description, which lives in
+ debian/control. A patch that only touches debian/ is applied to the
+ tree and ends up in the new debian tarball. This is here to make the
+ example verifiable, not because the change is useful in itself.
+Author: seine
+Forwarded: not-needed
+
+--- a/debian/control
++++ b/debian/control
+@@ -19,7 +19,7 @@
+ Depends: ${misc:Depends}, ${shlibs:Depends}
+ Conflicts: busybox-static
+ Replaces: busybox-static
+-Description: Tiny utilities for small and embedded systems
++Description: Tiny utilities for small and embedded systems (rebuilt-by-seine)
+  BusyBox combines tiny versions of many common UNIX utilities into a single
+  small executable. It provides minimalist replacements for the most common
+  utilities you would usually find on your desktop system (i.e., ls, cp, mv,
