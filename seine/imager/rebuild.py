@@ -55,7 +55,10 @@ class PartitionRebuild:
         # ext2/3/4 has no syscall for ctime/crtime either, so it's
         # rebuilt with mke2fs -d, same idea as FAT above. Deepest first:
         # root goes last, once its children are already rebuilt.
-        ext_mounts = [m for m in mounts if m["type"] in EXT_FSTYPES]
+        # mke2fs -d cannot copy fsverity: such a file system keeps its
+        # creation times and layout, so the image is not byte-identical.
+        ext_mounts = [m for m in mounts if m["type"] in EXT_FSTYPES
+                      and id(m) not in self._verity_mounts]
         fat_mounts = [m for m in mounts if m["type"] in ("vfat", "msdos")]
         # FAT staging needs a full copy of the partition, which does not
         # fit in root's own auto-sized slack -- use the scratch disk,

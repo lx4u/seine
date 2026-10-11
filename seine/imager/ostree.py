@@ -215,17 +215,21 @@ def _ostree(g, *args):
     return g.command([OSTREE] + list(args))
 
 # '/sysroot' is the physical sysroot, already mounted.
-def init_sysroot(g, stateroot):
+def init_sysroot(g, stateroot, fsverity=False):
     _ostree(g, "admin", "init-fs", SYSROOT)
     _ostree(g, "admin", "os-init", "--sysroot=%s" % SYSROOT, stateroot)
     # With a grub.cfg present, 'deploy' runs grub-mkconfig and fails. The
     # boot configuration is written by the imager, and by an updater later.
     _ostree(g, "config", "--repo=%s/ostree/repo" % SYSROOT, "set",
             "sysroot.bootloader", "none")
+    if fsverity:
+        _ostree(g, "config", "--repo=%s/ostree/repo" % SYSROOT, "set",
+                "ex-integrity.fsverity", "true")
 
 # Refuses a staged root that would boot as a classic ostree. With the
 # conf only in the tree, or without erofs in the initramfs, the boot
 # silently falls back (or stops in the initramfs). Run before sanitize().
+# Returns the 'enabled' value of the conf, 'yes' or 'verity'.
 def check_composefs(g):
     if "composefs" not in _ostree(g, "--version"):
         raise RuntimeError(
@@ -235,20 +239,21 @@ def check_composefs(g):
     if conf is None:
         raise RuntimeError(
             "'mode: composefs' needs '/%s' with '[composefs] enabled = yes' "
-            "before the initramfs is built" % PREPARE_ROOT_CONFS[-1])
+            "(or 'verity') before the initramfs is built" % PREPARE_ROOT_CONFS[-1])
     parser = configparser.ConfigParser()
     parser.read_string(g.read_file("/" + conf).decode())
     enabled = parser.get("composefs", "enabled", fallback="no")
-    if enabled != "yes":
+    if enabled not in ("yes", "verity"):
         raise RuntimeError(
-            "'/%s' has 'enabled = %s' in [composefs]: only 'yes' is "
-            "supported for 'mode: composefs'" % (conf, enabled))
+            "'/%s' has 'enabled = %s' in [composefs]: only 'yes' and "
+            "'verity' are supported for 'mode: composefs'" % (conf, enabled))
     initrds = [n for n in g.ls("/boot") if n.startswith("initrd.img-")]
     listing = g.command([LSINITRD, "/boot/%s" % initrds[0]]) if initrds else ""
     if conf not in listing or "erofs" not in listing:
         raise RuntimeError(
             "the initramfs lacks '/%s' or the erofs driver: install the "
             "conf before the kernel, so dracut copies it" % conf)
+    return enabled
 
 # Sets IMAGE_VERSION in the os-release of the staged root, so the commit
 # and the UKI carry it. Returns the new text.
@@ -506,16 +511,19 @@ class OstreeSysroot:
         self._write_fstab(g, others, mount_devices, part_index)
         ukis = self._take_ukis(g)
         composefs = settings["mode"] == "composefs"
-        if composefs:
-            check_composefs(g)
+        verity = composefs and check_composefs(g) == "verity"
         sanitize(g, "/", [m["_prefix"] for m in others], composefs)
         version = settings.get("version")
         osrel = stamp_version(g, version) if version else None
 
         self._guest_paths = {id(m): target_path(m["_prefix"], stateroot)
                              for m in mounts}
+        if verity:
+            # The repo objects get fsverity, which ext4 needs the feature for.
+            g.command(["tune2fs", "-O", "verity", mount_devices[id(root)]])
+            self._verity_mounts = {id(root)}
         g.mount(mount_devices[id(root)], SYSROOT)
-        init_sysroot(g, stateroot)
+        init_sysroot(g, stateroot, verity)
         for m in mounts:
             if m is root:
                 continue

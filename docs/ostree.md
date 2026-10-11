@@ -124,9 +124,14 @@ boot falls back to a classic ostree without any message. So the file
 must exist before the kernel installs and dracut builds the initramfs
 (see `examples/pc-ostree-composefs-image/composefs.yaml`). The build
 stops, before any commit, if the conf, the erofs driver in the
-initramfs or composefs in `ostree` is missing. `enabled = verity` is
-refused: fsverity does not survive the reproducible rebuild of the
-file systems yet.
+initramfs or composefs in `ostree` is missing.
+
+With `enabled = verity` the sysroot partition is made with the ext4
+`verity` feature, and the repo gets `ex-integrity.fsverity=true` before
+the commit, so every object has fsverity and the boot checks it. That
+partition is not rebuilt for `--reproducible` (`mke2fs -d` cannot copy
+fsverity), so two builds differ in its creation times and layout. Other
+partitions are rebuilt as usual.
 
 The commit is made with `--generate-composefs-metadata`. Nothing
 signed binds the composefs image to the commit: the digest lives in the
@@ -492,5 +497,5 @@ full deployment, so the first update does not fail on a full disk. Set
 Booting on a non-amd64 architecture (the build stops with a message),
 mixing ostree and plain root file systems on one disk, a separate
 `/boot` partition (its entries are written, but it has not been
-boot-tested), `enabled = verity` for composefs, `containers:`, `bootlets:` and read-only
+boot-tested), `containers:`, `bootlets:` and read-only
 (`squashfs`/`erofs`) partitions.
