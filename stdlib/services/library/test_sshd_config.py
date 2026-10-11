@@ -4,7 +4,7 @@
 
 # run with 'python3 stdlib/services/library/test_sshd_config.py'
 
-from sshd_config import _edit, _include_ok, _toggle
+from sshd_config import _edit, _include_ok, _reported, _toggle
 
 # appends when the directive is missing
 lines, changed = _edit(["# a comment", "Port 22"], "PermitRootLogin", "no", "present")
@@ -67,5 +67,10 @@ assert _toggle(["aes256-ctr", "3des-cbc", "aes128-ctr"], "3des-cbc", "absent") =
 
 # is a no-op if it was never there
 assert _toggle(["aes256-ctr"], "3des-cbc", "absent") == ["aes256-ctr"]
+
+# finds a directive whatever the case sshd prints it in
+assert _reported("ciphers a,b\nmacs c", "Ciphers") == ["a", "b"]
+assert _reported("Ciphers a,b\nMacs c", "Ciphers") == ["a", "b"]
+assert _reported("macs c", "Ciphers") is None
 
 print("ok")
