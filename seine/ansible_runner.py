@@ -293,21 +293,27 @@ class AnsibleContainerRunner:
             os.unlink(inventoryfile.name)
 
     # Rebuilds every kernel's initrd with whichever generator is installed
-    # (only one ever is: dracut Conflicts: initramfs-tools). dracut's
-    # output name is spelled out to match what imager/imager.py expects.
+    # (only one ever is: dracut Conflicts: initramfs-tools). dracut is
+    # asked first: forky's dracut ships an 'update-initramfs' wrapper that
+    # would hide it. Its output name is spelled out to match what
+    # imager/imager.py expects.
     def _finalize(self):
         # mkinitramfs needs SOURCE_DATE_EPOCH for reproducible zstd.
         # dracut also needs '--reproducible', or its own generated
         # files keep the real build time and never hash the same twice.
+        # '--no-hostonly': else the initrd is made for the build container's
+        # drivers and mounts, not for the target. dracut's systemd module
+        # copies /etc/machine-id anyway, so give it a stable one.
         self._exec(["sh", "-c",
             "export SOURCE_DATE_EPOCH=%d; " % self.epoch +
             "for k in /boot/vmlinuz-*; do "
             "[ -e \"$k\" ] || continue; "
             "v=${k#/boot/vmlinuz-}; "
-            "if command -v update-initramfs >/dev/null 2>&1; then "
+            "if command -v dracut >/dev/null 2>&1; then "
+            "printf 'uninitialized\\n' > /etc/machine-id; "
+            "dracut --reproducible --no-hostonly --force \"/boot/initrd.img-$v\" \"$v\"; "
+            "elif command -v update-initramfs >/dev/null 2>&1; then "
             "update-initramfs -c -k \"$v\"; "
-            "elif command -v dracut >/dev/null 2>&1; then "
-            "dracut --reproducible --force \"/boot/initrd.img-$v\" \"$v\"; "
             "fi; "
             "done"])
         # TransportBootstrap marks its own packages "auto" so a plain
