@@ -3,6 +3,7 @@
 
 import os
 import posixpath
+import re
 import shlex
 import tarfile
 import tempfile
@@ -19,11 +20,14 @@ REQUIRED = (
     "usr/bin/dracut",
     "usr/bin/ostree",
     "usr/lib/ostree/ostree-prepare-root",
-    "usr/lib/dracut/modules.d/98ostree/module-setup.sh",
 )
 
+# The module is numbered 98 on trixie and 50 on forky.
+DRACUT_MODULE = re.compile(r"usr/lib/dracut/modules\.d/\d+ostree/module-setup\.sh")
+
 # Only dracut has an ostree module, so initramfs-tools must not be there.
-FORBIDDEN = "usr/sbin/update-initramfs"
+# Not update-initramfs: dracut on forky ships a wrapper of that name.
+FORBIDDEN = "usr/sbin/mkinitramfs"
 
 # Packages usually come from a playbook, not 'packages:', so this can
 # only be checked once the rootfs tarball exists.
@@ -31,6 +35,8 @@ def check_tarball(tarball, what):
     with tarfile.open(tarball) as tar:
         names = {m.name.lstrip("./") for m in tar.getmembers()}
     missing = [path for path in REQUIRED if path not in names]
+    if not any(DRACUT_MODULE.fullmatch(name) for name in names):
+        missing.append("usr/lib/dracut/modules.d/<nn>ostree/module-setup.sh")
     if missing:
         raise ValueError(
             "%s cannot become an ostree sysroot: its root file-system "
