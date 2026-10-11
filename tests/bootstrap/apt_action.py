@@ -5,6 +5,7 @@
 import avocado
 import importlib.util
 import os
+import subprocess
 import sys
 
 from unittest.mock import patch
@@ -53,7 +54,37 @@ class ApptGetBuildsTheChrootRecipe(avocado.Test):
         self.assertNotIn("--cap-add=sys_admin", args)
         self.assertNotIn("mount -t proc", script)
         # Still simulated once, so a would-be change is still reported.
-        self.assertIn("-s | grep", script)
+        self.assertIn(" -s 2>&1)", script)
+
+class AFailedSimulationFailsTheScript(avocado.Test):
+    def run_script(self, apt_get_body):
+        bin_dir = os.path.join(self.workdir, "bin")
+        os.makedirs(bin_dir)
+        stub = os.path.join(bin_dir, "apt-get")
+        with open(stub, "w") as f:
+            f.write(f"#!/bin/sh\n{apt_get_body}\n")
+        os.chmod(stub, 0o755)
+        with patch.dict(os.environ, ENV), patch("subprocess.run") as run:
+            apt_action._apt_get("/merged", "install", ["vim"], True)
+        script = run.call_args.args[0][-1]
+        env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}")
+        return subprocess.run(["sh", "-c", script], env=env,
+                              capture_output=True, text=True)
+
+    def test_an_apt_error_is_not_read_as_no_change(self):
+        proc = self.run_script("echo 'E: Unable to locate package vim' >&2; exit 100")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("Unable to locate package vim", proc.stderr)
+
+    def test_a_planned_install_is_reported_as_a_change(self):
+        proc = self.run_script("echo 'Inst vim (1.0 stable)'")
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn(apt_action.CHANGED_MARKER, proc.stdout)
+
+    def test_an_empty_plan_is_no_change(self):
+        proc = self.run_script("exit 0")
+        self.assertEqual(proc.returncode, 0)
+        self.assertNotIn(apt_action.CHANGED_MARKER, proc.stdout)
 
 class RecommendsAreInstalledUnlessTurnedOff(avocado.Test):
     def script(self, **kwargs):

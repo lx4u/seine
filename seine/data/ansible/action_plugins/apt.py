@@ -87,8 +87,10 @@ def _apt_get(merged_dir, action, names, simulate, recommends=True):
               f"{recommends_opt}"
               f"{netrc_opt}"
               f"-qqy {action} {' '.join(names)}")
+    # A failed simulation (unknown package, conflict) must fail the task.
     script = (
-        f"if {apt_get} -s | grep -Eq '^(Inst|Remv) '; then "
+        f'plan=$({apt_get} -s 2>&1) || {{ echo "$plan" >&2; exit 1; }}; '
+        f"if echo \"$plan\" | grep -Eq '^(Inst|Remv) '; then "
         f"echo {CHANGED_MARKER}; "
         + ("true; " if simulate else MOUNT_LIVE_FS + apt_get + "; ") +
         "fi")
