@@ -140,12 +140,19 @@ def _resolve(module, name):
     if rc != 0:
         module.fail_json(msg="'sshd -T' failed: %s" % err)
 
-    key = name.lower()
+    value = _reported(out, name)
+    if value is None:
+        module.fail_json(msg="'sshd -T' does not report '%s'" % name)
+    return value
+
+
+# OpenSSH 10 prints 'Ciphers', older releases 'ciphers'.
+def _reported(out, name):
     for line in out.splitlines():
         directive, _, value = line.partition(" ")
-        if directive == key:
+        if directive.lower() == name.lower():
             return value.split(",")
-    module.fail_json(msg="'sshd -T' does not report '%s'" % name)
+    return None
 
 
 def main():
