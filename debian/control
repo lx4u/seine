@@ -56,7 +56,7 @@ Description: prebuilt debian:bookworm base image
  imported into podman on first use instead of pulled from a registry --
  the only image any of seine's own container builds ever pull rather
  than build locally.
- Install alongside seine-oci-trixie for both releases.
+ Install alongside the other seine-oci packages for more releases.
 
 Package: seine-oci-trixie
 Architecture: amd64 arm64
@@ -67,7 +67,18 @@ Description: prebuilt debian:trixie base image
  imported into podman on first use instead of pulled from a registry --
  the only image any of seine's own container builds ever pull rather
  than build locally.
- Install alongside seine-oci-bookworm for both releases.
+ Install alongside the other seine-oci packages for more releases.
+
+Package: seine-oci-forky
+Architecture: amd64 arm64
+Depends: seine (= ${binary:Version}),
+         ${misc:Depends}
+Description: prebuilt debian:forky base image
+ The 'debian:forky' image for this package's own architecture,
+ imported into podman on first use instead of pulled from a registry --
+ the only image any of seine's own container builds ever pull rather
+ than build locally.
+ Install alongside the other seine-oci packages for more releases.
 
 Package: seine-vault-openbao
 Architecture: amd64 arm64

@@ -1,7 +1,7 @@
 # Releasing seine as .deb packages
 
-This builds seine's own Debian packages: `seine`, plus `seine-oci-bookworm`
-and `seine-oci-trixie` (the prebuilt base images seine imports into podman
+This builds seine's own Debian packages: `seine`, plus `seine-oci-bookworm`,
+`seine-oci-trixie` and `seine-oci-forky` (the prebuilt base images seine imports into podman
 instead of pulling from a registry).
 
 ## Build for amd64

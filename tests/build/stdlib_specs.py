@@ -72,6 +72,9 @@ class TestStdlibSpecs(avocado.Test):
         self.assertIn("trixie", suites)
         self.assertIn("trixie-updates", suites)
         self.assertIn("trixie-security", suites)
+        self.assertIn("forky", suites)
+        self.assertIn("forky-updates", suites)
+        self.assertIn("forky-security", suites)
 
     def test_debian_release_specs_include_base_and_feeds(self):
         build = BuildCmd()
@@ -88,6 +91,13 @@ class TestStdlibSpecs(avocado.Test):
         suites = [feed.get("suite") for feed in trixie.get("distribution", {}).get("feeds", [])]
         self.assertIn("trixie", suites)
         self.assertFalse(trixie.get("defaults", {}).get("apt", {}).get("install_recommends", True))
+
+        build = BuildCmd()
+        forky = build.load("stdlib:debian/forky.yml")
+        self.assertEqual(forky.get("distribution", {}).get("release"), "forky")
+        suites = [feed.get("suite") for feed in forky.get("distribution", {}).get("feeds", [])]
+        self.assertIn("forky", suites)
+        self.assertFalse(forky.get("defaults", {}).get("apt", {}).get("install_recommends", True))
 
     def test_configuration_and_service_specs(self):
         build = BuildCmd()

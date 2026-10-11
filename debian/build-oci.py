@@ -43,7 +43,7 @@ import shutil
 import subprocess
 import sys
 
-RELEASES = os.environ.get("RELEASES", "bookworm trixie").split()
+RELEASES = os.environ.get("RELEASES", "bookworm trixie forky").split()
 SOURCE = "debian"
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
