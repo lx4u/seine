@@ -1,0 +1,26 @@
+Description: build with ed25519 signatures
+ Debian builds ostree without libsodium, so 'ostree sign' and the
+ composefs signature check in ostree-prepare-root have no ed25519.
+Author: seine
+Forwarded: not-needed
+
+--- a/debian/rules
++++ b/debian/rules
+@@ -16,6 +16,7 @@
+ 
+ configure_options = \
+ 	--enable-installed-tests \
++	--with-ed25519-libsodium \
+ 	--with-avahi \
+ 	--with-curl \
+ 	--with-dracut \
+--- a/debian/control
++++ b/debian/control
+@@ -43,6 +43,7 @@
+  libmount-dev,
+  libselinux-dev,
+  libsoup-3.0-dev (>= 3.0.0),
++ libsodium-dev,
+  libsystemd-dev,
+  libtool,
+  pkgconf,

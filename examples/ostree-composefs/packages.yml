@@ -1,0 +1,16 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Debian's ostree, rebuilt with libsodium so it can sign and verify
+# ed25519 signatures (docs/ostree.md). Needs forky: trixie has no
+# libcomposefs. Signed with the shared custom-packages key.
+requires:
+    - ../common/custom-packages
+
+packages:
+    - source: apt://ostree
+      profiles:
+          - nocheck
+          - nodoc
+      patches:
+          - patches/0001-build-with-ed25519-signatures.patch
