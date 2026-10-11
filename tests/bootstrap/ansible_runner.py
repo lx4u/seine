@@ -197,6 +197,31 @@ class MdadmConfDropsItsBuildDate(avocado.Test):
         self.assertEqual(len(mdadm), 1)
         self.assertLess(mdadm[0], reset[0])
 
+# podman would bind-mount a random hosts file, and the export would keep
+# an empty 0700 placeholder: a real file is written before the playbooks.
+class BuildContainerHasARealHostsFile(avocado.Test):
+    def test_podman_does_not_mount_its_own_hosts_file(self):
+        self.assertIn("--no-hosts", runner(online_distro()).container_command("img"))
+
+    def test_hosts_is_written_once_after_the_marker_and_before_apt(self):
+        cmd = runner(online_distro())
+        cmd.epoch = 0
+        run = []
+        with patch.object(cmd, "_exec", lambda args, check=True: run.append(args[-1])), \
+             patch.object(cmd, "_seed_downloads"), \
+             patch.object(cmd, "_configure_feeds"), \
+             patch.object(cmd, "_run_playbooks"), \
+             patch.object(cmd, "_save_downloads"), \
+             patch.object(cmd, "_restore_online_feeds"), \
+             patch("seine.ansible_runner.TransportBootstrap"), \
+             patch("seine.ansible_runner.ContainerEngine"):
+            cmd.run([])
+        hosts = [i for i, c in enumerate(run) if "> /etc/hosts" in c]
+        self.assertEqual(len(hosts), 1)
+        self.assertEqual(run[hosts[0] - 1], "/.ansible-marker")
+        self.assertIn("localhost", run[hosts[0]])
+        self.assertLess(hosts[0], run.index("-qqy"))
+
 # dracut would otherwise build the initrd for the build container: its
 # drivers and mounts. Its systemd module also copies /etc/machine-id,
 # which differs from one build to the next.
