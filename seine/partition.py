@@ -368,10 +368,7 @@ class PartitionHandler:
     # ('None' = this spec's own). Only mounts/bootlets with a matching
     # 'source' can claim the file, so groups never share one size.
     def distribute(self, f, source=None):
-        if f.name.startswith("/") == False:
-            name = "/" + f.name
-        else:
-            name = f.name
+        name = f.name if f.name.startswith("/") else "/" + f.name
 
         if source is None:
             for bootlet in self.bootlets:
@@ -379,11 +376,20 @@ class PartitionHandler:
                     bootlet["_size"] = f.size
                     break
 
+        mount = self.mount_for(name, source)
+        if mount is not None:
+            mount["_size"] = mount["_size"] + self._size_file(f, mount)
+        return mount
+
+    # Returns the mount that holds 'name' (absolute or not), or 'None'.
+    # Mounts are sorted deepest first, so the first prefix match wins.
+    def mount_for(self, name, source=None):
+        if not name.startswith("/"):
+            name = "/" + name
         for mount in self.mounts:
             if mount.get("source") != source:
                 continue
             if mount["_prefix"] is not None and name.startswith(mount["_prefix"]):
-                mount["_size"] = mount["_size"] + self._size_file(f, mount)
                 return mount
         return None
 
