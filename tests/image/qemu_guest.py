@@ -12,8 +12,11 @@ from seine.utils import HOST_ARCH
 END = "@@END@@"
 
 # Terminal escape sequences, and the start of one that has not ended yet.
-ESCAPE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
-PARTIAL = re.compile(r"\x1b(\[[0-9;?]*)?$")
+# CSI sequences, and the strings (OSC, DCS) that end in BEL or ESC \: a
+# forky shell marks its prompts with OSC 3008, systemd with DCS queries.
+ESCAPE = re.compile(
+    r"\x1b\[[0-9;?!]*[ -/]*[@-~]|\x1b[\]P][^\x07\x1b]*(\x07|\x1b\\)")
+PARTIAL = re.compile(r"\x1b([\[\]P][^\x07\x1b]*\x1b?)?$")
 
 # Drives a program through its standard input and output, which is a
 # shell on a serial console when the program is QEMU with '-serial stdio'.
