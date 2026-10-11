@@ -34,6 +34,16 @@ class SpecRendering(avocado.Test):
             build.loads("playbook:\n  - name: x\n    password: '[[ vault(\"kv/data/accounts/root#hash\") ]]'\n")
             self.assertEqual(build.spec["playbook"][0]["password"], "secret-value")
 
+    def test_an_ed25519_public_key_renders_as_base64_and_is_no_secret(self):
+        provider = mock.Mock()
+        provider.ed25519_public_key.return_value = bytes(range(32))
+        with mock.patch.object(vault, "for_build", return_value=provider):
+            build = BuildCmd()
+            build.loads("key: '[[ vault_ed25519_public(\"commits\") ]]'\n")
+        provider.ed25519_public_key.assert_called_once_with("commits")
+        self.assertEqual(build.spec["key"], "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=")
+        self.assertEqual(vault.secrets(), [])
+
     def test_a_lookup_failure_names_the_file(self):
         provider = mock.Mock()
         provider.kv_read.side_effect = VaultNotFound("vault has no 'kv/data/a#b'")
