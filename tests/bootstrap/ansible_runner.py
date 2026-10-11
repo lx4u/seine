@@ -196,3 +196,37 @@ class MdadmConfDropsItsBuildDate(avocado.Test):
         reset = [i for i, c in enumerate(run) if "-newer /.ansible-marker" in c]
         self.assertEqual(len(mdadm), 1)
         self.assertLess(mdadm[0], reset[0])
+
+# dracut would otherwise build the initrd for the build container: its
+# drivers and mounts. Its systemd module also copies /etc/machine-id,
+# which differs from one build to the next.
+class FinalizeBuildsAGenericDracutInitrd(avocado.Test):
+    def test_dracut_is_not_host_only_and_is_reproducible(self):
+        cmd = runner(online_distro())
+        cmd.epoch = 0
+        run = []
+        with patch.object(cmd, "_exec", lambda args, check=True: run.append(args[-1])):
+            cmd._finalize()
+        dracut = [c for c in run if "dracut" in c]
+        self.assertEqual(len(dracut), 1)
+        self.assertIn("dracut --reproducible --no-hostonly --force", dracut[0])
+
+    def test_machine_id_is_stable_when_dracut_runs(self):
+        cmd = runner(online_distro())
+        cmd.epoch = 0
+        run = []
+        with patch.object(cmd, "_exec", lambda args, check=True: run.append(args[-1])):
+            cmd._finalize()
+        script = [c for c in run if "dracut" in c][0]
+        dracut = script.index("dracut --reproducible")
+        self.assertIn("uninitialized", script[:dracut])
+
+    def test_dracut_is_asked_before_update_initramfs(self):
+        cmd = runner(online_distro())
+        cmd.epoch = 0
+        run = []
+        with patch.object(cmd, "_exec", lambda args, check=True: run.append(args[-1])):
+            cmd._finalize()
+        script = [c for c in run if "dracut" in c][0]
+        self.assertLess(script.index("command -v dracut"),
+                        script.index("command -v update-initramfs"))
