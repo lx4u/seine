@@ -77,7 +77,7 @@ class Image:
         self._tarball = None
         self.vmImages = VmImages(self)
         self._verbose = options["verbose"]
-        # Used by _normalize_timestamps() to find files written by this run.
+        # Used by _clean_tarball() to find files written by this run.
         self._started = time.time()
         # Defaulted here so a spec with no 'image:' section still has
         # something safe to read, instead of parse()/tasks() hitting
@@ -390,7 +390,7 @@ class Image:
         try:
             ContainerEngine.run(["container", "export", "-o", partial.name, self._cid], check=True)
             self._exported(partial.name)
-            self._normalize_timestamps(partial.name)
+            self._clean_tarball(partial.name)
             utils.invalidate_digest_file(self._digest_file())
             os.replace(partial.name, self._rootfs)
             utils.write_digest_file(self._digest_file(), digest, recipe=recipe)
@@ -450,7 +450,9 @@ class Image:
     # Some files (e.g. the '/bin' symlink) get stamped with the real
     # time they were written, breaking reproducible builds. Rewrite
     # anything timestamped during this run to a fixed epoch instead.
-    def _normalize_timestamps(self, tarball):
+    # The build container's resolv.conf is the build host's: drop it
+    # (a symlink is the spec's own and stays).
+    def _clean_tarball(self, tarball):
         epoch = self._epoch()
         fixed = tempfile.NamedTemporaryFile(
             delete=False, dir=os.path.dirname(tarball))
@@ -458,6 +460,8 @@ class Image:
         with tarfile.open(tarball, "r") as src, \
              tarfile.open(fixed.name, "w", format=src.format) as dst:
             for member in src.getmembers():
+                if member.isreg() and member.name.removeprefix("./") == "etc/resolv.conf":
+                    continue
                 if member.mtime >= self._started:
                     member.mtime = epoch
                 dst.addfile(member, src.extractfile(member)
