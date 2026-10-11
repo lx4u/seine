@@ -2,6 +2,7 @@
 
 import avocado
 import atexit
+import base64
 import contextlib
 import io
 import os
@@ -17,10 +18,12 @@ path_to_self = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
 from seine import vault
 from seine.container import ContainerEngine
 from seine.vault import OpenBaoProvider
-from seine.vault.base import VaultNotFound
+from seine.vault.base import VaultError, VaultNotFound
 from seine.vault.dev import DEV_DEFAULTS, DevVault, STALE_AFTER, reap_stale
 from tests.testutils import cache_vault_image
 
@@ -283,6 +286,40 @@ class TransitKeyMint(avocado.Test):
         self.assertEqual([call for call in calls if call[0] == "POST"], [])
 
 
+class Ed25519Keys(avocado.Test):
+    SEED = base64.b64encode(bytes(range(32))).decode()
+
+    def dev(self):
+        return DevVault(defaults={"mykey": {"private_key": self.SEED}})
+
+    def test_a_default_key_signs_the_same_bytes_every_time(self):
+        dev = self.dev()
+        signature = dev.ed25519_sign("mykey", b"data")
+        self.assertEqual(len(signature), 64)
+        self.assertEqual(dev.ed25519_sign("mykey", b"data"), signature)
+        self.assertEqual(self.dev().ed25519_sign("mykey", b"data"), signature)
+
+    def test_the_public_key_checks_the_signature(self):
+        dev = self.dev()
+        public = dev.ed25519_public_key("mykey")
+        self.assertEqual(len(public), 32)
+        Ed25519PublicKey.from_public_bytes(public).verify(
+            dev.ed25519_sign("mykey", b"data"), b"data")
+
+    def test_a_default_that_is_not_a_seed_is_refused(self):
+        dev = DevVault(defaults={"mykey": {"private_key": "c2hvcnQ="}})
+        with self.assertRaises(VaultError):
+            dev.ed25519_public_key("mykey")
+
+    def test_without_a_default_a_throwaway_ed25519_transit_key_is_minted(self):
+        dev, calls = TransitKeyMint.minted(self)
+        dev._inner.ed25519_sign.return_value = b"s" * 64
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(dev.ed25519_sign("other", b"data"), b"s" * 64)
+        posts = [call for call in calls if call[0] == "POST"]
+        self.assertEqual(posts[0][2], {"type": "ed25519"})
+
+
 class TransitConsumer(ContainerSetup):
     """
     :avocado: tags=container
@@ -298,6 +335,12 @@ class TransitConsumer(ContainerSetup):
         self.assertNotIn("secret-bytes", ciphertext)
         self.assertIn("warning", said.getvalue())
         self.assertEqual(dev.decrypt("seine-test-enc", ciphertext), b"secret-bytes")
+
+    def test_ed25519_roundtrip(self):
+        dev = self.started()
+        public = dev.ed25519_public_key("seine-test-ed25519")
+        signature = dev.ed25519_sign("seine-test-ed25519", b"data-bytes")
+        Ed25519PublicKey.from_public_bytes(public).verify(signature, b"data-bytes")
 
     def test_sign_verify_roundtrip(self):
         dev = self.started()

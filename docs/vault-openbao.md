@@ -199,6 +199,14 @@ echo '{"generate": {"name": "seine ostree commits", "email": "seine-demo@example
   | bao write seine-pgp/keys/ostree-commits -
 ```
 
+A composefs commit is signed with an ed25519 key in the vault's transit
+engine (`image: ostree: composefs-key: vault:composefs-commits`). The
+build reads its public half too, to put it in the initramfs:
+
+```
+bao write -f transit/keys/composefs-commits type=ed25519
+```
+
 ## 6. Point a build at it
 
 ```

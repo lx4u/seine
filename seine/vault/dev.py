@@ -2,6 +2,7 @@
 # SPDX-License-Identifier Apache-2.0
 
 import atexit
+import base64
 import hashlib
 import json
 import os
@@ -13,6 +14,9 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from seine.container import ContainerEngine
 from seine.oci_bundle import import_bundled
@@ -259,6 +263,40 @@ class DevVault(VaultProvider):
         with self._lock:
             self._ensure_transit_key(key, "rsa-2048")
             return self._inner.verify(key, data, signature)
+
+    # A key of the spec's 'defaults: vault:' ('private_key' is the
+    # base64 seed) is the same on every run, so the public key in an
+    # initramfs and the signatures agree between builds. Without one,
+    # a throwaway transit key is minted.
+    def ed25519_public_key(self, name):
+        default = self._ed25519_default(name)
+        if default is not None:
+            return default.public_key().public_bytes(
+                serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+        self._ensure_started()
+        with self._lock:
+            self._ensure_transit_key(name, "ed25519")
+            return self._inner.ed25519_public_key(name)
+
+    def ed25519_sign(self, name, data):
+        default = self._ed25519_default(name)
+        if default is not None:
+            return default.sign(data)
+        self._ensure_started()
+        with self._lock:
+            self._ensure_transit_key(name, "ed25519")
+            return self._inner.ed25519_sign(name, data)
+
+    def _ed25519_default(self, name):
+        entry = self._defaults.get(name)
+        if not isinstance(entry, dict) or "private_key" not in entry:
+            return None
+        try:
+            seed = base64.b64decode(entry["private_key"], validate=True)
+            return Ed25519PrivateKey.from_private_bytes(seed)
+        except ValueError as e:
+            raise VaultError(
+                "default ed25519 key '%s' is not a base64 32-byte seed" % name) from e
 
     def _ensure_transit_key(self, name, key_type):
         if name in self._transit_keys:
