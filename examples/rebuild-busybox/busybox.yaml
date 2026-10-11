@@ -18,6 +18,8 @@ packages:
           - nocheck
       patches:
           - patches/0001-mark-the-banner-as-rebuilt.patch
+          # Changes debian/control: goes in the debian tarball, not the series.
+          - patches/0002-mark-the-description-as-rebuilt.patch
 
 playbook:
     - name: install the rebuilt busybox
@@ -47,5 +49,10 @@ test:
                 - power_cycle: {settle: 2s}
                 - log_in: {}
                 - console_send: {data: "busybox | head -1\n"}
+                - console_wait: {pattern: "rebuilt-by-seine", timeout: 15s, assign: MATCHED}
+                - should_be_true: ["${MATCHED}"]
+          - name: description shows the rebuild marker
+            steps:
+                - console_send: {data: "dpkg-query -W -f='${Description}\\n' busybox | head -1\n"}
                 - console_wait: {pattern: "rebuilt-by-seine", timeout: 15s, assign: MATCHED}
                 - should_be_true: ["${MATCHED}"]
