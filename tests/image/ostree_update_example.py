@@ -119,8 +119,8 @@ class ExampleUpdates(avocado.Test):
             status, output = guest.run("grep IMAGE_VERSION /etc/os-release")
             self.assertEqual(output, "IMAGE_VERSION=1")
             status, output = guest.run(
-                "(for i in $(seq 60); do ls /run/systemd/netif/leases/* && exit 0; sleep 1; done; exit 1)", 90)
-            self.assertEqual(status, 0, "no DHCP lease")
+                "/usr/lib/systemd/systemd-networkd-wait-online --timeout=60 -q", 90)
+            self.assertEqual(status, 0, "the network did not come up")
             status, output = guest.run("grep -h '^url=' /etc/ostree/remotes.d/seine.conf")
             self.assertEqual(output, f"url=http://10.0.2.2:{PORT}/repo")
             status, output = guest.run("/usr/libexec/seine-update/seine-update", 180)
