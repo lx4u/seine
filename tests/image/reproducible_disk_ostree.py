@@ -8,6 +8,7 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 from reproducible_base import ReproducibleDiskImage
 from seine.utils import HOST_ARCH
+from tests.testutils import RELEASE as TEST_RELEASE
 
 COMMON = os.path.join(os.path.dirname(os.path.realpath(__file__)),
                       "..", "..", "examples", "common")
@@ -21,7 +22,7 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
     """
     timeout = 3600
     FILENAME = "reproducible-ostree.img"
-    RELEASE = "trixie"
+    RELEASE = TEST_RELEASE
     # The common amd64 fragment brings grub and the kernel; the
     # systemd-boot variant below lists its own.
     BOOT = ("requires:\n"
@@ -49,18 +50,18 @@ class OstreeDiskImageIsByteIdenticalAcrossTwoBuilds(ReproducibleDiskImage, avoca
                     "requires:\n", "requires:\n    - %(common)s/dev-ostree-key\n"
                     "    - %(common)s/dev-update-manifest-key\n", 1) +
                 "distribution:\n"
-                "    release: trixie\n"
+                f"    release: {self.RELEASE}\n"
                 "    architecture: amd64\n"
                 "    architectures: [amd64]\n"
                 "    uri: https://snapshot.debian.org/archive/debian/%(ts)s\n"
                 "    feeds:\n"
-                "        - suite: trixie\n"
+                f"        - suite: {self.RELEASE}\n"
                 "          valid-until: false\n"
-                "        - suite: trixie-updates\n"
-                "          release: trixie\n"
+                f"        - suite: {self.RELEASE}-updates\n"
+                f"          release: {self.RELEASE}\n"
                 "          valid-until: false\n"
-                "        - suite: trixie-security\n"
-                "          release: trixie\n"
+                f"        - suite: {self.RELEASE}-security\n"
+                f"          release: {self.RELEASE}\n"
                 "          uri: https://snapshot.debian.org/archive/debian-security/%(ts)s\n"
                 "          valid-until: false\n"
                 "playbook:\n"
@@ -109,7 +110,7 @@ class OstreeSystemdBootDiskImageIsByteIdenticalAcrossTwoBuilds(
     """
     FILENAME = "reproducible-ostree-sdboot.img"
     BOOT = ("requires:\n"
-            "    - stdlib:debian/trixie.yml\n"
+            f"    - stdlib:debian/{TEST_RELEASE}.yml\n"
             "imager:\n"
             "    kernel: linux-image-amd64\n")
     BOOT_PLAYBOOK = ("    - name: systemd-boot and the kernel\n"

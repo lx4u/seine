@@ -131,6 +131,8 @@ invariants. `ostree_update_soak.py` verifies updates across five versions,
 self-updating the script and refusing updates on a full ESP.
 `ostree_update_delta.py` tests static deltas, verifying updates via
 delta and object-fetch paths.
+The ostree tests build `trixie` by default; set `SEINE_TEST_RELEASE=forky`
+to build forky instead.
 
 
 ## Coding style

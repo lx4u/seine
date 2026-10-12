@@ -20,7 +20,7 @@ import qemu_boot
 import qemu_guest
 from seine.build import BuildCmd
 from seine.utils import HOST_ARCH
-from tests.testutils import prune_on_pass
+from tests.testutils import RELEASE, prune_on_pass
 
 # Where the example serves its payload from (its update: url).
 PORT = 8000
@@ -92,7 +92,8 @@ class ExampleUpdates(avocado.Test):
     def build_and_boot(self, disk):
         where = os.path.join(self.workdir, "where.yml")
         with open(where, "w") as f:
-            f.write(f"image:\n    filename: {disk}\n")
+            f.write(f"distribution:\n    release: {RELEASE}\n"
+                    f"image:\n    filename: {disk}\n")
         environment = dict(os.environ)
         environment["PATH"] = f"{os.path.dirname(sys.executable)}:{environment.get('PATH', '')}"
         log = os.path.join(self.outputdir, "build.log")

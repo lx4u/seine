@@ -9,6 +9,9 @@ import os
 import shutil
 import subprocess
 
+# The Debian release the image tests build: trixie or forky.
+RELEASE = os.environ.get("SEINE_TEST_RELEASE", "trixie")
+
 # Importing litellm fetches its price list from GitHub in a thread. The
 # thread's log lines can outlive the test and block on a full log pipe.
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")

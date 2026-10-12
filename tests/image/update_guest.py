@@ -21,7 +21,7 @@ import qemu_boot
 import qemu_guest
 import secure_boot
 from seine.utils import HOST_ARCH
-from tests.testutils import prune_on_pass
+from tests.testutils import RELEASE, prune_on_pass
 
 PLAN = os.environ.get("SEINE_TEST_PLAN", "")
 
@@ -138,7 +138,8 @@ class UpdateGuest:
             deltas_list = ", ".join(f'"{d}"' for d in deltas_from)
             deltas = f"            deltas-from: [{deltas_list}]\n"
         with open(peer, "w") as f:
-            f.write(f"image:\n    filename: {disk}\n    ostree:\n"
+            f.write(f"distribution:\n    release: {RELEASE}\n"
+                    f"image:\n    filename: {disk}\n    ostree:\n"
                     f'        version: "{version}"\n'
                     f"        payload:\n            path: {self.payload}\n{deltas}")
         specs = [peer]
@@ -169,7 +170,8 @@ class UpdateGuest:
             deltas_list = ", ".join(f'"{d}"' for d in deltas_from)
             deltas = f"            deltas-from: [{deltas_list}]\n"
         with open(peer, "w") as f:
-            f.write(f"image:\n    filename: {disk}\n    ostree:\n"
+            f.write(f"distribution:\n    release: {RELEASE}\n"
+                    f"image:\n    filename: {disk}\n    ostree:\n"
                     f'        version: "{version}"\n'
                     f"        payload:\n            path: {self.payload}\n{deltas}")
         specs = [peer]
