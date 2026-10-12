@@ -13,7 +13,7 @@ path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
 from seine.utils import HOST_ARCH
-from tests.testutils import prune_on_pass
+from tests.testutils import RELEASE, prune_on_pass
 
 COMMON = os.path.join(path_to_sources, "examples", "common")
 
@@ -22,7 +22,7 @@ PLAN = os.environ.get("SEINE_TEST_PLAN", "")
 SPEC = """
 requires:
     - stdlib:debian/amd64.yml
-    - stdlib:debian/trixie.yml
+    - stdlib:debian/""" + RELEASE + """.yml
 
 playbook:
     - name: dracut and ostree

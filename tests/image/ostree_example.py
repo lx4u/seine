@@ -13,7 +13,7 @@ sys.path.append(os.path.dirname(path_to_self))
 
 import qemu_boot
 from seine.utils import HOST_ARCH
-from tests.testutils import prune_on_pass
+from tests.testutils import RELEASE, prune_on_pass
 
 EXAMPLE = os.path.join(path_to_sources, "examples", "pc-ostree-image")
 
@@ -62,7 +62,7 @@ class OstreeExampleBoots(avocado.Test):
         disk = os.path.join(self.workdir, "pc-ostree.img")
         where = os.path.join(self.workdir, "filename.yml")
         with open(where, "w") as f:
-            f.write("image:\n    filename: %s\n" % disk)
+            f.write("distribution:\n    release: %s\nimage:\n    filename: %s\n" % (RELEASE, disk))
 
         environment = dict(os.environ)
         environment["PATH"] = "%s:%s" % (os.path.dirname(sys.executable),

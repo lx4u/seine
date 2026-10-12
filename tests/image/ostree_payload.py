@@ -19,7 +19,7 @@ from seine.imager import ostree
 from seine.imager import payload
 from seine.imager import uki
 from seine.utils import HOST_ARCH
-from tests.testutils import prune_on_pass
+from tests.testutils import RELEASE, prune_on_pass
 
 # Stands for the tools container: records the commands and leaves the files
 # the real ones would, with command lines taken from 'cmdlines' by UKI name.
@@ -416,7 +416,7 @@ class WritesAPayload(avocado.Test):
         keys = os.path.join(ostree_boot.COMMON, "ostree-update")
         done = subprocess.run(
             ["podman", "run", "--rm", "-v", "%s:/payload:ro" % payload,
-             "-v", "%s:/keys:ro" % keys, "docker.io/library/debian:trixie",
+             "-v", "%s:/keys:ro" % keys, f"docker.io/library/debian:{RELEASE}",
              "sh", "-c", CHECK, "check"] + versions,
             capture_output=True, text=True)
         with open(os.path.join(self.outputdir, "verify-%s.log" % "-".join(versions)), "w") as f:

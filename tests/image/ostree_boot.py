@@ -13,7 +13,7 @@ sys.path.append(os.path.dirname(path_to_self))
 
 import qemu_boot
 from seine.utils import HOST_ARCH
-from tests.testutils import prune_on_pass
+from tests.testutils import RELEASE, prune_on_pass
 
 EXAMPLES = os.path.join(path_to_sources, "examples")
 COMMON = os.path.join(EXAMPLES, "common")
@@ -25,7 +25,7 @@ PLAN = os.environ.get("SEINE_TEST_PLAN", "")
 GROUP = """
 requires:
     - stdlib:debian/amd64.yml
-    - stdlib:debian/trixie.yml
+    - stdlib:debian/""" + RELEASE + """.yml
     - {pc_image}/grub-serial-console
 
 playbook:
@@ -119,7 +119,7 @@ image:
 
 DISK = """
 requires:
-    - stdlib:debian/trixie.yml
+    - stdlib:debian/""" + RELEASE + """.yml
 
 distribution:
     architecture: amd64
