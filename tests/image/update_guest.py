@@ -244,9 +244,9 @@ class UpdateGuest:
                           f"{self.guest.run(f'ls -l {ESP}')[1]}")
             time.sleep(2)
 
-    # The agent needs the network: the DHCP lease comes after the login.
+    # The agent needs the network, which comes up after the login.
     def wait_for_network(self):
-        self.wait_until("ls /run/systemd/netif/leases/*", 90)
+        self.wait_until("/usr/lib/systemd/systemd-networkd-wait-online --timeout=5 -q", 90)
 
     # Runs the agent once. Returns its status file as a dict.
     def update(self):
