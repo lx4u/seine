@@ -1802,7 +1802,7 @@ layout.
 | ref       | no       | Commit ref, defaults to `<stateroot>/<arch>`         |
 | gpg-key   | no       | `vault:<name>`: signs the commit with this vault pgp key, unsigned if unset |
 | composefs-key | no   | `vault:<name>`: signs the commit with this vault ed25519 key. Needs `mode: composefs` and `[composefs] enabled = signed`, which need it |
-| version   | no       | Image version, a quoted string such as `"23"`: a digit first, then letters, digits, `.` or `_`, at most 64 characters. Needs `mode: standard`, one stateroot, `gpg-key` and `manifest-key`. Not allowed in `sources:` |
+| version   | no       | Image version, a quoted string such as `"23"`: a digit first, then letters, digits, `.` or `_`, at most 64 characters. Needs `mode: standard` or `mode: composefs`, one stateroot, `gpg-key` and `manifest-key`. Not allowed in `sources:` |
 | manifest-key | no     | `vault:<name>`: signs the list of UKIs (`SHA256SUMS`) of the update payload. Needed with `version`. Not allowed in `sources:` |
 | payload   | no       | With `version`: `path` of the update payload directory, and `deltas-from`, the versions that get a static delta to this one (strings, lower than `version`). Not allowed in `sources:` |
 | sources   | no       | Per `multiconfig:` group overrides of `mode`, `stateroot`, `ref`, `gpg-key` and `composefs-key` |

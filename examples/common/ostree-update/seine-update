@@ -21,6 +21,14 @@ LOCK=${SEINE_UPDATE_LOCK:-/run/seine-update.lock}
 DEPLOYS=$SYSROOT/ostree/deploy/$STATEROOT/deploy
 ESP_SLACK=$((5 * 1024 * 1024))
 
+# A composefs root has /sysroot read-only. Like ostree, write to it from a
+# private mount namespace only.
+if [[ -z ${SEINE_UPDATE_RW:-} ]] && [[ $(findmnt -no OPTIONS -T "$SYSROOT") == ro,* ]]; then
+    export SEINE_UPDATE_RW=1
+    # shellcheck disable=SC2016
+    exec unshare -m sh -c 'mount -o remount,rw "$0" && exec "$@"' "$SYSROOT" "$0" "$@"
+fi
+
 reported=
 v=
 BAD=0

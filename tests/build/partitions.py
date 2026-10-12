@@ -659,13 +659,16 @@ class OstreeSpecification(avocado.Test):
             self.assertIn("'image: ostree: version:", str(cm.exception))
         PartitionHandler().parse(versioned(ostree_spec(), "1" * 64))
 
-    def test_version_needs_standard_mode(self):
-        for mode in ("disabled", "composefs"):
-            spec = ostree_spec(mode=mode, release="forky")
-            spec["image"]["ostree"]["version"] = "1"
-            with self.assertRaises(ValueError) as cm:
-                PartitionHandler().parse(spec)
-            self.assertIn("needs 'mode: standard'", str(cm.exception))
+    def test_version_needs_an_ostree_mode(self):
+        spec = ostree_spec(mode="disabled")
+        spec["image"]["ostree"]["version"] = "1"
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("needs 'mode: standard' or 'mode: composefs'", str(cm.exception))
+
+    def test_version_is_accepted_with_composefs(self):
+        spec = versioned(ostree_spec(mode="composefs", release="forky"), "1")
+        PartitionHandler().parse(spec)
 
     def test_version_is_refused_in_sources(self):
         spec = ostree_spec()

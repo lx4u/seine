@@ -765,9 +765,9 @@ class PartitionHandler:
             if settings.get("composefs-key") and settings["mode"] != "composefs":
                 raise ValueError(
                     "'composefs-key' needs 'mode: composefs'")
-        if "version" in self.ostree and self.ostree["mode"] != "standard":
+        if "version" in self.ostree and self.ostree["mode"] == "disabled":
             raise ValueError(
-                "'image: ostree: version' needs 'mode: standard'")
+                "'image: ostree: version' needs 'mode: standard' or 'mode: composefs'")
         if "payload" in self.ostree and "version" not in self.ostree:
             raise ValueError("'image: ostree: payload' needs 'version'")
         if not enabled:
