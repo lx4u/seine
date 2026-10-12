@@ -62,8 +62,10 @@ playbook:
                   mode: "0755"
                   content: |
                       #!/bin/sh
-                      echo "seine-test: FREEZING EARLY BOOT FOR WATCHDOG" > /dev/console
-                      while true; do sleep 1 2>/dev/null || true; done
+                      while true; do
+                          echo "seine-test: FREEZING EARLY BOOT FOR WATCHDOG" > /dev/console
+                          sleep 1 2>/dev/null || true
+                      done
                 - dest: /etc/dracut.conf.d/90-seine-freeze.conf
                   mode: "0644"
                   content: |
@@ -149,8 +151,10 @@ class UpdateWatchdogReset(UpdateGuest, avocado.Test):
         self.guest.expect(r"reboot: Restarting system", 150)
 
         # Each try freezes and triggers a watchdog hardware reset
+        # The marker repeats, so skip to the next boot before the next try.
         for _ in range(3):
             self.guest.expect("seine-test: FREEZING EARLY BOOT FOR WATCHDOG", timeout=120)
+            self.guest.expect("Detected i6300ESB watchdog", timeout=120)
 
         # After tries are exhausted, systemd-boot falls back to version 1
         self.login(timeout=180)
