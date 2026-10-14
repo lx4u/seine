@@ -710,9 +710,9 @@ class SpecDigestLookupTest(Test):
         self.db.close()
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
-    def _build(self, build_id, digest, arch="amd64"):
+    def _build(self, build_id, digest, arch="amd64", **kwargs):
         self.db.create_build(build_id=build_id, project="alpha", target_arch=arch,
-                             worktree_digest="t", spec_digest=digest)
+                             worktree_digest="t", spec_digest=digest, **kwargs)
 
     def test_the_newest_build_with_the_digest_wins(self):
         self._build("old", "d1")
@@ -725,6 +725,18 @@ class SpecDigestLookupTest(Test):
         self._build("a", "d1", "amd64")
         self._build("b", "d1", "arm64")
         self.assertEqual(self.db.find_build_by_spec("alpha", "d1", "amd64")["id"], "a")
+
+    def test_a_build_is_on_main_by_default(self):
+        self._build("a", "d1")
+        self.assertEqual(self.db.get_build("a")["branch"], "main")
+
+    def test_branch_narrows_the_match(self):
+        self._build("a", "d1", branch="main")
+        time.sleep(0.01)
+        self._build("b", "d1", branch="stable")
+        self.assertEqual(self.db.find_build_by_spec("alpha", "d1")["id"], "b")
+        self.assertEqual(self.db.find_build_by_spec("alpha", "d1", branch="main")["id"], "a")
+        self.assertIsNone(self.db.find_build_by_spec("alpha", "d1", branch="other"))
 
     def test_no_match_and_empty_digest_find_nothing(self):
         self._build("a", "")
@@ -741,6 +753,16 @@ class SpecDigestLookupTest(Test):
         self.db = Database(os.path.join(self.tmp_dir, "digest.db"))
         self._build("a", "d1")
         self.assertEqual(self.db.find_build_by_spec("alpha", "d1")["id"], "a")
+
+    def test_a_database_without_the_branch_column_reads_main(self):
+        self.db.close()
+        conn = sqlite3.connect(os.path.join(self.tmp_dir, "digest.db"))
+        conn.execute("ALTER TABLE builds DROP COLUMN branch")
+        conn.commit()
+        conn.close()
+        self.db = Database(os.path.join(self.tmp_dir, "digest.db"))
+        self._build("a", "d1")
+        self.assertEqual(self.db.get_build("a")["branch"], "main")
 
 
 class DatabaseConstraintsAndIntegrationTest(Test):

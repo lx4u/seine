@@ -67,7 +67,9 @@ from seine.distributed.server.auth import (
     require_system_admin,
     require_worker_id,
 )
-from seine.distributed.server.db import Database, LastAdminError, UserBusyError
+from seine.distributed.server.db import (
+    Database, LastAdminError, UserBusyError, validate_branch_name,
+)
 from seine.distributed.server.housekeeping import HousekeepingBusy, run_housekeeping
 from seine.distributed.server.reaper import Reaper
 from seine.distributed.server.settings import S3_ENVIRONMENTS, Settings
@@ -441,6 +443,7 @@ def create_app(
         refuse_prod_for_dev_only(project_row, req.is_release)
         user_id = token_record["user_id"]
         try:
+            validate_branch_name(req.branch)
             validation.check_build_options(req.options)
             validation.check_transient_secrets(req.transient_secrets)
         except ValueError as e:
@@ -491,6 +494,7 @@ def create_app(
             spec_file=(req.spec_files or [req.spec_file])[0],
             spec_files=req.spec_files or [req.spec_file],
             spec_digest=req.spec_digest,
+            branch=req.branch,
             is_release=req.is_release,
             options=req.options,
             user_id=user_id,
@@ -630,12 +634,13 @@ def create_app(
         spec_digest: str,
         request: Request,
         target_arch: Optional[str] = None,
+        branch: Optional[str] = None,
         token_record: dict[str, Any] = Depends(current_user),
     ):
         app_db = get_db(request)
         load_project(app_db, project)
         require_member(app_db, token_record, project)
-        build = app_db.find_build_by_spec(project, spec_digest, target_arch)
+        build = app_db.find_build_by_spec(project, spec_digest, target_arch, branch)
         if not build:
             raise HTTPException(status_code=404, detail="No build matches this spec")
         return build_response(request, build)

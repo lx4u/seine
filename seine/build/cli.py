@@ -32,6 +32,7 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
     LONG_OPTIONS = [
         "artifactory-endpoint=",
         "artifactory-repo=",
+        "branch=",
         "ca-cert=",
         "cache-bootstraps",
         "cache-rootfs",
@@ -332,6 +333,8 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                 self.options["no_download"] = True
             elif o in ("--token",):
                 self.options["token"] = a
+            elif o in ("--branch",):
+                self.options["branch"] = a
             elif o in ("--project",):
                 self.options["project"] = a
             elif o in ("--release",):
@@ -367,6 +370,7 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                     options=self.options,
                     token=self.options.get("token"),
                     is_release=self.options.get("release", False),
+                    branch=self.options.get("branch") or "main",
                 )
             )
 
@@ -504,6 +508,8 @@ Flags:
       --no-download     skip automatic artifact download after remote completion
       --project NAME    project for a remote build (default: $SEINE_PROJECT, else
                         your default project on the server, else it asks)
+      --branch NAME     branch of a remote build, the line of development it
+                        belongs to (default: main)
       --release         mark remote build as a release build (requires releaser or admin role)
       --remote URL      dispatch build to a remote seine-server. Ctrl+C asks the
                         server to cancel the build (exit status 130). Exit

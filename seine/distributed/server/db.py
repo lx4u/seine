@@ -34,6 +34,16 @@ def validate_project_name(name: str) -> str:
     return name
 
 
+def validate_branch_name(name: str) -> str:
+    """Return name if it is a valid branch name (same rules as a project), else raise ValueError."""
+    if not isinstance(name, str) or not PROJECT_NAME_RE.match(name):
+        raise ValueError(
+            f"Invalid branch name {name!r}: use 2-41 chars of a-z, 0-9 and '-', "
+            "starting with a letter or digit"
+        )
+    return name
+
+
 def check_not_reserved(name: str, dev_only: bool = False) -> None:
     """Raise ValueError for a home- name given to anything but a dev-only home project."""
     if name.startswith(HOME_PREFIX) and not dev_only:
@@ -310,6 +320,7 @@ class BuildRepo:
         spec_file: str = "spec.yaml",
         spec_files: Optional[list[str]] = None,
         spec_digest: str = "",
+        branch: str = "main",
         options: Optional[dict[str, Any]] = None,
         status: str = "queued",
         artifact_urls: Optional[list[str]] = None,
@@ -323,10 +334,10 @@ class BuildRepo:
                 """
                 INSERT INTO builds (
                     id, project, target_arch, is_release, status,
-                    worktree_digest, spec_file, spec_files, spec_digest, options,
+                    worktree_digest, spec_file, spec_files, spec_digest, branch, options,
                     created_at, artifact_urls, user_id, user_uid
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                         (SELECT uid FROM users WHERE id = ?))
                 """,
                 (
@@ -339,6 +350,7 @@ class BuildRepo:
                     spec_file,
                     json.dumps(spec_files or [spec_file]),
                     spec_digest,
+                    branch,
                     opts_json,
                     now,
                     urls_json,
@@ -360,8 +372,12 @@ class BuildRepo:
 
     def latest_for_spec(
         self, project: str, spec_digest: str, target_arch: Optional[str] = None,
+        branch: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
-        """Return the newest build of a project that carries this spec digest."""
+        """Return the newest build of a project that carries this spec digest.
+
+        Without a branch, builds of every branch are considered.
+        """
         if not spec_digest:
             return None
         sql = "SELECT * FROM builds WHERE project = ? AND spec_digest = ?"
@@ -369,6 +385,9 @@ class BuildRepo:
         if target_arch:
             sql += " AND target_arch = ?"
             args.append(target_arch)
+        if branch:
+            sql += " AND branch = ?"
+            args.append(branch)
         row = self.conn.execute(sql + " ORDER BY created_at DESC LIMIT 1", args).fetchone()
         return self._decode(row) if row else None
 
@@ -1134,6 +1153,7 @@ class Database:
         user_id: Optional[str] = None,
         spec_files: Optional[list[str]] = None,
         spec_digest: str = "",
+        branch: str = "main",
     ) -> str:
         self.ensure_project(project)
         self.builds.create(
@@ -1145,6 +1165,7 @@ class Database:
             spec_file=spec_file,
             spec_files=spec_files,
             spec_digest=spec_digest,
+            branch=branch,
             options=options,
             user_id=user_id,
         )
@@ -1171,6 +1192,7 @@ class Database:
         user_id: Optional[str] = None,
         spec_files: Optional[list[str]] = None,
         spec_digest: str = "",
+        branch: str = "main",
     ) -> str:
         self.ensure_project(project)
         self.builds.create(
@@ -1182,6 +1204,7 @@ class Database:
             spec_file=spec_file,
             spec_files=spec_files,
             spec_digest=spec_digest,
+            branch=branch,
             options=options,
             user_id=user_id,
         )
@@ -1198,8 +1221,9 @@ class Database:
 
     def find_build_by_spec(
         self, project: str, spec_digest: str, target_arch: Optional[str] = None,
+        branch: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
-        return self.builds.latest_for_spec(project, spec_digest, target_arch)
+        return self.builds.latest_for_spec(project, spec_digest, target_arch, branch)
 
     def claim_next_job(self, worker_id: str) -> Optional[dict[str, Any]]:
         return self.scheduler.claim_job(worker_id)
