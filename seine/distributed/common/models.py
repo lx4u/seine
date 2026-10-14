@@ -18,6 +18,7 @@ class ProjectModel(BaseModel):
     name: str
     prod_bucket: str
     dev_bucket: str
+    default_branch: str = "main"
     created_at: float
 
 
@@ -233,7 +234,8 @@ class BuildSubmitRequest(BaseModel):
     spec_files: list[str] = Field(default_factory=list)
     # analyze.spec_digest() of the spec, so the build can be found again.
     spec_digest: str = ""
-    branch: str = "main"
+    # Empty: the default branch of the project.
+    branch: str = ""
     options: dict[str, Any] = Field(default_factory=dict)
     transient_secrets: dict[str, Any] = Field(default_factory=dict, repr=False)
 
@@ -265,6 +267,7 @@ class ProjectCreateRequest(BaseModel):
 class ProjectUpdateRequest(BaseModel):
     """Project update payload; omitted fields are left unchanged, null clears the quota."""
     quota_gb: float | None = Field(default=None, gt=0)
+    default_branch: str | None = None
 
 
 class StorageGcRequest(BaseModel):

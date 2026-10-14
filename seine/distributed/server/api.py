@@ -443,7 +443,7 @@ def create_app(
         refuse_prod_for_dev_only(project_row, req.is_release)
         user_id = token_record["user_id"]
         try:
-            validate_branch_name(req.branch)
+            branch = validate_branch_name(req.branch or project_row["default_branch"])
             validation.check_build_options(req.options)
             validation.check_transient_secrets(req.transient_secrets)
         except ValueError as e:
@@ -494,7 +494,7 @@ def create_app(
             spec_file=(req.spec_files or [req.spec_file])[0],
             spec_files=req.spec_files or [req.spec_file],
             spec_digest=req.spec_digest,
-            branch=req.branch,
+            branch=branch,
             is_release=req.is_release,
             options=req.options,
             user_id=user_id,
@@ -645,6 +645,19 @@ def create_app(
             raise HTTPException(status_code=404, detail="No build matches this spec")
         return build_response(request, build)
 
+    @app.get("/api/v1/projects/{project}/branches")
+    def list_branches(
+        project: str,
+        request: Request,
+        token_record: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        project_row = load_project(app_db, project)
+        require_member(app_db, token_record, project)
+        default = project_row["default_branch"]
+        names = sorted({default, *app_db.builds.branches(project)})
+        return {"default": default, "branches": names}
+
     @app.get("/api/v1/projects/{project}/branches/{branch}/latest", response_model=BuildResponse)
     def latest_build_on_branch(
         project: str,
@@ -761,6 +774,16 @@ def create_app(
     ):
         app_db = get_db(request)
         require_system_admin(app_db, tok)
+        if req.default_branch is not None:
+            try:
+                found = app_db.projects.set_default_branch(project, req.default_branch)
+            except ValueError as e:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+            if not found:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Project '{project}' not found",
+                )
         if "quota_gb" in req.model_fields_set:
             if not app_db.projects.set_quota(project, req.quota_gb):
                 raise HTTPException(

@@ -157,6 +157,7 @@ class ProjectRepo:
             "dev_bucket": dev,
             "dev_only": dev_only,
             "quota_gb": None,
+            "default_branch": "main",
             "created_at": now,
         }
 
@@ -220,6 +221,16 @@ class ProjectRepo:
             cur = self.conn.execute(
                 "UPDATE projects SET quota_gb = ? WHERE id = ? OR name = ?",
                 (quota_gb, id_or_name, id_or_name),
+            )
+            return cur.rowcount > 0
+
+    def set_default_branch(self, id_or_name: str, branch: str) -> bool:
+        """Set the branch that builds without an explicit branch go to."""
+        validate_branch_name(branch)
+        with self.conn:
+            cur = self.conn.execute(
+                "UPDATE projects SET default_branch = ? WHERE id = ? OR name = ?",
+                (branch, id_or_name, id_or_name),
             )
             return cur.rowcount > 0
 
@@ -402,6 +413,13 @@ class BuildRepo:
             args.append(target_arch)
         row = self.conn.execute(sql + " ORDER BY created_at DESC LIMIT 1", args).fetchone()
         return self._decode(row) if row else None
+
+    def branches(self, project: str) -> list[str]:
+        """Return the branches that have builds in a project, sorted by name."""
+        rows = self.conn.execute(
+            "SELECT DISTINCT branch FROM builds WHERE project = ? ORDER BY branch", (project,),
+        ).fetchall()
+        return [row["branch"] for row in rows]
 
     def get(self, build_id: str) -> Optional[dict[str, Any]]:
         cur = self.conn.execute("SELECT * FROM builds WHERE id = ?", (build_id,))

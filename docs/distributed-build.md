@@ -521,6 +521,11 @@ $admin token issue bob
 - `project update <name> --quota-gb N` sets a project's storage quota in GB;
   `--no-quota` removes it. `project list` shows it. Over the API this is
   `PATCH /api/v1/projects/<name>` with `{"quota_gb": N}` or `null`.
+- `project update <name> --default-branch NAME` sets the branch that builds
+  without `--branch` go to (`main` for a new project). `project branches
+  <name>` lists the default branch and the branches that have builds. Over the
+  API these are `PATCH /api/v1/projects/<name>` with `{"default_branch": "NAME"}`
+  and `GET /api/v1/projects/<name>/branches`.
 - `project delete <name> [--purge-storage]` removes the project from the
   server. Its buckets and objects remain unless `--purge-storage` is given:
   that empties the dev and prod buckets (objects and incomplete multipart
@@ -732,7 +737,7 @@ them. Handing each job only the feeds it needs is not done yet.
 | `--token TOKEN` | Personal access token (default `$SEINE_TOKEN`). Without one, the client uses the token an earlier run saved (the keyring, else `~/.config/seine/credentials.json`), or asks for one in the terminal and offers to save it. It stops before uploading anything when it gets none. |
 | `--ca-cert PATH` | CA bundle verifying the server certificate, and the storage endpoint when downloading (default `$SEINE_CA_CERT`). |
 | `--insecure` | Allow plain `http://` to a server that is not on this machine. Testing only. |
-| `--branch NAME` | The branch of the build (default `main`). |
+| `--branch NAME` | The branch of the build (default: the default branch of the project, `main` unless an administrator changed it). |
 | `--release` | A release build: needs the `releaser` or `admin` role. |
 | `--dest-dir PATH`, `--no-download` | Where to put the artifacts, or skip downloading them. |
 
@@ -924,8 +929,9 @@ GET /api/v1/projects/<project>/builds/match?spec_digest=<digest>&target_arch=arm
 ```
 
 A build belongs to a branch, the line of development it is part of. The client
-sets it with `--branch` (default `main`) and the server creates the branch on
-first use. A branch name follows the rules of a project name. Without `branch`,
+sets it with `--branch` and the server creates the branch on
+first use. Without `--branch` a build goes to the default branch of its
+project. A branch name follows the rules of a project name. Without `branch`,
 a match looks at the builds of every branch. Builds that were submitted before
 branches existed read as `main`.
 

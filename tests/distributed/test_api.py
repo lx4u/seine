@@ -910,6 +910,44 @@ class BuildSubmissionRBACTest(Test):
         if os.path.exists(self.tmp_dir):
             shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
+    def _bearer(self, token):
+        return {"Authorization": f"Bearer {token}"}
+
+    def _submit_on(self, branch=""):
+        req = BuildSubmitRequest(project="firmware", worktree_digest="t", branch=branch)
+        return self.client.post("/api/v1/builds", json=req.model_dump(),
+                                headers=self._bearer(self.dev_tok))
+
+    def test_a_build_without_a_branch_goes_to_the_default_branch(self):
+        self.assertEqual(self._submit_on().status_code, 200)
+        self.db.projects.set_default_branch("firmware", "stable")
+        build_id = self._submit_on().json()["build_id"]
+        self.assertEqual(self.db.get_build(build_id)["branch"], "stable")
+        build_id = self._submit_on("feature-x").json()["build_id"]
+        self.assertEqual(self.db.get_build(build_id)["branch"], "feature-x")
+
+    def test_default_branch_is_set_by_a_system_admin(self):
+        url = "/api/v1/projects/firmware"
+        sysadmin = self._bearer(self.db.tokens.issue(user_id="sysadmin")["token"])
+        resp = self.client.patch(url, json={"default_branch": "stable"}, headers=sysadmin)
+        self.assertEqual(resp.json()["default_branch"], "stable")
+        resp = self.client.patch(url, json={"default_branch": "Bad Name"}, headers=sysadmin)
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.patch("/api/v1/projects/ghost", json={"default_branch": "x1"},
+                                 headers=sysadmin)
+        self.assertEqual(resp.status_code, 404)
+        resp = self.client.patch(url, json={"default_branch": "dev"},
+                                 headers=self._bearer(self.adm_tok))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_branches_lists_the_default_and_those_with_builds(self):
+        self._submit_on("feature-x")
+        url = "/api/v1/projects/firmware/branches"
+        resp = self.client.get(url, headers=self._bearer(self.dev_tok))
+        self.assertEqual(resp.json(), {"default": "main", "branches": ["feature-x", "main"]})
+        resp = self.client.get(url, headers=self._bearer(self.ext_tok))
+        self.assertEqual(resp.status_code, 403)
+
     def test_development_build_submission_allowed(self):
         req = BuildSubmitRequest(
             project="firmware",
