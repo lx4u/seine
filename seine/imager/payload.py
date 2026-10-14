@@ -156,7 +156,7 @@ def write_manifest(directory, sign):
     write_atomic(base + ".gpg", sign(text))
 
 # Writes snapshot pointers next to the disk image for the build artifact manifest.
-def write_snapshot_files(out_dir, stem, checksum, directory, parent=None, ref=None):
+def write_snapshot_files(out_dir, stem, checksum, directory, parent=None, ref=None, deltas_from=None):
     commit_file = os.path.join(out_dir, f"{stem}.ostree-commit")
     write_atomic(commit_file, f"{checksum}\n".encode())
 
@@ -179,4 +179,15 @@ def write_snapshot_files(out_dir, stem, checksum, directory, parent=None, ref=No
         sig_dst = os.path.join(out_dir, f"{stem}.ostree-summary.sig")
         with open(sig_src, "rb") as f:
             write_atomic(sig_dst, f.read())
+
+    for old in (deltas_from or []):
+        old_commit = ref_commit(directory, version_ref(ref, old)) if ref else None
+        delta_file = os.path.join(out_dir, f"{stem}.static-delta-{old}")
+        info = f"from={old}\n"
+        if old_commit:
+            info += f"from_commit={old_commit}\n"
+        info += f"to_commit={checksum}\n"
+        if ref:
+            info += f"ref={ref}\n"
+        write_atomic(delta_file, info.encode())
 

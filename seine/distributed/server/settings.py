@@ -40,7 +40,8 @@ ENV_VARS = {
     "artifactory_endpoint": "SEINE_ARTIFACTORY_ENDPOINT",
 }
 
-S3_ENVIRONMENTS = ("dev", "prod")
+RETENTION_ENVIRONMENTS = ("dev", "prod")
+S3_ENVIRONMENTS = ("dev", "prod", "updates")
 ARTIFACTORY_DOWNLOADS = ("proxy", "direct", "byot")
 ARTIFACTORY_JOB_TOKENS = ("optional", "required")
 _S3_KEY_FIELDS = ("access_key", "secret_key")
@@ -145,14 +146,22 @@ class Settings:
                     vault.record_secret(value)
 
     def s3_keys(self, project: str, env: str) -> Optional[dict[str, str]]:
-        """Return the project's key pair for env ('dev' or 'prod'), else the default's, else None."""
+        """Return the project's key pair for env, else the default's, else None."""
         envs = self.s3_projects.get(project, self.s3_default)
-        return envs.get(env)
+        if env in envs:
+            return envs[env]
+        if env == "updates" and "prod" in envs:
+            return envs["prod"]
+        return None
 
     def artifactory_keys(self, project: str, env: str) -> Optional[dict[str, str]]:
         """Return the project's token (or user/password) for env, else the default's, else None."""
         envs = self.artifactory_projects.get(project, self.artifactory_default)
-        return envs.get(env)
+        if env in envs:
+            return envs[env]
+        if env == "updates" and "prod" in envs:
+            return envs["prod"]
+        return None
 
     def validate(self) -> None:
         """Raise SettingsError unless the server may start with these settings."""
@@ -428,7 +437,7 @@ def _read_retention(section: Any) -> Retention:
     """Validate the 'retention:' section of the config file."""
     if not isinstance(section, Mapping):
         raise SettingsError("invalid 'retention' section: expected a mapping")
-    unknown = set(section) - {"interval", *S3_ENVIRONMENTS}
+    unknown = set(section) - {"interval", *RETENTION_ENVIRONMENTS}
     if unknown:
         raise SettingsError(f"unknown retention setting(s): {', '.join(sorted(map(str, unknown)))}")
     interval = section.get("interval", 3600)
@@ -436,7 +445,7 @@ def _read_retention(section: Any) -> Retention:
         interval = _duration(interval, "retention.interval", allow_never=False)
     elif isinstance(interval, bool) or not isinstance(interval, (int, float)) or interval <= 0:
         raise SettingsError(f"retention.interval: invalid value {interval!r}, expected seconds above zero")
-    envs = {env: _env_retention(env, section.get(env)) for env in S3_ENVIRONMENTS}
+    envs = {env: _env_retention(env, section.get(env)) for env in RETENTION_ENVIRONMENTS}
     return Retention(interval=float(interval), **envs)
 
 

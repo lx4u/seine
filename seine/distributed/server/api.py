@@ -123,7 +123,7 @@ def _get_storage_provider(request: Request, project: str, bucket: str, env: str)
 def _purge_project_storage(settings: Settings, proj: dict[str, Any]) -> list[dict[str, Any]]:
     """Empty the dev and prod buckets of a project; 502 on the first failure."""
     purged = []
-    for env in S3_ENVIRONMENTS:
+    for env in ("dev", "prod"):
         bucket = proj.get(f"{env}_bucket")
         if not bucket:
             continue
@@ -291,6 +291,20 @@ def create_app(
             secrets_mgr.pop(build_id, None)
             forget_finished_build(app_db, request.app.state.hub, build_id)
             return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+        updates_storage = None
+        if build.get("is_release") and job.get("kind") == "image":
+            proj_row = app_db.projects.get(job["project"]) or {}
+            updates_bkt = proj_row.get("updates_bucket") or f"seine-{job['project']}-updates"
+            try:
+                updates_storage = job_storage(settings, job["project"], updates_bkt, "updates")
+            except StorageCredentialsError:
+                try:
+                    updates_storage = job_storage(settings, job["project"], updates_bkt, "prod")
+                except StorageCredentialsError:
+                    updates_storage = None
+        job["updates_storage"] = updates_storage
+
         job["transient_secrets"] = secrets
         return JobManifest(**job)
 
@@ -822,6 +836,7 @@ def create_app(
                 name=req.name,
                 dev_bucket=req.dev_bucket,
                 prod_bucket=req.prod_bucket,
+                updates_bucket=req.updates_bucket,
             )
         except sqlite3.IntegrityError:
             raise HTTPException(
@@ -833,6 +848,8 @@ def create_app(
 
         if req.provision_buckets:
             for bkt, env in ((proj["dev_bucket"], "dev"), (proj["prod_bucket"], "prod")):
+                if not bkt:
+                    continue
                 provider = _get_storage_provider(request, req.name, bkt, env)
                 if hasattr(provider, "ensure_bucket"):
                     provider.ensure_bucket()

@@ -127,7 +127,11 @@ class OstreeTipApiTest(Test):
         reg_req = RegisterWorkerRequest(
             worker_id="worker-1",
             hostname="worker1.local",
-            capabilities=WorkerCapabilities(native_arch="amd64"),
+            capabilities=WorkerCapabilities(
+                native_arch="amd64",
+                arch_scores={"amd64": 1.0},
+                free_disk_gb=50.0,
+            ),
         )
         reg_resp = self.client.post(
             "/api/v1/workers/register",
@@ -300,6 +304,95 @@ class OstreeTipApiTest(Test):
         self.assertEqual(len(resp_filtered.json()), 1)
         self.assertEqual(resp_filtered.json()[0]["branch"], "main")
 
+    def test_claim_job_attaches_updates_storage_for_release_image(self):
+        self.app.state.settings.s3_endpoint = "http://s3.local:9000"
+        self.app.state.settings.s3_default = {
+            "dev": {"access_key": "key-dev", "secret_key": "sec-dev"},
+            "prod": {"access_key": "key-prod", "secret_key": "sec-prod"},
+        }
+
+        self.db.create_build("bld-rel", "alpha", "amd64", "digest1", is_release=True)
+        worker_headers = {"Authorization": f"Bearer {self.token_worker}"}
+        resp = self.client.post(
+            "/api/v1/workers/claim",
+            json={"worker_id": "worker-1"},
+            headers=worker_headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIsNotNone(data.get("updates_storage"))
+        self.assertEqual(data["updates_storage"]["bucket"], "seine-alpha-updates")
+
+    def test_claim_job_non_release_has_no_updates_storage(self):
+        self.app.state.settings.s3_endpoint = "http://s3.local:9000"
+        self.app.state.settings.s3_default = {
+            "dev": {"access_key": "key-dev", "secret_key": "sec-dev"},
+            "prod": {"access_key": "key-prod", "secret_key": "sec-prod"},
+        }
+
+        self.db.create_build("bld-dev", "alpha", "amd64", "digest2", is_release=False)
+        worker_headers = {"Authorization": f"Bearer {self.token_worker}"}
+        resp = self.client.post(
+            "/api/v1/workers/claim",
+            json={"worker_id": "worker-1"},
+            headers=worker_headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIsNone(data.get("updates_storage"))
+
+    def test_build_artifacts_endpoint_serves_ostree_payload_artifacts(self):
+        from unittest.mock import MagicMock
+
+        mock_provider = MagicMock()
+        mock_provider.generate_download_url.return_value = "http://storage.local/download"
+        mock_stream = MagicMock()
+        mock_stream.iter_content.return_value = [b"delta-bytes"]
+        mock_provider.open_artifact.return_value = mock_stream
+        self.app.state.storage_provider = mock_provider
+
+        self.db.create_build("bld-ostree", "alpha", "amd64", "digest3", is_release=True)
+        meta = [
+            {
+                "name": "disk.ostree-commit",
+                "size": 65,
+                "sha256": "11" * 32,
+                "key": "artifacts/alpha/bld-ostree/disk.ostree-commit",
+            },
+            {
+                "name": "disk.ostree-summary",
+                "size": 256,
+                "sha256": "22" * 32,
+                "key": "artifacts/alpha/bld-ostree/disk.ostree-summary",
+            },
+            {
+                "name": "disk.static-delta-20",
+                "size": 1024,
+                "sha256": "33" * 32,
+                "key": "artifacts/alpha/bld-ostree/disk.static-delta-20",
+            },
+        ]
+        self.db.builds.update_status("bld-ostree", "completed", artifact_meta=meta)
+
+        dev_headers = {"Authorization": f"Bearer {self.token_developer}"}
+        resp = self.client.get("/api/v1/builds/bld-ostree", headers=dev_headers)
+        self.assertEqual(resp.status_code, 200)
+        names = [a["name"] for a in resp.json()["artifacts"]]
+        self.assertIn("disk.ostree-commit", names)
+        self.assertIn("disk.ostree-summary", names)
+        self.assertIn("disk.static-delta-20", names)
+
+        dl_resp = self.client.get(
+            "/api/v1/builds/bld-ostree/artifacts/disk.static-delta-20",
+            headers=dev_headers,
+        )
+        self.assertEqual(dl_resp.status_code, 200)
+        self.assertEqual(dl_resp.content, b"delta-bytes")
+        mock_provider.open_artifact.assert_called_with(
+            "alpha", "artifacts/alpha/bld-ostree/disk.static-delta-20"
+        )
+
+
 
 class OstreeUploadArtifactsTest(Test):
     """Test worker artifact harvesting, cumulative ostree push, and CAS protocol."""
@@ -319,6 +412,10 @@ class OstreeUploadArtifactsTest(Test):
             f.write(f"{COMMIT_B}\n")
         with open(os.path.join(self.deploy_dir, "disk.ostree-ref"), "w") as f:
             f.write("os/debian/x86_64\n")
+        self.uki_dir = os.path.join(self.deploy_dir, "disk-payload", "uki")
+        os.makedirs(self.uki_dir, exist_ok=True)
+        with open(os.path.join(self.uki_dir, "debian-1.efi"), "wb") as f:
+            f.write(b"pe-binary")
 
     def tearDown(self):
         if os.path.exists(self.tmp_dir):
@@ -335,6 +432,7 @@ class OstreeUploadArtifactsTest(Test):
         self.assertEqual(p["parent"], COMMIT_B)
         self.assertEqual(p["ref"], "os/debian/x86_64")
         self.assertEqual(p["repo_dir"], self.repo_dir)
+        self.assertEqual(p["uki_dir"], self.uki_dir)
 
     def test_upload_artifacts_release_protocol(self):
         from unittest.mock import MagicMock
@@ -418,4 +516,67 @@ class OstreeUploadArtifactsTest(Test):
         provider.push_ostree_objects.assert_not_called()
         provider.push_ostree_metadata.assert_not_called()
         on_tip_update.assert_not_called()
+
+    def test_upload_artifacts_syncs_to_updates_bucket(self):
+        from unittest.mock import MagicMock
+        from seine.distributed.agent.executor import upload_artifacts
+
+        provider = MagicMock()
+        updates_provider = MagicMock()
+        on_tip_update = MagicMock(return_value=True)
+
+        upload_artifacts(
+            self.job_dir,
+            "alpha",
+            "b1",
+            provider=provider,
+            branch="main",
+            is_release=True,
+            on_tip_update=on_tip_update,
+            updates_provider=updates_provider,
+        )
+
+        updates_provider.sync_ostree_updates.assert_called_once_with(
+            "alpha", "main", "os/debian/x86_64", self.repo_dir, uki_dir=self.uki_dir
+        )
+
+    def test_upload_artifacts_tip_conflict_does_not_touch_updates_bucket(self):
+        from unittest.mock import MagicMock
+        from seine.distributed.agent.executor import upload_artifacts
+
+        provider = MagicMock()
+        updates_provider = MagicMock()
+        on_tip_update = MagicMock(return_value=False)
+
+        with self.assertRaises(RuntimeError):
+            upload_artifacts(
+                self.job_dir,
+                "alpha",
+                "b1",
+                provider=provider,
+                branch="main",
+                is_release=True,
+                on_tip_update=on_tip_update,
+                updates_provider=updates_provider,
+            )
+
+        updates_provider.sync_ostree_updates.assert_not_called()
+
+    def test_upload_artifacts_first_commit_vs_later_deltas(self):
+        from unittest.mock import MagicMock
+        from seine.distributed.agent.executor import harvest_artifacts
+
+        # First commit: deploy_dir has no static-delta files
+        files = [os.path.basename(f) for f in harvest_artifacts(self.job_dir)]
+        self.assertIn("disk.img", files)
+        self.assertIn("disk.ostree-commit", files)
+        self.assertFalse(any("static-delta" in f for f in files))
+
+        # Later commit: static delta added
+        delta_path = os.path.join(self.deploy_dir, "disk.static-delta-20")
+        with open(delta_path, "w") as f:
+            f.write("from=20\n")
+
+        files_later = [os.path.basename(f) for f in harvest_artifacts(self.job_dir)]
+        self.assertIn("disk.static-delta-20", files_later)
 

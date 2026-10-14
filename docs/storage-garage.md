@@ -290,9 +290,14 @@ The same can be done through the Garage admin API (`quotas.maxSize` on
   `ostree/<project>/<branch>/<ref>/repo/`. This prefix is never deleted by
   retention sweeps so that devices can always walk commit history and static
   deltas. Content objects carry `immutable` cache headers, while repository
-  metadata (`summary`, `refs`) carries `no-cache`. This layout can be served
-  directly to devices over HTTP using Garage's `s3_web` endpoint (port 3902)
-  or a caching reverse proxy.
+  metadata (`summary`, `refs`) carries `no-cache`.
+- **Public updates bucket**: For device serving, release builds also sync the
+  cumulative repository and signed UKIs (`ostree/<project>/<branch>/<ref>/uki/`)
+  to a dedicated public updates bucket (named `seine-<project>-updates` by
+  default, or configured per project). This bucket is separate from internal
+  build buckets (`dev` and `prod`) and can be exposed directly to devices
+  over HTTP using Garage's `s3_web` endpoint (port 3902) or a caching reverse
+  proxy.
 
 ## 9. Where to go from here
 

@@ -545,3 +545,52 @@ class S3ProviderOstreeHistory(avocado.Test):
         self.assertEqual(deleted_count, 1)
         self.assertFalse(self.provider.has_ostree_history("myproj", "main", "debian/amd64"))
 
+    def test_push_and_pull_ostree_uki(self):
+        uki_dir = os.path.join(self.tmp_dir, "uki")
+        os.makedirs(uki_dir, exist_ok=True)
+        efi_file = os.path.join(uki_dir, "debian-1.efi")
+        manifest_file = os.path.join(uki_dir, "SHA256SUMS")
+        sig_file = os.path.join(uki_dir, "SHA256SUMS.gpg")
+
+        with open(efi_file, "wb") as f:
+            f.write(b"pe-binary")
+        with open(manifest_file, "wb") as f:
+            f.write(b"hash debian-1.efi")
+        with open(sig_file, "wb") as f:
+            f.write(b"signature")
+
+        count = self.provider.push_ostree_uki("myproj", "main", "debian/amd64", uki_dir)
+        self.assertEqual(count, 3)
+
+        efi_key = "ostree/myproj/main/debian/amd64/uki/debian-1.efi"
+        man_key = "ostree/myproj/main/debian/amd64/uki/SHA256SUMS"
+        sig_key = "ostree/myproj/main/debian/amd64/uki/SHA256SUMS.gpg"
+        self.assertIn(efi_key, self.client.objects)
+        self.assertEqual(self.client.cache_controls[efi_key], "public, max-age=31536000, immutable")
+        self.assertEqual(self.client.cache_controls[man_key], "no-cache, must-revalidate")
+        self.assertEqual(self.client.cache_controls[sig_key], "no-cache, must-revalidate")
+
+        pulled_dir = os.path.join(self.tmp_dir, "pulled_uki")
+        pull_count = self.provider.pull_ostree_uki("myproj", "main", "debian/amd64", pulled_dir)
+        self.assertEqual(pull_count, 3)
+        self.assertEqual(open(os.path.join(pulled_dir, "debian-1.efi"), "rb").read(), b"pe-binary")
+
+    def test_sync_ostree_updates(self):
+        repo_dir = os.path.join(self.tmp_dir, "repo")
+        uki_dir = os.path.join(self.tmp_dir, "uki")
+        os.makedirs(os.path.join(repo_dir, "objects", "11"), exist_ok=True)
+        os.makedirs(uki_dir, exist_ok=True)
+
+        with open(os.path.join(repo_dir, "objects", "11", "22.filez"), "wb") as f:
+            f.write(b"obj")
+        with open(os.path.join(repo_dir, "summary"), "wb") as f:
+            f.write(b"summary")
+        with open(os.path.join(uki_dir, "debian-1.efi"), "wb") as f:
+            f.write(b"uki")
+
+        res = self.provider.sync_ostree_updates("myproj", "main", "debian/amd64", repo_dir, uki_dir)
+        self.assertEqual(res, {"objects": 1, "metadata": 1, "ukis": 1})
+
+        del_count, _ = self.provider.delete_ostree_updates("myproj", "main", "debian/amd64")
+        self.assertEqual(del_count, 3)
+

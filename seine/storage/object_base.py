@@ -607,3 +607,81 @@ class ObjectStorageProvider(StorageProvider):
         """Delete cumulative ostree history under the prefix; return (count, bytes)."""
         prefix = self.ostree_repo_prefix(project, branch, ref)
         return self.delete_prefix(prefix)
+
+    @staticmethod
+    def ostree_uki_prefix(project: str, branch: str, ref: str) -> str:
+        """Return the storage key prefix for update UKIs and manifest."""
+        return f"ostree/{project}/{branch}/{ref}/uki"
+
+    def push_ostree_uki(self, project: str, branch: str, ref: str, uki_dir: str) -> int:
+        """Upload UKIs and SHA256SUMS manifest to storage."""
+        prefix = self.ostree_uki_prefix(project, branch, ref)
+        uki_dir = os.path.abspath(uki_dir)
+        if not os.path.isdir(uki_dir):
+            raise StorageError(f"push_ostree_uki failed: '{uki_dir}' is not a directory")
+
+        count = 0
+        for f in sorted(os.listdir(uki_dir)):
+            if f.startswith("."):
+                continue
+            full_path = os.path.join(uki_dir, f)
+            if not os.path.isfile(full_path):
+                continue
+            key = f"{prefix}/{f}"
+            if f.startswith("SHA256SUMS"):
+                cc = "no-cache, must-revalidate"
+            else:
+                cc = "public, max-age=31536000, immutable"
+            self._upload_file(key, full_path, cache_control=cc)
+            count += 1
+        return count
+
+    def pull_ostree_uki(self, project: str, branch: str, ref: str, dest_dir: str) -> int:
+        """Download update UKIs and manifest into dest_dir, skipping existing files."""
+        prefix = self.ostree_uki_prefix(project, branch, ref)
+        count = 0
+        dest_dir = os.path.abspath(dest_dir)
+        try:
+            for item in self._iter_objects(prefix):
+                key = item["key"]
+                rel = key[len(prefix):].lstrip("/")
+                if not rel:
+                    continue
+                target = os.path.join(dest_dir, rel)
+                if not os.path.exists(target):
+                    parent = os.path.dirname(target)
+                    os.makedirs(parent, exist_ok=True)
+                    fd, tmp = tempfile.mkstemp(prefix=".uki-pull-", dir=parent)
+                    os.close(fd)
+                    try:
+                        self._download_object(key, tmp)
+                        os.replace(tmp, target)
+                        count += 1
+                    finally:
+                        if os.path.exists(tmp):
+                            with contextlib.suppress(FileNotFoundError):
+                                os.unlink(tmp)
+        except Exception as e:
+            if self.offline_mode == "strict":
+                raise StorageOfflineError(f"pull_ostree_uki failed for {prefix}: {e}") from e
+            raise StorageError(f"pull_ostree_uki failed for {prefix}: {e}") from e
+        return count
+
+    def sync_ostree_updates(
+        self,
+        project: str,
+        branch: str,
+        ref: str,
+        repo_dir: str,
+        uki_dir: Optional[str] = None,
+    ) -> dict[str, int]:
+        """Sync OSTree repository and optional UKIs to the updates bucket."""
+        objs = self.push_ostree_objects(project, branch, ref, repo_dir)
+        meta = self.push_ostree_metadata(project, branch, ref, repo_dir)
+        ukis = self.push_ostree_uki(project, branch, ref, uki_dir) if uki_dir and os.path.isdir(uki_dir) else 0
+        return {"objects": objs, "metadata": meta, "ukis": ukis}
+
+    def delete_ostree_updates(self, project: str, branch: str, ref: str) -> tuple[int, int]:
+        """Delete ostree updates repo and uki under the prefix; return (count, bytes)."""
+        prefix = f"ostree/{project}/{branch}/{ref}"
+        return self.delete_prefix(prefix)

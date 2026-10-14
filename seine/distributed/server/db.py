@@ -124,6 +124,8 @@ class ProjectRepo:
     def _to_dict(row: sqlite3.Row) -> dict[str, Any]:
         res = dict(row)
         res["dev_only"] = bool(res["dev_only"])
+        if not res.get("updates_bucket"):
+            res["updates_bucket"] = f"seine-{res['name']}-updates" if not res["dev_only"] else ""
         return res
 
     def create(
@@ -133,6 +135,7 @@ class ProjectRepo:
         dev_bucket: Optional[str] = None,
         id: Optional[str] = None,
         dev_only: bool = False,
+        updates_bucket: Optional[str] = None,
     ) -> dict[str, Any]:
         validate_project_name(name)
         check_not_reserved(name, dev_only)
@@ -141,20 +144,22 @@ class ProjectRepo:
         proj_id = id or name
         dev = dev_bucket or f"seine-{name}-dev"
         prod = "" if dev_only else (prod_bucket or f"seine-{name}-prod")
+        updates = "" if dev_only else (updates_bucket or f"seine-{name}-updates")
         now = time.time()
         with self.conn:
             self.conn.execute(
                 """
-                INSERT INTO projects (id, name, prod_bucket, dev_bucket, dev_only, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO projects (id, name, prod_bucket, dev_bucket, updates_bucket, dev_only, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (proj_id, name, prod, dev, 1 if dev_only else 0, now),
+                (proj_id, name, prod, dev, updates, 1 if dev_only else 0, now),
             )
         return {
             "id": proj_id,
             "name": name,
             "prod_bucket": prod,
             "dev_bucket": dev,
+            "updates_bucket": updates,
             "dev_only": dev_only,
             "quota_gb": None,
             "default_branch": "main",
@@ -167,18 +172,20 @@ class ProjectRepo:
         dev_bucket: Optional[str] = None,
         prod_bucket: Optional[str] = None,
         id: Optional[str] = None,
+        updates_bucket: Optional[str] = None,
     ) -> dict[str, Any]:
         """Ensure a project exists, updating buckets only if explicitly specified."""
         validate_project_name(name)
         existing = self.get(name)
         if existing:
-            if dev_bucket is not None or prod_bucket is not None:
+            if dev_bucket is not None or prod_bucket is not None or updates_bucket is not None:
                 dev = dev_bucket if dev_bucket is not None else existing["dev_bucket"]
                 prod = prod_bucket if prod_bucket is not None else existing["prod_bucket"]
+                updates = updates_bucket if updates_bucket is not None else existing.get("updates_bucket", f"seine-{name}-updates")
                 with self.conn:
                     self.conn.execute(
-                        "UPDATE projects SET dev_bucket = ?, prod_bucket = ? WHERE id = ?",
-                        (dev, prod, existing["id"]),
+                        "UPDATE projects SET dev_bucket = ?, prod_bucket = ?, updates_bucket = ? WHERE id = ?",
+                        (dev, prod, updates, existing["id"]),
                     )
                 return self.get(name)  # type: ignore
             return existing
@@ -187,17 +194,19 @@ class ProjectRepo:
         proj_id = id or name
         dev = dev_bucket or f"seine-{name}-dev"
         prod = prod_bucket or f"seine-{name}-prod"
+        updates = updates_bucket or f"seine-{name}-updates"
         now = time.time()
         with self.conn:
             self.conn.execute(
                 """
-                INSERT INTO projects (id, name, prod_bucket, dev_bucket, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO projects (id, name, prod_bucket, dev_bucket, updates_bucket, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(name) DO UPDATE SET
                     dev_bucket = excluded.dev_bucket,
-                    prod_bucket = excluded.prod_bucket
+                    prod_bucket = excluded.prod_bucket,
+                    updates_bucket = excluded.updates_bucket
                 """,
-                (proj_id, name, prod, dev, now),
+                (proj_id, name, prod, dev, updates, now),
             )
         return self.get(name)  # type: ignore
 
@@ -1108,8 +1117,11 @@ class Database:
         name: str,
         dev_bucket: Optional[str] = None,
         prod_bucket: Optional[str] = None,
+        updates_bucket: Optional[str] = None,
     ) -> dict[str, Any]:
-        return self.projects.ensure(name, dev_bucket=dev_bucket, prod_bucket=prod_bucket)
+        return self.projects.ensure(
+            name, dev_bucket=dev_bucket, prod_bucket=prod_bucket, updates_bucket=updates_bucket
+        )
 
     def get_project(self, name: str) -> Optional[dict[str, Any]]:
         return self.projects.get(name)

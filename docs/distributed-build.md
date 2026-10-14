@@ -992,8 +992,9 @@ s3://seine-cache/
 │   ├── pc-image.ostree-commit             # Commit hash snapshot pointer
 │   ├── pc-image.ostree-parent             # Parent commit hash (if any)
 │   ├── pc-image.ostree-ref                # Branch ref name
-│   └── pc-image.ostree-summary            # Repo summary snapshot
-└── ostree/<project>/<branch>/<ref>/repo/  # Cumulative OSTree repo (prod bucket only)
+│   ├── pc-image.ostree-summary            # Repo summary snapshot
+│   └── pc-image.static-delta-<old>        # Static delta from prior tip (if any)
+└── ostree/<project>/<branch>/<ref>/repo/  # Cumulative OSTree repo (prod bucket)
     ├── objects/                           # Content-addressed objects (immutable)
     ├── deltas/                            # Static delta superblocks (immutable)
     ├── refs/heads/<ref>                   # Branch tip ref (no-cache)
@@ -1001,10 +1002,30 @@ s3://seine-cache/
     └── summary.sig                        # Detached GPG signature (no-cache)
 ```
 
+In addition to the internal production bucket, release builds publish the
+cumulative repository and UKI payloads to a dedicated public updates bucket
+(`seine-<project>-updates` by default, or configured via `--updates-bucket`
+when creating the project):
+
+```text
+s3://seine-<project>-updates/
+└── ostree/<project>/<branch>/<ref>/
+    ├── repo/                              # Cumulative repository
+    │   ├── objects/                       # Content objects (immutable)
+    │   ├── deltas/                        # Static delta superblocks (immutable)
+    │   ├── refs/heads/<ref>               # Branch tip ref (no-cache)
+    │   ├── summary                        # Repository summary (no-cache)
+    │   └── summary.sig                    # Detached GPG signature (no-cache)
+    └── uki/                               # Unified Kernel Images (UKIs)
+        ├── <version>.efi                  # Signed UKI executable (immutable)
+        ├── SHA256SUMS                     # Manifest of UKIs (no-cache)
+        └── SHA256SUMS.gpg                 # Detached signature (no-cache)
+```
+
 After a successful build the worker uploads the files of the build's `deploy`
 directory that match the deliverable patterns (disk images, root file-system
-tarballs, `.digest`, `.recipe`, `.boot-signers*`, `.sbom*`, and `.ostree-*`
-snapshot pointers) to `artifacts/<project>/<build-id>/`.
+tarballs, `.digest`, `.recipe`, `.boot-signers*`, `.sbom*`, `.ostree-*`
+snapshot pointers, and `*.static-delta*` files) to `artifacts/<project>/<build-id>/`.
 
 The server rejects a status report whose manifest names a key outside that
 prefix, a name that is not a plain file name, or an entry without a 64-digit
@@ -1029,10 +1050,15 @@ prefix `ostree/<project>/<branch>/<ref>/repo/`:
 3. **Metadata upload**: On success (HTTP 200), the worker pushes the mutable
    repository metadata (`summary`, `summary.sig`, `refs/`) with
    `Cache-Control: no-cache, must-revalidate`.
-4. **Conflict safety**: If the tip update returns `409 Conflict`, the worker
-   aborts the upload immediately and never touches the mutable metadata.
-   The existing branch tip remains untouched, and unreferenced objects left
-   in storage cause no harm.
+4. **Updates bucket synchronization**: Following successful metadata upload and
+   CAS validation, the worker synchronizes the cumulative repository and UKIs
+   to the public updates bucket (`seine-<project>-updates`). Content objects
+   and UKIs are written with immutable cache headers, while repository metadata
+   and checksums carry `no-cache`.
+5. **Conflict safety**: If the tip update returns `409 Conflict`, the worker
+   aborts the upload immediately and never touches the mutable metadata or the
+   updates bucket. The existing branch tip remains untouched, and unreferenced
+   objects left in storage cause no harm.
 
 ---
 
