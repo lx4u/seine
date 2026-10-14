@@ -345,6 +345,26 @@ class WorktreeStagingCheckTest(Test):
                                headers=self.headers)
         self.assertEqual(resp.json()["id"], ids["stable"])
 
+    def test_latest_build_on_a_branch(self):
+        provider = mock.MagicMock()
+        provider.has_worktree.return_value = True
+        req = BuildSubmitRequest(project="alpha", worktree_digest="d1", branch="stable")
+        with mock.patch("seine.distributed.server.api.provider_for", lambda *a: provider):
+            build_id = self.client.post(
+                "/api/v1/builds", json=req.model_dump(), headers=self.headers).json()["build_id"]
+        url = "/api/v1/projects/alpha/branches/stable/latest"
+        self.assertEqual(self.client.get(url, headers=self.headers).status_code, 404)
+        self.db.builds.update_status(build_id, "completed")
+        resp = self.client.get(url, headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["id"], build_id)
+
+    def test_latest_on_a_branch_needs_membership(self):
+        self.db.users.create("eve")
+        eve = {"Authorization": f"Bearer {self.db.tokens.issue(user_id='eve', kind='pat')['token']}"}
+        resp = self.client.get("/api/v1/projects/alpha/branches/main/latest", headers=eve)
+        self.assertEqual(resp.status_code, 403)
+
     def test_an_invalid_branch_name_is_refused(self):
         req = BuildSubmitRequest(project="alpha", worktree_digest="d1", branch="Bad Branch")
         resp = self.client.post("/api/v1/builds", json=req.model_dump(), headers=self.headers)
