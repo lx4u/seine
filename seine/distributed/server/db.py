@@ -391,6 +391,18 @@ class BuildRepo:
         row = self.conn.execute(sql + " ORDER BY created_at DESC LIMIT 1", args).fetchone()
         return self._decode(row) if row else None
 
+    def latest_on_branch(
+        self, project: str, branch: str, target_arch: Optional[str] = None,
+    ) -> Optional[dict[str, Any]]:
+        """Return the newest completed build on a branch of a project."""
+        sql = "SELECT * FROM builds WHERE project = ? AND branch = ? AND status = 'completed'"
+        args: list[Any] = [project, branch]
+        if target_arch:
+            sql += " AND target_arch = ?"
+            args.append(target_arch)
+        row = self.conn.execute(sql + " ORDER BY created_at DESC LIMIT 1", args).fetchone()
+        return self._decode(row) if row else None
+
     def get(self, build_id: str) -> Optional[dict[str, Any]]:
         cur = self.conn.execute("SELECT * FROM builds WHERE id = ?", (build_id,))
         row = cur.fetchone()
@@ -1224,6 +1236,11 @@ class Database:
         branch: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
         return self.builds.latest_for_spec(project, spec_digest, target_arch, branch)
+
+    def find_latest_build_on_branch(
+        self, project: str, branch: str, target_arch: Optional[str] = None,
+    ) -> Optional[dict[str, Any]]:
+        return self.builds.latest_on_branch(project, branch, target_arch)
 
     def claim_next_job(self, worker_id: str) -> Optional[dict[str, Any]]:
         return self.scheduler.claim_job(worker_id)

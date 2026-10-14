@@ -932,6 +932,15 @@ branches existed read as `main`.
 The answer is the build, as for `GET /api/v1/builds/<id>`, or 404 when no build
 carries the digest. Builds submitted by older clients carry no digest.
 
+The newest completed build on a branch, optionally for one architecture, comes
+from:
+
+```text
+GET /api/v1/projects/<project>/branches/<branch>/latest?target_arch=arm64
+```
+
+It answers like `match`, and with 404 when the branch has no completed build.
+
 #### Following a project's builds
 
 Members can follow every build of a project over a WebSocket, without polling:

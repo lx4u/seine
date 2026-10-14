@@ -738,6 +738,28 @@ class SpecDigestLookupTest(Test):
         self.assertEqual(self.db.find_build_by_spec("alpha", "d1", branch="main")["id"], "a")
         self.assertIsNone(self.db.find_build_by_spec("alpha", "d1", branch="other"))
 
+    def test_latest_on_branch_is_the_newest_completed_build(self):
+        self._build("old", "d1", branch="stable")
+        self.db.builds.update_status("old", "completed")
+        time.sleep(0.01)
+        self._build("new", "d2", branch="stable")
+        self.db.builds.update_status("new", "completed")
+        time.sleep(0.01)
+        self._build("failed", "d3", branch="stable")
+        self.db.builds.update_status("failed", "failed")
+        self._build("elsewhere", "d4", branch="main")
+        self.db.builds.update_status("elsewhere", "completed")
+        self.assertEqual(self.db.find_latest_build_on_branch("alpha", "stable")["id"], "new")
+        self.assertIsNone(self.db.find_latest_build_on_branch("alpha", "other"))
+
+    def test_latest_on_branch_can_narrow_to_an_architecture(self):
+        self._build("a", "d1", "amd64", branch="stable")
+        self._build("b", "d1", "arm64", branch="stable")
+        for build_id in ("a", "b"):
+            self.db.builds.update_status(build_id, "completed")
+        found = self.db.find_latest_build_on_branch("alpha", "stable", "amd64")
+        self.assertEqual(found["id"], "a")
+
     def test_no_match_and_empty_digest_find_nothing(self):
         self._build("a", "")
         self.assertIsNone(self.db.find_build_by_spec("alpha", "d9"))

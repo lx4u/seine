@@ -645,6 +645,22 @@ def create_app(
             raise HTTPException(status_code=404, detail="No build matches this spec")
         return build_response(request, build)
 
+    @app.get("/api/v1/projects/{project}/branches/{branch}/latest", response_model=BuildResponse)
+    def latest_build_on_branch(
+        project: str,
+        branch: str,
+        request: Request,
+        target_arch: Optional[str] = None,
+        token_record: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        load_project(app_db, project)
+        require_member(app_db, token_record, project)
+        build = app_db.find_latest_build_on_branch(project, branch, target_arch)
+        if not build:
+            raise HTTPException(status_code=404, detail="No completed build on this branch")
+        return build_response(request, build)
+
     @app.get("/api/v1/builds")
     def list_builds(
         request: Request,
