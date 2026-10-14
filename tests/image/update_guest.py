@@ -71,6 +71,8 @@ class UpdateGuest:
     secure_boot = False
     # Watchdog device: True ("i6300esb"), device name string, or None (disabled).
     watchdog = None
+    # TPM emulation via swtpm: True to enable.
+    tpm = False
 
     def setUp(self):
         self.guest = None
@@ -90,6 +92,11 @@ class UpdateGuest:
             if reason:
                 self.cancel(reason)
             self.make_keys()
+        if self.tpm:
+            if shutil.which("swtpm") is None:
+                self.cancel("swtpm is needed for TPM emulation")
+            self.tpm_dir = os.path.join(self.workdir, "tpm")
+            os.makedirs(self.tpm_dir, exist_ok=True)
         self.payload = os.path.join(self.workdir, "payload")
         os.makedirs(self.payload)
         self.variables = os.path.join(self.workdir, "OVMF_VARS.fd")
@@ -194,7 +201,7 @@ class UpdateGuest:
 
     # Starts the guest on a copy-on-write overlay of 'disk' and logs in. With
     # Secure Boot, the first start enrols the keys.
-    def start(self, disk=None, watchdog=None):
+    def start(self, disk=None, watchdog=None, tpm=None):
         if disk:
             if self.guest:
                 self.guest.close()
@@ -205,9 +212,10 @@ class UpdateGuest:
         self.starts = getattr(self, "starts", 0) + 1
         log = os.path.join(self.outputdir, f"serial-{self.starts}.log")
         effective_watchdog = self.watchdog if watchdog is None else watchdog
+        effective_tpm = getattr(self, "tpm_dir", None) if self.tpm else (self.tpm if tpm is None else tpm)
         self.guest = qemu_guest.Guest(self.disk, self.variables, log,
                                       secure_boot=self.secure_boot, share=self.share,
-                                      watchdog=effective_watchdog)
+                                      watchdog=effective_watchdog, tpm=effective_tpm)
         self.login()
         if disk and self.secure_boot:
             self.enrol()

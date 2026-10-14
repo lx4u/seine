@@ -571,6 +571,25 @@ class UpdateAgent(avocado.Test):
         self.assertEqual(len(undeploys), 1)
         self.assertIn(undeploys[0], self.function_lines(text, "drop_deployment"))
 
+    def test_pull_passes_auth_token_from_conf(self):
+        self.w.factory()
+        self.w.offer("22", "b")
+        self.w.set_conf("AUTH_TOKEN=secrettoken123\n")
+        self.assert_ok(self.w.run())
+        pulls = [c for c in self.w.calls() if c.startswith("ostree pull")]
+        self.assertTrue(any("--http-header=Authorization=Bearer secrettoken123" in c for c in pulls))
+
+    def test_pull_passes_auth_token_from_token_file(self):
+        self.w.factory()
+        self.w.offer("22", "b")
+        os.makedirs(self.w.state, exist_ok=True)
+        token_path = os.path.join(self.w.state, "token")
+        with open(token_path, "w") as f:
+            f.write("filetoken456\n")
+        self.assert_ok(self.w.run())
+        pulls = [c for c in self.w.calls() if c.startswith("ostree pull")]
+        self.assertTrue(any("--http-header=Authorization=Bearer filetoken456" in c for c in pulls))
+
     def test_the_script_is_shellcheck_clean(self):
         if shutil.which("shellcheck") is None:
             self.cancel("shellcheck is not installed")
