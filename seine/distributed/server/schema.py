@@ -17,6 +17,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             name TEXT UNIQUE NOT NULL,
             prod_bucket TEXT NOT NULL,
             dev_bucket TEXT NOT NULL,
+            updates_bucket TEXT NOT NULL DEFAULT '',
             dev_only INTEGER NOT NULL DEFAULT 0,
             quota_gb REAL,
             created_at REAL NOT NULL
@@ -140,6 +141,7 @@ def init_db(conn: sqlite3.Connection) -> None:
         for stmt in (
             "ALTER TABLE projects ADD COLUMN quota_gb REAL",
             "ALTER TABLE projects ADD COLUMN default_branch TEXT NOT NULL DEFAULT 'main'",
+            "ALTER TABLE projects ADD COLUMN updates_bucket TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE builds ADD COLUMN artifacts_expired_at REAL",
             "ALTER TABLE builds ADD COLUMN artifacts_expired_reason TEXT",
             "ALTER TABLE builds ADD COLUMN spec_files TEXT NOT NULL DEFAULT '[]'",

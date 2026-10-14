@@ -439,3 +439,61 @@ class WritesAPayload(avocado.Test):
         self.assertIn("debian/amd64.v24", out)
         self.assertEqual(sorted(os.listdir(os.path.join(payload, "uki"))),
                          ["SHA256SUMS", "SHA256SUMS.gpg", "debian-23.efi", "debian-24.efi"])
+
+
+class SnapshotFilesTest(avocado.Test):
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-snapshot-", dir="/var/tmp")
+        self.out_dir = os.path.join(self.tmp_dir, "deploy")
+        self.payload_dir = os.path.join(self.tmp_dir, "payload")
+        os.makedirs(self.out_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.payload_dir, "repo", "refs", "heads"), exist_ok=True)
+
+    def tearDown(self):
+        if os.path.exists(self.tmp_dir):
+            shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_write_snapshot_files_first_commit_no_deltas(self):
+        with open(os.path.join(self.payload_dir, "repo", "summary"), "wb") as f:
+            f.write(b"summary-bytes")
+
+        payload.write_snapshot_files(
+            self.out_dir,
+            "pc-image",
+            "1" * 64,
+            self.payload_dir,
+            parent=None,
+            ref="debian/amd64",
+            deltas_from=None,
+        )
+
+        files = sorted(os.listdir(self.out_dir))
+        self.assertEqual(files, ["pc-image.ostree-commit", "pc-image.ostree-ref", "pc-image.ostree-summary"])
+        self.assertFalse(any("static-delta" in f for f in files))
+
+    def test_write_snapshot_files_with_deltas(self):
+        with open(os.path.join(self.payload_dir, "repo", "summary"), "wb") as f:
+            f.write(b"summary-bytes")
+        ref_file = os.path.join(self.payload_dir, "repo", "refs", "heads", "debian/amd64.v20")
+        os.makedirs(os.path.dirname(ref_file), exist_ok=True)
+        with open(ref_file, "w") as f:
+            f.write("0" * 64 + "\n")
+
+        payload.write_snapshot_files(
+            self.out_dir,
+            "pc-image",
+            "2" * 64,
+            self.payload_dir,
+            parent="0" * 64,
+            ref="debian/amd64",
+            deltas_from=["20"],
+        )
+
+        files = sorted(os.listdir(self.out_dir))
+        self.assertIn("pc-image.static-delta-20", files)
+        self.assertIn("pc-image.ostree-parent", files)
+
+        content = open(os.path.join(self.out_dir, "pc-image.static-delta-20")).read()
+        self.assertIn("from=20", content)
+        self.assertIn(f"from_commit={'0' * 64}", content)
+        self.assertIn(f"to_commit={'2' * 64}", content)

@@ -674,7 +674,8 @@ class OstreeSysroot:
         payload.write_manifest(
             directory, lambda text: provider.pgp_detach_sign(key, text, epoch))
         stem = os.path.splitext(os.path.basename(self.source._output))[0]
-        payload.write_snapshot_files(self._output_dir, stem, checksum, directory, parent=parent, ref=ref)
+        payload.write_snapshot_files(self._output_dir, stem, checksum, directory,
+                                     parent=parent, ref=ref, deltas_from=deltas)
 
     # The UKIs of the root file system leave the commit: they cannot name
     # the deployment yet, and they live on the ESP. Returns their names

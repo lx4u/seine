@@ -18,6 +18,7 @@ class ProjectModel(BaseModel):
     name: str
     prod_bucket: str
     dev_bucket: str
+    updates_bucket: str = ""
     default_branch: str = "main"
     created_at: float
 
@@ -197,6 +198,7 @@ class JobManifest(BaseModel):
     worktree_digest: str = ""
     s3_bucket: str = ""
     storage: JobStorage | None = None
+    updates_storage: JobStorage | None = None
     spec_file: str = "spec.yaml"
     # Every spec file as on the command line, "--" between multiconfig groups.
     spec_files: list[str] = Field(default_factory=list)
@@ -263,6 +265,7 @@ class ProjectCreateRequest(BaseModel):
     name: str
     dev_bucket: str | None = None
     prod_bucket: str | None = None
+    updates_bucket: str | None = None
     provision_buckets: bool = False
 
 

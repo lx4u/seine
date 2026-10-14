@@ -460,7 +460,8 @@ class SubprocessExecutor:
         manifest: JobManifest,
         on_log: Optional[Callable[[str, str], None]] = None,
         provider: Optional[Any] = None,
-        on_tip_update: Optional[Callable[[str, str, str, Optional[str]], bool]] = None,
+        on_tip_update: Optional[Callable[[str, str, str, str, Optional[str]], bool]] = None,
+        updates_provider: Optional[Any] = None,
     ) -> list[dict[str, Any]]:
         job_dir = os.path.join(self.work_dir, "jobs", manifest.build_id)
         return upload_artifacts(
@@ -473,6 +474,8 @@ class SubprocessExecutor:
             branch=manifest.branch,
             is_release=manifest.is_release,
             on_tip_update=on_tip_update,
+            updates_provider=updates_provider,
+            updates_storage=manifest.updates_storage,
         )
 
 
@@ -491,6 +494,7 @@ DELIVERABLE_PATTERNS = [
     "*.ostree-parent*",
     "*.ostree-ref*",
     "*.ostree-summary*",
+    "*.static-delta*",
 ]
 
 
@@ -567,14 +571,19 @@ def find_ostree_payloads(job_dir: str) -> list[dict[str, Any]]:
                         pass
 
                 candidate_repo = os.path.join(deploy_dir, f"{stem}-payload", "repo")
+                candidate_uki = os.path.join(deploy_dir, f"{stem}-payload", "uki")
                 if not os.path.isdir(candidate_repo):
                     if os.path.isdir(os.path.join(root, f"{stem}-payload", "repo")):
                         candidate_repo = os.path.join(root, f"{stem}-payload", "repo")
+                        candidate_uki = os.path.join(root, f"{stem}-payload", "uki")
                     elif os.path.isdir(os.path.join(deploy_dir, "repo")):
                         candidate_repo = os.path.join(deploy_dir, "repo")
+                        candidate_uki = os.path.join(deploy_dir, "uki")
 
                 if not os.path.isdir(candidate_repo):
                     continue
+
+                uki_dir = candidate_uki if os.path.isdir(candidate_uki) else None
 
                 if not ref:
                     heads_dir = os.path.join(candidate_repo, "refs", "heads")
@@ -599,6 +608,7 @@ def find_ostree_payloads(job_dir: str) -> list[dict[str, Any]]:
                         "parent": parent,
                         "ref": ref,
                         "repo_dir": candidate_repo,
+                        "uki_dir": uki_dir,
                     })
     return payloads
 
@@ -613,6 +623,8 @@ def upload_artifacts(
     branch: str = "main",
     is_release: bool = False,
     on_tip_update: Optional[Callable[[str, str, str, str, Optional[str]], bool]] = None,
+    updates_provider: Optional[Any] = None,
+    updates_storage: Optional[JobStorage] = None,
 ) -> list[dict[str, Any]]:
     """Upload harvested deliverables to shared storage; return their {name, key, sha256, size}."""
     files = harvest_artifacts(job_dir)
@@ -624,6 +636,9 @@ def upload_artifacts(
             raise ValueError("the job came without storage access")
         provider = provider_from(storage)
 
+    if updates_provider is None and updates_storage is not None:
+        updates_provider = provider_from(updates_storage)
+
     if is_release and provider is not None:
         payloads = find_ostree_payloads(job_dir)
         for p in payloads:
@@ -631,6 +646,7 @@ def upload_artifacts(
             commit = p["commit"]
             parent = p.get("parent")
             repo_dir = p["repo_dir"]
+            uki_dir = p.get("uki_dir")
 
             if on_log:
                 on_log("system", f"[agent] Uploading cumulative OSTree objects for {ref} on branch {branch}...\n")
@@ -646,6 +662,11 @@ def upload_artifacts(
             if on_log:
                 on_log("system", f"[agent] Uploading cumulative OSTree metadata for {ref} on branch {branch}...\n")
             provider.push_ostree_metadata(project, branch, ref, repo_dir)
+
+            if updates_provider is not None:
+                if on_log:
+                    on_log("system", f"[agent] Syncing OSTree update payload to updates bucket for {ref} on branch {branch}...\n")
+                updates_provider.sync_ostree_updates(project, branch, ref, repo_dir, uki_dir=uki_dir)
 
     root = os.path.abspath(deploy_root(job_dir))
     uploaded = []

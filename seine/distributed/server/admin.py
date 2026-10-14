@@ -22,14 +22,22 @@ def project_create(
     name: str,
     dev_bucket: Optional[str] = None,
     prod_bucket: Optional[str] = None,
+    updates_bucket: Optional[str] = None,
     provision_buckets: bool = False,
     storage_provider: Optional[Any] = None,
     settings: Optional[Settings] = None,
 ) -> dict[str, Any]:
     """Create a project and optionally provision its S3 buckets."""
-    proj = db.projects.create(name=name, dev_bucket=dev_bucket, prod_bucket=prod_bucket)
+    proj = db.projects.create(
+        name=name, dev_bucket=dev_bucket, prod_bucket=prod_bucket, updates_bucket=updates_bucket
+    )
     if provision_buckets:
-        for bkt, env in ((proj["dev_bucket"], "dev"), (proj["prod_bucket"], "prod")):
+        for bkt, env in (
+            (proj["dev_bucket"], "dev"),
+            (proj["prod_bucket"], "prod"),
+        ):
+            if not bkt:
+                continue
             if storage_provider is not None:
                 provider = storage_provider
             else:
@@ -149,6 +157,7 @@ def setup_admin_subparsers(admin_parser: argparse.ArgumentParser) -> None:
     p_create.add_argument("name", help="Project name")
     p_create.add_argument("--dev-bucket", default=None, help="Custom dev S3 bucket")
     p_create.add_argument("--prod-bucket", default=None, help="Custom prod S3 bucket")
+    p_create.add_argument("--updates-bucket", default=None, help="Custom updates S3 bucket")
     p_create.add_argument("--provision-buckets", action="store_true", help="Provision buckets on S3")
 
     p_sub.add_parser("list", help="List projects")
@@ -235,15 +244,16 @@ def handle_admin_command(args: argparse.Namespace, db: Optional[Database] = None
                     args.name,
                     dev_bucket=args.dev_bucket,
                     prod_bucket=args.prod_bucket,
+                    updates_bucket=args.updates_bucket,
                     provision_buckets=args.provision_buckets,
                     settings=Settings.load() if args.provision_buckets else None,
                 )
-                print(f"Created project: {proj['name']} (dev: {proj['dev_bucket']}, prod: {proj['prod_bucket']})")
+                print(f"Created project: {proj['name']} (dev: {proj['dev_bucket']}, prod: {proj['prod_bucket']}, updates: {proj['updates_bucket']})")
                 return 0
             elif act == "list":
                 projects = project_list(db)
                 for p in projects:
-                    print(f"{p['name']}\tdev={p['dev_bucket']}\tprod={p['prod_bucket']}\tquota={format_quota(p)}\tbranch={p['default_branch']}")
+                    print(f"{p['name']}\tdev={p['dev_bucket']}\tprod={p['prod_bucket']}\tupdates={p['updates_bucket']}\tquota={format_quota(p)}\tbranch={p['default_branch']}")
                 return 0
             elif act == "update":
                 fields = {}
