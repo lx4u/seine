@@ -3,7 +3,9 @@
 
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 import threading
 import time
 
@@ -118,7 +120,7 @@ def overlay(base, path):
 # locked flash. 'share' is a host directory the guest sees as 9p 'host'.
 # 'watchdog' adds an emulated hardware watchdog device (e.g. i6300esb).
 def qemu_argv(disk, variables, secure_boot=False, share=None, watchdog=None,
-              arch="amd64"):
+              arch="amd64", tpm_socket=None):
     if arch == "arm64":
         code = "AAVMF_CODE.secboot.fd" if secure_boot else "AAVMF_CODE.fd"
         argv = [
@@ -153,6 +155,13 @@ def qemu_argv(disk, variables, secure_boot=False, share=None, watchdog=None,
         argv += ["-device", device, "-watchdog-action", "reset"]
     if share:
         argv += ["-virtfs", f"local,path={share},mount_tag=host,security_model=none,id=host"]
+    if tpm_socket:
+        device = "tpm-tis-device" if arch == "arm64" else "tpm-tis"
+        argv += [
+            "-chardev", f"socket,id=chrtpm,path={tpm_socket}",
+            "-tpmdev", "emulator,id=tpm0,chardev=chrtpm",
+            "-device", f"{device},tpmdev=tpm0",
+        ]
     return argv
 
 # What the root shell of the guest prints before it is silenced.
@@ -165,12 +174,47 @@ SHARE = "/var/host"
 # A QEMU guest with a root shell on its serial console.
 class Guest(Console):
     def __init__(self, disk, variables, log, secure_boot=False, share=None,
-                 watchdog=None, arch="amd64"):
+                 watchdog=None, arch="amd64", tpm=None):
         self.share = share
         self.watchdog = watchdog
         self.arch = arch
+        self.tpm = tpm
+        self.tpm_proc = None
+        self.tpm_dir = None
+        self._tpm_owned = False
+        tpm_socket = None
+        if tpm:
+            if shutil.which("swtpm") is None:
+                raise RuntimeError("swtpm is needed for TPM emulation")
+            if isinstance(tpm, str) and os.path.isdir(tpm):
+                self.tpm_dir = tpm
+            else:
+                self.tpm_dir = tempfile.mkdtemp(prefix="seine-test-swtpm-", dir="/var/tmp")
+                self._tpm_owned = True
+            tpm_socket = os.path.join(self.tpm_dir, "swtpm-sock")
+            self.tpm_proc = subprocess.Popen([
+                "swtpm", "socket", "--tpm2",
+                "--tpmstate", f"dir={self.tpm_dir}",
+                "--ctrl", f"type=unixio,path={tpm_socket}",
+            ])
+            deadline = time.time() + 5
+            while not os.path.exists(tpm_socket):
+                if time.time() > deadline or self.tpm_proc.poll() is not None:
+                    raise RuntimeError(f"swtpm failed to start on {tpm_socket}")
+                time.sleep(0.05)
         super().__init__(qemu_argv(disk, variables, secure_boot, share,
-                                   watchdog=watchdog, arch=arch), log)
+                                   watchdog=watchdog, arch=arch,
+                                   tpm_socket=tpm_socket), log)
+
+    def close(self):
+        super().close()
+        if self.tpm_proc:
+            self.tpm_proc.terminate()
+            self.tpm_proc.wait()
+            self.tpm_proc = None
+        if self._tpm_owned and self.tpm_dir and os.path.exists(self.tpm_dir):
+            shutil.rmtree(self.tpm_dir, ignore_errors=True)
+            self.tpm_dir = None
 
     # Waits for the shell and silences it, so that long lines are not echoed
     # back garbled.

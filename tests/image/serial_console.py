@@ -115,6 +115,18 @@ class QemuCommand(avocado.Test):
         self.assertIn("virt,secure=on", argv)
         self.assertTrue(any(a.endswith("AAVMF_CODE.secboot.fd") for a in argv))
 
+    def test_tpm_adds_chardev_and_device_on_amd64(self):
+        argv = qemu_guest.qemu_argv("d.qcow2", "vars.fd", tpm_socket="/tmp/tpm.sock")
+        self.assertIn("socket,id=chrtpm,path=/tmp/tpm.sock", argv)
+        self.assertIn("emulator,id=tpm0,chardev=chrtpm", argv)
+        self.assertIn("tpm-tis,tpmdev=tpm0", argv)
+
+    def test_tpm_adds_chardev_and_device_on_arm64(self):
+        argv = qemu_guest.qemu_argv("d.qcow2", "vars.fd", arch="arm64", tpm_socket="/tmp/tpm.sock")
+        self.assertIn("socket,id=chrtpm,path=/tmp/tpm.sock", argv)
+        self.assertIn("emulator,id=tpm0,chardev=chrtpm", argv)
+        self.assertIn("tpm-tis-device,tpmdev=tpm0", argv)
+
 class Overlay(avocado.Test):
     def setUp(self):
         if shutil.which("qemu-img") is None:

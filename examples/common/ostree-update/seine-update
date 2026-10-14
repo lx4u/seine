@@ -20,6 +20,7 @@ STATE=${SEINE_UPDATE_STATE:-/var/lib/seine-update}
 LOCK=${SEINE_UPDATE_LOCK:-/run/seine-update.lock}
 DEPLOYS=$SYSROOT/ostree/deploy/$STATEROOT/deploy
 ESP_SLACK=$((5 * 1024 * 1024))
+TOKEN_FILE=${SEINE_UPDATE_TOKEN_FILE:-${TOKEN_FILE:-$STATE/token}}
 
 # A composefs root has /sysroot read-only. Like ostree, write to it from a
 # private mount namespace only.
@@ -391,7 +392,18 @@ if [[ $lv == [0-9]* ]]; then
     if [[ $newest != "$v" || $lv == "$v" ]]; then fail "version $v is not newer than $lv"; fi
 fi
 
-"$OSTREE" pull "$REMOTE" "$REF" || fail "cannot pull $REMOTE:$REF"
+pull_args=()
+if [[ -n ${AUTH_TOKEN:-} ]]; then
+    pull_args+=(--http-header="Authorization=Bearer $AUTH_TOKEN")
+elif [[ -f $TOKEN_FILE && -s $TOKEN_FILE ]]; then
+    pull_args+=(--http-header="Authorization=Bearer $(<"$TOKEN_FILE")")
+fi
+if [[ -n ${EXTRA_PULL_ARGS:-} ]]; then
+    # shellcheck disable=SC2206
+    pull_args+=($EXTRA_PULL_ARGS)
+fi
+
+"$OSTREE" pull "${pull_args[@]}" "$REMOTE" "$REF" || fail "cannot pull $REMOTE:$REF"
 failpoint after-pull
 c=$("$OSTREE" rev-parse "$REMOTE:$REF") || fail "cannot read $REMOTE:$REF"
 [[ $c =~ ^[0-9a-f]{64}$ ]] || fail "unexpected commit '$c'"
