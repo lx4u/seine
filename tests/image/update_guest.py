@@ -164,6 +164,10 @@ class UpdateGuest:
                 [sys.executable, "-u", "./seine.py", "build", "-v", EXAMPLE] + specs,
                 cwd=path_to_sources, env=environment, stdout=f,
                 stderr=subprocess.STDOUT)
+        if built.returncode != 0 and os.path.exists(log):
+            with open(log) as f:
+                err_text = f.read()
+            self.assertEqual(built.returncode, 0, f"build of {version} failed, see {log}:\n{err_text}")
         self.assertEqual(built.returncode, 0, f"build of {version} failed, see {log}")
         self.assertTrue(os.path.isfile(os.path.join(self.payload, "uki", f"debian-{version}.efi")))
         return disk
