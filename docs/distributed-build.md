@@ -732,6 +732,7 @@ them. Handing each job only the feeds it needs is not done yet.
 | `--token TOKEN` | Personal access token (default `$SEINE_TOKEN`). Without one, the client uses the token an earlier run saved (the keyring, else `~/.config/seine/credentials.json`), or asks for one in the terminal and offers to save it. It stops before uploading anything when it gets none. |
 | `--ca-cert PATH` | CA bundle verifying the server certificate, and the storage endpoint when downloading (default `$SEINE_CA_CERT`). |
 | `--insecure` | Allow plain `http://` to a server that is not on this machine. Testing only. |
+| `--branch NAME` | The branch of the build (default `main`). |
 | `--release` | A release build: needs the `releaser` or `admin` role. |
 | `--dest-dir PATH`, `--no-download` | Where to put the artifacts, or skip downloading them. |
 
@@ -916,11 +917,17 @@ the server stored: name, size and SHA-256.
 
 A submission carries the digest of its specification (`spec_digest`), which the
 server stores with the build. Any project member can ask for the newest build
-that carries a given digest, optionally for one architecture:
+that carries a given digest, optionally for one architecture and one branch:
 
 ```text
-GET /api/v1/projects/<project>/builds/match?spec_digest=<digest>&target_arch=arm64
+GET /api/v1/projects/<project>/builds/match?spec_digest=<digest>&target_arch=arm64&branch=main
 ```
+
+A build belongs to a branch, the line of development it is part of. The client
+sets it with `--branch` (default `main`) and the server creates the branch on
+first use. A branch name follows the rules of a project name. Without `branch`,
+a match looks at the builds of every branch. Builds that were submitted before
+branches existed read as `main`.
 
 The answer is the build, as for `GET /api/v1/builds/<id>`, or 404 when no build
 carries the digest. Builds submitted by older clients carry no digest.

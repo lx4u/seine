@@ -131,6 +131,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             "ALTER TABLE builds ADD COLUMN artifacts_expired_reason TEXT",
             "ALTER TABLE builds ADD COLUMN spec_files TEXT NOT NULL DEFAULT '[]'",
             "ALTER TABLE builds ADD COLUMN spec_digest TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE builds ADD COLUMN branch TEXT NOT NULL DEFAULT 'main'",
         ):
             try:
                 conn.execute(stmt)

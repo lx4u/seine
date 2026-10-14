@@ -412,10 +412,12 @@ class RemoteBuild:
         on_event: Optional[Callable[[dict[str, Any]], None]] = None,
         log_dir: Optional[str] = None,
         spec_digest: str = "",
+        branch: str = "main",
     ):
         # With log_dir, the streamed log goes there, one file per task, not to out.
         self.log_dir = log_dir
         self.spec_digest = spec_digest
+        self.branch = branch
         # out/err/prompt let the TUI take over what would go to the terminal.
         self._out = out
         self._err = err
@@ -799,6 +801,7 @@ class RemoteBuild:
             spec_file=self.spec_file,
             spec_files=self.spec_files,
             spec_digest=self.spec_digest,
+            branch=self.branch,
             options=options,
             transient_secrets=secrets or {},
         )
@@ -1014,6 +1017,7 @@ def build_remote(
     token: Optional[str] = None,
     is_release: bool = False,
     root_dir: Optional[str] = None,
+    branch: str = "main",
 ) -> int:
     """Build the project remotely on seine-server and follow it, returning the exit code."""
     if not spec_files:
@@ -1021,5 +1025,5 @@ def build_remote(
         return EXIT_PROTOCOL
     return RemoteBuild(
         server_url, project, spec_files, options=options, token=token,
-        is_release=is_release, root_dir=root_dir,
+        is_release=is_release, root_dir=root_dir, branch=branch,
     ).run()

@@ -325,6 +325,31 @@ class WorktreeStagingCheckTest(Test):
         self.assertEqual(resp.json()["id"], build_id)
         self.assertEqual(resp.json()["spec_digest"], "abc123")
 
+    def test_branch_is_stored_and_narrows_match(self):
+        provider = mock.MagicMock()
+        provider.has_worktree.return_value = True
+        ids = {}
+        for branch in ("main", "stable"):
+            req = BuildSubmitRequest(project="alpha", worktree_digest="d1",
+                                     spec_digest="abc123", branch=branch)
+            with mock.patch("seine.distributed.server.api.provider_for", lambda *a: provider):
+                ids[branch] = self.client.post(
+                    "/api/v1/builds", json=req.model_dump(), headers=self.headers).json()["build_id"]
+        resp = self.client.get("/api/v1/projects/alpha/builds/match",
+                               params={"spec_digest": "abc123", "branch": "main"},
+                               headers=self.headers)
+        self.assertEqual(resp.json()["id"], ids["main"])
+        self.assertEqual(resp.json()["branch"], "main")
+        resp = self.client.get("/api/v1/projects/alpha/builds/match",
+                               params={"spec_digest": "abc123", "branch": "stable"},
+                               headers=self.headers)
+        self.assertEqual(resp.json()["id"], ids["stable"])
+
+    def test_an_invalid_branch_name_is_refused(self):
+        req = BuildSubmitRequest(project="alpha", worktree_digest="d1", branch="Bad Branch")
+        resp = self.client.post("/api/v1/builds", json=req.model_dump(), headers=self.headers)
+        self.assertEqual(resp.status_code, 400)
+
     def test_match_without_a_build_is_404(self):
         resp = self.client.get("/api/v1/projects/alpha/builds/match",
                                params={"spec_digest": "nope"}, headers=self.headers)
