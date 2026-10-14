@@ -38,6 +38,8 @@ from seine.distributed.common.models import (
     JobManifest,
     JobStatusUpdateRequest,
     MemberAddRequest,
+    OstreeTipResponse,
+    OstreeTipUpdateRequest,
     ProjectCreateRequest,
     ProjectUpdateRequest,
     RegisterWorkerRequest,
@@ -64,6 +66,7 @@ from seine.distributed.server.auth import (
     member_projects,
     require_member,
     require_project_admin,
+    require_releaser_or_worker,
     require_system_admin,
     require_worker_id,
 )
@@ -673,6 +676,76 @@ def create_app(
         if not build:
             raise HTTPException(status_code=404, detail="No completed build on this branch")
         return build_response(request, build)
+
+    @app.get("/api/v1/projects/{project}/ostree/tip", response_model=OstreeTipResponse)
+    def get_ostree_tip(
+        project: str,
+        branch: str,
+        ref: str,
+        request: Request,
+        token_record: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        load_project(app_db, project)
+        require_member(app_db, token_record, project)
+        try:
+            validate_branch_name(branch)
+            validation.validate_ref_name(ref)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        tip = app_db.ostree_tips.get(project, branch, ref)
+        if not tip:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No ostree tip for {branch}/{ref}",
+            )
+        return tip
+
+    @app.get("/api/v1/projects/{project}/ostree/tips", response_model=list[OstreeTipResponse])
+    def list_ostree_tips(
+        project: str,
+        request: Request,
+        branch: Optional[str] = None,
+        token_record: dict[str, Any] = Depends(current_user),
+    ):
+        app_db = get_db(request)
+        load_project(app_db, project)
+        require_member(app_db, token_record, project)
+        if branch:
+            try:
+                validate_branch_name(branch)
+            except ValueError as e:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        return app_db.ostree_tips.list_by_project(project, branch=branch)
+
+    @app.post("/api/v1/projects/{project}/ostree/tip", response_model=OstreeTipResponse)
+    def update_ostree_tip(
+        project: str,
+        req: OstreeTipUpdateRequest,
+        request: Request,
+        authorization: Optional[str] = Header(None),
+    ):
+        app_db = get_db(request)
+        load_project(app_db, project)
+        require_releaser_or_worker(request, project, authorization)
+        try:
+            validate_branch_name(req.branch)
+            validation.validate_ref_name(req.ref)
+            validation.validate_commit_hex(req.commit)
+            if req.parent:
+                validation.validate_commit_hex(req.parent, label="parent")
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+        ok = app_db.ostree_tips.update_tip(
+            project, req.branch, req.ref, req.commit, req.parent
+        )
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="history moved, rebuild required",
+            )
+        return app_db.ostree_tips.get(project, req.branch, req.ref)
 
     @app.get("/api/v1/builds")
     def list_builds(

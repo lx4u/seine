@@ -960,6 +960,94 @@ class TokenRepo:
         return [dict(r) for r in cur.fetchall()]
 
 
+class OstreeTipRepo:
+    """Repository for OSTree tip commits per project, branch, and ref."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn = conn
+
+    def get(self, project: str, branch: str, ref: str) -> Optional[dict[str, Any]]:
+        """Return the tip record for (project, branch, ref), or None."""
+        row = self.conn.execute(
+            "SELECT project, branch, ref, commit_id, parent, updated_at "
+            "FROM ostree_tips WHERE project = ? AND branch = ? AND ref = ?",
+            (project, branch, ref),
+        ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["commit"] = d.pop("commit_id")
+        return d
+
+    def get_tip(self, project: str, branch: str, ref: str) -> Optional[str]:
+        """Return the current tip commit hash, or None."""
+        rec = self.get(project, branch, ref)
+        return rec["commit"] if rec else None
+
+    def update_tip(
+        self,
+        project: str,
+        branch: str,
+        ref: str,
+        commit_id: str,
+        parent: Optional[str] = None,
+        now: Optional[float] = None,
+    ) -> bool:
+        """Atomic check-and-set: update tip to commit_id if current tip == parent."""
+        now = time.time() if now is None else now
+        cur = self.conn.execute(
+            "SELECT commit_id FROM ostree_tips WHERE project = ? AND branch = ? AND ref = ?",
+            (project, branch, ref),
+        )
+        row = cur.fetchone()
+        current_tip = row["commit_id"] if row else None
+
+        if current_tip != parent:
+            return False
+
+        self.conn.execute(
+            """
+            INSERT INTO ostree_tips (project, branch, ref, commit_id, parent, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(project, branch, ref) DO UPDATE SET
+                commit_id = excluded.commit_id,
+                parent = excluded.parent,
+                updated_at = excluded.updated_at
+            """,
+            (project, branch, ref, commit_id, parent, now),
+        )
+        self.conn.commit()
+        return True
+
+    def list_by_project(self, project: str, branch: Optional[str] = None) -> list[dict[str, Any]]:
+        """List all tip records for a project, optionally filtered by branch."""
+        query = (
+            "SELECT project, branch, ref, commit_id, parent, updated_at "
+            "FROM ostree_tips WHERE project = ?"
+        )
+        params = [project]
+        if branch:
+            query += " AND branch = ?"
+            params.append(branch)
+        query += " ORDER BY branch, ref"
+        rows = self.conn.execute(query, tuple(params)).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["commit"] = d.pop("commit_id")
+            result.append(d)
+        return result
+
+    def delete(self, project: str, branch: str, ref: str) -> bool:
+        """Delete a tip record; return True if deleted."""
+        cur = self.conn.execute(
+            "DELETE FROM ostree_tips WHERE project = ? AND branch = ? AND ref = ?",
+            (project, branch, ref),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+
 class Database:
     """Unified database entrypoint providing access to entity repositories."""
 
@@ -993,6 +1081,7 @@ class Database:
             self.workers = WorkerRepo(self.conn)
             self.users = UserRepo(self.conn)
             self.tokens = TokenRepo(self.conn)
+            self.ostree_tips = OstreeTipRepo(self.conn)
             from seine.distributed.server.scheduler import BuildScheduler
             self.scheduler = BuildScheduler(self)
         elif db_type == "postgres":

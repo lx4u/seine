@@ -42,10 +42,15 @@ class S3StorageProvider(ObjectStorageProvider):
     def _download_object(self, key, target_path):
         self.client.download_file(self.bucket, key, target_path)
 
-    def _put_small(self, key, data):
-        self.client.put_object(self.bucket, key, data)
+    def _put_small(self, key, data, cache_control=None):
+        if cache_control:
+            self.client.put_object(self.bucket, key, data, cache_control=cache_control)
+        else:
+            self.client.put_object(self.bucket, key, data)
 
-    def _upload_file(self, key, file_path, sha256=None):
+    def _upload_file(self, key, file_path, sha256=None, cache_control=None):
+        if cache_control:
+            return self.client.upload_file(self.bucket, key, file_path, cache_control=cache_control)
         return self.client.upload_file(self.bucket, key, file_path)
 
     def _delete_keys(self, keys):

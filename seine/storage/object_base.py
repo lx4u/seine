@@ -156,11 +156,11 @@ class ObjectStorageProvider(StorageProvider):
         """Stream an object to target_path; missing raises not_found_errors."""
         raise NotImplementedError
 
-    def _put_small(self, key, data):
+    def _put_small(self, key, data, cache_control=None):
         """Upload short bytes (sidecars, heartbeats)."""
         raise NotImplementedError
 
-    def _upload_file(self, key, file_path, sha256=None):
+    def _upload_file(self, key, file_path, sha256=None, cache_control=None):
         """Stream a file; return the backend-recorded sha256, None to use sha256."""
         raise NotImplementedError
 
@@ -510,3 +510,100 @@ class ObjectStorageProvider(StorageProvider):
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(tmp_path)
         return dest_file
+
+    @staticmethod
+    def ostree_repo_prefix(project: str, branch: str, ref: str) -> str:
+        """Return the storage key prefix for cumulative ostree history."""
+        return f"ostree/{project}/{branch}/{ref}/repo"
+
+    def has_ostree_history(self, project: str, branch: str, ref: str) -> bool:
+        """Return True if an ostree repository exists under the prefix."""
+        prefix = self.ostree_repo_prefix(project, branch, ref)
+        try:
+            return any(True for _ in self._iter_objects(prefix))
+        except Exception:
+            return False
+
+    def pull_ostree_repo(self, project: str, branch: str, ref: str, dest_dir: str) -> int:
+        """Download cumulative ostree history into dest_dir, skipping existing files."""
+        prefix = self.ostree_repo_prefix(project, branch, ref)
+        count = 0
+        dest_dir = os.path.abspath(dest_dir)
+        try:
+            for item in self._iter_objects(prefix):
+                key = item["key"]
+                rel = key[len(prefix):].lstrip("/")
+                if not rel:
+                    continue
+                target = os.path.join(dest_dir, rel)
+                if not os.path.exists(target):
+                    parent = os.path.dirname(target)
+                    os.makedirs(parent, exist_ok=True)
+                    fd, tmp = tempfile.mkstemp(prefix=".ostree-pull-", dir=parent)
+                    os.close(fd)
+                    try:
+                        self._download_object(key, tmp)
+                        os.replace(tmp, target)
+                        count += 1
+                    finally:
+                        if os.path.exists(tmp):
+                            with contextlib.suppress(FileNotFoundError):
+                                os.unlink(tmp)
+        except Exception as e:
+            if self.offline_mode == "strict":
+                raise StorageOfflineError(f"pull_ostree_repo failed for {prefix}: {e}") from e
+            raise StorageError(f"pull_ostree_repo failed for {prefix}: {e}") from e
+        return count
+
+    def push_ostree_objects(self, project: str, branch: str, ref: str, repo_dir: str) -> int:
+        """Upload missing content-addressed objects and deltas with immutable cache control."""
+        prefix = self.ostree_repo_prefix(project, branch, ref)
+        repo_dir = os.path.abspath(repo_dir)
+        if not os.path.isdir(repo_dir):
+            raise StorageError(f"push_ostree_objects failed: '{repo_dir}' is not a directory")
+
+        existing_keys = {item["key"] for item in self._iter_objects(prefix)}
+        count = 0
+        for root, _, files in os.walk(repo_dir):
+            for f in sorted(files):
+                if f.startswith("."):
+                    continue
+                full_path = os.path.join(root, f)
+                rel_path = os.path.relpath(full_path, repo_dir).replace(os.sep, "/")
+                if not (rel_path.startswith("objects/") or rel_path.startswith("deltas/")):
+                    continue
+                key = f"{prefix}/{rel_path}"
+                if key not in existing_keys:
+                    self._upload_file(key, full_path, cache_control="public, max-age=31536000, immutable")
+                    count += 1
+        return count
+
+    def push_ostree_metadata(self, project: str, branch: str, ref: str, repo_dir: str) -> int:
+        """Upload mutable metadata files (summary, refs, config) with no-cache revalidation."""
+        prefix = self.ostree_repo_prefix(project, branch, ref)
+        repo_dir = os.path.abspath(repo_dir)
+        if not os.path.isdir(repo_dir):
+            raise StorageError(f"push_ostree_metadata failed: '{repo_dir}' is not a directory")
+
+        count = 0
+        for root, _, files in os.walk(repo_dir):
+            for f in sorted(files):
+                if f.startswith("."):
+                    continue
+                full_path = os.path.join(root, f)
+                rel_path = os.path.relpath(full_path, repo_dir).replace(os.sep, "/")
+                if rel_path.startswith("objects/") or rel_path.startswith("deltas/"):
+                    continue
+                key = f"{prefix}/{rel_path}"
+                if "summary" in rel_path or "refs" in rel_path:
+                    cc = "no-cache, must-revalidate"
+                else:
+                    cc = "max-age=300"
+                self._upload_file(key, full_path, cache_control=cc)
+                count += 1
+        return count
+
+    def delete_ostree_history(self, project: str, branch: str, ref: str) -> tuple[int, int]:
+        """Delete cumulative ostree history under the prefix; return (count, bytes)."""
+        prefix = self.ostree_repo_prefix(project, branch, ref)
+        return self.delete_prefix(prefix)

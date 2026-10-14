@@ -101,12 +101,24 @@ def init_db(conn: sqlite3.Connection) -> None:
             expires_at REAL
         );
 
+        CREATE TABLE IF NOT EXISTS ostree_tips (
+            project TEXT NOT NULL,
+            branch TEXT NOT NULL,
+            ref TEXT NOT NULL,
+            commit_id TEXT NOT NULL,
+            parent TEXT,
+            updated_at REAL NOT NULL,
+            PRIMARY KEY (project, branch, ref),
+            FOREIGN KEY (project) REFERENCES projects(name) ON DELETE CASCADE
+        );
+
         CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id);
         CREATE INDEX IF NOT EXISTS idx_builds_project ON builds(project);
         CREATE INDEX IF NOT EXISTS idx_jobs_build_id ON jobs(build_id);
         CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
         CREATE INDEX IF NOT EXISTS idx_workers_token ON workers(token_hash);
         CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id);
+        CREATE INDEX IF NOT EXISTS idx_ostree_tips_project ON ostree_tips(project);
         """)
         try:
             conn.execute(

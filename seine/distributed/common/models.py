@@ -203,6 +203,8 @@ class JobManifest(BaseModel):
     package_name: str | None = None
     options: dict[str, Any] = Field(default_factory=dict)
     transient_secrets: dict[str, Any] = Field(default_factory=dict, repr=False)
+    is_release: bool = False
+    branch: str = "main"
 
 
 class JobStatusUpdateRequest(BaseModel):
@@ -346,3 +348,22 @@ class WorkerRosterResponse(BaseModel):
 class WorkerPauseRequest(BaseModel):
     """Payload to pause or unpause job scheduling on a worker."""
     paused: bool = True
+
+
+class OstreeTipUpdateRequest(BaseModel):
+    """Payload to update an ostree branch tip."""
+    branch: str
+    ref: str
+    commit: str
+    parent: str | None = None
+
+
+class OstreeTipResponse(BaseModel):
+    """OSTree branch tip record."""
+    project: str
+    branch: str
+    ref: str
+    commit: str
+    parent: str | None = None
+    updated_at: float
+

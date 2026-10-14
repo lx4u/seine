@@ -286,6 +286,13 @@ The same can be done through the Garage admin API (`quotas.maxSize` on
   [Per-project keys](#per-project-keys)); workers get the keys of their job's
   bucket from it. A client downloads artifacts from Garage with pre-signed
   URLs, so port 3900 must be reachable from developers as well.
+- **Cumulative OSTree history** is kept in the production bucket under
+  `ostree/<project>/<branch>/<ref>/repo/`. This prefix is never deleted by
+  retention sweeps so that devices can always walk commit history and static
+  deltas. Content objects carry `immutable` cache headers, while repository
+  metadata (`summary`, `refs`) carries `no-cache`. This layout can be served
+  directly to devices over HTTP using Garage's `s3_web` endpoint (port 3902)
+  or a caching reverse proxy.
 
 ## 9. Where to go from here
 

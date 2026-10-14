@@ -160,3 +160,36 @@ def member_projects(db: Database, user_id: str) -> set[str]:
         "SELECT project_id FROM project_members WHERE user_id = ?", (user_id,)
     ).fetchall()
     return {r["project_id"] for r in rows}
+
+
+def require_releaser_or_worker(
+    request: Request,
+    project: str,
+    authorization: Optional[str] = Header(None),
+) -> dict[str, Any]:
+    """Authorize either a registered worker or a user with releaser/admin role in the project."""
+    token = parse_bearer(authorization)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+        )
+    db = get_db(request)
+    worker = db.get_worker_by_token(token)
+    if worker:
+        return {"kind": "worker", "worker": worker}
+    record = db.tokens.validate(token)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired bearer token",
+        )
+    user = db.users.get(record["user_id"])
+    if user is None or not user["active"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unknown or disabled user account",
+        )
+    require_member(db, record, project, roles=("releaser", "admin"))
+    return {"kind": "user", "record": record}
+
