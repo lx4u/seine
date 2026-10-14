@@ -284,13 +284,14 @@ each project below a size limit.
 #### What is kept, and what may be deleted
 
 Each project has a `dev` and a `prod` bucket (see
-[Shared storage layout](#4-shared-storage-layout)). Each holds three prefixes:
+[Shared storage layout](#4-shared-storage-layout)). They hold the following prefixes:
 
 | Prefix | Dev bucket | Prod bucket |
 |--------|------------|-------------|
 | `artifacts/` | deleted by age (`artifacts`) and, oldest first, when the bucket is over `high_water` | never deleted; above `high_water` the server only logs a warning |
 | `worktrees/` | deleted by age (`worktrees`) | deleted by age |
 | `cache/` | deleted by age (`cache`) | deleted by age |
+| `ostree/` | not present | never deleted; cumulative per-branch history |
 
 Artifacts of a `--release` build are never deleted, and neither are those of
 a build that has not finished.
@@ -983,23 +984,55 @@ s3://seine-cache/
 ├── worktrees/<project>/<digest>.tar.zst   # Staged source worktrees
 ├── cache/<kind>/<key>.tar.zst             # Shared cache: bootstraps, chroots,
 │                                          # packages, rootfs (see caching.md)
-└── artifacts/<project>/<build-id>/        # Harvested build deliverables
-    ├── pc-image.img                       # Bootable full disk image
-    ├── pc-image.img.digest                # SHA-256 integrity digest
-    ├── pc-image.img.boot-signers.json     # UEFI / kernel module signing metadata
-    └── pc-image.img.sbom.json             # Software bill of materials
+├── artifacts/<project>/<build-id>/        # Harvested build deliverables
+│   ├── pc-image.img                       # Bootable full disk image
+│   ├── pc-image.img.digest                # SHA-256 integrity digest
+│   ├── pc-image.img.boot-signers.json     # UEFI / kernel module signing metadata
+│   ├── pc-image.img.sbom.json             # Software bill of materials
+│   ├── pc-image.ostree-commit             # Commit hash snapshot pointer
+│   ├── pc-image.ostree-parent             # Parent commit hash (if any)
+│   ├── pc-image.ostree-ref                # Branch ref name
+│   └── pc-image.ostree-summary            # Repo summary snapshot
+└── ostree/<project>/<branch>/<ref>/repo/  # Cumulative OSTree repo (prod bucket only)
+    ├── objects/                           # Content-addressed objects (immutable)
+    ├── deltas/                            # Static delta superblocks (immutable)
+    ├── refs/heads/<ref>                   # Branch tip ref (no-cache)
+    ├── summary                            # Repository summary (no-cache)
+    └── summary.sig                        # Detached GPG signature (no-cache)
 ```
 
 After a successful build the worker uploads the files of the build's `deploy`
 directory that match the deliverable patterns (disk images, root file-system
-tarballs, `.digest`, `.recipe`, `.boot-signers*` and `.sbom*` files) to
-`artifacts/<project>/<build-id>/`.
+tarballs, `.digest`, `.recipe`, `.boot-signers*`, `.sbom*`, and `.ostree-*`
+snapshot pointers) to `artifacts/<project>/<build-id>/`.
 
 The server rejects a status report whose manifest names a key outside that
 prefix, a name that is not a plain file name, or an entry without a 64-digit
 SHA-256 and a size. It issues pre-signed URLs (valid for 1 hour) only for the
 names in the manifest, and only to members of the project, so developers
 download images from S3 without proxying them through the API server.
+
+### Cumulative OSTree history and tip update protocol
+
+For release builds (`--release`) that build an OSTree update payload, the
+worker maintains cumulative history in the production bucket under the
+prefix `ostree/<project>/<branch>/<ref>/repo/`:
+
+1. **Object upload**: The worker pushes new content-addressed files under
+   `objects/` and `deltas/` with `Cache-Control: public, max-age=31536000, immutable`.
+   Existing objects in S3 are skipped.
+2. **Atomic check-and-set (CAS)**: The worker submits an update to
+   `POST /api/v1/projects/{project}/ostree/tip` with the target `branch`,
+   `ref`, `commit`, and `parent`. The server verifies that `parent` matches
+   the currently recorded tip. If a concurrent build updated the tip in the
+   meantime, the server returns `409 Conflict`.
+3. **Metadata upload**: On success (HTTP 200), the worker pushes the mutable
+   repository metadata (`summary`, `summary.sig`, `refs/`) with
+   `Cache-Control: no-cache, must-revalidate`.
+4. **Conflict safety**: If the tip update returns `409 Conflict`, the worker
+   aborts the upload immediately and never touches the mutable metadata.
+   The existing branch tip remains untouched, and unreferenced objects left
+   in storage cause no harm.
 
 ---
 

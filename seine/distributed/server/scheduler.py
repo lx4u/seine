@@ -517,6 +517,8 @@ class BuildScheduler:
                 "spec_files": json.loads(b_dict.get("spec_files") or "[]"),
                 "options": options,
                 "package_name": j.get("package_name"),
+                "is_release": is_rel,
+                "branch": b_dict.get("branch", "main"),
             }
 
         return None

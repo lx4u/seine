@@ -118,7 +118,7 @@ class S3Client:
                    bucket, key, target_path)
 
     # Garage ignores If-None-Match (a second PUT overwrites)
-    def put_object(self, bucket, key, data, metadata=None, if_none_match=False):
+    def put_object(self, bucket, key, data, metadata=None, if_none_match=False, cache_control=None):
         """Upload bytes; SHA256 is checked by the server on single PUTs."""
         body = data.encode("utf-8") if isinstance(data, str) else bytes(data)
         args = {"Bucket": bucket, "Key": key, "Body": body,
@@ -127,15 +127,20 @@ class S3Client:
             args["Metadata"] = {k: str(v) for k, v in metadata.items()}
         if if_none_match:
             args["IfNoneMatch"] = "*"
+        if cache_control:
+            args["CacheControl"] = cache_control
         self._call(f"PUT {bucket}/{key}", self._s3.put_object, **args)
 
-    def upload_file(self, bucket, key, file_path, metadata=None):
+    def upload_file(self, bucket, key, file_path, metadata=None, cache_control=None):
         """Stream a file, multipart when large; stores its sha256 and returns it."""
         meta = {k: str(v) for k, v in (metadata or {}).items()}
         meta.setdefault("sha256", _file_sha256(file_path))
+        extra_args = {"Metadata": meta, "ChecksumAlgorithm": "SHA256"}
+        if cache_control:
+            extra_args["CacheControl"] = cache_control
         self._call(f"upload {bucket}/{key}", self._s3.upload_file,
                    file_path, bucket, key,
-                   ExtraArgs={"Metadata": meta, "ChecksumAlgorithm": "SHA256"},
+                   ExtraArgs=extra_args,
                    Config=TransferConfig())
         return meta["sha256"]
 

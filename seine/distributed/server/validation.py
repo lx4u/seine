@@ -102,3 +102,25 @@ def check_transient_secrets(secrets: dict[str, Any]) -> None:
                 f"transient_secrets.feeds: each feed takes a login and a password "
                 f"of 1 to {MAX_SECRET_LENGTH} characters"
             )
+
+
+OSTREE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_COMMIT_HEX = re.compile(r"^[0-9a-f]{64}$")
+
+
+def validate_ref_name(ref: str) -> str:
+    """Validate an ostree ref (e.g. 'debian/amd64'); raise ValueError on error."""
+    if not isinstance(ref, str) or not ref:
+        raise ValueError("ref cannot be empty")
+    parts = ref.split("/")
+    if not all(OSTREE_NAME.match(part) for part in parts):
+        raise ValueError(f"invalid ostree ref {ref!r}")
+    return ref
+
+
+def validate_commit_hex(commit: str, label: str = "commit") -> str:
+    """Validate a 64-hex commit hash; raise ValueError on error."""
+    if not isinstance(commit, str) or not _COMMIT_HEX.match(commit):
+        raise ValueError(f"{label} must be 64 lowercase hex digits")
+    return commit
+

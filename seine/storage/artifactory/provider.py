@@ -33,10 +33,10 @@ class ArtifactoryStorageProvider(ObjectStorageProvider):
     def _download_object(self, key, target_path):
         self.client.download_file(self.repo, key, target_path)
 
-    def _put_small(self, key, data):
+    def _put_small(self, key, data, cache_control=None):
         self.client.put_object(self.repo, key, data)
 
-    def _upload_file(self, key, file_path, sha256=None):
+    def _upload_file(self, key, file_path, sha256=None, cache_control=None):
         return self.client.upload_file(self.repo, key, file_path, sha256)
 
     def _delete_keys(self, keys):

@@ -664,6 +664,7 @@ class OstreeSysroot:
         deltas = (settings.get("payload") or {}).get("deltas-from", [])
         version, stateroot = settings["version"], settings["stateroot"]
         payload.check_version(directory, ref, version, checksum)
+        parent = payload.ref_commit(directory, ref)
         payload.add_uki(self._run_tool, directory, stateroot, version, uki, host)
         payload.add_commit(self._run_tool, directory, os.path.join(host, "export"),
                            ref, checksum, version, deltas)
@@ -672,6 +673,8 @@ class OstreeSysroot:
         key = settings["manifest-key"][len("vault:"):]
         payload.write_manifest(
             directory, lambda text: provider.pgp_detach_sign(key, text, epoch))
+        stem = os.path.splitext(os.path.basename(self.source._output))[0]
+        payload.write_snapshot_files(self._output_dir, stem, checksum, directory, parent=parent, ref=ref)
 
     # The UKIs of the root file system leave the commit: they cannot name
     # the deployment yet, and they live on the ESP. Returns their names

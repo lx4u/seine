@@ -6,6 +6,7 @@ import avocado
 import hashlib
 import io
 import os
+import shutil
 import sys
 import tarfile
 import tempfile
@@ -79,6 +80,7 @@ class FakeS3:
     def __init__(self):
         self.objects = {}
         self.meta = {}
+        self.cache_controls = {}
         self.uploads = []
         self.put_keys = []
         self.get_keys = []
@@ -94,7 +96,7 @@ class FakeS3:
             headers[f"x-amz-meta-{k}"] = v
         return headers
 
-    def upload_file(self, bucket, key, path, metadata=None):
+    def upload_file(self, bucket, key, path, metadata=None, cache_control=None):
         if self.fail:
             raise self.fail
         with open(path, "rb") as f:
@@ -102,16 +104,20 @@ class FakeS3:
         self.uploads.append(key)
         self.objects[key] = data
         self.meta[key] = {"sha256": hashlib.sha256(data).hexdigest()}
+        if cache_control:
+            self.cache_controls[key] = cache_control
 
     def download_file(self, bucket, key, path):
         with open(path, "wb") as f:
             f.write(self.objects[key])
 
-    def put_object(self, bucket, key, data, metadata=None, if_none_match=False):
+    def put_object(self, bucket, key, data, metadata=None, if_none_match=False, cache_control=None):
         if self.fail:
             raise self.fail
         self.put_keys.append(key)
         self.objects[key] = bytes(data)
+        if cache_control:
+            self.cache_controls[key] = cache_control
 
     def get_object(self, bucket, key):
         assert key.endswith(".recipe"), f"get_object on {key}"
@@ -459,3 +465,83 @@ class S3ProviderPull(avocado.Test):
         dest = self._pull_dir(make_tar([(dev, None)]))
         with self.assertRaises(StorageError):
             self.provider.pull("packages", "mypkg", dest)
+
+
+class S3ProviderOstreeHistory(avocado.Test):
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-ostree-", dir="/var/tmp")
+        self.client = FakeS3()
+        self.provider = S3StorageProvider(self.client, "test-bucket")
+
+    def tearDown(self):
+        if os.path.exists(self.tmp_dir):
+            shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_ostree_repo_prefix(self):
+        prefix = self.provider.ostree_repo_prefix("myproj", "main", "debian/amd64")
+        self.assertEqual(prefix, "ostree/myproj/main/debian/amd64/repo")
+
+    def test_push_ostree_objects_and_metadata_with_cache_control(self):
+        repo_dir = os.path.join(self.tmp_dir, "repo")
+        obj_file = os.path.join(repo_dir, "objects", "ab", "123.filez")
+        delta_file = os.path.join(repo_dir, "deltas", "cd", "superblock")
+        summary_file = os.path.join(repo_dir, "summary")
+        ref_file = os.path.join(repo_dir, "refs", "heads", "debian", "amd64")
+        config_file = os.path.join(repo_dir, "config")
+
+        for path, content in [
+            (obj_file, b"content-object"),
+            (delta_file, b"content-delta"),
+            (summary_file, b"signed-summary"),
+            (ref_file, b"commit-hash\n"),
+            (config_file, b"[core]\nmode=archive\n"),
+        ]:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(content)
+
+        # First push objects (content-addressed)
+        count_objs = self.provider.push_ostree_objects("myproj", "main", "debian/amd64", repo_dir)
+        self.assertEqual(count_objs, 2)
+        obj_key = "ostree/myproj/main/debian/amd64/repo/objects/ab/123.filez"
+        delta_key = "ostree/myproj/main/debian/amd64/repo/deltas/cd/superblock"
+        self.assertIn(obj_key, self.client.objects)
+        self.assertIn(delta_key, self.client.objects)
+        self.assertEqual(self.client.cache_controls[obj_key], "public, max-age=31536000, immutable")
+        self.assertEqual(self.client.cache_controls[delta_key], "public, max-age=31536000, immutable")
+
+        # Second push metadata (mutable)
+        count_meta = self.provider.push_ostree_metadata("myproj", "main", "debian/amd64", repo_dir)
+        self.assertEqual(count_meta, 3)
+        summary_key = "ostree/myproj/main/debian/amd64/repo/summary"
+        ref_key = "ostree/myproj/main/debian/amd64/repo/refs/heads/debian/amd64"
+        config_key = "ostree/myproj/main/debian/amd64/repo/config"
+        self.assertEqual(self.client.cache_controls[summary_key], "no-cache, must-revalidate")
+        self.assertEqual(self.client.cache_controls[ref_key], "no-cache, must-revalidate")
+        self.assertEqual(self.client.cache_controls[config_key], "max-age=300")
+
+    def test_pull_ostree_repo(self):
+        prefix = "ostree/myproj/main/debian/amd64/repo"
+        self.client.objects[f"{prefix}/objects/12/34.filez"] = b"remote-obj"
+        self.client.objects[f"{prefix}/summary"] = b"remote-summary"
+        dest_dir = os.path.join(self.tmp_dir, "pulled")
+
+        count = self.provider.pull_ostree_repo("myproj", "main", "debian/amd64", dest_dir)
+        self.assertEqual(count, 2)
+        self.assertEqual(open(os.path.join(dest_dir, "objects", "12", "34.filez"), "rb").read(), b"remote-obj")
+        self.assertEqual(open(os.path.join(dest_dir, "summary"), "rb").read(), b"remote-summary")
+
+        # Second pull with existing files skips downloads
+        count2 = self.provider.pull_ostree_repo("myproj", "main", "debian/amd64", dest_dir)
+        self.assertEqual(count2, 0)
+
+    def test_has_and_delete_ostree_history(self):
+        self.assertFalse(self.provider.has_ostree_history("myproj", "main", "debian/amd64"))
+        prefix = "ostree/myproj/main/debian/amd64/repo"
+        self.client.objects[f"{prefix}/summary"] = b"summary"
+        self.assertTrue(self.provider.has_ostree_history("myproj", "main", "debian/amd64"))
+
+        deleted_count, deleted_bytes = self.provider.delete_ostree_history("myproj", "main", "debian/amd64")
+        self.assertEqual(deleted_count, 1)
+        self.assertFalse(self.provider.has_ostree_history("myproj", "main", "debian/amd64"))
+

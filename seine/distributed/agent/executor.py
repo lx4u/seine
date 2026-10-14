@@ -460,6 +460,7 @@ class SubprocessExecutor:
         manifest: JobManifest,
         on_log: Optional[Callable[[str, str], None]] = None,
         provider: Optional[Any] = None,
+        on_tip_update: Optional[Callable[[str, str, str, Optional[str]], bool]] = None,
     ) -> list[dict[str, Any]]:
         job_dir = os.path.join(self.work_dir, "jobs", manifest.build_id)
         return upload_artifacts(
@@ -469,6 +470,9 @@ class SubprocessExecutor:
             provider=provider,
             storage=manifest.storage,
             on_log=on_log,
+            branch=manifest.branch,
+            is_release=manifest.is_release,
+            on_tip_update=on_tip_update,
         )
 
 
@@ -483,6 +487,10 @@ DELIVERABLE_PATTERNS = [
     "*.layout",
     "*.boot-signers*",
     "*.sbom*",
+    "*.ostree-commit*",
+    "*.ostree-parent*",
+    "*.ostree-ref*",
+    "*.ostree-summary*",
 ]
 
 
@@ -520,6 +528,81 @@ def harvest_artifacts(path: str) -> list[str]:
     return results
 
 
+def find_ostree_payloads(job_dir: str) -> list[dict[str, Any]]:
+    """Find OSTree payload repos and snapshot info under deploy_root(job_dir)."""
+    deploy_dir = deploy_root(job_dir)
+    if not os.path.isdir(deploy_dir):
+        return []
+
+    payloads = []
+    for root, _, files in os.walk(deploy_dir):
+        for f in sorted(files):
+            if f.endswith(".ostree-commit"):
+                stem = f[:-len(".ostree-commit")]
+                commit_path = os.path.join(root, f)
+                try:
+                    with open(commit_path, "r", encoding="utf-8") as cf:
+                        commit = cf.read().strip()
+                except OSError:
+                    continue
+
+                parent = None
+                parent_path = os.path.join(root, f"{stem}.ostree-parent")
+                if os.path.isfile(parent_path):
+                    try:
+                        with open(parent_path, "r", encoding="utf-8") as pf:
+                            p_val = pf.read().strip()
+                            if p_val:
+                                parent = p_val
+                    except OSError:
+                        pass
+
+                ref = None
+                ref_path = os.path.join(root, f"{stem}.ostree-ref")
+                if os.path.isfile(ref_path):
+                    try:
+                        with open(ref_path, "r", encoding="utf-8") as rf:
+                            ref = rf.read().strip()
+                    except OSError:
+                        pass
+
+                candidate_repo = os.path.join(deploy_dir, f"{stem}-payload", "repo")
+                if not os.path.isdir(candidate_repo):
+                    if os.path.isdir(os.path.join(root, f"{stem}-payload", "repo")):
+                        candidate_repo = os.path.join(root, f"{stem}-payload", "repo")
+                    elif os.path.isdir(os.path.join(deploy_dir, "repo")):
+                        candidate_repo = os.path.join(deploy_dir, "repo")
+
+                if not os.path.isdir(candidate_repo):
+                    continue
+
+                if not ref:
+                    heads_dir = os.path.join(candidate_repo, "refs", "heads")
+                    if os.path.isdir(heads_dir):
+                        for hroot, _, hfiles in os.walk(heads_dir):
+                            for hf in hfiles:
+                                full_ref_path = os.path.join(hroot, hf)
+                                try:
+                                    with open(full_ref_path, "r", encoding="utf-8") as rf:
+                                        if rf.read().strip() == commit:
+                                            ref = os.path.relpath(full_ref_path, heads_dir).replace(os.sep, "/")
+                                            break
+                                except OSError:
+                                    pass
+                            if ref:
+                                break
+
+                if ref and commit and os.path.isdir(candidate_repo):
+                    payloads.append({
+                        "stem": stem,
+                        "commit": commit,
+                        "parent": parent,
+                        "ref": ref,
+                        "repo_dir": candidate_repo,
+                    })
+    return payloads
+
+
 def upload_artifacts(
     job_dir: str,
     project: str,
@@ -527,6 +610,9 @@ def upload_artifacts(
     provider: Optional[Any] = None,
     storage: Optional[JobStorage] = None,
     on_log: Optional[Callable[[str, str], None]] = None,
+    branch: str = "main",
+    is_release: bool = False,
+    on_tip_update: Optional[Callable[[str, str, str, str, Optional[str]], bool]] = None,
 ) -> list[dict[str, Any]]:
     """Upload harvested deliverables to shared storage; return their {name, key, sha256, size}."""
     files = harvest_artifacts(job_dir)
@@ -537,6 +623,29 @@ def upload_artifacts(
         if storage is None:
             raise ValueError("the job came without storage access")
         provider = provider_from(storage)
+
+    if is_release and provider is not None:
+        payloads = find_ostree_payloads(job_dir)
+        for p in payloads:
+            ref = p["ref"]
+            commit = p["commit"]
+            parent = p.get("parent")
+            repo_dir = p["repo_dir"]
+
+            if on_log:
+                on_log("system", f"[agent] Uploading cumulative OSTree objects for {ref} on branch {branch}...\n")
+            provider.push_ostree_objects(project, branch, ref, repo_dir)
+
+            if on_tip_update:
+                ok = on_tip_update(project, branch, ref, commit, parent)
+                if not ok:
+                    raise RuntimeError(
+                        f"OSTree tip conflict for {project}/{branch}/{ref}: tip already moved"
+                    )
+
+            if on_log:
+                on_log("system", f"[agent] Uploading cumulative OSTree metadata for {ref} on branch {branch}...\n")
+            provider.push_ostree_metadata(project, branch, ref, repo_dir)
 
     root = os.path.abspath(deploy_root(job_dir))
     uploaded = []

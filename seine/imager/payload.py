@@ -154,3 +154,29 @@ def write_manifest(directory, sign):
     base = os.path.join(directory, UKI_DIR, MANIFEST)
     write_atomic(base, text)
     write_atomic(base + ".gpg", sign(text))
+
+# Writes snapshot pointers next to the disk image for the build artifact manifest.
+def write_snapshot_files(out_dir, stem, checksum, directory, parent=None, ref=None):
+    commit_file = os.path.join(out_dir, f"{stem}.ostree-commit")
+    write_atomic(commit_file, f"{checksum}\n".encode())
+
+    if ref:
+        ref_file = os.path.join(out_dir, f"{stem}.ostree-ref")
+        write_atomic(ref_file, f"{ref}\n".encode())
+
+    if parent:
+        parent_file = os.path.join(out_dir, f"{stem}.ostree-parent")
+        write_atomic(parent_file, f"{parent}\n".encode())
+
+    summary_src = os.path.join(directory, REPO_DIR, "summary")
+    if os.path.isfile(summary_src):
+        summary_dst = os.path.join(out_dir, f"{stem}.ostree-summary")
+        with open(summary_src, "rb") as f:
+            write_atomic(summary_dst, f.read())
+
+    sig_src = os.path.join(directory, REPO_DIR, "summary.sig")
+    if os.path.isfile(sig_src):
+        sig_dst = os.path.join(out_dir, f"{stem}.ostree-summary.sig")
+        with open(sig_src, "rb") as f:
+            write_atomic(sig_dst, f.read())
+

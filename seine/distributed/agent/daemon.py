@@ -108,6 +108,39 @@ class WorkerAgent:
         resp.raise_for_status()
         return JobManifest(**resp.json())
 
+    def get_ostree_tip(self, project: str, branch: str, ref: str) -> Optional[str]:
+        """Fetch the current ostree tip commit hash for project/branch/ref, or None."""
+        url = f"{self.server_url}/api/v1/projects/{project}/ostree/tip"
+        resp = requests.get(
+            url,
+            params={"branch": branch, "ref": ref},
+            headers=self._auth_headers(),
+            timeout=10,
+            verify=requests_verify(self.ca_cert),
+        )
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json().get("commit")
+
+    def update_ostree_tip(
+        self, project: str, branch: str, ref: str, commit: str, parent: Optional[str] = None
+    ) -> bool:
+        """Submit atomic tip update; returns True on success, False on 409 conflict."""
+        url = f"{self.server_url}/api/v1/projects/{project}/ostree/tip"
+        payload = {"branch": branch, "ref": ref, "commit": commit, "parent": parent}
+        resp = requests.post(
+            url,
+            json=payload,
+            headers=self._auth_headers(),
+            timeout=10,
+            verify=requests_verify(self.ca_cert),
+        )
+        if resp.status_code == 409:
+            return False
+        resp.raise_for_status()
+        return True
+
     def update_job_status(
         self,
         job_id: str,
@@ -283,7 +316,9 @@ class WorkerAgent:
         if ret != 0:
             return "failed", self.executor.failure_reason or f"build exited with code {ret}", []
         try:
-            return "completed", None, self.executor.upload_artifacts(manifest, on_log=on_log)
+            return "completed", None, self.executor.upload_artifacts(
+                manifest, on_log=on_log, on_tip_update=self.update_ostree_tip
+            )
         except Exception as e:
             return "failed", f"artifact upload failed: {e}", []
 
