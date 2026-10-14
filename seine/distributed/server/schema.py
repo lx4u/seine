@@ -127,6 +127,7 @@ def init_db(conn: sqlite3.Connection) -> None:
             pass
         for stmt in (
             "ALTER TABLE projects ADD COLUMN quota_gb REAL",
+            "ALTER TABLE projects ADD COLUMN default_branch TEXT NOT NULL DEFAULT 'main'",
             "ALTER TABLE builds ADD COLUMN artifacts_expired_at REAL",
             "ALTER TABLE builds ADD COLUMN artifacts_expired_reason TEXT",
             "ALTER TABLE builds ADD COLUMN spec_files TEXT NOT NULL DEFAULT '[]'",

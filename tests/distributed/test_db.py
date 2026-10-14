@@ -666,6 +666,22 @@ class DatabaseHousekeepingRepoTest(Test):
         with self.assertRaises(ValueError):
             projects.set_quota("core", 0)
 
+    def test_set_default_branch(self):
+        projects = self.db.projects
+        self.assertEqual(projects.get("core")["default_branch"], "main")
+        self.assertTrue(projects.set_default_branch("core", "stable"))
+        self.assertEqual(projects.get("core")["default_branch"], "stable")
+        self.assertEqual(projects.get("other")["default_branch"], "main")
+        self.assertFalse(projects.set_default_branch("ghost", "stable"))
+        with self.assertRaises(ValueError):
+            projects.set_default_branch("core", "Bad Name")
+
+    def test_branches_of_a_project_are_listed_once_and_sorted(self):
+        for build_id, branch in (("a", "stable"), ("b", "main"), ("c", "stable")):
+            self.db.builds.create(build_id, "core", branch=branch)
+        self.db.builds.create("d", "other", branch="elsewhere")
+        self.assertEqual(self.db.builds.branches("core"), ["main", "stable"])
+
     def test_mark_artifacts_expired(self):
         self._build("b1", 100.0)
         self.assertTrue(self.db.builds.mark_artifacts_expired("b1", "ttl", now=500.0))

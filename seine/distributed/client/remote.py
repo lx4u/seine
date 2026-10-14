@@ -412,7 +412,7 @@ class RemoteBuild:
         on_event: Optional[Callable[[dict[str, Any]], None]] = None,
         log_dir: Optional[str] = None,
         spec_digest: str = "",
-        branch: str = "main",
+        branch: str = "",
     ):
         # With log_dir, the streamed log goes there, one file per task, not to out.
         self.log_dir = log_dir
@@ -1017,7 +1017,7 @@ def build_remote(
     token: Optional[str] = None,
     is_release: bool = False,
     root_dir: Optional[str] = None,
-    branch: str = "main",
+    branch: str = "",
 ) -> int:
     """Build the project remotely on seine-server and follow it, returning the exit code."""
     if not spec_files:

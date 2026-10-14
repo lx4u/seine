@@ -71,6 +71,12 @@ class AdminClient:
         resp.raise_for_status()
         return resp.json()
 
+    def project_branches(self, name: str) -> dict[str, Any]:
+        url = f"{self.server_url}/api/v1/projects/{name}/branches"
+        resp = self.session.get(url, headers=self._headers(), timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()
+
     def project_delete(self, name: str, purge_storage: bool = False) -> dict[str, Any]:
         url = f"{self.server_url}/api/v1/projects/{name}"
         params = {"purge_storage": "true"} if purge_storage else None
@@ -267,6 +273,10 @@ def run_client_admin(argv: list[str]) -> int:
     quota = p_upd.add_mutually_exclusive_group()
     quota.add_argument("--quota-gb", type=float, default=None, help="Storage quota in GB")
     quota.add_argument("--no-quota", action="store_true", help="Remove the storage quota")
+    p_upd.add_argument("--default-branch", default=None, help="Branch of builds that name none")
+
+    p_br = p_sub.add_parser("branches", help="List the branches of a project")
+    p_br.add_argument("name", help="Project name")
 
     p_del = p_sub.add_parser("delete", help="Delete project")
     p_del.add_argument("name", help="Project name")
@@ -351,19 +361,29 @@ def run_client_admin(argv: list[str]) -> int:
             elif args.action == "list":
                 projects = client.project_list()
                 for p in projects:
-                    buckets = f"\tdev={p['dev_bucket']}\tprod={p['prod_bucket']}\tquota={format_quota(p)}" if "dev_bucket" in p else ""
+                    buckets = f"\tdev={p['dev_bucket']}\tprod={p['prod_bucket']}\tquota={format_quota(p)}\tbranch={p['default_branch']}" if "dev_bucket" in p else ""
                     print(f"{p['name']}{buckets}")
                 return 0
             elif args.action == "update":
+                fields = {}
                 if args.no_quota:
-                    fields = {"quota_gb": None}
+                    fields["quota_gb"] = None
                 elif args.quota_gb is not None:
-                    fields = {"quota_gb": args.quota_gb}
-                else:
-                    sys.stderr.write("error: nothing to update (use --quota-gb or --no-quota)\n")
+                    fields["quota_gb"] = args.quota_gb
+                if args.default_branch is not None:
+                    fields["default_branch"] = args.default_branch
+                if not fields:
+                    sys.stderr.write(
+                        "error: nothing to update (use --quota-gb, --no-quota or --default-branch)\n")
                     return 1
                 proj = client.project_update(args.name, **fields)
-                print(f"Updated project: {proj['name']} (quota: {format_quota(proj)})")
+                print(f"Updated project: {proj['name']} (quota: {format_quota(proj)}, "
+                      f"default branch: {proj['default_branch']})")
+                return 0
+            elif args.action == "branches":
+                res = client.project_branches(args.name)
+                for name in res["branches"]:
+                    print(f"{name}{' (default)' if name == res['default'] else ''}")
                 return 0
             elif args.action == "delete":
                 res = client.project_delete(args.name, purge_storage=args.purge_storage)

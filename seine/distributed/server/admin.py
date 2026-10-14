@@ -47,6 +47,8 @@ def project_update(db: Database, name: str, **fields: Any) -> Optional[dict[str,
     """Apply the given fields to a project; None when it does not exist."""
     if "quota_gb" in fields:
         db.projects.set_quota(name, fields["quota_gb"])
+    if "default_branch" in fields:
+        db.projects.set_default_branch(name, fields["default_branch"])
     return db.projects.get(name)
 
 
@@ -156,6 +158,10 @@ def setup_admin_subparsers(admin_parser: argparse.ArgumentParser) -> None:
     quota = p_upd.add_mutually_exclusive_group()
     quota.add_argument("--quota-gb", type=float, default=None, help="Storage quota in GB")
     quota.add_argument("--no-quota", action="store_true", help="Remove the storage quota")
+    p_upd.add_argument("--default-branch", default=None, help="Branch of builds that name none")
+
+    p_br = p_sub.add_parser("branches", help="List the branches of a project")
+    p_br.add_argument("name", help="Project name")
 
     p_del = p_sub.add_parser("delete", help="Delete project")
     p_del.add_argument("name", help="Project name")
@@ -237,15 +243,19 @@ def handle_admin_command(args: argparse.Namespace, db: Optional[Database] = None
             elif act == "list":
                 projects = project_list(db)
                 for p in projects:
-                    print(f"{p['name']}\tdev={p['dev_bucket']}\tprod={p['prod_bucket']}\tquota={format_quota(p)}")
+                    print(f"{p['name']}\tdev={p['dev_bucket']}\tprod={p['prod_bucket']}\tquota={format_quota(p)}\tbranch={p['default_branch']}")
                 return 0
             elif act == "update":
+                fields = {}
                 if args.no_quota:
-                    fields = {"quota_gb": None}
+                    fields["quota_gb"] = None
                 elif args.quota_gb is not None:
-                    fields = {"quota_gb": args.quota_gb}
-                else:
-                    sys.stderr.write("error: nothing to update (use --quota-gb or --no-quota)\n")
+                    fields["quota_gb"] = args.quota_gb
+                if args.default_branch is not None:
+                    fields["default_branch"] = args.default_branch
+                if not fields:
+                    sys.stderr.write(
+                        "error: nothing to update (use --quota-gb, --no-quota or --default-branch)\n")
                     return 1
                 try:
                     proj = project_update(db, args.name, **fields)
@@ -255,7 +265,16 @@ def handle_admin_command(args: argparse.Namespace, db: Optional[Database] = None
                 if proj is None:
                     sys.stderr.write(f"error: project '{args.name}' not found\n")
                     return 1
-                print(f"Updated project: {proj['name']} (quota: {format_quota(proj)})")
+                print(f"Updated project: {proj['name']} (quota: {format_quota(proj)}, "
+                      f"default branch: {proj['default_branch']})")
+                return 0
+            elif act == "branches":
+                proj = db.projects.get(args.name)
+                if proj is None:
+                    sys.stderr.write(f"error: project '{args.name}' not found\n")
+                    return 1
+                for name in sorted({proj["default_branch"], *db.builds.branches(proj["name"])}):
+                    print(f"{name}{' (default)' if name == proj['default_branch'] else ''}")
                 return 0
             elif act == "delete":
                 ok = project_delete(db, args.name)

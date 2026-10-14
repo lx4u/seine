@@ -370,7 +370,7 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                     options=self.options,
                     token=self.options.get("token"),
                     is_release=self.options.get("release", False),
-                    branch=self.options.get("branch") or "main",
+                    branch=self.options.get("branch") or "",
                 )
             )
 
@@ -509,7 +509,7 @@ Flags:
       --project NAME    project for a remote build (default: $SEINE_PROJECT, else
                         your default project on the server, else it asks)
       --branch NAME     branch of a remote build, the line of development it
-                        belongs to (default: main)
+                        belongs to (default: the project's default branch)
       --release         mark remote build as a release build (requires releaser or admin role)
       --remote URL      dispatch build to a remote seine-server. Ctrl+C asks the
                         server to cancel the build (exit status 130). Exit

@@ -246,6 +246,26 @@ class ServerAdminLocalCLITest(Test):
             self.assertEqual(run_server_admin(db + ["project", "update", "quota-p"]), 1)
         self.assertIn("not found", err.getvalue())
 
+    def test_project_default_branch_and_branches_cli(self):
+        db = ["--db-path", self.db_path]
+        project_create(self.db, "branch-p")
+        self.db.builds.create("b1", "branch-p", branch="feature-x")
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
+            self.assertEqual(
+                run_server_admin(db + ["project", "update", "branch-p", "--default-branch", "stable"]), 0)
+            self.assertEqual(self.db.projects.get("branch-p")["default_branch"], "stable")
+            self.assertIn("default branch: stable", out.getvalue())
+            self.assertEqual(
+                run_server_admin(db + ["project", "update", "branch-p", "--default-branch", "No Good"]), 1)
+            run_server_admin(db + ["project", "list"])
+            self.assertIn("branch=stable", out.getvalue())
+            out.seek(0)
+            out.truncate()
+            self.assertEqual(run_server_admin(db + ["project", "branches", "branch-p"]), 0)
+            self.assertEqual(out.getvalue(), "feature-x\nstable (default)\n")
+            self.assertEqual(run_server_admin(db + ["project", "branches", "no-such"]), 1)
+
     def test_server_admin_cli_execution(self):
         res = run_server_admin(["--db-path", self.db_path, "user", "create", "bob"])
         self.assertEqual(res, 0)
@@ -852,13 +872,13 @@ class RemoteClientAdminTest(Test):
         self.db.projects.create("p-q")
         out = io.StringIO()
         with mock.patch("sys.stdout", out), mock.patch("requests.Session.patch") as patch:
-            patch.return_value.json.return_value = {"name": "p-q", "quota_gb": 3.5}
+            patch.return_value.json.return_value = {"name": "p-q", "quota_gb": 3.5, "default_branch": "main"}
             self.assertEqual(run_client_admin(argv + ["--quota-gb", "3.5"]), 0)
             self.assertEqual(patch.call_args.args[0], f"{self.server_url}/api/v1/projects/p-q")
             self.assertEqual(patch.call_args.kwargs["json"], {"quota_gb": 3.5})
             self.assertIn("quota: 3.5GB", out.getvalue())
 
-            patch.return_value.json.return_value = {"name": "p-q", "quota_gb": None}
+            patch.return_value.json.return_value = {"name": "p-q", "quota_gb": None, "default_branch": "main"}
             self.assertEqual(run_client_admin(argv + ["--no-quota"]), 0)
             self.assertEqual(patch.call_args.kwargs["json"], {"quota_gb": None})
 
@@ -866,6 +886,19 @@ class RemoteClientAdminTest(Test):
             with mock.patch("sys.stderr", io.StringIO()):
                 self.assertEqual(run_client_admin(argv), 1)
             patch.assert_not_called()
+
+    def test_client_project_default_branch_and_branches(self):
+        client = AdminClient(server_url=self.server_url, token=self.admin_tok)
+        client.project_create("p-branch")
+        self.assertEqual(
+            client.project_update("p-branch", default_branch="stable")["default_branch"], "stable")
+        self.assertEqual(client.project_branches("p-branch"),
+                         {"default": "stable", "branches": ["stable"]})
+        argv = ["--server", self.server_url, "--token", self.admin_tok, "project"]
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out):
+            self.assertEqual(run_client_admin(argv + ["branches", "p-branch"]), 0)
+        self.assertEqual(out.getvalue(), "stable (default)\n")
 
     def _gc_cli(self, result, *args):
         argv = ["--server", self.server_url, "--token", self.admin_tok, "storage", "gc", *args]
