@@ -611,6 +611,11 @@ class Console(avocado.Test):
         self.adapter.print(b"hello\r\n")
         self.assertEqual(self.adapter.screen.display[0].rstrip(), "hello")
 
+    def test_print_resets_column_on_bare_linefeed(self):
+        self.adapter.print(b"first\nsecond\n")
+        self.assertEqual(self.adapter.screen.display[0].rstrip(), "first")
+        self.assertEqual(self.adapter.screen.display[1].rstrip(), "second")
+
     # dirty is a plain flag, not a push -- TargetScreen's own tick polls
     # it at a bounded rate instead.
     def test_print_sets_dirty_without_touching_the_thread(self):
