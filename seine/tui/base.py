@@ -83,9 +83,9 @@ class Prompt(Input):
         Binding("down", "history_next", "history", show=False),
     ]
 
-    def __init__(self, history, completions, scopes, **kwargs):
+    def __init__(self, history, completions, scopes, placeholder=DEFAULT_PLACEHOLDER, **kwargs):
         super().__init__(
-            placeholder=DEFAULT_PLACEHOLDER,
+            placeholder=placeholder,
             suggester=CommandSuggester(),
             # Input's default selects the whole value on focus; wrong
             # for a prompt regaining focus mid-edit, like a shell prompt.
@@ -378,6 +378,7 @@ class BaseScreen(Screen):
     # TargetScreen's ConsolePane (composed before the prompt) and fire
     # its on_focus() before anyone asked for it.
     AUTO_FOCUS = "#prompt"
+    PROMPT_PLACEHOLDER = DEFAULT_PLACEHOLDER
 
     # Which history.py scopes this screen's Prompt recalls with
     # Up/Down. 'commands' is universal; TargetScreen swaps 'chat' for
@@ -486,7 +487,9 @@ class BaseScreen(Screen):
     def footer(self):
         completions = PathCompletions(id="completions")
         yield completions
-        yield Prompt(self.app.history, completions, self.HISTORY_SCOPES, id="prompt")
+        yield Prompt(self.app.history, completions, self.HISTORY_SCOPES,
+                     placeholder=getattr(self, "PROMPT_PLACEHOLDER", DEFAULT_PLACEHOLDER),
+                     id="prompt")
         # markup=False: engine text (a path, an argv, an exception
         # message) can contain a bare '['.
         yield Horizontal(
@@ -516,6 +519,12 @@ class BaseScreen(Screen):
         self._scrolled_to = None
         self.set_interval(1.0, self._tick_highlight)
         self._tick_highlight()
+
+    def on_screen_resume(self):
+        try:
+            self.query_one(Prompt).placeholder = getattr(self, "PROMPT_PLACEHOLDER", DEFAULT_PLACEHOLDER)
+        except NoMatches:
+            pass
 
     # NoMatches guard: TargetScreen has no #spectree.
     def _tick_highlight(self):

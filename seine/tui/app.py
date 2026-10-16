@@ -342,12 +342,12 @@ class SeineApp(App):
             return
         if index is None:
             prompt.disabled = False
-            prompt.placeholder = DEFAULT_PLACEHOLDER
+            prompt.placeholder = getattr(self.screen, "PROMPT_PLACEHOLDER", DEFAULT_PLACEHOLDER)
             prompt.remove_class("startup")
             prompt.focus()
         else:
             prompt.disabled = True
-            prompt.placeholder = "Running startup command (%d/%d)..." % (index, total)
+            prompt.placeholder = f"Running startup command ({index}/{total})..."
             prompt.add_class("startup")
 
     # NoMatches below: worker callbacks (build/vendor finish, target

@@ -867,11 +867,13 @@ class TargetScreenIntegration(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.tui.app import SeineApp
-            from seine.tui.base import TargetIndicator
-            from seine.tui.target_screen import TargetScreen
+            from seine.tui.base import DEFAULT_PLACEHOLDER, TargetIndicator
+            from seine.tui.target_screen import TARGET_PLACEHOLDER, TargetScreen
         self.SeineApp = SeineApp
         self.TargetIndicator = TargetIndicator
         self.TargetScreen = TargetScreen
+        self.DEFAULT_PLACEHOLDER = DEFAULT_PLACEHOLDER
+        self.TARGET_PLACEHOLDER = TARGET_PLACEHOLDER
 
         target._available = None
         self._real_mtda_client = sys.modules.pop("mtda.client", None)
@@ -1318,6 +1320,43 @@ class TargetScreenIntegration(avocado.Test):
                 self.assertIsNone(app._target_client)
                 self.assertIn("/target connect",
                              app.screen.query_one("#targetstatus").renderable.plain)
+        _run(scenario)
+
+    def test_prompt_placeholder_updates_on_target_and_reverts_on_switch(self):
+        async def scenario():
+            app = self.SeineApp(files=[NATIVE_IMAGE])
+            async with app.run_test() as pilot:
+                self.assertEqual(app.screen.query_one("#prompt").placeholder,
+                                 self.DEFAULT_PLACEHOLDER)
+                app.show("target")
+                await pilot.pause()
+                self.assertEqual(app.screen.query_one("#prompt").placeholder,
+                                 self.TARGET_PLACEHOLDER)
+                app.show("overview")
+                await pilot.pause()
+                self.assertEqual(app.screen.query_one("#prompt").placeholder,
+                                 self.DEFAULT_PLACEHOLDER)
+        _run(scenario)
+
+    def test_prompt_placeholder_restored_on_screen_resume(self):
+        from textual.screen import ModalScreen
+
+        class DummyModal(ModalScreen):
+            pass
+
+        async def scenario():
+            app = self.SeineApp(files=[NATIVE_IMAGE])
+            async with app.run_test() as pilot:
+                app.show("target")
+                await pilot.pause()
+                prompt = app.screen.query_one("#prompt")
+                self.assertEqual(prompt.placeholder, self.TARGET_PLACEHOLDER)
+                app.push_screen(DummyModal())
+                await pilot.pause()
+                prompt.placeholder = "temporary"
+                app.pop_screen()
+                await pilot.pause()
+                self.assertEqual(prompt.placeholder, self.TARGET_PLACEHOLDER)
         _run(scenario)
 
 # _key_to_bytes() is a pure function -- a plain SimpleNamespace stands

@@ -21,10 +21,15 @@ import threading
 import time
 
 from textual.containers import Horizontal
+from textual.css.query import NoMatches
 from textual.widgets import Static
 
 from seine.progress import SPINNER, elapsed
-from seine.tui.base import BaseScreen, StaticPane
+from seine.tui.base import BaseScreen, Prompt, StaticPane
+
+# Context-sensitive prompt placeholder shown while on the target screen,
+# cueing that bare lines are routed straight to the serial console.
+TARGET_PLACEHOLDER = "Type to send to target serial console (or /command)"
 
 # Same braille spinner chat.py's '#chatcol' border uses while working.
 FRAMES = SPINNER[True]
@@ -115,6 +120,7 @@ class TargetScreen(BaseScreen):
     # 'target' instead of 'chat': matches target.HISTORY_GROUP, the
     # scope _history_add() below tags a console line with.
     HISTORY_SCOPES = {"commands", "target"}
+    PROMPT_PLACEHOLDER = TARGET_PLACEHOLDER
 
     DEFAULT_CSS = """
     /* min-width: CONSOLE_COLUMNS (80) plus border chrome: Textual
@@ -148,6 +154,7 @@ class TargetScreen(BaseScreen):
 
     def on_mount(self):
         super().on_mount()
+        self._update_prompt_placeholder()
         # Status pane + console pane's uptime/spinner border: a 1s tick,
         # not a push per POWER/STORAGE event (rare state transitions).
         self._status_timer = self.set_interval(1.0, self._redraw_status)
@@ -164,6 +171,16 @@ class TargetScreen(BaseScreen):
         if getattr(self.app, "_target_client", None) is not None or \
                 os.environ.get("MTDA_REMOTE"):
             self.connect()
+
+    def on_screen_resume(self):
+        super().on_screen_resume()
+        self._update_prompt_placeholder()
+
+    def _update_prompt_placeholder(self):
+        try:
+            self.query_one(Prompt).placeholder = self.PROMPT_PLACEHOLDER
+        except NoMatches:
+            pass
 
     def on_unmount(self):
         for timer in (getattr(self, "_status_timer", None),
