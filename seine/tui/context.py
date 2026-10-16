@@ -5,6 +5,8 @@
 # Overview/Plan act on. '/use a.yaml -- b.yaml' groups the same way
 # 'seine build a.yaml -- b.yaml' does.
 
+import os
+
 from seine import gists, multiconfig, stdlib
 from seine.build import BuildCmd
 
@@ -12,14 +14,16 @@ class Context:
     def __init__(self):
         self.groups = None
         self.builds = None
-        # Set only by side_load()/side_unload(): the spec just before
+        # Set only by side_load()/side_unload()/overlay(): the spec just before
         # the most recent change, for SpecTree.load() to diff against.
         # Cleared by use(), overwritten (not accumulated) each call.
         self.changed_from = None
+        self.base_groups = None
+        self.overlay_fragment = None
 
     # Loads/parses each group like 'seine build' does; nothing is
     # built, so this is instant and side-effect-free.
-    def use(self, args):
+    def use(self, args, reset_base=True):
         groups = multiconfig.split([stdlib.resolve(gists.resolve(arg)) for arg in args])
         builds = []
         for files in groups:
@@ -34,6 +38,9 @@ class Context:
         self.groups = groups
         self.builds = builds
         self.changed_from = None
+        if reset_base:
+            self.base_groups = [list(g) for g in groups]
+            self.overlay_fragment = None
 
     # Refuses more than one active group, same as /build/ /filesystem.
     def _one_active_group(self):
@@ -41,7 +48,7 @@ class Context:
             raise ValueError("no active specification -- '/use SPEC' first")
         if len(self.builds) != 1:
             raise ValueError(
-                "side-load needs exactly one active group -- multi-group "
+                "overlay and side-load need exactly one active group -- multi-group "
                 "specifications ('/use a -- b') aren't supported here yet")
 
     # 'group's declared file list, amended by side_load()/side_unload()
@@ -78,7 +85,7 @@ class Context:
         build = self.builds[0]
         if group is None:
             previous_spec = build.spec
-            self.use(self.groups[0] + [fragment])
+            self.use(self.groups[0] + [fragment], reset_base=False)
             self.changed_from = previous_spec
             return
         files = self._subbuild_files(build, group)
@@ -97,7 +104,7 @@ class Context:
                 raise ValueError("'%s' isn't currently loaded" % fragment)
             previous_spec = build.spec
             remaining = [f for f in files if f != fragment]
-            self.use(remaining)
+            self.use(remaining, reset_base=False)
             self.changed_from = previous_spec
             return
         files = self._subbuild_files(build, group)
@@ -105,6 +112,44 @@ class Context:
             raise ValueError(
                 "'%s' isn't currently loaded in '%s'" % (fragment, group))
         self._reload_subbuild(build, group, [f for f in files if f != fragment])
+
+    def _resolve_overlay_fragment(self, fragment, base_spec_file=None):
+        if fragment.startswith("@"):
+            fragment = fragment[1:]
+        resolved = stdlib.resolve(gists.resolve(fragment))
+        if os.path.exists(resolved):
+            return os.path.abspath(resolved)
+        if base_spec_file:
+            base_dir = os.path.dirname(os.path.abspath(base_spec_file))
+            for cand in [os.path.join(base_dir, fragment),
+                         os.path.join(base_dir, f"{fragment}.yaml"),
+                         os.path.join(base_dir, f"{fragment}.yml")]:
+                if os.path.exists(cand):
+                    return os.path.abspath(cand)
+        return os.path.abspath(resolved) if not os.path.isabs(resolved) else resolved
+
+    # Load an overlay fragment on top of the base specification, or clear
+    # with 'none'. Replaces any previously active overlay fragment.
+    def overlay(self, fragment):
+        self._one_active_group()
+        if not self.base_groups:
+            self.base_groups = [list(g) for g in self.groups]
+        base_files = self.base_groups[0]
+        if not base_files:
+            raise ValueError("no base specification files loaded")
+        build = self.builds[0]
+        previous_spec = build.spec
+
+        if fragment.lower() == "none":
+            self.use(base_files, reset_base=False)
+            self.overlay_fragment = None
+            self.changed_from = previous_spec
+            return
+
+        resolved = self._resolve_overlay_fragment(fragment, base_files[0])
+        self.use(base_files + [resolved], reset_base=False)
+        self.overlay_fragment = resolved
+        self.changed_from = previous_spec
 
     @property
     def active(self):

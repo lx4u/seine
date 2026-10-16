@@ -169,5 +169,82 @@ class SideLoadTargetsANamedGroup(avocado.Test):
         with self.assertRaises(ValueError):
             context.side_load("whatever.yaml", group="main")
 
+class OverlaySpecification(avocado.Test):
+    """
+    :avocado: tags=tui
+    """
+    def setUp(self):
+        with _tui_required(self):
+            from seine.tui.context import Context
+        self.Context = Context
+        os.environ["SEINE_CACHE_DIR"] = self.workdir
+        os.environ["XDG_CONFIG_HOME"] = self.workdir
+
+    def test_overlay_applies_and_clears_fragment(self):
+        main = _write_group(self.workdir, "main")
+        fragment = _write(self.workdir, "v2.yaml",
+            "playbook:\n    - name: extra play\n      tasks: []\n")
+        context = self.Context()
+        context.use([main])
+        self.assertEqual(context.base_groups, [[main]])
+        self.assertIsNone(context.overlay_fragment)
+
+        context.overlay(fragment)
+        self.assertEqual(context.groups, [[main, fragment]])
+        self.assertEqual(context.overlay_fragment, fragment)
+        self.assertEqual(context.base_groups, [[main]])
+        self.assertEqual(len(context.builds[0].spec.get("playbook")), 1)
+
+        context.overlay("none")
+        self.assertEqual(context.groups, [[main]])
+        self.assertIsNone(context.overlay_fragment)
+        self.assertEqual(context.base_groups, [[main]])
+        self.assertIsNone(context.builds[0].spec.get("playbook"))
+
+    def test_overlay_replaces_previous_overlay(self):
+        main = _write_group(self.workdir, "main")
+        f1 = _write(self.workdir, "v2.yaml",
+            "playbook:\n    - name: play one\n      tasks: []\n")
+        f2 = _write(self.workdir, "v3.yaml",
+            "playbook:\n    - name: play two\n      tasks: []\n")
+        context = self.Context()
+        context.use([main])
+
+        context.overlay(f1)
+        self.assertEqual(context.groups, [[main, f1]])
+        self.assertEqual(context.overlay_fragment, f1)
+
+        context.overlay(f2)
+        self.assertEqual(context.groups, [[main, f2]])
+        self.assertEqual(context.overlay_fragment, f2)
+        self.assertEqual(context.builds[0].spec["playbook"][0]["name"], "play two")
+
+    def test_overlay_resolves_relative_to_base_spec_directory(self):
+        sub = os.path.join(self.workdir, "subdir")
+        os.makedirs(sub, exist_ok=True)
+        main = _write_group(sub, "main")
+        frag = _write(sub, "v2.yaml",
+            "playbook:\n    - name: play in subdir\n      tasks: []\n")
+        context = self.Context()
+        context.use([main])
+
+        context.overlay("v2.yaml")
+        self.assertEqual(context.overlay_fragment, frag)
+        self.assertEqual(context.groups, [[main, frag]])
+
+    def test_overlay_refuses_without_active_specification(self):
+        context = self.Context()
+        with self.assertRaises(ValueError):
+            context.overlay("v2.yaml")
+
+    def test_overlay_refuses_multi_group_session(self):
+        main = _write_group(self.workdir, "main")
+        other = _write_group(self.workdir, "other")
+        context = self.Context()
+        context.use([main, "--", other])
+
+        with self.assertRaises(ValueError):
+            context.overlay("v2.yaml")
+
 if __name__ == "__main__":
     avocado.main()
