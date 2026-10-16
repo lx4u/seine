@@ -130,6 +130,14 @@ class Image:
             # real output instead.
             self._output = self._rootfs = self._rootfs_output(distro)
 
+        if self.options.get("payload_only"):
+            if "image" not in spec or "ostree" not in spec.get("image", {}):
+                raise ValueError("--payload-only requires an 'image: ostree:' section")
+            if not spec["image"]["ostree"].get("version"):
+                raise ValueError("--payload-only requires 'image: ostree: version:' to be set")
+            if self.options.get("rootfs_only"):
+                raise ValueError("--payload-only and --rootfs-only are mutually exclusive")
+
         # Validated at parse time, not build time. 'defer_uki_check' skips
         # the 'extends: uki: initrd:' check for a multiconfig group whose
         # predecessor (not yet built) will deploy it.
@@ -691,10 +699,11 @@ class Image:
         if "image" not in self.spec or self.options.get("rootfs_only"):
             return common
 
+        vm_tasks = [] if self.options.get("payload_only") else self.vmImages.tasks()
         return common + [
             Task("disk", self._prepare_disk,
                 needs=["rootfs"] + self._source_task_names(), resource="io"),
-        ] + Imager(self).tasks(needs_packages) + self.vmImages.tasks()
+        ] + Imager(self).tasks(needs_packages) + vm_tasks
 
     # Pulled out of the built tarball rather than the tarball itself:
     # more than one match is the same build-time error the imager's own
@@ -784,6 +793,17 @@ class Image:
             check_tarball(self._tarball_for(source), what)
 
     def _prepare_disk(self):
+        if self.options.get("payload_only"):
+            self._check_ostree_sources()
+            self._size_partitions()
+            scratch = tempfile.NamedTemporaryFile(
+                mode="wb", delete=False,
+                dir=ContainerEngine.scratch(),
+                prefix="scratch-disk-")
+            scratch.truncate(self.partitionHandler.disk_size())
+            scratch.close()
+            self._image = scratch.name
+            return
         if self._image_current():
             return
         self._check_ostree_sources()

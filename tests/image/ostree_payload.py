@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from unittest import mock
 
 path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
@@ -14,10 +15,13 @@ sys.path.append(path_to_sources)
 sys.path.append(os.path.dirname(path_to_self))
 
 import ostree_boot
+from seine.build import BuildCmd
 from seine.container import ContainerEngine
+from seine.image import Image
 from seine.imager import ostree
 from seine.imager import payload
 from seine.imager import uki
+from seine.imager.imager import Imager
 from seine.utils import HOST_ARCH
 from tests.testutils import RELEASE, prune_on_pass
 
@@ -522,3 +526,131 @@ class SnapshotFilesTest(avocado.Test):
         self.assertIn("from=20", content)
         self.assertIn(f"from_commit={'0' * 64}", content)
         self.assertIn(f"to_commit={'2' * 64}", content)
+
+
+class PayloadFastBuildTest(avocado.Test):
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp(prefix="seine-test-fast-payload-", dir="/var/tmp")
+
+    def tearDown(self):
+        if os.path.exists(self.tmp_dir):
+            shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_build_cmd_payload_only_options(self):
+        spec_file = os.path.join(self.tmp_dir, "test.yaml")
+        with open(spec_file, "w") as f:
+            f.write("distribution:\n  release: trixie\n")
+
+        for flag in ("-p", "--payload-only"):
+            cmd = BuildCmd()
+            with mock.patch.object(cmd, "load_all"), \
+                 mock.patch.object(cmd, "parse", return_value={}), \
+                 mock.patch.object(cmd, "build", return_value=0), \
+                 mock.patch("seine.build.cli.collect_credentials"), \
+                 mock.patch("seine.build.cli.locked"), \
+                 mock.patch("seine.build.cli.remember"):
+                with self.assertRaises(SystemExit) as cm:
+                    cmd.main([flag, spec_file])
+                self.assertEqual(cm.exception.code, 0)
+                self.assertTrue(cmd.options["payload_only"])
+
+    def test_image_validation_requires_ostree(self):
+        spec = {"distribution": {"release": "trixie"}}
+        opts = dict(BuildCmd().options, payload_only=True)
+        with self.assertRaises(ValueError) as cm:
+            Image(spec, options=opts).parse(spec)
+        self.assertIn("--payload-only requires an 'image: ostree:' section", str(cm.exception))
+
+    def test_image_validation_requires_version(self):
+        spec = {
+            "distribution": {"release": "trixie"},
+            "image": {"filename": "pc.img", "ostree": {"mode": "standard"}},
+        }
+        opts = dict(BuildCmd().options, payload_only=True)
+        with self.assertRaises(ValueError) as cm:
+            Image(spec, options=opts).parse(spec)
+        self.assertIn("--payload-only requires 'image: ostree: version:' to be set", str(cm.exception))
+
+    def test_image_validation_rejects_rootfs_only(self):
+        spec = {
+            "distribution": {"release": "trixie"},
+            "image": {"filename": "pc.img", "ostree": {"version": "2"}},
+        }
+        opts = dict(BuildCmd().options, payload_only=True, rootfs_only=True)
+        with self.assertRaises(ValueError) as cm:
+            Image(spec, options=opts).parse(spec)
+        self.assertIn("mutually exclusive", str(cm.exception))
+
+    def test_image_own_tasks_skips_vm_tasks(self):
+        spec = {
+            "distribution": {"release": "trixie"},
+            "image": {"filename": "pc.img", "ostree": {"version": "2"}},
+        }
+        opts = dict(BuildCmd().options, payload_only=True)
+        img = Image(spec, options=opts)
+        img.spec = spec
+        with mock.patch.object(img, "_source_task_names", return_value=[]), \
+             mock.patch("seine.image.Imager") as mock_imager, \
+             mock.patch.object(img.vmImages, "tasks") as mock_vm_tasks:
+            mock_imager.return_value.tasks.return_value = []
+            img.own_tasks()
+            mock_vm_tasks.assert_not_called()
+
+    def test_image_prepare_disk_creates_ephemeral_scratch(self):
+        spec = {
+            "distribution": {"release": "trixie"},
+            "image": {"filename": "pc.img", "ostree": {"version": "2"}},
+        }
+        opts = dict(BuildCmd().options, payload_only=True)
+        img = Image(spec, options=opts)
+        img.spec = spec
+        img.partitionHandler = mock.Mock()
+        img.partitionHandler.disk_size.return_value = 1048576
+        with mock.patch.object(img, "_check_ostree_sources"), \
+             mock.patch.object(img, "_size_partitions"), \
+             mock.patch.object(ContainerEngine, "scratch", return_value=self.tmp_dir):
+            img._prepare_disk()
+            self.assertIsNotNone(img._image)
+            self.assertTrue(os.path.exists(img._image))
+            self.assertEqual(os.path.getsize(img._image), 1048576)
+            self.assertTrue(os.path.basename(img._image).startswith("scratch-disk-"))
+
+    def test_imager_build_payload_only_removes_scratch_disk(self):
+        scratch_file = os.path.join(self.tmp_dir, "scratch-disk-12345")
+        with open(scratch_file, "wb") as f:
+            f.write(b"data")
+
+        source = mock.Mock()
+        source.options = dict(BuildCmd().options, payload_only=True)
+        source._image = scratch_file
+
+        imager = Imager(source)
+        imager.create = mock.Mock()
+
+        imager._build()
+        imager.create.assert_called_once()
+        self.assertFalse(os.path.exists(scratch_file))
+        self.assertIsNone(source._image)
+
+    def test_tui_command_build_payload_only(self):
+        try:
+            from seine.tui import commands
+        except ImportError as e:
+            self.cancel(f"the 'tui' extra (textual) is not installed: {e}")
+
+        for flag in ("-p", "--payload-only"):
+            app = mock.Mock()
+            app.context.active = True
+            app.context.spec = {"image": {}}
+            app.build_state.running = False
+            app.vendor_state.running = False
+            build = mock.Mock()
+            build.spec = {"image": {}}
+            build.options = dict(BuildCmd().options)
+            app.context.builds = [build]
+
+            with mock.patch("seine.tui.build.start_build"):
+                commands._build(app, [flag])
+            self.assertTrue(build.options.get("payload_only"))
+
+
