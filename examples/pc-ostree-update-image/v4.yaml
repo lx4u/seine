@@ -1,0 +1,25 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Version 4 overlay for pc-ostree-update-image: adds chrony alongside
+# htop and strace, and generates a static delta from version 3.
+#   seine build examples/pc-ostree-update-image/main.yaml examples/pc-ostree-update-image/v4.yaml
+
+image:
+    ostree:
+        version: "4"
+        payload:
+            deltas-from: ["3"]
+
+playbook:
+    - name: v4 daemon
+      wave: packages
+      after: [base]
+      tasks:
+          - name: install htop, strace and chrony
+            apt:
+                name:
+                    - htop
+                    - strace
+                    - chrony
+                state: present

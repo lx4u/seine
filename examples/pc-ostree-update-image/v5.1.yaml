@@ -1,0 +1,25 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Version 5.1 hotfix overlay for pc-ostree-update-image: removes the
+# failing service, prunes htop, and generates a static delta from
+# version 4.
+#   seine build examples/pc-ostree-update-image/main.yaml examples/pc-ostree-update-image/v5.1.yaml
+
+image:
+    ostree:
+        version: "5.1"
+        payload:
+            deltas-from: ["4"]
+
+playbook:
+    - name: v5.1 hotfix packages
+      wave: packages
+      after: [base]
+      tasks:
+          - name: install strace and chrony
+            apt:
+                name:
+                    - strace
+                    - chrony
+                state: present

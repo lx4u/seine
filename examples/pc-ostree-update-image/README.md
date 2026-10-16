@@ -6,7 +6,7 @@ systemd-boot, and reproducible update payloads with static deltas.
 
 ## Architecture
 
-The example demonstrates multi-version lifecycle updates across three
+The example demonstrates multi-version lifecycle updates across several
 revisions:
 
 1. **Version 1 (Factory Baseline)** (`main.yaml`):
@@ -25,6 +25,24 @@ revisions:
    `deltas-from: ["1", "2"]`. This allows devices running version 1 to jump
    directly to version 3 (long jump) and devices running version 2 to apply
    a smaller incremental update (stepwise).
+
+4. **Version 4 (Daemon Addition)** (`v4.yaml`):
+   An overlay bumping version to `"4"`, installing `htop`, `strace`, and
+   `chrony`, and generating a static delta from version 3.
+
+5. **Version 5 (Poisoned Release & Watchdog Rollback)** (`v5.yaml`):
+   An overlay bumping version to `"5"`, introducing a failing systemd
+   service that triggers hardware watchdog reboot exhaustion and automated
+   rollback to the last-known-good release (version 4).
+
+6. **Version 5.1 (Hotfix Release)** (`v5.1.yaml`):
+   An overlay bumping version to `"5.1"`, pruning `htop`, removing the
+   failing service, and generating a static delta from version 4.
+
+7. **Version 9 (Final Application Release)** (`v9.yaml`):
+   An overlay bumping version to `"9"`, installing `iperf3`, custom app
+   binary `/usr/bin/myapp`, and a `timesyncd` drop-in. Generates static deltas
+   against baseline version 1 (long jump) and version 5.1 (stepwise).
 
 ### Payload Directory Layout
 

@@ -29,6 +29,10 @@ EXAMPLE_DIR = os.path.join(path_to_sources, "examples", "pc-ostree-update-image"
 EXAMPLE = os.path.join(EXAMPLE_DIR, "main.yaml")
 EXAMPLE_V2 = os.path.join(EXAMPLE_DIR, "v2.yaml")
 EXAMPLE_V3 = os.path.join(EXAMPLE_DIR, "v3.yaml")
+EXAMPLE_V4 = os.path.join(EXAMPLE_DIR, "v4.yaml")
+EXAMPLE_V5 = os.path.join(EXAMPLE_DIR, "v5.yaml")
+EXAMPLE_V5_1 = os.path.join(EXAMPLE_DIR, "v5.1.yaml")
+EXAMPLE_V9 = os.path.join(EXAMPLE_DIR, "v9.yaml")
 
 PLAN = os.environ.get("SEINE_TEST_PLAN", "")
 
@@ -70,6 +74,49 @@ class ExampleSpec(avocado.Test):
         tasks = [t for p in build.spec["playbook"] if p["name"] == "v3 packages" for t in p["tasks"]]
         self.assertEqual(len(tasks), 1)
         self.assertEqual(tasks[0]["apt"]["name"], ["chrony"])
+
+    def test_v4_overlay_sets_version_and_deltas(self):
+        build = BuildCmd()
+        build.load_all([EXAMPLE, EXAMPLE_V4])
+        ostree = build.spec["image"]["ostree"]
+        self.assertEqual(ostree["version"], "4")
+        self.assertEqual(ostree["payload"]["deltas-from"], ["3"])
+        tasks = [t for p in build.spec["playbook"] if p["name"] == "v4 daemon" for t in p["tasks"]]
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["apt"]["name"], ["htop", "strace", "chrony"])
+
+    def test_v5_overlay_sets_version_and_failing_unit(self):
+        build = BuildCmd()
+        build.load_all([EXAMPLE, EXAMPLE_V5])
+        ostree = build.spec["image"]["ostree"]
+        self.assertEqual(ostree["version"], "5")
+        self.assertEqual(ostree["payload"]["deltas-from"], ["4"])
+        pkg_tasks = [t for p in build.spec["playbook"] if p["name"] == "v5 packages" for t in p["tasks"]]
+        self.assertEqual(pkg_tasks[0]["apt"]["name"], ["htop", "strace", "chrony"])
+        fail_tasks = [t for p in build.spec["playbook"] if p["name"] == "an unhealthy system" for t in p["tasks"]]
+        self.assertEqual(len(fail_tasks), 2)
+        self.assertEqual(fail_tasks[0]["copy"]["dest"], "/etc/systemd/system/seine-test-fail.service")
+
+    def test_v5_1_overlay_sets_version_and_prunes_packages(self):
+        build = BuildCmd()
+        build.load_all([EXAMPLE, EXAMPLE_V5_1])
+        ostree = build.spec["image"]["ostree"]
+        self.assertEqual(ostree["version"], "5.1")
+        self.assertEqual(ostree["payload"]["deltas-from"], ["4"])
+        tasks = [t for p in build.spec["playbook"] if p["name"] == "v5.1 hotfix packages" for t in p["tasks"]]
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["apt"]["name"], ["strace", "chrony"])
+
+    def test_v9_overlay_sets_version_deltas_and_custom_app(self):
+        build = BuildCmd()
+        build.load_all([EXAMPLE, EXAMPLE_V9])
+        ostree = build.spec["image"]["ostree"]
+        self.assertEqual(ostree["version"], "9")
+        self.assertEqual(ostree["payload"]["deltas-from"], ["1", "5.1"])
+        tasks = [t for p in build.spec["playbook"] if p["name"] == "v9 app and iperf3" for t in p["tasks"]]
+        self.assertEqual(len(tasks), 4)
+        self.assertEqual(tasks[0]["apt"]["name"], ["strace", "python3-minimal", "iperf3"])
+        self.assertEqual(tasks[3]["copy"]["dest"], "/usr/bin/myapp")
 
 
 # The example as shipped, built with its payload served over HTTP, then
