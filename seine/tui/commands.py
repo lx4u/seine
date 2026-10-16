@@ -245,6 +245,89 @@ def _delta(app, argv):
     else:
         raise CommandError(f"unknown delta subcommand '{subcmd}' -- '/delta generate --from=V1 --to=V2'")
 
+def _resolve_serve_directory(app):
+    context = getattr(app, "context", None)
+    if context and context.active:
+        build = context.builds[0]
+        ostree_spec = build.spec.get("image", {}).get("ostree")
+        release = build.spec.get("distribution", {}).get("release")
+        if ostree_spec:
+            from seine.imager import payload
+            from seine.container import ContainerEngine
+            output = getattr(getattr(build, "image", None), "_output", None)
+            if not output:
+                image_name = build.spec.get("image", {}).get("filename", "image.img")
+                output = os.path.join(ContainerEngine.deploy_dir(release), image_name)
+            pdir = payload.payload_dir(output, ostree_spec.get("payload"), release)
+            if os.path.isdir(pdir):
+                return pdir
+        if release:
+            from seine.container import ContainerEngine
+            ddir = ContainerEngine.deploy_dir(release)
+            if os.path.isdir(ddir):
+                return ddir
+    from seine.container import ContainerEngine
+    return ContainerEngine.deploy_root()
+
+def _serve(app, argv):
+    """serve update payloads over HTTP for connected targets
+
+    Starts a background development HTTP server serving OSTree update
+    payloads or deploy artifacts. Connected devices or virtual machines
+    (e.g. mtda-kvm) can fetch UKIs, commits, and deltas over the network.
+    Use '/serve stop' to shut down the server, or '/serve status' to
+    check its status.
+    """
+    from seine.tui.server import PayloadServer
+
+    server = getattr(app, "_payload_server", None)
+    if argv and argv[0] == "stop":
+        if server and server.running:
+            server.stop()
+            app._payload_server = None
+            app.say("payload server stopped")
+        else:
+            app.say("payload server is not running")
+        return
+
+    if argv and argv[0] == "status":
+        if server and server.running:
+            app.say("serving %s on port %d" % (server.directory, server.port))
+        else:
+            app.say("payload server is not running")
+        return
+
+    port = 8000
+    custom_dir = None
+    if argv:
+        try:
+            port = int(argv[0])
+        except ValueError:
+            raise CommandError("invalid port '%s' -- /serve [PORT] [stop|status]" % argv[0])
+        if port < 0 or port > 65535:
+            raise CommandError("port must be between 1 and 65535")
+        if len(argv) > 1:
+            custom_dir = argv[1]
+
+    if not argv and server and server.running:
+        app.say("serving %s on port %d" % (server.directory, server.port))
+        return
+
+    directory = custom_dir if custom_dir else _resolve_serve_directory(app)
+
+    if server and server.running:
+        server.stop()
+        app._payload_server = None
+
+    new_server = PayloadServer(directory=directory, port=port)
+    try:
+        new_server.start()
+    except OSError as e:
+        raise CommandError("failed to start server on port %d: %s" % (port, e))
+
+    app._payload_server = new_server
+    app.say("serving %s on port %d" % (new_server.directory, new_server.port))
+
 def _packages(app, argv):
     """rebuilt-from-source packages, and what the last SBOM found"""
     _show_over_active_spec(app, argv, "packages")
@@ -808,6 +891,14 @@ def _target(app, argv):
         _target_status(app)
     elif verb in ("on", "off", "toggle"):
         target.run_and_report(app, "target %s" % verb, lambda: target.power(app, verb))
+    elif verb == "reset":
+        settle = 2.0
+        if rest:
+            try:
+                settle = float(rest[0])
+            except ValueError:
+                raise CommandError("/target reset [SETTLE_SECONDS]")
+        target.run_and_report(app, "target reset", lambda: target.reset(app, settle=settle))
     elif verb == "usb":
         if len(rest) != 2 or rest[1] not in ("on", "off", "toggle"):
             raise CommandError("/target usb needs PORT on|off|toggle")
@@ -1187,8 +1278,9 @@ REGISTRY = {
         Command("filesystem", _filesystem, "[SPEC...]",             *_doc(_filesystem)),
         Command("cd",       _cd,       "[PATH]",                   *_doc(_cd)),
         Command("cancel",   _cancel,   "",                         *_doc(_cancel)),
+        Command("serve",    _serve,    "[PORT] [stop|status]",     *_doc(_serve)),
         Command("target",   _target,
-                "[connect [AGENT]|disconnect|on|off|toggle|usb PORT V|"
+                "[connect [AGENT]|disconnect|on|off|toggle|reset|usb PORT V|"
                 "storage host|target|write IMAGE|snapshot|rollback|"
                 "console ...|status]",
                 *_doc(_target)),
@@ -1220,6 +1312,7 @@ OPTIONS = {
     "plan":  BuildCmd.LONG_OPTIONS,
     "build": ["jobs=", "reproducible", "local", "remote", "release", "no-download", "project=", "payload-only"],
     "delta": ["generate", "from=", "to="],
+    "serve": ["stop", "status"],
     "remote": ["disconnect", "status", "screen", "insecure", "ca-cert="],
     "project": ["default"],
     "cache": ["explain", "why"],

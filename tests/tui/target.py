@@ -164,6 +164,10 @@ class FakeClient:
         self.calls.append(("console_wait", what, timeout))
         return "matched line"
 
+    def console_clear(self):
+        self.calls.append(("console_clear",))
+        return True
+
 # Injects FakeClient as mtda.client.Client for the duration of one test,
 # same sys.modules trick Availability uses above, plus a plain
 # SimpleNamespace standing in for 'app' -- target.py only ever needs
@@ -284,6 +288,11 @@ class Actions(avocado.Test):
             self.app = types.SimpleNamespace()
             target.power(self.app, state)
             self.assertEqual(self._client().calls, [(rpc,)])
+
+    def test_reset_powers_off_clears_console_and_powers_on(self):
+        target.reset(self.app, settle=0)
+        self.assertEqual(self._client().calls,
+                         [("target_off",), ("console_clear",), ("target_on",)])
 
     def test_usb_passes_the_port_as_an_int(self):
         target.usb(self.app, "2", "on")
@@ -429,6 +438,12 @@ class TargetCommand(avocado.Test):
     def test_power_on_runs_directly_no_confirmation(self):
         self.commands.dispatch(self.app, "/target on")
         self.assertEqual(self._client().calls, [("target_on",)])
+
+    def test_target_reset_runs_power_cycle(self):
+        self.commands.dispatch(self.app, "/target reset 0")
+        self.assertEqual(self._client().calls,
+                         [("target_off",), ("console_clear",), ("target_on",)])
+        self.assertIn(("target reset: done", False), self.app.said)
 
     def test_usb_needs_a_port_and_a_state(self):
         self.assertRaises(self.commands.CommandError,
