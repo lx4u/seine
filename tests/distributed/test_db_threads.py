@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the per-thread SQLite connections of Database."""
 
+import gc
 import os
 import shutil
+import sqlite3
 import tempfile
 import threading
 
@@ -36,6 +38,30 @@ class ThreadConnectionTest(Test):
         t.start()
         t.join()
         self.assertNotEqual(ids[0], id(db.conn._get()))
+
+    def test_ended_threads_do_not_leak_connections(self):
+        self.db = db = Database(os.path.join(self.tmp_dir, "l.db"))
+        conns = []
+
+        def work():
+            conn = db.conn._get()
+            conns.append(conn)
+            # A reference cycle keeps the connection alive until the garbage collector runs.
+            keep = [conn]
+            keep.append(keep)
+
+        gc.disable()
+        try:
+            for _ in range(20):
+                t = threading.Thread(target=work)
+                t.start()
+                t.join()
+            db.conn._get()
+            self.assertLessEqual(len(db.conn._opened), 2)
+            with self.assertRaises(sqlite3.ProgrammingError):
+                conns[0].execute("SELECT 1")
+        finally:
+            gc.enable()
 
     def test_connections_get_row_factory_and_foreign_keys(self):
         self.db = db = Database(os.path.join(self.tmp_dir, "e.db"))

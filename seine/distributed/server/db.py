@@ -73,7 +73,7 @@ class ThreadLocalConnection:
             db_path = f"file:seine-mem-{uuid.uuid4().hex}?mode=memory&cache=shared"
         self._path = db_path
         self._local = threading.local()
-        self._opened: list[sqlite3.Connection] = []
+        self._opened: dict[threading.Thread, sqlite3.Connection] = {}
         self._lock = threading.Lock()
         # The first connection also keeps an in-memory database alive.
         self._get()
@@ -84,7 +84,10 @@ class ThreadLocalConnection:
             conn = connect_db(self._path)
             self._local.conn = conn
             with self._lock:
-                self._opened.append(conn)
+                # Do not wait for the garbage collector to free the connections of ended threads.
+                for thread in [t for t in self._opened if not t.is_alive()]:
+                    self._opened.pop(thread).close()
+                self._opened[threading.current_thread()] = conn
         return conn
 
     def execute(self, *args: Any) -> sqlite3.Cursor:
@@ -108,7 +111,7 @@ class ThreadLocalConnection:
 
     def close(self) -> None:
         with self._lock:
-            for conn in self._opened:
+            for conn in self._opened.values():
                 conn.close()
             self._opened.clear()
         self._local = threading.local()
