@@ -5,6 +5,8 @@
 # escape, command registry. Split from app.py to avoid an app.py <->
 # build.py import cycle.
 
+import os
+
 from textual.app import Screen
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -128,16 +130,38 @@ class Prompt(Input):
         self.cursor_position = len(self.value)
         self.recalled = self.value
 
-    # The '@fragment' token under the cursor, if any.
+    def _active_spec_dir(self):
+        try:
+            context = getattr(self.app, "context", None)
+            if not context or not context.active:
+                return None
+            base_groups = getattr(context, "base_groups", None)
+            files = base_groups[0] if base_groups else context.groups[0]
+            if files and files[0]:
+                return os.path.dirname(os.path.abspath(files[0]))
+        except Exception:
+            return None
+        return None
+
+    # The '@fragment' token under the cursor, or the argument to '/overlay'.
     def _active_fragment(self):
         before_cursor = self.value[:self.cursor_position]
         at = before_cursor.rfind("@")
-        if at == -1:
-            return None
-        fragment = before_cursor[at + 1:]
-        if " " in fragment or "\t" in fragment:
-            return None
-        return at, fragment
+        if at != -1:
+            fragment = before_cursor[at + 1:]
+            if " " not in fragment and "\t" not in fragment:
+                is_overlay = before_cursor.lstrip().startswith("/overlay")
+                return at, fragment, True, is_overlay
+
+        # Support fragment autocompletion when typing '/overlay '
+        stripped = before_cursor.lstrip()
+        if stripped.startswith("/overlay ") or stripped.startswith("/overlay\t"):
+            cmd_prefix_len = len(before_cursor) - len(stripped) + len("/overlay ")
+            fragment = before_cursor[cmd_prefix_len:]
+            if " " not in fragment and "\t" not in fragment:
+                return cmd_prefix_len, fragment, False, True
+
+        return None
 
     # Called from both on_input_changed and action_submit: self.value
     # updates synchronously but the pane's Changed handler lags a tick,
@@ -147,8 +171,32 @@ class Prompt(Input):
         if active is None:
             self.completions.hide()
             return
-        _, fragment = active
+        _, fragment, _, is_overlay = active
         matches = complete(fragment)
+        if is_overlay:
+            overlay_matches = []
+            if "none".startswith(fragment.lower()):
+                overlay_matches.append("none")
+            base_dir = self._active_spec_dir()
+            if base_dir and os.path.isdir(base_dir) and not os.path.isabs(fragment):
+                try:
+                    for entry in sorted(os.listdir(base_dir)):
+                        if entry.startswith(".") and not fragment.startswith("."):
+                            continue
+                        if not entry.startswith(fragment):
+                            continue
+                        full = os.path.join(base_dir, entry)
+                        if entry.endswith(".yaml") or entry.endswith(".yml") or os.path.isdir(full):
+                            cand = entry + ("/" if os.path.isdir(full) else "")
+                            if cand not in overlay_matches:
+                                overlay_matches.append(cand)
+                except OSError:
+                    pass
+            for m in matches:
+                if m not in overlay_matches:
+                    overlay_matches.append(m)
+            matches = overlay_matches
+
         # A single match equal to what's already typed offers nothing.
         if matches == [fragment]:
             matches = []
@@ -191,11 +239,12 @@ class Prompt(Input):
         if replacement is None:
             self.completions.hide()
             return False
-        at, _ = active
+        at, _, has_at, _ = active
         before = self.value[:at]
         after = self.value[self.cursor_position:]
-        self.value = "%s@%s %s" % (before, replacement, after)
-        self.cursor_position = len(before) + 1 + len(replacement) + 1
+        prefix = "@" if has_at else ""
+        self.value = f"{before}{prefix}{replacement} {after}"
+        self.cursor_position = len(before) + len(prefix) + len(replacement) + 1
         self.completions.hide()
         return True
 

@@ -155,6 +155,10 @@ class CommandRegistry(avocado.Test):
     def test_serve_command_is_registered(self):
         self.assertIn("serve", self.commands.REGISTRY)
 
+    def test_overlay_command_is_registered(self):
+        self.assertIn("overlay", self.commands.REGISTRY)
+        self.assertIn("overlay", self.commands.OPTIONS)
+
     def test_target_command_args_include_reset(self):
         target_cmd = self.commands.REGISTRY["target"]
         self.assertIn("reset", target_cmd.args)
@@ -1802,6 +1806,74 @@ image:
                 status = app.screen.query_one("#status")
                 self.assertTrue(_content(status),
                                 "the fallen-through Enter should still submit /nope")
+        _run(scenario)
+
+    def test_typing_overlay_opens_the_pane(self):
+        async def scenario():
+            app = self.SeineApp()
+            async with app.run_test() as pilot:
+                await pilot.click("#prompt")
+                pane = app.screen.query_one("#completions", self.PathCompletions)
+                self.assertFalse(pane.display)
+                await self._type(pilot, "/overlay ")
+                self.assertTrue(pane.display)
+                prompts = [str(o.prompt) for o in pane._options]
+                self.assertIn("none", prompts)
+        _run(scenario)
+
+    def test_typing_overlay_with_active_spec_suggests_local_fragments(self):
+        async def scenario():
+            app = self.SeineApp()
+            async with app.run_test() as pilot:
+                prompt = app.screen.query_one("#prompt")
+                pane = app.screen.query_one("#completions", self.PathCompletions)
+                await pilot.click("#prompt")
+                await self._type(pilot, "/use stuff/one.yaml")
+                await pilot.press("enter")
+                await pilot.pause()
+
+                await pilot.click("#prompt")
+                await self._type(pilot, "/overlay tw")
+                self.assertTrue(pane.display)
+                prompts = [str(o.prompt) for o in pane._options]
+                self.assertIn("two.yaml", prompts)
+
+                await pilot.press("enter")
+                await pilot.pause()
+                self.assertEqual(prompt.value, "/overlay two.yaml ")
+        _run(scenario)
+
+    def test_overlay_command_workflow_in_app(self):
+        async def scenario():
+            with open("stuff/two.yaml", "w") as f:
+                f.write("playbook:\n    - name: extra\n      tasks: []\n")
+            app = self.SeineApp()
+            async with app.run_test() as pilot:
+                await pilot.click("#prompt")
+                await self._type(pilot, "/use stuff/one.yaml")
+                await pilot.press("enter")
+                await pilot.pause()
+
+                self.assertTrue(app.context.active)
+                self.assertIsNone(app.context.overlay_fragment)
+
+                await pilot.click("#prompt")
+                await self._type(pilot, "/overlay two.yaml")
+                await pilot.press("enter")
+                await pilot.pause()
+
+                self.assertIsNotNone(app.context.overlay_fragment)
+                self.assertTrue(app.context.overlay_fragment.endswith("two.yaml"))
+                status = app.screen.query_one("#status")
+                self.assertIn("overlay two.yaml", _content(status))
+
+                await pilot.click("#prompt")
+                await self._type(pilot, "/overlay none")
+                await pilot.press("enter")
+                await pilot.pause()
+
+                self.assertIsNone(app.context.overlay_fragment)
+                self.assertIn("cleared overlay", _content(status))
         _run(scenario)
 
 # The application: screens, the prompt, history and the '!' escape.

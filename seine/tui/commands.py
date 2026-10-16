@@ -100,6 +100,32 @@ def _side_unload(app, argv):
     app.say("side-unloaded %s" % argv[0])
     _refresh_or_show_spectree(app)
 
+def _overlay(app, argv):
+    """load or clear an overlay fragment on top of the base specification
+
+    Loads an overlay fragment on top of the base specification and
+    reloads it, highlighting on the spec tree what that fragment changed.
+    Passing 'none' clears the active overlay and restores the base spec.
+    Needs a single active group.
+    """
+    if getattr(app, "_loading_spec", False):
+        raise CommandError("still loading specification")
+    if not app.context.active:
+        raise CommandError("no active specification -- '/use SPEC' first")
+    if len(argv) != 1:
+        raise CommandError("/overlay expects a fragment file or 'none'")
+    fragment = argv[0]
+    try:
+        app.context.overlay(fragment)
+    except (OSError, ValueError) as e:
+        raise CommandError(str(e))
+    if fragment.lower() == "none":
+        app.say("cleared overlay")
+    else:
+        app.say("overlay %s" % fragment)
+    app.remote_session.sync_matches()
+    _refresh_or_show_spectree(app)
+
 def _validate(app, argv):
     """check a specification loads and parses, without using it
 
@@ -1263,6 +1289,7 @@ def _help(app, argv):
 REGISTRY = {
     c.name: c for c in [
         Command("use",      _use,      "SPEC... [-- SPEC...]...",  *_doc(_use)),
+        Command("overlay",  _overlay,  "FRAGMENT.yaml|none",       *_doc(_overlay)),
         Command("side-load",   _side_load,   "FRAGMENT.yaml",      *_doc(_side_load)),
         Command("side-unload", _side_unload, "FRAGMENT.yaml",      *_doc(_side_unload)),
         Command("plan",     _plan,     "[SPEC...]",                *_doc(_plan)),
@@ -1309,6 +1336,7 @@ REGISTRY["q"] = REGISTRY["quit"]
 # What Tab/the palette suggest for a command's flags. 'build' only
 # offers what _build() actually parses.
 OPTIONS = {
+    "overlay": ["none"],
     "plan":  BuildCmd.LONG_OPTIONS,
     "build": ["jobs=", "reproducible", "local", "remote", "release", "no-download", "project=", "payload-only"],
     "delta": ["generate", "from=", "to="],
