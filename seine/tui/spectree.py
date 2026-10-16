@@ -420,7 +420,7 @@ TASK_BRANCHES = {
 # not here: core must not import the TUI back.
 PACKAGE_TASK_PREFIXES = tasks.PACKAGE_STEPS
 
-# Not '_'-prefixed: also used by render.py to match a logs/index.json
+# Not '_'-prefixed: also used by overview.py to match a logs/index.json
 # task name back to the spec-tree branch it belongs to.
 def branch_for(name):
     branch = TASK_BRANCHES.get(name)

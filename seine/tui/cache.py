@@ -12,7 +12,7 @@ from seine import packages
 from seine.cache import CACHES, CacheCmd
 from seine.sbuild import BuilderImage
 from seine.tui.base import BaseScreen
-from seine.tui.render import _captured
+from seine.tui.screens import _captured
 
 
 # Not spec-scoped: cache and environment are shared by every build.

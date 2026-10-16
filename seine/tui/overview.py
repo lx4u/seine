@@ -452,7 +452,7 @@ class CastPane(StaticPane):
             event.stop()
             event.prevent_default()
 
-# Reads the 'log-click'/'cast-play' markers render.py puts in a
+# Reads the 'log-click'/'cast-play' markers overview.py puts in a
 # span's meta, since Rich's own '@click' link style is Textual's,
 # not ours (same workaround as target_screen.py's TargetStatusStatic).
 class BodyStatic(Static):
@@ -465,7 +465,7 @@ class BodyStatic(Static):
         if cast:
             self.screen.action_replay_cast(cast)
 
-# The right pane's own content width, not render.py's BOX_WIDTH
+# The right pane's own content width, not overview.py's BOX_WIDTH
 # default, which overflows the pane. A scrollbar not shown yet is
 # reserved for, since tall boxes always earn one once they land.
 def _body_width(screen):

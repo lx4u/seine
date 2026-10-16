@@ -111,8 +111,8 @@ NO_SINGLE_GROUP = ("no single active specification -- '/use SPEC' first "
 # render_doctor() returns a styled rich.Text, not a plain str.
 def _render_tool(name, with_context=True):
     def run(app, arguments):
-        from seine.tui import render
-        fn = getattr(render, name)
+        from seine.tui import screens
+        fn = getattr(screens, name)
         return str(fn(app.context) if with_context else fn())
     return run
 

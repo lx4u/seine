@@ -159,7 +159,7 @@ class TheSBOMTaskFallsBackToTheInitrdOutput(avocado.Test):
 # 'output_path()': the same naming, but a plain lookup -- no SBOM
 # instance, no 'options' -- rather than SBOM._output_file()'s own "only
 # if options currently say --sbom" gate. Shared by every caller
-# (seine/tui/render.py's Packages screen, seine/secscan.py) that wants
+# (seine/tui/screens.py's Packages screen, seine/secscan.py) that wants
 # to know whether a prior build already left an SBOM, not whether the
 # build being loaded right now would produce one.
 class OutputPathIsAPlainLookup(avocado.Test):

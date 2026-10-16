@@ -215,7 +215,7 @@ class Rendering(avocado.Test):
         with _tui_required(self):
             from seine.tui.context import Context
             from seine.tui.overview import render_overview
-            from seine.tui.render import render_plan
+            from seine.tui.screens import render_plan
         self.Context = Context
         self.render_overview = render_overview
         self.render_plan = render_plan
@@ -881,7 +881,7 @@ class PackagesRendering(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.tui.context import Context
-            from seine.tui.render import render_packages
+            from seine.tui.screens import render_packages
         self.Context = Context
         self.render_packages = render_packages
         os.environ["SEINE_CACHE_DIR"] = self.workdir
@@ -1379,7 +1379,7 @@ class AnalyzeCacheDoctorRendering(avocado.Test):
         with _tui_required(self):
             from seine.tui.context import Context
             from seine.tui.cache import render_cache, render_cache_why
-            from seine.tui.render import render_analyze, render_doctor
+            from seine.tui.screens import render_analyze, render_doctor
         self.Context = Context
         self.render_analyze = render_analyze
         self.render_cache = render_cache
@@ -1899,7 +1899,7 @@ class App(avocado.Test):
                 self.assertIn("┌", text)
         _run(scenario)
 
-    # Boxes must fit the actual right pane, far under render.py's
+    # Boxes must fit the actual right pane, far under overview.py's
     # BOX_WIDTH default at standard pilot size.
     def test_selecting_the_image_node_fits_the_right_pane(self):
         async def scenario():
@@ -3112,7 +3112,7 @@ class Tailing(avocado.Test):
         self.assertEqual(tail.read_new(), "retried\n")
 
 # What the Build screen renders, kept apart from any widget -- the same
-# split as 'Rendering' (render.py) above.
+# split as 'Rendering' (screens.py) above.
 class BuildStateBehaviour(avocado.Test):
     """
     :avocado: tags=tui
