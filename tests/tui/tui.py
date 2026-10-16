@@ -4901,5 +4901,204 @@ class ArtifactsScreenIntegration(avocado.Test):
 
         _run(scenario)
 
+
+class UpdatesScreenIntegration(avocado.Test):
+    """
+    :avocado: tags=tui
+    """
+    def setUp(self):
+        with _tui_required(self):
+            from seine.tui.app import SeineApp
+            from seine.tui.updates_screen import UpdatesScreen, LineageTable, DeltaMatrix
+        self.SeineApp = SeineApp
+        self.UpdatesScreen = UpdatesScreen
+        self.LineageTable = LineageTable
+        self.DeltaMatrix = DeltaMatrix
+        os.environ["SEINE_CACHE_DIR"] = self.workdir
+        self.deploy = os.path.join(self.workdir, "deploy")
+        os.environ["SEINE_DEPLOY_DIR"] = self.deploy
+        _isolate_history(self)
+
+    def tearDown(self):
+        if os.path.isdir(self.workdir):
+            shutil.rmtree(self.workdir, ignore_errors=True)
+
+    def _setup_mock_payload(self, deploy_rel, stem="pc-ostree-update"):
+        payload_dir = os.path.join(deploy_rel, f"{stem}-payload")
+        uki_dir = os.path.join(payload_dir, "uki")
+        repo_dir = os.path.join(payload_dir, "repo")
+        heads_dir = os.path.join(repo_dir, "refs", "heads", "debian")
+        obj_dir = os.path.join(repo_dir, "objects")
+        deltas_dir = os.path.join(repo_dir, "deltas", "8f", "2b31-4c9811")
+        os.makedirs(uki_dir, exist_ok=True)
+        os.makedirs(heads_dir, exist_ok=True)
+        os.makedirs(obj_dir, exist_ok=True)
+        os.makedirs(deltas_dir, exist_ok=True)
+
+        with open(os.path.join(uki_dir, "SHA256SUMS"), "w") as f:
+            f.write("hash1  debian-1.efi\nhash2  debian-2.efi\n")
+        with open(os.path.join(uki_dir, "SHA256SUMS.gpg"), "wb") as f:
+            f.write(b"signature")
+        with open(os.path.join(uki_dir, "debian-1.efi"), "wb") as f:
+            f.write(b"uki1" * 1024 * 1024)
+        with open(os.path.join(uki_dir, "debian-2.efi"), "wb") as f:
+            f.write(b"uki2" * 1024 * 1024)
+
+        with open(os.path.join(repo_dir, "summary"), "wb") as f:
+            f.write(b"summary")
+        with open(os.path.join(repo_dir, "summary.sig"), "wb") as f:
+            f.write(b"sig")
+        with open(os.path.join(heads_dir, "amd64"), "w") as f:
+            f.write("4c9811e5f2847c1b5a329d91cb61d8a391e0a98c5d3129841f3e790a12b8cd12\n")
+        with open(os.path.join(heads_dir, "amd64.v1"), "w") as f:
+            f.write("8f2b31c9a07123456789abcdef0123456789abcdef0123456789abcdef012345\n")
+        with open(os.path.join(heads_dir, "amd64.v2"), "w") as f:
+            f.write("4c9811e5f2847c1b5a329d91cb61d8a391e0a98c5d3129841f3e790a12b8cd12\n")
+
+        with open(os.path.join(obj_dir, "obj1"), "wb") as f:
+            f.write(b"objects" * 1024 * 512)
+        with open(os.path.join(deltas_dir, "superblock"), "wb") as f:
+            f.write(b"delta-data" * 256)
+
+        with open(os.path.join(deploy_rel, f"{stem}.ostree-commit"), "w") as f:
+            f.write("4c9811e5f2847c1b5a329d91cb61d8a391e0a98c5d3129841f3e790a12b8cd12\n")
+        with open(os.path.join(deploy_rel, f"{stem}.ostree-ref"), "w") as f:
+            f.write("debian/amd64\n")
+        with open(os.path.join(deploy_rel, f"{stem}.static-delta-1"), "w") as f:
+            f.write("from=1\nfrom_commit=8f2b31c9a0\nto_commit=4c9811e5f2847c1b5a329d91cb61d8a391e0a98c5d3129841f3e790a12b8cd12\nref=debian/amd64\n")
+
+        return payload_dir
+
+    def test_list_payload_lineage_and_deltas(self):
+        from seine.imager import payload
+        deploy_rel = os.path.join(self.deploy, "trixie")
+        os.makedirs(deploy_rel, exist_ok=True)
+        payload_dir = self._setup_mock_payload(deploy_rel)
+
+        lineage = payload.list_payload_lineage(payload_dir)
+        self.assertEqual(len(lineage), 2)
+        self.assertEqual(lineage[0]["version"], "1")
+        self.assertEqual(lineage[0]["status"], "[LKG]")
+        self.assertEqual(lineage[0]["commit_short"], "8f2b31c9a0")
+        self.assertTrue(lineage[0]["uki"]["signed"])
+        self.assertEqual(lineage[1]["version"], "2")
+        self.assertEqual(lineage[1]["status"], "[Active]")
+        self.assertIn("v1->v2", lineage[1]["deltas"])
+
+        deltas_info = payload.list_payload_deltas(payload_dir)
+        self.assertEqual(deltas_info["versions"], ["1", "2"])
+        cell_1_2 = deltas_info["matrix"][("1", "2")]
+        self.assertTrue(cell_1_2["available"])
+        self.assertIn("saved", cell_1_2["text"])
+        self.assertEqual(cell_1_2["status"], "Stepwise ready")
+
+        cell_2_1 = deltas_info["matrix"][("2", "1")]
+        self.assertFalse(cell_2_1["available"])
+        self.assertEqual(cell_2_1["text"], "-")
+
+    def test_generate_delta_function(self):
+        from seine.imager import payload
+        deploy_rel = os.path.join(self.deploy, "trixie")
+        os.makedirs(deploy_rel, exist_ok=True)
+        payload_dir = self._setup_mock_payload(deploy_rel)
+
+        commands_run = []
+        def fake_run(args, volumes):
+            commands_run.append(args)
+
+        payload.generate_delta(fake_run, payload_dir, "debian/amd64", "1", "2")
+        self.assertEqual(len(commands_run), 2)
+        self.assertEqual(commands_run[0], [
+            "ostree", "--repo=/payload/repo", "static-delta", "generate",
+            "--from=debian/amd64.v1", "--to=debian/amd64.v2"
+        ])
+        self.assertEqual(commands_run[1], [
+            "ostree", "--repo=/payload/repo", "summary", "-u"
+        ])
+
+        with self.assertRaises(RuntimeError):
+            payload.generate_delta(fake_run, payload_dir, "debian/amd64", "99", "2")
+
+    def test_updates_screen_ui_and_keyboard(self):
+        deploy_rel = os.path.join(self.deploy, "trixie")
+        os.makedirs(deploy_rel, exist_ok=True)
+        self._setup_mock_payload(deploy_rel)
+
+        async def scenario():
+            app = self.SeineApp(files=[PC_OSTREE_UPDATE_IMAGE])
+            async with app.run_test() as pilot:
+                app.show("updates")
+                await pilot.pause()
+                self.assertIsInstance(app.screen, self.UpdatesScreen)
+
+                header = str(_content(app.screen.query_one("#updates-header")))
+                self.assertIn("Payload Repository:", header)
+                self.assertIn("debian/amd64", header)
+                self.assertIn("2 Versions", header)
+
+                lineage_table = app.screen.query_one(self.LineageTable)
+                self.assertEqual(len(lineage_table.rows), 2)
+
+                matrix_table = app.screen.query_one(self.DeltaMatrix)
+                self.assertEqual(len(matrix_table.rows), 2)
+
+                detail = str(_content(app.screen.query_one("#detail-content")))
+                self.assertIn("Commit:", detail)
+                self.assertIn("Signed By:", detail)
+
+                await pilot.press("tab")
+                await pilot.pause()
+                self.assertTrue(matrix_table.has_focus)
+
+                await pilot.press("tab")
+                await pilot.pause()
+                self.assertTrue(lineage_table.has_focus)
+
+        _run(scenario)
+
+    def test_commands_updates_and_delta(self):
+        from seine.tui import commands
+        deploy_rel = os.path.join(self.deploy, "trixie")
+        os.makedirs(deploy_rel, exist_ok=True)
+        self._setup_mock_payload(deploy_rel)
+
+        delta_calls = []
+        def fake_delta_runner(args, volumes):
+            delta_calls.append(args)
+
+        async def scenario():
+            app = self.SeineApp(files=[PC_OSTREE_UPDATE_IMAGE])
+            app._delta_runner = fake_delta_runner
+            async with app.run_test() as pilot:
+                commands.dispatch(app, "/updates")
+                await pilot.pause()
+                self.assertIsInstance(app.screen, self.UpdatesScreen)
+
+                commands.dispatch(app, "/delta generate --from=1 --to=2")
+                await pilot.pause()
+                self.assertGreater(len(delta_calls), 0)
+                status = str(_content(app.screen.query_one("#status")))
+                self.assertIn("static delta 1 -> 2 generated", status)
+
+                with self.assertRaises(commands.CommandError):
+                    commands.dispatch(app, "/delta generate --from=1")
+
+                with self.assertRaises(commands.CommandError):
+                    commands.dispatch(app, "/delta badsubcmd")
+
+        _run(scenario)
+
+    def test_navbar_contains_updates(self):
+        from seine.tui.navbar import NAV_ITEMS
+        names = [item.name for item in NAV_ITEMS]
+        self.assertIn("updates", names)
+        build_idx = names.index("build")
+        updates_idx = names.index("updates")
+        artifacts_idx = names.index("artifacts")
+        self.assertEqual(updates_idx, build_idx + 1)
+        self.assertEqual(artifacts_idx, updates_idx + 1)
+        item = next(it for it in NAV_ITEMS if it.name == "updates")
+        self.assertEqual(item.icon, "↑")
+
 if __name__ == "__main__":
     avocado.main()

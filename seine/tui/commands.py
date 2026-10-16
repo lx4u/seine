@@ -157,6 +157,94 @@ def _artifacts(app, argv):
     """what the last build wrote under the deploy directory"""
     _show_over_active_spec(app, argv, "artifacts")
 
+def _updates(app, argv):
+    """OSTree release lineage and delta compression matrix"""
+    _show_over_active_spec(app, argv, "updates")
+
+def _delta(app, argv):
+    """OSTree static delta generation and matrix inspection
+
+    Inspects or generates static deltas for the active OSTree payload.
+    '/delta generate --from=V1 --to=V2' produces a static delta container
+    between two existing version commits without rebuilding the rootfs.
+    """
+    if not app.context.active:
+        raise CommandError("no active specification -- '/use SPEC' first")
+    if not argv:
+        app.show("updates")
+        return
+    subcmd = argv[0]
+    if subcmd == "generate":
+        try:
+            opts, _ = getopt.getopt(argv[1:], "", ["from=", "to="])
+        except getopt.GetoptError as e:
+            raise CommandError(str(e))
+        from_ver = None
+        to_ver = None
+        for o, a in opts:
+            if o == "--from":
+                from_ver = a
+            elif o == "--to":
+                to_ver = a
+        if not from_ver or not to_ver:
+            raise CommandError("/delta generate requires --from=<ver> and --to=<ver>")
+
+        _require_image(app)
+        build = app.context.builds[0]
+        ostree_spec = build.spec.get("image", {}).get("ostree")
+        if not ostree_spec:
+            raise CommandError("active specification does not define an OSTree image")
+        ref = ostree_spec.get("ref", "debian/amd64")
+        release = build.spec["distribution"]["release"]
+        from seine.container import ContainerEngine
+        output = getattr(getattr(build, "image", None), "_output", None)
+        if not output:
+            image_name = build.spec.get("image", {}).get("filename", "image.img")
+            output = os.path.join(ContainerEngine.deploy_dir(release), image_name)
+        from seine.imager import payload
+        payload_dir = payload.payload_dir(output, ostree_spec.get("payload"), release)
+
+        def runner(args, volumes):
+            if hasattr(app, "_delta_runner") and app._delta_runner:
+                return app._delta_runner(args, volumes)
+            import shutil
+            import subprocess
+            if shutil.which("ostree"):
+                mapped_args = list(args)
+                for host_dir, guest_dir in volumes.items():
+                    for i, arg in enumerate(mapped_args):
+                        if guest_dir in arg:
+                            mapped_args[i] = arg.replace(guest_dir, host_dir)
+                subprocess.run(mapped_args, check=True)
+                return
+
+            from seine.container import ContainerEngine
+            from seine.imager.appliance import ImagerAppliance
+            appliance = ImagerAppliance(build)
+            img_name = appliance.name if ContainerEngine.hasImage(appliance.name) else f"docker.io/library/debian:{release}"
+            cmd = ["container", "run", "--rm"]
+            for h, g in volumes.items():
+                cmd += ["-v", f"{os.path.abspath(h)}:{g}"]
+            ContainerEngine.run(cmd + [img_name] + args, check=True)
+
+        import time
+        from seine.tui.artifacts import _human_size
+        t0 = time.time()
+        try:
+            payload.generate_delta(runner, payload_dir, ref, from_ver, to_ver)
+        except RuntimeError as e:
+            raise CommandError(str(e))
+        elapsed = time.time() - t0
+        deltas_info = payload.list_payload_deltas(payload_dir)
+        d_cell = deltas_info["matrix"].get((from_ver.lstrip("v"), to_ver.lstrip("v")), {})
+        sz_str = d_cell.get("size_human", "delta")
+        app.say(f"static delta {from_ver} -> {to_ver} generated in {elapsed:.1f}s ({sz_str})")
+        from seine.tui.updates_screen import UpdatesScreen
+        if isinstance(app.screen, UpdatesScreen):
+            app.screen.update_body()
+    else:
+        raise CommandError(f"unknown delta subcommand '{subcmd}' -- '/delta generate --from=V1 --to=V2'")
+
 def _packages(app, argv):
     """rebuilt-from-source packages, and what the last SBOM found"""
     _show_over_active_spec(app, argv, "packages")
@@ -1089,6 +1177,8 @@ REGISTRY = {
         Command("plan",     _plan,     "[SPEC...]",                *_doc(_plan)),
         Command("validate", _validate, "SPEC...",                  *_doc(_validate)),
         Command("overview", _overview, "",                         *_doc(_overview)),
+        Command("updates",  _updates,  "[SPEC...]",                *_doc(_updates)),
+        Command("delta",    _delta,    "generate --from=V1 --to=V2", *_doc(_delta)),
         Command("artifacts", _artifacts, "[SPEC...]",               *_doc(_artifacts)),
         Command("packages", _packages, "[SPEC...]",                *_doc(_packages)),
         Command("build",    _build,    "[--jobs=N] [SPEC...]",     *_doc(_build),
@@ -1129,6 +1219,7 @@ REGISTRY["q"] = REGISTRY["quit"]
 OPTIONS = {
     "plan":  BuildCmd.LONG_OPTIONS,
     "build": ["jobs=", "reproducible", "local", "remote", "release", "no-download", "project=", "payload-only"],
+    "delta": ["generate", "from=", "to="],
     "remote": ["disconnect", "status", "screen", "insecure", "ca-cert="],
     "project": ["default"],
     "cache": ["explain", "why"],

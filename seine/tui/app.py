@@ -38,13 +38,15 @@ from seine.tui.remote_screen import RemoteScreen
 from seine.tui.target import TargetState
 from seine.tui.target_screen import TargetScreen
 from seine.tui.testing import TestScreen, TestState
+from seine.tui.updates_screen import UpdatesScreen
 
 SCREENS = {"overview": OverviewScreen, "plan": PlanScreen, "build": BuildScreen,
-          "artifacts": ArtifactsScreen, "filesystem": FilesystemScreen,
-          "packages": PackagesScreen, "analyze": AnalyzeScreen,
-          "cache": CacheScreen, "doctor": DoctorScreen, "diff": DiffScreen,
-          "issues": IssuesScreen, "chat": ChatScreen, "target": TargetScreen,
-          "test": TestScreen, "vendor": VendorScreen, "remote": RemoteScreen}
+          "updates": UpdatesScreen, "artifacts": ArtifactsScreen,
+          "filesystem": FilesystemScreen, "packages": PackagesScreen,
+          "analyze": AnalyzeScreen, "cache": CacheScreen, "doctor": DoctorScreen,
+          "diff": DiffScreen, "issues": IssuesScreen, "chat": ChatScreen,
+          "target": TargetScreen, "test": TestScreen, "vendor": VendorScreen,
+          "remote": RemoteScreen}
 
 
 class SeineApp(App):
