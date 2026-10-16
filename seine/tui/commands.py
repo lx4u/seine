@@ -993,7 +993,7 @@ def _latest_cast(qualified):
 # the same no-run-yet fallback OverviewScreen.update_body() uses.
 def _selected_tests(app):
     from seine.tui.app import OverviewScreen
-    from seine.tui.render import _tests_under
+    from seine.tui.testing import _tests_under
     screen = app.screen
     if not isinstance(screen, OverviewScreen) or \
             getattr(screen, "_selected_path", None) is None:

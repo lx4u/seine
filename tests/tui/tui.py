@@ -931,7 +931,7 @@ class IssuesRendering(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.tui.context import Context
-            from seine.tui.render import (issues_matrix_data,
+            from seine.tui.issues import (issues_matrix_data,
                                           render_issues_detail,
                                           render_issues_stats)
         self.Context = Context
@@ -1054,7 +1054,7 @@ class IssuesRendering(avocado.Test):
         self.assertEqual(row["defects:normal"] if "defects:normal" in row else "", "")
 
     def test_count_columns_are_fixed_width(self):
-        from seine.tui.render import COUNT_WIDTH
+        from seine.tui.issues import COUNT_WIDTH
         self.assertEqual(COUNT_WIDTH, 4)
         context = self.Context()
         context.use([BUSYBOX_REBUILD])
@@ -1443,7 +1443,7 @@ class VendorRendering(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.tui.context import Context
-            from seine.tui.render import render_vendor, render_vendor_why
+            from seine.tui.vendor import render_vendor, render_vendor_why
         self.Context = Context
         self.render_vendor = render_vendor
         self.render_vendor_why = render_vendor_why
@@ -1542,7 +1542,7 @@ class SettingsRendering(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.render import render_settings
+            from seine.tui.settings import render_settings
         self.render_settings = render_settings
         os.environ["XDG_CONFIG_HOME"] = self.workdir
 
@@ -4460,7 +4460,7 @@ class AggregateTestStatePriority(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.render import _aggregate_test_state, _tests_under
+            from seine.tui.testing import _aggregate_test_state, _tests_under
         self._aggregate_test_state = _aggregate_test_state
         self._tests_under = _tests_under
 
@@ -4503,9 +4503,9 @@ class TestNodeLiveMarks(avocado.Test):
 
     def setUp(self):
         with _tui_required(self):
-            from seine.tui import render
+            from seine.tui.testing import render_test_node
             from seine.testing.runner import SuiteResult, TestOutcome
-        self.render = render
+        self.render_test_node = render_test_node
         self.SuiteResult = SuiteResult
         self.TestOutcome = TestOutcome
         # No run history is recorded from here -- entries()/scan() (both
@@ -4527,7 +4527,7 @@ class TestNodeLiveMarks(avocado.Test):
 
     def test_a_test_never_started_is_pending(self):
         node = self._node("[0] login")
-        text = self.render.render_test_node(
+        text = self.render_test_node(
             node, ("test", "[0] boot", "tests", "[0] login"), self._state())
         self.assertTrue(text.plain.startswith("○ "))
         self.assertFalse(any(span.style for span in text.spans))
@@ -4535,14 +4535,14 @@ class TestNodeLiveMarks(avocado.Test):
     def test_a_running_test_gets_the_running_mark(self):
         node = self._node("[0] login")
         rows = {self.QUALIFIED: {"state": "running"}}
-        text = self.render.render_test_node(
+        text = self.render_test_node(
             node, ("test", "[0] boot", "tests", "[0] login"), self._state(rows))
         self.assertTrue(text.plain.startswith("● "))
 
     def test_a_passed_test_is_green(self):
         node = self._node("[0] login")
         rows = {self.QUALIFIED: {"state": "done"}}
-        text = self.render.render_test_node(
+        text = self.render_test_node(
             node, ("test", "[0] boot", "tests", "[0] login"), self._state(rows))
         self.assertTrue(text.plain.startswith("✔ "))
         [span] = [s for s in text.spans if s.start == 0]
@@ -4555,7 +4555,7 @@ class TestNodeLiveMarks(avocado.Test):
             [self.TestOutcome(self.QUALIFIED, "seine test", "FAIL",
                               "'x' != 'y'", [], 0.5)],
             "/tmp/out/output.xml")
-        text = self.render.render_test_node(
+        text = self.render_test_node(
             node, ("test", "[0] boot", "tests", "[0] login"),
             self._state(rows, result))
         plain = text.plain
@@ -4574,7 +4574,7 @@ class TestNodeLiveMarks(avocado.Test):
             rows={self.QUALIFIED: {"state": "done"},
                  other: {"state": "failed"}},
             result=None)
-        text = self.render.render_test_node(node, ("test", "[0] boot", "tests"), state)
+        text = self.render_test_node(node, ("test", "[0] boot", "tests"), state)
         plain = text.plain
         self.assertIn("✔ [0] login", plain)
         self.assertIn("✘ [0] second case", plain)
@@ -4583,7 +4583,7 @@ class TestNodeLiveMarks(avocado.Test):
     # it in test_paths -- the caller falls back to render_node().
     def test_a_scalar_field_under_a_case_has_no_test_of_its_own(self):
         node = self._node("timeout: 30")
-        text = self.render.render_test_node(
+        text = self.render_test_node(
             node, ("test", "[0] boot", "tests", "[0] login", "timeout"),
             self._state())
         self.assertIsNone(text)
@@ -4600,9 +4600,9 @@ class TestHistory(avocado.Test):
 
     def setUp(self):
         with _tui_required(self):
-            from seine.tui import render
+            from seine.tui.testing import render_test_node
             from seine.testing import testindex
-        self.render = render
+        self.render_test_node = render_test_node
         self.testindex = testindex
         os.environ["SEINE_LOG_DIR"] = self.workdir
         _isolate_history(self)
@@ -4653,7 +4653,7 @@ class TestHistory(avocado.Test):
         started = datetime.datetime(2026, 9, 11, 7, 53).timestamp()
         self._record("20260911-000000", started)
         node = self._node("[0] " + self.SHORT)
-        text = self.render.render_test_node(
+        text = self.render_test_node(
             node, ("test", "[0] boot", "tests", "[0] " + self.SHORT),
             self._state())
         plain = text.plain
@@ -4671,7 +4671,7 @@ class TestHistory(avocado.Test):
 
     def test_never_run_says_so(self):
         node = self._node("[0] " + self.SHORT)
-        text = self.render.render_test_node(
+        text = self.render_test_node(
             node, ("test", "[0] boot", "tests", "[0] " + self.SHORT),
             self._state())
         self.assertIn("never run from here yet", text.plain)
@@ -4697,7 +4697,7 @@ class TestHistory(avocado.Test):
         node = self._node("tests", children=[
             self._node("[0] " + self.SHORT),
             self._node("[0] second case")])
-        text = self.render.render_test_node(
+        text = self.render_test_node(
             node, ("test", "[0] boot", "tests"), state)
         plain = text.plain
         self.assertIn("[0] " + self.SHORT, plain)
@@ -4712,7 +4712,7 @@ class TestHistory(avocado.Test):
         started = datetime.datetime(2026, 9, 11, 7, 53).timestamp()
         self._record("20260911-000000", started, status="FAIL")
         node = self._node("[0] " + self.SHORT)
-        text = self.render.render_test_node(
+        text = self.render_test_node(
             node, ("test", "[0] boot", "tests", "[0] " + self.SHORT),
             self._state())
         self.assertIn("FAIL", text.plain)

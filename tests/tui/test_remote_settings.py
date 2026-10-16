@@ -33,8 +33,7 @@ class RemoteSettingsTest(avocado.Test):
             from textual.app import App
             from seine import settings
             from seine.tui import commands
-            from seine.tui.render import render_settings
-            from seine.tui.settings import GeneralSettings, SettingsScreen
+            from seine.tui.settings import GeneralSettings, SettingsScreen, render_settings
         self.App = App
         self.settings = settings
         self.commands = commands

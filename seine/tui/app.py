@@ -38,13 +38,13 @@ from seine.tui.artifacts import ArtifactsScreen
 from seine.tui.render import (append_logs_section, render_analyze,
                               render_cache, render_doctor, render_image_node,
                               render_node, render_overview, render_packages,
-                              render_plan, render_root_node, render_test_node)
+                              render_plan, render_root_node)
 from seine.tui.spectree import SpecTree
 from seine.tui.remote_screen import RemoteScreen
 from seine.tui.sanitize import sanitize
 from seine.tui.target import TargetState
 from seine.tui.target_screen import TargetScreen
-from seine.tui.testing import TestState
+from seine.tui.testing import TestState, render_test_node
 
 # A read failure shows inline rather than raising, same as
 # FilesystemScreen's own preview_failed() does for a bad file.
