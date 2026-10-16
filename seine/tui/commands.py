@@ -301,6 +301,7 @@ def _serve(app, argv):
     Starts a background development HTTP server serving OSTree update
     payloads or deploy artifacts. Connected devices or virtual machines
     (e.g. mtda-kvm) can fetch UKIs, commits, and deltas over the network.
+    An indicator chip displays the active port in the infobar.
     Use '/serve stop' to shut down the server, or '/serve status' to
     check its status.
     """
@@ -312,6 +313,8 @@ def _serve(app, argv):
             server.stop()
             app._payload_server = None
             app.say("payload server stopped")
+            if hasattr(app, "refresh_indicators"):
+                app.refresh_indicators()
         else:
             app.say("payload server is not running")
         return
@@ -344,6 +347,8 @@ def _serve(app, argv):
     if server and server.running:
         server.stop()
         app._payload_server = None
+        if hasattr(app, "refresh_indicators"):
+            app.refresh_indicators()
 
     new_server = PayloadServer(directory=directory, port=port)
     try:
@@ -353,6 +358,8 @@ def _serve(app, argv):
 
     app._payload_server = new_server
     app.say("serving %s on port %d" % (new_server.directory, new_server.port))
+    if hasattr(app, "refresh_indicators"):
+        app.refresh_indicators()
 
 def _packages(app, argv):
     """rebuilt-from-source packages, and what the last SBOM found"""
