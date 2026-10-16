@@ -341,6 +341,31 @@ class PayloadWrite(PayloadTest):
         self.assertIn("the ESP holds", str(cm.exception))
         self.assertFalse(os.path.exists(self.payload))
 
+    def test_write_payload_emits_milestones(self):
+        class MockReporter:
+            def __init__(self):
+                self.events = []
+            def milestone(self, task, phase, status="running", detail=""):
+                self.events.append((task, phase, status, detail))
+
+        imager = self.Imager(self)
+        reporter = MockReporter()
+        imager.source.reporter = reporter
+        group = {"built": [("debian-23.efi", self.dir, "rebuilt.efi")]}
+        self.uki()
+        guest = FakeGuest(self.dir)
+        settings = self.settings(payload={"path": self.payload, "deltas-from": ["22"]})
+        imager._write_payload(guest, settings, [], group, "debian/amd64", "c0ffee")
+
+        self.assertEqual(reporter.events, [
+            ("image", "commit", "running", ""),
+            ("image", "deltas", "running", "v22 -> v23"),
+            ("image", "commit", "done", ""),
+            ("image", "deltas", "done", "v22 -> v23"),
+            ("image", "manifest", "running", ""),
+            ("image", "manifest", "done", ""),
+        ])
+
 
 # A setuid file and a file of group 'shadow': what a copy that loses
 # ownership would get wrong.

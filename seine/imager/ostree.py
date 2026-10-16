@@ -522,6 +522,16 @@ def copy_boot_files(g, directories, esp_path):
 # Part of Imager, like PartitionRebuild: it relies on the imager's own
 # helpers (fstab, kernel arguments, boot loader signing, timestamps).
 class OstreeSysroot:
+    def _milestone(self, phase, status="running", detail=""):
+        reporter = getattr(self.source, "reporter", None)
+        if reporter is not None:
+            fn = getattr(reporter, "milestone", None)
+            if fn is not None:
+                try:
+                    fn("image", phase, status, detail)
+                except TypeError:
+                    fn("image", phase, status)
+
     # Unpacks the rootfs onto the scratch disk, which becomes the chroot
     # the target's own ostree runs from, then commits and deploys it
     # into the real sysroot mounted under '/sysroot'. Leaves everything
@@ -536,6 +546,21 @@ class OstreeSysroot:
         distro = self.source.spec["distribution"] if source is None else \
             self.source.subbuilds[source].spec["distribution"]
         ref = ostree_ref(settings, distro)
+        version = settings.get("version")
+        deltas = (settings.get("payload") or {}).get("deltas-from", [])
+        esp_name = f"{stateroot}-{version}.efi" if version else ""
+        delta_label = (f"v{deltas[0]} -> v{version}" if (deltas and version)
+                       else (", ".join(f"v{p} -> v{version}" for p in deltas) if deltas else ""))
+
+        self._milestone("staging", "pending")
+        if version:
+            self._milestone("uki", "pending", esp_name)
+            self._milestone("commit", "pending")
+            if deltas:
+                self._milestone("deltas", "pending", delta_label)
+            self._milestone("manifest", "pending")
+
+        self._milestone("staging", "running")
         print("Staging root file-system for ostree '%s'..." % ref)
         g.mkfs("ext4", SCRATCH_DEVICE, features="^dir_index")
         g.mount(SCRATCH_DEVICE, "/")
@@ -576,6 +601,7 @@ class OstreeSysroot:
                 g.mkdir_p(os.path.dirname(path))
                 g.mkmountpoint(path)
             g.mount(mount_devices[id(m)], path)
+        self._milestone("staging", "done")
 
         print("Committing and deploying...")
         checksum = commit(g, ref, self.source._epoch(), version, composefs)
@@ -653,6 +679,7 @@ class OstreeSysroot:
             payload.check_esp(esp["_size"], os.path.getsize(uki))
         directory = self._payload_dir(settings)
         print("Writing the update payload to '%s'..." % directory)
+        self._milestone("commit", "running")
         guest = "/.seine-payload"
         g.mkdir_p(guest)
         _ostree(g, "--repo=%s/export" % guest, "init", "--mode=archive")
@@ -663,16 +690,25 @@ class OstreeSysroot:
         g.rm_rf(guest)
         deltas = (settings.get("payload") or {}).get("deltas-from", [])
         version, stateroot = settings["version"], settings["stateroot"]
+        delta_label = (f"v{deltas[0]} -> v{version}" if (deltas and version)
+                       else (", ".join(f"v{p} -> v{version}" for p in deltas) if deltas else ""))
         payload.check_version(directory, ref, version, checksum)
         parent = payload.ref_commit(directory, ref)
         payload.add_uki(self._run_tool, directory, stateroot, version, uki, host)
+        if deltas:
+            self._milestone("deltas", "running", delta_label)
         payload.add_commit(self._run_tool, directory, os.path.join(host, "export"),
                            ref, checksum, version, deltas)
+        self._milestone("commit", "done")
+        if deltas:
+            self._milestone("deltas", "done", delta_label)
+        self._milestone("manifest", "running")
         provider, epoch = self._vault_provider(), self.source._epoch()
         sign_summary(directory, provider, settings["gpg-key"], epoch)
         key = settings["manifest-key"][len("vault:"):]
         payload.write_manifest(
             directory, lambda text: provider.pgp_detach_sign(key, text, epoch))
+        self._milestone("manifest", "done")
         stem = os.path.splitext(os.path.basename(self.source._output))[0]
         payload.write_snapshot_files(self._output_dir, stem, checksum, directory,
                                      parent=parent, ref=ref, deltas_from=deltas)
@@ -711,13 +747,15 @@ class OstreeSysroot:
             group["entries"][0]["options"], link_deployment(g, stateroot))
         group["ukis"], group["built"] = [], []
         for name, original in ukis:
+            esp_name = ("%s-%s.efi" % (stateroot, version) if version
+                        else "%s-%s" % (stateroot, name))
+            self._milestone("uki", "running", esp_name)
             print("Adding the ostree command line to '%s'..." % name)
             workdir = os.path.dirname(original)
             result = self._rebuild_uki(workdir, original, options, osrel)
-            esp_name = ("%s-%s.efi" % (stateroot, version) if version
-                        else "%s-%s" % (stateroot, name))
             group["ukis"].append(esp_name)
             group["built"].append((esp_name, workdir, result))
+            self._milestone("uki", "done", esp_name)
 
     # Records this sysroot's boot entries. The boot owner (last) installs
     # the boot loader and writes every group's menu on the shared ESP,

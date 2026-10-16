@@ -79,8 +79,19 @@ PLAY_RECAP_RE = re.compile(r"^PLAY RECAP \*+\s*$")
 # The single row a remote build has until the worker announces its plan.
 REMOTE_PLACEHOLDER = "remote build"
 
+MILESTONE_LABELS = {
+    "staging": "sysroot staging",
+    "uki": "UKI compilation",
+    "commit": "ostree commit export",
+    "ostree-commit": "ostree commit export",
+    "deltas": "static delta generation",
+    "static-deltas": "static delta generation",
+    "manifest": "summary & manifest signing",
+}
+
 def new_row(needs=(), state="pending"):
-    return {"needs": list(needs), "state": state, "started": None, "elapsed": None}
+    return {"needs": list(needs), "state": state, "started": None, "elapsed": None,
+            "milestones": []}
 
 # What the Build screen renders, kept apart from the widgets so it's
 # testable without a running App.
@@ -167,6 +178,9 @@ class BuildState:
             self.say(event["text"])
         elif kind == "sampled":
             self.sampled(event["sample"])
+        elif kind == "milestone":
+            self.milestone(event["task"], event["phase"], event.get("status", "running"),
+                           event.get("detail", ""))
 
     def reset(self, build):
         self.remote = None
@@ -199,6 +213,7 @@ class BuildState:
         row = self.rows.setdefault(name, new_row())
         row["state"] = "running"
         row["started"] = time.time()
+        row["milestones"] = []
         self.current = name
         # Clear leftovers from a previous rootfs run (retry after failure).
         self.play = None
@@ -213,8 +228,31 @@ class BuildState:
             row["elapsed"] = time.time() - row["started"]
         if self.current == name:
             self.current = None
+        for m in row.get("milestones", []):
+            if failed and m["status"] == "running":
+                m["status"] = "failed"
+            elif not failed and m["status"] in ("running", "pending"):
+                m["status"] = "done"
         if self.on_task_finished and not self.remote:
             self.on_task_finished(name, failed)
+
+    def milestone(self, task, phase, status="running", detail=""):
+        row = self.rows.setdefault(task, new_row())
+        milestones = row.setdefault("milestones", [])
+        key = phase[len("image:"):] if phase.startswith("image:") else phase
+        base_label = MILESTONE_LABELS.get(key, phase)
+        if detail:
+            label = f"{base_label} ({detail})"
+        elif phase in MILESTONE_LABELS:
+            label = MILESTONE_LABELS[phase]
+        else:
+            label = phase
+        for m in milestones:
+            if m["phase"] == key or m["phase"] == phase or m["label"] == label:
+                m["status"] = status
+                m["label"] = label
+                return
+        milestones.append({"phase": key, "label": label, "status": status})
 
     def say(self, text):
         self.message = text
@@ -277,6 +315,9 @@ class BuildState:
             else:
                 extra = ""
             lines.append("%s %s%s" % (mark, name, extra))
+            for m in row.get("milestones", []):
+                m_mark = MARKS.get(m["status"], "○")
+                lines.append("    %s %s" % (m_mark, m["label"]))
         return "\n".join(lines) + "\n"
 
 # Starts a build in an App-level thread worker, wired to 'state' through

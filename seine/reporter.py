@@ -30,6 +30,9 @@ class Reporter(Protocol):
     def plan(self, steps, cached=()) -> None:
         pass
 
+    def milestone(self, task: str, phase: str, status: str = "running") -> None:
+        pass
+
 # Name of the variable holding the Unix socket path a worker agent listens on.
 SOCKET_ENV = "SEINE_REPORTER_SOCKET"
 
@@ -41,12 +44,13 @@ class SocketReporter:
         self.inner = inner
         self._lock = threading.Lock()
         self._sock = None
-        try:
-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock.connect(path)
-            self._sock = sock
-        except OSError:
-            pass
+        if path:
+            try:
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                sock.connect(path)
+                self._sock = sock
+            except OSError:
+                pass
 
     @classmethod
     def from_env(cls, inner=None):
@@ -86,6 +90,19 @@ class SocketReporter:
 
     def sampled(self, sample):
         self._emit({"type": "sampled", "sample": sample})
+
+    def milestone(self, task, phase, status="running", detail=""):
+        event = {"type": "milestone", "task": task, "phase": phase, "status": status}
+        if detail:
+            event["detail"] = detail
+        self._emit(event)
+        if self.inner is not None:
+            fn = getattr(self.inner, "milestone", None)
+            if fn is not None:
+                try:
+                    fn(task, phase, status, detail)
+                except TypeError:
+                    fn(task, phase, status)
 
     def close(self):
         if self._sock is not None:

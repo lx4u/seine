@@ -3264,6 +3264,74 @@ class BuildStateBehaviour(avocado.Test):
         self.assertIn("\U0001F680 package:cached-pkg", rendered)
         self.assertNotIn("○ package:cached-pkg", rendered)
 
+    def test_milestones_recorded_and_rendered_beneath_task(self):
+        state = self.BuildState()
+        state.reset(self.build)
+        state.task_started("image")
+        state.milestone("image", "staging", "done")
+        state.milestone("image", "uki", "done", "debian-2.efi")
+        state.milestone("image", "deltas", "running", "v1 -> v2")
+        state.milestone("image", "manifest", "pending")
+
+        milestones = state.rows["image"]["milestones"]
+        self.assertEqual(len(milestones), 4)
+        self.assertEqual(milestones[0],
+                         {"phase": "staging", "label": "sysroot staging", "status": "done"})
+        self.assertEqual(milestones[1],
+                         {"phase": "uki", "label": "UKI compilation (debian-2.efi)", "status": "done"})
+        self.assertEqual(milestones[2],
+                         {"phase": "deltas", "label": "static delta generation (v1 -> v2)", "status": "running"})
+        self.assertEqual(milestones[3],
+                         {"phase": "manifest", "label": "summary & manifest signing", "status": "pending"})
+
+        rendered = state.render()
+        self.assertIn("    ✔ sysroot staging\n", rendered)
+        self.assertIn("    ✔ UKI compilation (debian-2.efi)\n", rendered)
+        self.assertIn("    ● static delta generation (v1 -> v2)\n", rendered)
+        self.assertIn("    ○ summary & manifest signing\n", rendered)
+
+    def test_milestone_transitions_on_task_completion_and_failure(self):
+        state = self.BuildState()
+        state.reset(self.build)
+        state.task_started("image")
+        state.milestone("image", "staging", "done")
+        state.milestone("image", "uki", "running", "debian-2.efi")
+        state.milestone("image", "manifest", "pending")
+        state.task_finished("image", failed=False)
+
+        milestones = state.rows["image"]["milestones"]
+        self.assertEqual([m["status"] for m in milestones], ["done", "done", "done"])
+
+        state.task_started("image")
+        state.milestone("image", "staging", "running")
+        state.task_finished("image", failed=True)
+        milestones = state.rows["image"]["milestones"]
+        self.assertEqual(milestones[0]["status"], "failed")
+
+    def test_reporters_forward_milestones(self):
+        from seine.reporter import SocketReporter
+        from seine.tui.reporter import TextualReporter
+
+        class MockSink:
+            def __init__(self):
+                self.calls = []
+            def milestone(self, task, phase, status="running", detail=""):
+                self.calls.append((task, phase, status, detail))
+
+        class MockApp:
+            def call_from_thread(self, fn, *args):
+                fn(*args)
+
+        sink = MockSink()
+        textual = TextualReporter(MockApp(), sink)
+        textual.milestone("image", "staging", "running")
+        self.assertEqual(sink.calls, [("image", "staging", "running", "")])
+
+        inner = MockSink()
+        sock = SocketReporter(None, inner=inner)
+        sock.milestone("image", "uki", "done", "debian-2.efi")
+        self.assertEqual(inner.calls, [("image", "uki", "done", "debian-2.efi")])
+
 # 'resolve()'/'render()' are plain Python -- no guestfs, no App -- kept
 # apart from the real appliance the same way 'BuildState' is kept apart
 # from a real build.
