@@ -343,6 +343,19 @@ def start_vendor(app, state, distro, entries, exclude, wanted, refresh=False,
     app.refresh_indicators()
 
 class VendorScreen(BaseScreen):
+    DEFAULT_CSS = """
+    /* Vendor screen: own ids, 1fr:1fr both rows (others are 2fr:1fr). */
+    #vendormain, #vendorrow { height: 1fr; }
+    #vendorspectree, #vendortail, #vendorstatspane, #vendortaskspane {
+        width: 1fr; height: 100%; border: round $foreground 40%;
+    }
+    #vendorspectree:focus, #vendortail:focus {
+        border: round $border;
+    }
+    #vendorstats, #vendortasks { padding: 1 2; }
+    #vendortail { padding: 0 1; }
+    """
+
     HINT_ADD = [("complete", "cancel", "'/cancel' stops")]
 
     # Same split as BuildScreen but 50/50 (own ids/CSS, not '#spectree'

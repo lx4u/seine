@@ -33,7 +33,8 @@ class RemoteCommandTest(avocado.Test):
             from textual.app import App
             from seine import settings
             from seine.tui import app, commands
-            from seine.tui.app import SeineApp, run
+            from seine.tui.app import SeineApp
+            from seine.tui.cli import run
             from seine.tui.remote_session import RemoteSession
         self.App = App
         self.settings = settings

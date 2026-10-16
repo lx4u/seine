@@ -529,6 +529,14 @@ class ArtifactsTree(Tree):
 
 
 class ArtifactsScreen(BaseScreen):
+    DEFAULT_CSS = """
+    #artifactspath { height: 2; padding: 1 2 0 2; }
+    #artifactheader { height: 2; padding: 0 2; }
+    #artifactstree { width: 100%; height: 1fr; background: $background; padding: 0 1; }
+    #artifactpreviewpane { width: 100%; height: 1fr; background: $background; padding: 1 2; border: round $foreground 40%; }
+    #artifactpreviewpane:focus { border: round $border; }
+    """
+
     BINDINGS = BaseScreen.BINDINGS + [
         Binding("escape", "close_preview", show=False),
     ]

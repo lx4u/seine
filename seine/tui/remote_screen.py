@@ -94,6 +94,16 @@ class RemoteBodyStatic(Static):
                     break
 
 class RemoteScreen(BaseScreen):
+    DEFAULT_CSS = """
+    #remotemain { width: 3fr; height: 100%; border: round $foreground 40%; }
+    #remotemain:focus { border: round $border; }
+    #remoteside { width: 1fr; min-width: 32; height: 100%; border: round $foreground 40%; }
+    #remotedetailpane { height: 2fr; }
+    #remotesidebar { height: 1fr; min-height: 16; border-top: solid $foreground 40%; }
+    #remotesidebar:focus { border-top: solid $border; }
+    #remotebody, #remotedetail, #sidebarbody { padding: 1 2; }
+    """
+
     BINDINGS = BaseScreen.BINDINGS + [
         Binding("ctrl+1", "select_tab(1)", "Builds", show=False),
         Binding("ctrl+2", "select_tab(2)", "Workers", show=False),

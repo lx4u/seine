@@ -2084,7 +2084,7 @@ class App(avocado.Test):
     # The command palette (Ctrl+P) fills the prompt with a leading '/'
     # too -- what it fills in has to be runnable as typed.
     def test_palette_fills_the_prompt_with_a_leading_slash(self):
-        from seine.tui.app import RegistryProvider
+        from seine.tui.commands import RegistryProvider
         async def scenario():
             app = self.SeineApp(files=[NATIVE_IMAGE])
             async with app.run_test():
