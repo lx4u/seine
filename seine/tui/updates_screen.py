@@ -4,6 +4,7 @@
 # The /updates screen: release lineage, commit details, and delta matrix.
 
 import os
+from rich.text import Text
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Static
@@ -91,6 +92,30 @@ class UpdatesScreen(BaseScreen):
             "Status", "Signed UKI", "Static Deltas"
         )
         super().on_mount()
+        self._query_target_status()
+
+    def on_screen_resume(self):
+        super().on_screen_resume()
+        self._query_target_status()
+
+    def _query_target_status(self):
+        from seine.tui import target
+        if not target.available():
+            return
+
+        def _worker():
+            try:
+                client = getattr(self.app, "_target_client", None)
+                if client is None:
+                    client = target.get_client(self.app)
+                st = target.status(self.app)
+                if hasattr(self.app, "target_state"):
+                    self.app.target_state.seed(st)
+                self.app.call_from_thread(self.update_body)
+            except Exception:
+                pass
+
+        self.run_worker(_worker, thread=True, group="updates-target-status")
 
     def update_body(self):
         context = self.app.context
@@ -133,20 +158,82 @@ class UpdatesScreen(BaseScreen):
         total_ukis = len([e for e in lineage if e.get("uki")])
         tip_commit = lineage[-1]["commit_short"] if lineage else "none"
 
+        target_state = getattr(self.app, "target_state", None)
+        active_ver = getattr(target_state, "active_version", None) if target_state else None
+        active_commit = getattr(target_state, "active_commit", None) if target_state else None
+        rolled_back_ver = getattr(target_state, "rolled_back_version", None) if target_state else None
+        failed_ver = getattr(target_state, "failed_version", None) if target_state else None
+        lkg_ver = getattr(target_state, "lkg_version", None) if target_state else None
+
+        has_target_info = bool(active_ver or active_commit or rolled_back_ver or failed_ver)
+
         header_lines = [
             f"Payload Repository: {payload_dir}",
             f"Branch Ref:         {ref:<36} Tip: {tip_commit} (synchronized)",
             f"Total Artifacts:    {len(lineage)} Versions · {total_ukis} UKIs · {total_deltas} Static Deltas · {_human_size(total_size)} Total",
         ]
+        if target_state and (active_ver or rolled_back_ver or getattr(target_state, "agent", None)):
+            t_parts = []
+            if getattr(target_state, "agent", None):
+                t_parts.append(f"Agent: {target_state.agent}")
+            if active_ver:
+                t_parts.append(f"Active: v{active_ver}")
+            elif active_commit:
+                t_parts.append(f"Active: {active_commit[:10]}")
+            if rolled_back_ver or failed_ver:
+                t_parts.append(f"Rolled Back: v{rolled_back_ver or failed_ver}")
+            if t_parts:
+                header_lines[1] = f"Branch Ref:         {ref:<24} Tip: {tip_commit:<10} Target: {' · '.join(t_parts)}"
+
         header_widget.update("\n".join(header_lines))
 
         for entry in lineage:
+            v_str = str(entry["version"])
+            c_full = entry.get("commit", "")
+            c_short = entry.get("commit_short", "")
+
+            is_active = False
+            if active_ver is not None and str(active_ver) == v_str:
+                is_active = True
+            elif active_commit is not None and (c_full.startswith(active_commit) or active_commit.startswith(c_short)):
+                is_active = True
+
+            is_rolled_back = False
+            if rolled_back_ver is not None and str(rolled_back_ver) == v_str:
+                is_rolled_back = True
+            elif failed_ver is not None and str(failed_ver) == v_str:
+                is_rolled_back = True
+
+            is_lkg = False
+            if lkg_ver is not None and str(lkg_ver) == v_str:
+                is_lkg = True
+            elif lkg_ver is None and entry.get("status") == "[LKG]":
+                is_lkg = True
+
+            if has_target_info:
+                if is_active:
+                    pill_text = "● Target (Active) [LKG]" if is_lkg else "● Target (Active)"
+                    status_cell = Text(pill_text, style="bold green")
+                    version_cell = Text(f"v{entry['version']}", style="bold green")
+                elif is_rolled_back:
+                    status_cell = Text("[Rolled Back]", style="bold red")
+                    version_cell = Text(f"v{entry['version']}", style="red")
+                elif is_lkg:
+                    status_cell = Text("[LKG]", style="bold cyan")
+                    version_cell = f"v{entry['version']}"
+                else:
+                    status_cell = Text("[Draft]", style="dim")
+                    version_cell = f"v{entry['version']}"
+            else:
+                status_cell = entry["status"]
+                version_cell = f"v{entry['version']}"
+
             lineage_table.add_row(
-                f"v{entry['version']}",
+                version_cell,
                 entry["commit_short"],
                 entry["timestamp"],
                 entry["kernel"],
-                entry["status"],
+                status_cell,
                 entry["uki_str"],
                 entry["deltas"],
                 key=entry["version"],
@@ -192,6 +279,25 @@ class UpdatesScreen(BaseScreen):
             return
 
         self._selected_version = version
+
+        target_state = getattr(self.app, "target_state", None)
+        active_ver = getattr(target_state, "active_version", None) if target_state else None
+        active_commit = getattr(target_state, "active_commit", None) if target_state else None
+        rolled_back_ver = getattr(target_state, "rolled_back_version", None) if target_state else None
+        failed_ver = getattr(target_state, "failed_version", None) if target_state else None
+
+        v_str = str(entry["version"])
+        c_full = entry.get("commit", "")
+        c_short = entry.get("commit_short", "")
+
+        target_desc = None
+        if (active_ver is not None and str(active_ver) == v_str) or (active_commit is not None and (c_full.startswith(active_commit) or active_commit.startswith(c_short))):
+            target_desc = "● Active hardware deployment"
+        elif (rolled_back_ver is not None and str(rolled_back_ver) == v_str) or (failed_ver is not None and str(failed_ver) == v_str):
+            target_desc = "⚠ Rolled back on hardware (boot try-counter / watchdog fallback)"
+        elif target_state and getattr(target_state, "agent", None) is not None:
+            target_desc = "Not deployed on target"
+
         lines = [
             f"Author:  {entry.get('author', 'seine imager <builder@local>'):<40} Signed By: {entry.get('signed_by', 'unsigned')}",
             f"Commit:  {entry.get('commit', '')}",
@@ -199,6 +305,8 @@ class UpdatesScreen(BaseScreen):
             f"Delta:   {entry.get('deltas', '(factory baseline)')}",
             f"UKI:     {entry.get('uki_str', '(none)')} (Secure Boot signed: {entry.get('uki', {}).get('signed', False)})",
         ]
+        if target_desc:
+            lines.append(f"Target:  {target_desc}")
         detail_widget.update("\n".join(lines))
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted):

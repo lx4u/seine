@@ -323,12 +323,70 @@ def mouse_move(app, x, y, buttons=0):
 
 # --- Status (one-shot reads; TargetState below is the live counterpart) ---
 
+def parse_console_deployment(text):
+    if not text:
+        return {}
+    res = {}
+    import re
+    # Match seine-update status blocks
+    for m in re.finditer(r"result=(failed-update|failed|ok|waiting|busy)[\s\S]*?version=([0-9a-zA-Z\.\-]+)", text):
+        res_type, ver = m.group(1), m.group(2)
+        if res_type in ("failed-update", "failed"):
+            res["failed_version"] = ver
+            res["rolled_back_version"] = ver
+        elif res_type == "ok":
+            res["active_version"] = ver
+
+    # Match /etc/os-release or boot messages
+    for m in re.finditer(r"(?:IMAGE_VERSION|VERSION_ID)=[\"']?([0-9a-zA-Z\.\-]+)[\"']?", text):
+        res["active_version"] = m.group(1)
+
+    # Match ostree admin status current booted deployment
+    for m in re.finditer(r"\*\s+debian\s+([0-9a-fA-F]{8,64})", text):
+        res["active_commit"] = m.group(1)
+
+    if res.get("active_version") and res.get("active_version") == res.get("rolled_back_version"):
+        res.pop("active_version", None)
+
+    return res
+
+def probe_deployment(app):
+    client = getattr(app, "_target_client", None)
+    if client is None:
+        return {}
+    res = {}
+    if hasattr(client, "console_dump"):
+        try:
+            dump = client.console_dump()
+            if dump:
+                res.update(parse_console_deployment(dump))
+        except Exception:
+            pass
+    if hasattr(client, "env_get"):
+        for key in ("active_version", "active_commit", "rolled_back_version", "failed_version", "lkg_version"):
+            try:
+                val = client.env_get(key)
+                if val:
+                    res[key] = val
+            except Exception:
+                pass
+    if hasattr(client, "target_deployment"):
+        try:
+            dep = client.target_deployment()
+            if isinstance(dep, dict):
+                res.update(dep)
+        except Exception:
+            pass
+    return res
+
 def status(app):
     client = get_client(app)
-    return {"power": client.target_status(),
-            "uptime": client.target_uptime(),
-            "storage": client.storage_status(),
-            "usb": client.usb_ports()}
+    st = {"power": client.target_status(),
+          "uptime": client.target_uptime(),
+          "storage": client.storage_status(),
+          "usb": client.usb_ports()}
+    st.update(probe_deployment(app))
+    return st
 
 # --- Live state (fed by the 'EVT' topic on mtda's Subscribe stream) ---
 
@@ -354,6 +412,11 @@ class TargetState:
         # two waits on the same console.
         self.waiting = False
         self.wait_what = None
+        self.active_version = None
+        self.active_commit = None
+        self.rolled_back_version = None
+        self.failed_version = None
+        self.lkg_version = None
 
     # RemoteConsole's EVT stream is forward-only: it never replays past
     # state, so on_event() alone leaves power/storage blank until
@@ -362,12 +425,19 @@ class TargetState:
     # writing/write_*: storage_status()'s 'writing' is a bare bool,
     # with no byte counts to show a percent from.
     def seed(self, status):
-        self.power = status["power"]
-        location, _writing, _written = status["storage"]
-        self.storage = location
+        self.power = status.get("power")
+        storage = status.get("storage")
+        if isinstance(storage, (list, tuple)) and storage:
+            self.storage = storage[0]
+        elif isinstance(storage, str):
+            self.storage = storage
         # Backdated by the real uptime status() just read, not started
         # fresh from now, so an already-up target shows its real age.
-        self.power_on_at = time.time() - status["uptime"] if self.power == "ON" else None
+        uptime = status.get("uptime")
+        self.power_on_at = time.time() - uptime if self.power == "ON" and uptime is not None else None
+        for key in ("active_version", "active_commit", "rolled_back_version", "failed_version", "lkg_version"):
+            if key in status:
+                setattr(self, key, status[key])
 
     # One line off the 'EVT' topic, exactly as mtda publishes it:
     # f"{domain} {info}" -- 'POWER ON', 'STORAGE TARGET', 'STORAGE
