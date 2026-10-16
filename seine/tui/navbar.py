@@ -57,6 +57,7 @@ NAV_ITEMS = [
     NavItem("overview", "⌂", _always),
     NavItem("plan", "≡", _image),
     NavItem("build", "⚙", _image),
+    NavItem("updates", "↑", _spec),
     NavItem("artifacts", "▣", _spec),
     NavItem("filesystem", "▤", _spec),
     NavItem("packages", "▦", _spec),
