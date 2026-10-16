@@ -164,6 +164,7 @@ class ConsoleAdapter:
         # 'CSI ?7l' -- left on, its two-column layout wraps long help
         # text onto the next row, overwriting menu items drawn there.
         self.screen.reset_mode(pyte.modes.DECAWM)
+        self.screen.set_mode(pyte.modes.LNM)
         self.stream = _get_byte_stream_class()(self.screen)
         # A boot log arrives as hundreds of small chunks a second;
         # redrawing on every one made the console look like it was
