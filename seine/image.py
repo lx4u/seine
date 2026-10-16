@@ -1089,6 +1089,7 @@ class Image:
                 ticker = display
             # A worker agent listening on a socket also gets the events.
             display = SocketReporter.from_env(display)
+            self.reporter = display
             plan = getattr(display, "plan", None)
             if plan is not None:
                 cached = (self._builder.cached_task_entries()

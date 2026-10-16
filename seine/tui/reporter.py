@@ -22,6 +22,11 @@ class TextualReporter:
     def sampled(self, sample):
         self.app.call_from_thread(self.sink.sampled, sample)
 
+    def milestone(self, task, phase, status="running", detail=""):
+        sink_milestone = getattr(self.sink, "milestone", None)
+        if sink_milestone is not None:
+            self.app.call_from_thread(sink_milestone, task, phase, status, detail)
+
     # BuildState carries no 'output': seine.tasks captures a step's
     # output to its own file, tailed straight off disk instead.
     def output(self, name, line):
