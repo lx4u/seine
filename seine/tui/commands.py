@@ -416,7 +416,7 @@ def _cache(app, argv):
 
     sub = argv[0]
     if sub == "explain":
-        from seine.tui.render import render_cache_explain
+        from seine.tui.cache import render_cache_explain
         targets = argv[1:]
         if not targets:
             raise CommandError("cache explain requires one or two target recipes or artifact names")
@@ -428,7 +428,7 @@ def _cache(app, argv):
     elif sub == "why":
         if len(argv) < 2:
             raise CommandError("cache why requires a package name")
-        from seine.tui.render import render_cache_why
+        from seine.tui.cache import render_cache_why
         arch = argv[2] if len(argv) > 2 else None
         app.cache_text = render_cache_why(app.context, argv[1], arch)
         app.show("cache")

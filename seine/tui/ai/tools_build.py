@@ -17,14 +17,14 @@ from .tools_spec import SPEC_DUMP_CHUNK_LINES, _text_chunk
 # --entries-matching'. Not run through _render_tool(): that always
 # calls render_*() with no arguments.
 def _tool_cache(app, arguments):
-    from seine.tui import render
+    from seine.tui import cache
     pattern = arguments.get("matching")
     if pattern:
         try:
             re.compile(pattern)
         except re.error as e:
             return "'%s' is not a usable pattern: %s" % (pattern, e)
-    return render.render_cache(matching=pattern)
+    return cache.render_cache(matching=pattern)
 
 # Chunked the same way spec-dump/docs are (SPEC_DUMP_CHUNK_LINES) --
 # a full vendor summary can run to one line per suite plus per-package
@@ -33,9 +33,9 @@ def _tool_cache_why(app, arguments):
     name = arguments.get("package")
     if not name:
         return "give 'package', a source package name from 'packages:'"
-    from seine.tui import render
+    from seine.tui import cache
     architecture = arguments.get("architecture") or None
-    return render.render_cache_why(app.context, name, architecture=architecture)
+    return cache.render_cache_why(app.context, name, architecture=architecture)
 
 def _tool_vendor(app, arguments):
     from seine.tui import vendor
