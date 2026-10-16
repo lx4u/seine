@@ -124,6 +124,9 @@ class UpdatesScreen(BaseScreen):
         matrix_table = self.query_one("#matrix", DeltaMatrix)
         detail_widget = self.query_one("#detail-content", Static)
 
+        saved_matrix_coord = matrix_table.cursor_coordinate
+        saved_lineage_row = lineage_table.cursor_row
+
         lineage_table.clear()
         matrix_table.clear(columns=True)
 
@@ -255,13 +258,35 @@ class UpdatesScreen(BaseScreen):
                 for v_to in versions:
                     cell = matrix.get((v_from, v_to), {})
                     txt = cell.get("text", "-")
-                    row_cells.append(txt)
+                    if cell.get("available"):
+                        row_cells.append(Text(txt, style="green"))
+                    elif txt == "missing":
+                        row_cells.append(Text("missing", style="bold yellow"))
+                    else:
+                        row_cells.append(Text("-", style="dim"))
                     if cell.get("status") and cell["status"] != "-":
                         row_status = cell["status"]
                 if row_status == "-" and v_from == versions[-1]:
                     row_status = "Current HEAD"
-                row_cells.append(row_status)
+                if row_status == "Current HEAD":
+                    row_cells.append(Text("Current HEAD", style="cyan"))
+                elif "ready" in row_status:
+                    row_cells.append(Text(row_status, style="green"))
+                elif "Missing" in row_status:
+                    row_cells.append(Text(row_status, style="yellow"))
+                else:
+                    row_cells.append(Text(row_status, style="dim"))
                 matrix_table.add_row(*row_cells, key=f"row_v{v_from}")
+
+            if saved_matrix_coord and 0 <= saved_matrix_coord.row < len(versions) and 0 <= saved_matrix_coord.column < len(matrix_table.columns):
+                matrix_table.move_cursor(row=saved_matrix_coord.row, column=saved_matrix_coord.column)
+            if saved_lineage_row is not None and 0 <= saved_lineage_row < len(lineage):
+                lineage_table.move_cursor(row=saved_lineage_row)
+
+        if matrix_table.has_focus:
+            self._update_matrix_highlight(matrix_table.cursor_coordinate)
+        else:
+            self._reset_action_banner()
 
         # Update commit detail pane
         selected_version = self._selected_version or (lineage[-1]["version"] if lineage else None)
@@ -309,10 +334,71 @@ class UpdatesScreen(BaseScreen):
             lines.append(f"Target:  {target_desc}")
         detail_widget.update("\n".join(lines))
 
+    def _get_matrix_cell_versions(self, coordinate=None, cell_key=None):
+        versions = self._deltas_data.get("versions", [])
+        if not versions:
+            return None, None
+
+        if cell_key:
+            row_key = cell_key.row_key.value if cell_key.row_key else None
+            col_key = cell_key.column_key.value if cell_key.column_key else None
+            if row_key and str(row_key).startswith("row_v") and col_key and str(col_key).startswith("col_v"):
+                return str(row_key)[len("row_v"):], str(col_key)[len("col_v"):]
+
+        coord = coordinate
+        if coord is None:
+            matrix = self.query_one("#matrix", DeltaMatrix)
+            coord = matrix.cursor_coordinate if matrix else None
+
+        if coord is not None:
+            row_idx, col_idx = coord.row, coord.column
+            if 0 <= row_idx < len(versions) and 1 <= col_idx <= len(versions):
+                return versions[row_idx], versions[col_idx - 1]
+
+        return None, None
+
+    def _update_matrix_highlight(self, coordinate=None, cell_key=None):
+        banner = self.query_one("#actions", ActionBanner)
+        if not banner:
+            return
+        from_ver, to_ver = self._get_matrix_cell_versions(coordinate=coordinate, cell_key=cell_key)
+        if not from_ver or not to_ver:
+            self._reset_action_banner()
+            return
+
+        from seine.imager.payload import version_key
+        if version_key(from_ver) >= version_key(to_ver):
+            self._reset_action_banner()
+            return
+
+        cell = self._deltas_data.get("matrix", {}).get((from_ver, to_ver), {})
+        if cell.get("available"):
+            sz = cell.get("size_human", "")
+            pct = cell.get("savings_pct")
+            pct_str = f", {pct}% saved" if pct is not None else ""
+            banner.update(
+                f"[bold]Quick Actions:[/] [green]✓[/] Static Delta v{from_ver} -> v{to_ver} Built ({sz}{pct_str})   "
+                "[cyan]G[/] Regenerate   [cyan]Ctrl+B[/] Full Disk + Payload   [cyan]Ctrl+U[/] Payload Only"
+            )
+        else:
+            banner.update(
+                f"[bold]Quick Actions:[/] [cyan]G / Enter[/] Generate Delta (v{from_ver} -> v{to_ver})   "
+                "[cyan]Ctrl+B[/] Full Disk + Payload   [cyan]Ctrl+U[/] Payload Only"
+            )
+
+    def _reset_action_banner(self):
+        banner = self.query_one("#actions", ActionBanner)
+        if banner:
+            banner.update(
+                "[bold]Quick Actions:[/] [cyan]G[/] Generate Delta   "
+                "[cyan]Ctrl+B[/] Build Full Disk + Payload   [cyan]Ctrl+U[/] Payload Only"
+            )
+
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted):
         if event.data_table.id == "lineage" and event.row_key:
             version = str(event.row_key.value)
             self._update_commit_detail(version)
+            self._reset_action_banner()
 
     def on_data_table_cell_highlighted(self, event: DataTable.CellHighlighted):
         if event.data_table.id == "lineage" and event.cell_key:
@@ -320,14 +406,53 @@ class UpdatesScreen(BaseScreen):
             if row_key:
                 version = str(row_key.value)
                 self._update_commit_detail(version)
+            self._reset_action_banner()
+        elif event.data_table.id == "matrix":
+            self._update_matrix_highlight(coordinate=event.coordinate, cell_key=event.cell_key)
+
+    def on_data_table_cell_selected(self, event: DataTable.CellSelected):
+        if event.data_table.id != "matrix":
+            return
+        from_ver, to_ver = self._get_matrix_cell_versions(coordinate=event.coordinate, cell_key=event.cell_key)
+        if not from_ver or not to_ver:
+            return
+        if from_ver == to_ver:
+            self.app.say("delta generate: source and target versions must differ", warning=True)
+            return
+        from seine.imager.payload import version_key
+        if version_key(from_ver) > version_key(to_ver):
+            self.app.say("delta generate: target version must be newer than source version", warning=True)
+            return
+
+        cell = self._deltas_data.get("matrix", {}).get((from_ver, to_ver), {})
+        if cell.get("available"):
+            sz = cell.get("size_human", "")
+            pct = cell.get("savings_pct")
+            pct_str = f", {pct}% saved" if pct is not None else ""
+            self.app.say(f"static delta v{from_ver} -> v{to_ver} already available ({sz}{pct_str})")
+            return
+
+        self._trigger_delta_generation(from_ver, to_ver)
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected):
+        if event.data_table.id == "lineage":
+            self.action_inspect_selection()
 
     def action_toggle_focus(self):
         matrix = self.query_one("#matrix", DeltaMatrix)
         lineage = self.query_one("#lineage", LineageTable)
         if matrix.has_focus:
             lineage.focus()
+            self._reset_action_banner()
         else:
             matrix.focus()
+            self._update_matrix_highlight()
+
+    def _trigger_delta_generation(self, from_ver, to_ver):
+        cmd = f"/delta generate --from={from_ver} --to={to_ver}"
+        self.app.say(f"generating static delta v{from_ver} -> v{to_ver}...")
+        from seine.tui import commands
+        self.app.run_worker(lambda: commands.dispatch(self.app, cmd), thread=True)
 
     def action_generate_delta(self):
         versions = self._deltas_data.get("versions", [])
@@ -341,13 +466,19 @@ class UpdatesScreen(BaseScreen):
         from_ver = None
         to_ver = None
 
-        if matrix.has_focus and matrix.cursor_coordinate:
-            row_idx, col_idx = matrix.cursor_coordinate.row, matrix.cursor_coordinate.column
-            if 0 <= row_idx < len(versions) and 1 <= col_idx <= len(versions):
-                from_ver = versions[row_idx]
-                to_ver = versions[col_idx - 1]
-
-        if not from_ver or not to_ver or from_ver == to_ver:
+        if matrix.has_focus:
+            from_ver, to_ver = self._get_matrix_cell_versions()
+            if not from_ver or not to_ver:
+                self.app.say("delta generate: select a delta cell in the matrix", warning=True)
+                return
+            if from_ver == to_ver:
+                self.app.say("delta generate: source and target versions must differ", warning=True)
+                return
+            from seine.imager.payload import version_key
+            if version_key(from_ver) > version_key(to_ver):
+                self.app.say("delta generate: target version must be newer than source version", warning=True)
+                return
+        else:
             sel = self._selected_version or (lineage.cursor_row if lineage.cursor_row is not None else None)
             if sel is not None and str(sel) in versions:
                 idx = versions.index(str(sel))
@@ -361,14 +492,27 @@ class UpdatesScreen(BaseScreen):
                 from_ver = versions[0]
                 to_ver = versions[-1]
 
-        if from_ver == to_ver:
+        if not from_ver or not to_ver or from_ver == to_ver:
             self.app.say("delta generate: source and target versions must differ", warning=True)
             return
 
-        cmd = f"/delta generate --from={from_ver} --to={to_ver}"
-        from seine.tui import commands
-        self.app.run_worker(lambda: commands.dispatch(self.app, cmd), thread=True)
+        self._trigger_delta_generation(from_ver, to_ver)
 
     def action_inspect_selection(self):
+        matrix = self.query_one("#matrix", DeltaMatrix)
+        if matrix.has_focus:
+            from_ver, to_ver = self._get_matrix_cell_versions()
+            if from_ver and to_ver:
+                from seine.imager.payload import version_key
+                if version_key(from_ver) < version_key(to_ver):
+                    cell = self._deltas_data.get("matrix", {}).get((from_ver, to_ver), {})
+                    if not cell.get("available"):
+                        self._trigger_delta_generation(from_ver, to_ver)
+                        return
+                    sz = cell.get("size_human", "")
+                    pct = cell.get("savings_pct")
+                    pct_str = f", {pct}% saved" if pct is not None else ""
+                    self.app.say(f"static delta v{from_ver} -> v{to_ver} already available ({sz}{pct_str})")
+                    return
         if self._selected_version:
             self.app.say(f"selected version v{self._selected_version}")

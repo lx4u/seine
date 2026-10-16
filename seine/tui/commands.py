@@ -267,7 +267,15 @@ def _delta(app, argv):
         app.say(f"static delta {from_ver} -> {to_ver} generated in {elapsed:.1f}s ({sz_str})")
         from seine.tui.updates_screen import UpdatesScreen
         if isinstance(app.screen, UpdatesScreen):
-            app.screen.update_body()
+            import threading
+            if (
+                getattr(app, "is_running", False) is True
+                and hasattr(app, "call_from_thread")
+                and getattr(app, "_thread_id", None) != threading.get_ident()
+            ):
+                app.call_from_thread(app.screen.update_body)
+            else:
+                app.screen.update_body()
     else:
         raise CommandError(f"unknown delta subcommand '{subcmd}' -- '/delta generate --from=V1 --to=V2'")
 

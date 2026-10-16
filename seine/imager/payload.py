@@ -361,7 +361,7 @@ def list_payload_lineage(payload_dir):
                 p_commit = commits_by_version.get(pv, "")
                 if p_commit and commit:
                     for d_key, (sz, d_path) in delta_sizes.items():
-                        if p_commit[:2] in d_key and (commit[:6] in d_key or p_commit[2:6] in d_key):
+                        if (p_commit[:2] in d_key or p_commit[2:6] in d_key) and commit[:6] in d_key:
                             matched_sz = sz
                             break
                 if matched_sz:
@@ -377,7 +377,7 @@ def list_payload_lineage(payload_dir):
             matched_sz = None
             if p_commit and commit:
                 for d_key, (sz, d_path) in delta_sizes.items():
-                    if p_commit[:2] in d_key and (commit[:6] in d_key or p_commit[2:6] in d_key):
+                    if (p_commit[:2] in d_key or p_commit[2:6] in d_key) and commit[:6] in d_key:
                         matched_sz = sz
                         break
             if matched_sz:
@@ -488,7 +488,7 @@ def list_payload_deltas(payload_dir):
                 matched_delta = delta_dirs[0] if delta_dirs else {"size": 3984112, "path": ""}
             elif c_from and c_to:
                 for d in delta_dirs:
-                    if c_from[:2] in d["name"] and (c_to[:6] in d["name"] or c_from[2:6] in d["name"]):
+                    if (c_from[:2] in d["name"] or c_from[2:6] in d["name"]) and c_to[:6] in d["name"]:
                         matched_delta = d
                         break
 
