@@ -415,10 +415,11 @@ class ScreenRatioTest(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.app import (
-                AnalyzeScreen, CacheScreen, DoctorScreen,
-                FilesystemScreen, PackagesScreen,
-                PlanScreen, SeineApp
+            from seine.tui.app import SeineApp
+            from seine.tui.cache import CacheScreen
+            from seine.tui.filesystem import FilesystemScreen
+            from seine.tui.screens import (
+                AnalyzeScreen, DoctorScreen, PackagesScreen, PlanScreen
             )
             from seine.tui.overview import OverviewScreen
         self.SeineApp = SeineApp
