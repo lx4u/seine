@@ -55,6 +55,10 @@ from tests.native_image import _EXAMPLES, native_image
 NATIVE_IMAGE = native_image()
 PC_UKI_IMAGE = os.path.join(_EXAMPLES, "pc-uki-image", "main.yaml")
 PC_IMAGE = os.path.join(path_to_sources, "examples", "pc-image", "main.yaml")
+PC_OSTREE_UPDATE_IMAGE = os.path.join(
+    path_to_sources, "examples", "pc-ostree-update-image", "main.yaml")
+PC_OSTREE_UPDATE_V2 = os.path.join(
+    path_to_sources, "examples", "pc-ostree-update-image", "v2.yaml")
 
 # A minimal vendor-only specification -- no 'image:' section at all, the
 # same shape as examples/vendor/main.yaml (pins a package set, builds
@@ -233,6 +237,66 @@ class Rendering(avocado.Test):
         text = self.render_plan(context)
         self.assertIn("would build", text)
         self.assertIn("steps:", text)
+
+    def test_overview_over_ostree_spec(self):
+        context = self.Context()
+        context.use([PC_OSTREE_UPDATE_IMAGE])
+        text = self.render_overview(context)
+        self.assertIn("OSTree Update Payload", text)
+        self.assertIn("Mode:        standard", text)
+        self.assertIn("Ref:        debian/amd64", text)
+        self.assertIn("Version:     1", text)
+        self.assertIn("Stateroot:  debian", text)
+        self.assertIn("Commit Key:  vault:ostree-commits", text)
+        self.assertIn("Manifest:   vault:update-manifest", text)
+        self.assertIn("Target Path: build/deploy/trixie/pc-ostree-update-payload/", text)
+        self.assertIn("Deltas From: none", text)
+
+    def test_overview_over_ostree_spec_with_deltas(self):
+        context = self.Context()
+        context.use([PC_OSTREE_UPDATE_IMAGE, PC_OSTREE_UPDATE_V2])
+        text = self.render_overview(context)
+        self.assertIn("Version:     2", text)
+        self.assertIn('Deltas From: ["1"] (static delta against factory baseline release)', text)
+
+    def test_overview_root_node_shows_ostree_payload(self):
+        from seine.tui.render import render_root_node
+        context = self.Context()
+        context.use([PC_OSTREE_UPDATE_IMAGE])
+        text = render_root_node(context.groups[0], context.builds[0])
+        self.assertIn("OSTree Update Payload", text)
+        self.assertIn("Version:     1", text)
+
+    def test_overview_ostree_composefs_signed(self):
+        spec_text = (
+            "distribution:\n"
+            "    release: forky\n"
+            "    architecture: amd64\n"
+            "image:\n"
+            "    filename: test.img\n"
+            "    ostree:\n"
+            "        mode: composefs\n"
+            "        stateroot: debian\n"
+            "        version: '3'\n"
+            "        gpg-key: vault:ostree-commits\n"
+            "        composefs-key: vault:composefs-commits\n"
+            "        manifest-key: vault:manifest-key\n"
+            "    partitions:\n"
+            "        - label: sysroot\n"
+            "          type: ext4\n"
+            "          where: /\n"
+            "        - label: var\n"
+            "          type: ext4\n"
+            "          where: /var\n"
+        )
+        spec_path = os.path.join(self.workdir, "composefs.yaml")
+        with open(spec_path, "w") as f:
+            f.write(spec_text)
+        context = self.Context()
+        context.use([spec_path])
+        text = self.render_overview(context)
+        self.assertIn("Mode:        composefs (signed)", text)
+        self.assertIn("Commit Key:  vault:ostree-commits", text)
 
 def _line_for(text, path):
     for line in text.splitlines():

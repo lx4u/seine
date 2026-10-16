@@ -17,7 +17,10 @@ from seine import multiconfig
 from seine import packages
 from seine import sbom
 from seine import secscan
+from seine import utils
 from seine.diffing import diff, recall
+from seine.imager import payload
+from seine.imager.ostree import ostree_ref
 from seine.tui import remote_match
 from seine.progress import elapsed
 from seine.sbuild import BuilderImage
@@ -36,6 +39,69 @@ def _remote_line(info):
     if info.get("artifacts_expired_at"):
         text += " (artifacts expired)"
     return text
+
+# Summary card for OSTree update payload configuration and release metadata.
+def _ostree_payload_box(build, ostree):
+    distro = build.spec.get("distribution") or {}
+    mode = ostree.get("mode", "standard")
+    if mode == "composefs" and ostree.get("composefs-key"):
+        mode_str = "composefs (signed)"
+    else:
+        mode_str = mode
+
+    try:
+        ref = ostree_ref(ostree, distro)
+    except Exception:
+        ref = ostree.get("ref") or "none"
+
+    version = str(ostree.get("version", "none"))
+    stateroot = ostree.get("stateroot", "default")
+    commit_key = ostree.get("gpg-key") or ostree.get("composefs-key") or "none"
+    manifest_key = ostree.get("manifest-key", "none")
+
+    output = build.image._output
+    if output:
+        pdir = payload.payload_dir(output, ostree.get("payload"), distro.get("release"))
+        target_path = f"{utils.display_path(pdir).rstrip('/')}/"
+    else:
+        target_path = "none"
+
+    deltas = (ostree.get("payload") or {}).get("deltas-from")
+    if deltas:
+        if deltas == ["1"]:
+            deltas_str = '["1"] (static delta against factory baseline release)'
+        else:
+            deltas_str = json.dumps(deltas)
+    else:
+        deltas_str = "none"
+
+    col1_1 = f"Mode:        {mode_str}"
+    col2_1 = f"Ref:        {ref}"
+    col1_2 = f"Version:     {version}"
+    col2_2 = f"Stateroot:  {stateroot}"
+    col1_3 = f"Commit Key:  {commit_key}"
+    col2_3 = f"Manifest:   {manifest_key}"
+    line4 = f"Target Path: {target_path}"
+    line5 = f"Deltas From: {deltas_str}"
+
+    left_w = max(len(col1_1), len(col1_2), len(col1_3) + 3, 36)
+    row1 = f"{col1_1.ljust(left_w)}{col2_1}"
+    row2 = f"{col1_2.ljust(left_w)}{col2_2}"
+    row3 = f"{col1_3.ljust(left_w)}{col2_3}"
+
+    content_lines = [row1, row2, row3, line4, line5]
+    inner_w = max(74, max(len(l) for l in content_lines))
+
+    title = " OSTree Update Payload "
+    dashes = inner_w + 1 - len(title)
+    top = f"┌─{title}{'─' * dashes}┐"
+    bottom = f"└{'─' * (inner_w + 2)}┘"
+
+    box = [top]
+    for l in content_lines:
+        box.append(f"│ {l.ljust(inner_w)} │")
+    box.append(bottom)
+    return box
 
 # Overview lines for one build: distro/arch, last build, diff
 # status, output path. Shared by render_overview() and
@@ -71,6 +137,11 @@ def _overview_lines(files, build, name):
 
     if output:
         parts.append("  would write: %s" % output)
+
+    ostree = (build.spec.get("image") or {}).get("ostree")
+    if ostree and ostree.get("mode") != "disabled":
+        parts.append("")
+        parts += _ostree_payload_box(build, ostree)
     return parts
 
 def render_overview(context):
