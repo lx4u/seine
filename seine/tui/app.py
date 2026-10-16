@@ -36,11 +36,12 @@ from seine.tui.filesystem import FilesystemScreen, FilesystemState
 from seine.tui.history import History
 from seine.tui.issues import IssuesScreen
 from seine.tui.vendor import VendorScreen, VendorState
-from seine.tui.render import (append_logs_section, inspect_payload, _human_size,
-                              render_analyze, render_artifacts, render_cache,
-                              render_doctor, render_image_node, render_node,
-                              render_overview, render_packages, render_plan,
-                              render_root_node, render_test_node)
+from seine.tui.artifacts import (_human_size, inspect_payload,
+                                 render_artifacts)
+from seine.tui.render import (append_logs_section, render_analyze,
+                              render_cache, render_doctor, render_image_node,
+                              render_node, render_overview, render_packages,
+                              render_plan, render_root_node, render_test_node)
 from seine.tui.spectree import SpecTree
 from seine.tui.remote_screen import RemoteScreen
 from seine.tui.sanitize import sanitize
