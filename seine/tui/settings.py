@@ -18,6 +18,41 @@ ADD_LABEL = "+ add command…"
 
 HINT = "Tab switch · Up/Down move · Enter edit · Del clear · Esc close"
 
+# Not spec-scoped: jobs/resources/theme/llm_* only; startup_commands has
+# its own widget on Settings. Unset shows the real fallback value;
+# llm_model/llm_api_base have no fallback, so '(unset)' is used instead.
+def format_bool_toggle(value, is_default=False):
+    toggle = "[● ON | ○ off]" if value else "[○ on | ● OFF]"
+    return "%s (default)" % toggle if is_default else toggle
+
+def render_settings():
+    from seine import settings
+    from seine.build import format_resources
+    current = settings.load()
+    jobs = str(current["jobs"]) if current["jobs"] is not None else "1 (default)"
+    resources = format_resources(current["resources"]) or "(unset, follows jobs)"
+    theme = current["theme"] or "dark (default)"
+    llm_model = current["llm_model"] or "(unset)"
+    llm_api_base = current["llm_api_base"] or "(unset)"
+    default_remote = current.get("default_remote") or "(unset)"
+    insecure = bool(current.get("remote_insecure"))
+    insecure_default = insecure == settings.DEFAULTS.get("remote_insecure")
+    remote_insecure = format_bool_toggle(insecure, is_default=insecure_default)
+    remote_ca_cert = current.get("remote_ca_cert") or "(unset)"
+    remote_build = current.get("remote_build") or settings.DEFAULTS["remote_build"]
+    if remote_build == settings.DEFAULTS["remote_build"]:
+        remote_build += " (default)"
+    # Order matches GeneralSettings.KEYS (seine/tui/settings.py):
+    # 'resources' last so 'theme' stays one 'down' press from the top.
+    return "\n".join(
+        "%-16s %s" % (key, value) for key, value in
+        [("jobs", jobs), ("theme", theme), ("llm_model", llm_model),
+         ("llm_api_base", llm_api_base), ("default_remote", default_remote),
+         ("remote_insecure", remote_insecure),
+         ("remote_ca_cert", remote_ca_cert), ("remote_build", remote_build),
+         ("resources", resources)]
+    ) + "\n"
+
 # refresh_from() reuses render_settings()'s lines rather than
 # formatting each setting a second way; KEYS maps a row index to
 # which setting it was.
@@ -28,7 +63,6 @@ class GeneralSettings(OptionList):
             "remote_insecure", "remote_ca_cert", "remote_build", "resources"]
 
     def refresh_from(self):
-        from seine.tui.render import render_settings
         previous = self.highlighted
         self.clear_options()
         for line in render_settings().splitlines():

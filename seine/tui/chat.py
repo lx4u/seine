@@ -6,6 +6,7 @@
 # second row with #chatcol where #tail is, #stats (tokens, context
 # meter) where #tasklist is.
 
+import os
 import time
 
 from rich.style import Style
@@ -16,8 +17,18 @@ from textual.widgets import Markdown, ProgressBar, Static
 from seine.progress import SPINNER, elapsed
 from seine.tui import ai
 from seine.tui.base import BaseScreen, StaticPane
-from seine.tui.render import render_chat_header
 from seine.tui.spectree import SpecTree
+
+# ChatScreen's one-line #body: which spec the ai.py tools act on, and
+# whether the AI chat is even configured.
+def render_chat_header(context):
+    from seine import settings
+    from seine.tui.ai import configured
+    spec = context.label() if context.active else "no active specification"
+    if configured():
+        model = os.environ.get("SEINE_LLM_MODEL") or settings.load()["llm_model"]
+        return "%s -- %s" % (spec, model)
+    return "%s -- not configured ('/settings' sets llm_model)" % spec
 
 # Same braille spinner progress.py's ANSI Display uses during a build.
 FRAMES = SPINNER[True]

@@ -38,8 +38,8 @@ def _tool_cache_why(app, arguments):
     return render.render_cache_why(app.context, name, architecture=architecture)
 
 def _tool_vendor(app, arguments):
-    from seine.tui import render
-    text = render.render_vendor(app.context, suite=arguments.get("suite"))
+    from seine.tui import vendor
+    text = vendor.render_vendor(app.context, suite=arguments.get("suite"))
     lines = text.splitlines()
     try:
         start = int(arguments["start"]) if arguments.get("start") else 1
@@ -52,8 +52,8 @@ def _tool_vendor_why(app, arguments):
     package = arguments.get("package")
     if not package:
         return "give 'package', a source package name from 'vendor'"
-    from seine.tui import render
-    text = render.render_vendor_why(app.context, package, suite=arguments.get("suite"))
+    from seine.tui import vendor
+    text = vendor.render_vendor_why(app.context, package, suite=arguments.get("suite"))
     lines = text.splitlines()
     try:
         start = int(arguments["start"]) if arguments.get("start") else 1
