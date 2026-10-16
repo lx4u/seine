@@ -1786,10 +1786,11 @@ class App(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.app import (AnalyzeScreen, ArtifactsScreen, CacheScreen,
+            from seine.tui.app import (AnalyzeScreen, CacheScreen,
                                        DiffScreen, DoctorScreen, IssuesScreen,
                                        OverviewScreen, PackagesScreen, PlanScreen,
                                        SeineApp)
+            from seine.tui.artifacts import ArtifactsScreen
         self.AnalyzeScreen = AnalyzeScreen
         self.ArtifactsScreen = ArtifactsScreen
         self.CacheScreen = CacheScreen
@@ -4743,7 +4744,8 @@ class ArtifactsScreenIntegration(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.app import ArtifactsTree, ArtifactPreviewPane, SeineApp
+            from seine.tui.app import SeineApp
+            from seine.tui.artifacts import ArtifactPreviewPane, ArtifactsTree
         self.SeineApp = SeineApp
         self.ArtifactsTree = ArtifactsTree
         self.ArtifactPreviewPane = ArtifactPreviewPane
