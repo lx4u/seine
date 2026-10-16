@@ -432,15 +432,17 @@ class ScreenRatioTest(avocado.Test):
         async def scenario():
             app = self.SeineApp()
             async with app.run_test(size=(100, 30)) as pilot:
-                # Overview has 2:1 ratio (spectree > cmd)
+                # Overview has 1:2 ratio (cmd > spectree)
                 app.switch_screen(self.OverviewScreen())
                 await pilot.pause()
                 tree_w = app.screen.query_one("#spectree").size.width
                 cmd_w = app.screen.query_one("#cmd").size.width
-                self.assertGreater(tree_w, cmd_w)
+                self.assertLess(tree_w, cmd_w)
+                self.assertGreaterEqual(tree_w, 30)
+                self.assertLessEqual(tree_w, 42)
 
-                # 50/50 screens have equal widths (tree_w == cmd_w within 1 cell)
-                screens_50_50 = [
+                # Content screens allocate 2fr to cmd with spectree capped
+                screens = [
                     self.PlanScreen,
                     self.FilesystemScreen,
                     self.PackagesScreen,
@@ -448,13 +450,25 @@ class ScreenRatioTest(avocado.Test):
                     self.CacheScreen,
                     self.DoctorScreen,
                 ]
-                for screen_cls in screens_50_50:
+                for screen_cls in screens:
                     app.switch_screen(screen_cls())
                     await pilot.pause()
                     tw = app.screen.query_one("#spectree").size.width
                     cw = app.screen.query_one("#cmd").size.width
-                    self.assertAlmostEqual(tw, cw, delta=1,
-                                           msg=f"{screen_cls.__name__} spectree ({tw}) != cmd ({cw})")
+                    self.assertLess(tw, cw,
+                                    msg=f"{screen_cls.__name__} spectree ({tw}) >= cmd ({cw})")
+                    self.assertGreaterEqual(tw, 30)
+                    self.assertLessEqual(tw, 42)
+
+            app_wide = self.SeineApp()
+            async with app_wide.run_test(size=(142, 39)) as pilot:
+                app_wide.switch_screen(self.OverviewScreen())
+                await pilot.pause()
+                tree_w = app_wide.screen.query_one("#spectree").size.width
+                cmd_w = app_wide.screen.query_one("#cmd").size.width
+                self.assertGreaterEqual(tree_w, 34)
+                self.assertLessEqual(tree_w, 42)
+                self.assertGreaterEqual(cmd_w, 80)
         _run(scenario)
 
 if __name__ == "__main__":
