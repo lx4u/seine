@@ -992,7 +992,7 @@ def _latest_cast(qualified):
 # Qualified test name(s) under the overview's selected node, with
 # the same no-run-yet fallback OverviewScreen.update_body() uses.
 def _selected_tests(app):
-    from seine.tui.app import OverviewScreen
+    from seine.tui.overview import OverviewScreen
     from seine.tui.testing import _tests_under
     screen = app.screen
     if not isinstance(screen, OverviewScreen) or \
@@ -1054,7 +1054,7 @@ def _replay(app, argv):
     # Lazy: app imports this registry, so the screen class only
     # resolves at call time (same reason _test() imports start_test
     # inside its own body).
-    from seine.tui.app import OverviewScreen
+    from seine.tui.overview import OverviewScreen
     if isinstance(app.screen, OverviewScreen):
         app.screen.action_replay_cast(path)
     else:

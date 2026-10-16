@@ -35,7 +35,8 @@ class StartupModalTest(avocado.Test):
     def setUp(self):
         try:
             from seine.tui import commands
-            from seine.tui.app import DoctorScreen, OverviewScreen, SeineApp
+            from seine.tui.app import DoctorScreen, SeineApp
+            from seine.tui.overview import OverviewScreen
             from seine.tui.startup import PipeStream, StartupModal, ThreadOutputProxy
         except ImportError as e:
             self.cancel(f"the 'tui' extra (textual) is not installed: {e}")

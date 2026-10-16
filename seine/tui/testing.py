@@ -10,11 +10,15 @@ import time
 
 from rich.style import Style
 from rich.text import Text
+from textual.containers import Horizontal
+from textual.widgets import RichLog, Static
 
 from seine.progress import elapsed
 from seine.testing import runner, testindex
+from seine.tui.base import BaseScreen, StaticPane
 from seine.tui.reporter import TextualReporter
 from seine.tui.sanitize import sanitize
+from seine.tui.spectree import SpecTree
 
 # Same marks as the Build/Test screens, so a test reads the same in
 # the overview as where it ran. Only passed/failed get a color.
@@ -305,6 +309,56 @@ class TestState:
                 lines.append("see %s/console.log (%s/console.cast) and %s/interactions.json "
                             "for what led up to it" % (outdir, outdir, outdir))
         return "\n".join(lines) + "\n"
+ 
+# Live view over app.test_state: own tick redraws #body, plus a #tail
+# output pane. Reuses BuildScreen's #tail/#buildrow ids -- safe since
+# only one screen is mounted at a time.
+class TestScreen(BaseScreen):
+    def compose_content(self):
+        yield Horizontal(
+            SpecTree(id="spectree", classes="spectree"),
+            StaticPane(Static(id="body", markup=False), id="cmd"),
+            id="main",
+        )
+        yield Horizontal(RichLog(id="tail", markup=False, wrap=True, max_lines=4000),
+                         id="buildrow")
+
+    def on_mount(self):
+        super().on_mount()
+        self._output_run_id = None
+        self._output_offset = 0
+        self._timer = self.set_interval(1.0, self._tick)
+
+    def on_unmount(self):
+        timer = getattr(self, "_timer", None)
+        if timer is not None:
+            timer.stop()
+
+    def _tick(self):
+        self._follow()
+        self.update_body()
+
+    def update_body(self):
+        state = self.app.test_state
+        self.query_one("#body", Static).update(state.render())
+        if state.message:
+            self.say(state.message, error=state.error)
+
+    # A fresh run (state.run_id bumped by reset()) starts the pane over.
+    # No file here, so 'new since last tick' is a list slice, not a seek.
+    def _follow(self):
+        state = self.app.test_state
+        tail = self.query_one("#tail", RichLog)
+        if state.run_id != self._output_run_id:
+            self._output_run_id = state.run_id
+            self._output_offset = 0
+            tail.clear()
+        new_lines = state.output_lines[self._output_offset:]
+        if new_lines:
+            # output_lines is already sanitized at the source; sanitize
+            # again here so any other writer can't escape the pane.
+            tail.write(sanitize("\n".join(new_lines)))
+            self._output_offset = len(state.output_lines)
 
 # Mirrors start_build()'s shape: a worker thread, a Reporter crossing
 # back through call_from_thread. 'spec', already parsed, saves reloading

@@ -324,7 +324,8 @@ class HighlightsNamespacedGroupTasks(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.image import Image
-            from seine.tui.app import OverviewScreen, SeineApp
+            from seine.tui.app import SeineApp
+            from seine.tui.overview import OverviewScreen
             from seine.tui.spectree import SpecTree
         self.Image = Image
         self.OverviewScreen = OverviewScreen
@@ -416,9 +417,10 @@ class ScreenRatioTest(avocado.Test):
         with _tui_required(self):
             from seine.tui.app import (
                 AnalyzeScreen, CacheScreen, DoctorScreen,
-                FilesystemScreen, OverviewScreen, PackagesScreen,
+                FilesystemScreen, PackagesScreen,
                 PlanScreen, SeineApp
             )
+            from seine.tui.overview import OverviewScreen
         self.SeineApp = SeineApp
         self.OverviewScreen = OverviewScreen
         self.PlanScreen = PlanScreen
