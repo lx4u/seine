@@ -540,7 +540,8 @@ class SeineApp(App):
     .nav-icon.nav-disabled { color: $text-muted; }
     /* 'round', not Input's default 'tall': 'tall' uses eighth-block
        glyphs some terminal fonts lack, breaking the border. */
-    #spectree, #tail, #logviewer, #castpane { width: 2fr; height: 100%; }
+    #spectree { width: 1fr; min-width: 30; max-width: 42; height: 100%; }
+    #tail, #logviewer, #castpane { width: 2fr; height: 100%; }
     #prompt, #spectree, #tail, #fslist, #previewpane, #logviewer, #castpane {
         border: round $foreground 40%;
     }
@@ -556,16 +557,7 @@ class SeineApp(App):
        _run_startup_commands() below) with a progress line in place
        of the default placeholder, italic so it reads as status. */
     #prompt.startup > .input--placeholder { text-style: italic; }
-    #cmd, #tasks { width: 1fr; height: 100%; border: round $foreground 40%; }
-    /* 50/50 ratio: equal width for main content pane and right pane(s) */
-    PlanScreen #spectree,
-    FilesystemScreen #spectree,
-    PackagesScreen #spectree,
-    AnalyzeScreen #spectree,
-    CacheScreen #spectree,
-    DoctorScreen #spectree {
-        width: 1fr;
-    }
+    #cmd, #tasks { width: 2fr; height: 100%; border: round $foreground 40%; }
     #body { padding: 1 2; }
     /* Timeline up top, playing row's arguments below, 2:1 -- the
        arguments pane only shows while a replay with a timeline

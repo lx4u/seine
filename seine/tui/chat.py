@@ -27,7 +27,13 @@ class ChatScreen(BaseScreen):
     /* Scoped to this screen: #main's default background is a visibly
        lighter grey than #chatrow's, and the two halves clashed. */
     ChatScreen #main { background: $background; }
-    ChatScreen #spectree { background: $background; }
+    ChatScreen #spectree {
+        background: $background;
+        scrollbar-background: $background;
+        scrollbar-background-hover: $background;
+        scrollbar-background-active: $background;
+        scrollbar-corner-color: $background;
+    }
     ChatScreen #cmd { background: $background; }
     #chatrow { height: 1fr; }
     #chatcol {
