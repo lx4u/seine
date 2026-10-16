@@ -5,6 +5,7 @@ import avocado
 import contextlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -749,6 +750,107 @@ class ArtifactsRendering(avocado.Test):
         text = self.render_artifacts(context)
         self.assertIn("pc-image.img", text)
         self.assertIn("2.0KiB", text)
+
+    def _create_mock_payload(self, deploy_dir, stem="pc-image"):
+        payload_dir = os.path.join(deploy_dir, f"{stem}-payload")
+        uki_dir = os.path.join(payload_dir, "uki")
+        repo_dir = os.path.join(payload_dir, "repo")
+        heads_dir = os.path.join(repo_dir, "refs", "heads")
+        obj_dir = os.path.join(repo_dir, "objects")
+        deltas_dir = os.path.join(repo_dir, "deltas", "8f", "2b31-4c9811")
+        os.makedirs(uki_dir, exist_ok=True)
+        os.makedirs(os.path.join(heads_dir, "debian"), exist_ok=True)
+        os.makedirs(obj_dir, exist_ok=True)
+        os.makedirs(deltas_dir, exist_ok=True)
+
+        with open(os.path.join(uki_dir, "SHA256SUMS"), "w") as f:
+            f.write("hash1  debian-1.efi\nhash2  debian-2.efi\n")
+        with open(os.path.join(uki_dir, "SHA256SUMS.gpg"), "wb") as f:
+            f.write(b"gpg-signature")
+        with open(os.path.join(uki_dir, "debian-1.efi"), "wb") as f:
+            f.write(b"uki1" * 1024)
+        with open(os.path.join(uki_dir, "debian-2.efi"), "wb") as f:
+            f.write(b"uki2" * 1024)
+
+        with open(os.path.join(repo_dir, "summary"), "wb") as f:
+            f.write(b"summary-bytes")
+        with open(os.path.join(repo_dir, "summary.sig"), "wb") as f:
+            f.write(b"sig-bytes")
+        with open(os.path.join(heads_dir, "debian/amd64"), "w") as f:
+            f.write("4c9811e5f2847c1b5a329d91cb61d8a391e0a98c5d3129841f3e790a12b8cd12\n")
+        with open(os.path.join(heads_dir, "debian/amd64.v2"), "w") as f:
+            f.write("4c9811e5f2847c1b5a329d91cb61d8a391e0a98c5d3129841f3e790a12b8cd12\n")
+        with open(os.path.join(heads_dir, "debian/amd64.v1"), "w") as f:
+            f.write("8f2b31c9a07123456789abcdef0123456789abcdef0123456789abcdef012345\n")
+
+        with open(os.path.join(obj_dir, "test.obj"), "wb") as f:
+            f.write(b"obj" * 2048)
+        with open(os.path.join(deltas_dir, "superblock"), "wb") as f:
+            f.write(b"delta" * 512)
+
+        with open(os.path.join(deploy_dir, f"{stem}.ostree-commit"), "w") as f:
+            f.write("4c9811e5f2847c1b5a329d91cb61d8a391e0a98c5d3129841f3e790a12b8cd12\n")
+        with open(os.path.join(deploy_dir, f"{stem}.ostree-ref"), "w") as f:
+            f.write("debian/amd64\n")
+        with open(os.path.join(deploy_dir, f"{stem}.static-delta-1"), "w") as f:
+            f.write("from=1\nfrom_commit=8f2b31c9a0\nto_commit=4c9811e5f2847c1b5a329d91cb61d8a391e0a98c5d3129841f3e790a12b8cd12\nref=debian/amd64\n")
+
+        return payload_dir
+
+    def test_inspect_payload_extracts_uki_and_repo_details(self):
+        from seine.tui.render import inspect_payload
+        deploy = os.path.join(self.workdir, "deploy")
+        os.makedirs(deploy, exist_ok=True)
+        payload_dir = self._create_mock_payload(deploy)
+
+        info = inspect_payload(payload_dir)
+        self.assertIsNotNone(info)
+        self.assertEqual(info["name"], "pc-image-payload")
+        self.assertGreater(info["size"], 0)
+
+        ukis = info["uki"]["ukis"]
+        self.assertEqual(len(ukis), 2)
+        self.assertEqual(ukis[0]["name"], "debian-1.efi")
+        self.assertTrue(ukis[0]["signed"])
+        self.assertIsNotNone(info["uki"]["manifest"])
+        self.assertIsNotNone(info["uki"]["signature"])
+
+        repo = info["repo"]
+        self.assertIsNotNone(repo["summary"])
+        self.assertIsNotNone(repo["summary_sig"])
+        self.assertEqual(repo["objects_count"], 1)
+        ref_names = [r["ref"] for r in repo["refs"]]
+        self.assertIn("debian/amd64", ref_names)
+        self.assertIn("debian/amd64.v2", ref_names)
+
+        self.assertEqual(len(repo["deltas"]), 1)
+        self.assertEqual(repo["deltas"][0]["pair"], "v1 -> v2")
+
+        snapshot_names = [s["name"] for s in info["snapshots"]]
+        self.assertIn("pc-image.ostree-commit", snapshot_names)
+        self.assertIn("pc-image.ostree-ref", snapshot_names)
+        self.assertIn("pc-image.static-delta-1", snapshot_names)
+
+    def test_render_artifacts_drills_down_into_payload(self):
+        os.environ["SEINE_CACHE_DIR"] = self.workdir
+        deploy = os.path.join(self.workdir, "deploy")
+        os.environ["SEINE_DEPLOY_DIR"] = deploy
+        context = self.Context()
+        context.use([NATIVE_IMAGE])
+        release = context.builds[0].spec["distribution"]["release"]
+        deploy_rel = os.path.join(deploy, release)
+        os.makedirs(deploy_rel, exist_ok=True)
+        self._create_mock_payload(deploy_rel, stem="pc-image")
+
+        text = self.render_artifacts(context)
+        self.assertIn("pc-image-payload/", text)
+        self.assertIn("uki/", text)
+        self.assertIn("SHA256SUMS", text)
+        self.assertIn("debian-1.efi", text)
+        self.assertIn("repo/", text)
+        self.assertIn("summary", text)
+        self.assertIn("refs/heads/debian/amd64", text)
+        self.assertIn("deltas/", text)
 
 BUSYBOX_REBUILD = os.path.join(path_to_sources, "examples", "rebuild-busybox", "main.yaml")
 
@@ -4633,6 +4735,72 @@ class TestHistory(avocado.Test):
                 body.on_click(event)
                 await pilot.pause()
                 self.assertEqual(app.screen._cast_path, path)
+        _run(scenario)
+
+class ArtifactsScreenIntegration(avocado.Test):
+    """
+    :avocado: tags=tui
+    """
+    def setUp(self):
+        with _tui_required(self):
+            from seine.tui.app import ArtifactsTree, ArtifactPreviewPane, SeineApp
+        self.SeineApp = SeineApp
+        self.ArtifactsTree = ArtifactsTree
+        self.ArtifactPreviewPane = ArtifactPreviewPane
+        os.environ["SEINE_CACHE_DIR"] = self.workdir
+        self.deploy = os.path.join(self.workdir, "deploy")
+        os.environ["SEINE_DEPLOY_DIR"] = self.deploy
+        _isolate_history(self)
+
+    def tearDown(self):
+        if os.path.isdir(self.workdir):
+            shutil.rmtree(self.workdir, ignore_errors=True)
+
+    def test_artifacts_screen_populates_tree_and_previews(self):
+        from seine.tui.context import Context
+        ctx = Context()
+        ctx.use([NATIVE_IMAGE])
+        release = ctx.builds[0].spec["distribution"]["release"]
+        deploy_rel = os.path.join(self.deploy, release)
+        os.makedirs(deploy_rel, exist_ok=True)
+        with open(os.path.join(deploy_rel, "pc-image.img"), "wb") as f:
+            f.write(b"img" * 1024)
+
+        payload_dir = os.path.join(deploy_rel, "pc-image-payload")
+        uki_dir = os.path.join(payload_dir, "uki")
+        repo_dir = os.path.join(payload_dir, "repo")
+        os.makedirs(uki_dir, exist_ok=True)
+        os.makedirs(os.path.join(repo_dir, "refs", "heads"), exist_ok=True)
+        with open(os.path.join(uki_dir, "SHA256SUMS"), "w") as f:
+            f.write("hash1  debian-1.efi\n")
+        with open(os.path.join(deploy_rel, "pc-image.ostree-commit"), "w") as f:
+            f.write("4c9811e5f2847c1b5a329d91cb61d8a391e0a98c5d3129841f3e790a12b8cd12\n")
+
+        async def scenario():
+            app = self.SeineApp(files=[NATIVE_IMAGE])
+            async with app.run_test() as pilot:
+                app.show("artifacts")
+                await pilot.pause()
+                tree = app.screen.query_one(self.ArtifactsTree)
+                self.assertGreater(len(tree.root.children), 0)
+                labels = [str(c.label) for c in tree.root.children]
+                self.assertTrue(any("pc-image.img" in lbl for lbl in labels))
+                self.assertTrue(any("pc-image-payload" in lbl for lbl in labels))
+
+                commit_node = next((c for c in tree.root.children if "ostree-commit" in str(c.label)), None)
+                self.assertIsNotNone(commit_node)
+                tree.select_node(commit_node)
+                await pilot.pause()
+                preview_pane = app.screen.query_one(self.ArtifactPreviewPane)
+                self.assertTrue(preview_pane.display)
+                content = str(_content(app.screen.query_one("#artifactpreview")))
+                self.assertIn("4c9811e5f2847c1b", content)
+
+                await pilot.press("escape")
+                await pilot.pause()
+                self.assertFalse(preview_pane.display)
+                self.assertTrue(tree.display)
+
         _run(scenario)
 
 if __name__ == "__main__":
