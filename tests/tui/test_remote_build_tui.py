@@ -439,11 +439,11 @@ class RemoteBuildTuiTest(avocado.Test):
             self.assertEqual(app.remote_session.request.call_count, calls)
 
     def test_overview_names_the_remote_build(self):
-        from seine.tui import render
-        line = render._remote_line({"status": "completed", "created_at": 1.0,
+        from seine.tui import overview
+        line = overview._remote_line({"status": "completed", "created_at": 1.0,
                                     "started_at": 2.0, "finished_at": 62.0})
         self.assertIn("remote: built", line)
-        failed = render._remote_line({"status": "failed", "created_at": 1.0,
+        failed = overview._remote_line({"status": "failed", "created_at": 1.0,
                                       "artifacts_expired_at": 5.0})
         self.assertIn("FAILED", failed)
         self.assertIn("artifacts expired", failed)

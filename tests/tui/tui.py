@@ -214,7 +214,8 @@ class Rendering(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.tui.context import Context
-            from seine.tui.render import render_overview, render_plan
+            from seine.tui.overview import render_overview
+            from seine.tui.render import render_plan
         self.Context = Context
         self.render_overview = render_overview
         self.render_plan = render_plan
@@ -261,7 +262,7 @@ class Rendering(avocado.Test):
         self.assertIn('Deltas From: ["1"] (static delta against factory baseline release)', text)
 
     def test_overview_root_node_shows_ostree_payload(self):
-        from seine.tui.render import render_root_node
+        from seine.tui.overview import render_root_node
         context = self.Context()
         context.use([PC_OSTREE_UPDATE_IMAGE])
         text = render_root_node(context.groups[0], context.builds[0])
@@ -299,6 +300,23 @@ class Rendering(avocado.Test):
         self.assertIn("Mode:        composefs (signed)", text)
         self.assertIn("Commit Key:  vault:ostree-commits", text)
 
+    def test_overview_ostree_payload_box_responsive_width(self):
+        context = self.Context()
+        context.use([PC_OSTREE_UPDATE_IMAGE])
+        narrow = self.render_overview(context, width=41)
+        for line in narrow.splitlines():
+            if any(c in line for c in "┌│└"):
+                self.assertLessEqual(len(line), 41)
+        self.assertIn("Mode:        standard", narrow)
+        self.assertIn("Ref:        debian/amd64", narrow)
+
+        standard = self.render_overview(context, width=72)
+        for line in standard.splitlines():
+            if any(c in line for c in "┌│└"):
+                self.assertLessEqual(len(line), 72)
+        self.assertIn("OSTree Update Payload", standard)
+        self.assertIn("Commit Key:  vault:ostree-commits", standard)
+
 def _line_for(text, path):
     for line in text.splitlines():
         stripped = line.strip()
@@ -328,7 +346,7 @@ class RootNodeRendering(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.tui.context import Context
-            from seine.tui.render import render_root_node
+            from seine.tui.overview import render_root_node
         self.Context = Context
         self.render_root_node = render_root_node
         os.environ["SEINE_CACHE_DIR"] = self.workdir
@@ -413,7 +431,7 @@ class ImageNodeRendering(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.render import render_image_node
+            from seine.tui.overview import render_image_node
         self.render_image_node = render_image_node
 
     def test_no_partitions_says_so(self):
@@ -631,7 +649,7 @@ class ImageNodeRendering(avocado.Test):
         }
         text = self.render_image_node(image_spec, width=200)
         widths = self._box_widths(text.plain)
-        from seine.tui.render import BOX_WIDTH
+        from seine.tui.overview import BOX_WIDTH
         self.assertEqual(max(widths), BOX_WIDTH)
 
 # append_logs_section()/_logs_section(): the 'Logs:' bullets a task-
@@ -643,7 +661,7 @@ class LogsSectionRendering(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.render import append_logs_section
+            from seine.tui.overview import append_logs_section
         self.append_logs_section = append_logs_section
         os.environ["SEINE_LOG_DIR"] = self.workdir
 
@@ -706,7 +724,7 @@ class LogsSectionRendering(avocado.Test):
         self.assertEqual(text if isinstance(text, str) else text.plain, "x\n")
 
     def test_only_the_newest_few_runs_are_shown(self):
-        from seine.tui.render import LOGS_SHOWN
+        from seine.tui.overview import LOGS_SHOWN
         for i in range(LOGS_SHOWN + 3):
             self._record([{"name": "bootstrap-host", "failed": False,
                           "cached": False, "log": "x%d.log" % i}], run=str(i))
@@ -1360,8 +1378,8 @@ class AnalyzeCacheDoctorRendering(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.tui.context import Context
-            from seine.tui.render import (render_analyze, render_cache,
-                                          render_cache_why, render_doctor)
+            from seine.tui.cache import render_cache, render_cache_why
+            from seine.tui.render import render_analyze, render_doctor
         self.Context = Context
         self.render_analyze = render_analyze
         self.render_cache = render_cache

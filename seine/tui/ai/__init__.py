@@ -116,7 +116,9 @@ def _render_tool(name, with_context=True):
         return str(fn(app.context) if with_context else fn())
     return run
 
-_tool_overview = _render_tool("render_overview")
+def _tool_overview(app, arguments):
+    from seine.tui.overview import render_overview
+    return str(render_overview(app.context))
 _tool_plan = _render_tool("render_plan")
 _tool_packages = _render_tool("render_packages")
 _tool_analyze = _render_tool("render_analyze")

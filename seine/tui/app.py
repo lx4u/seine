@@ -34,7 +34,8 @@ from seine.tui.issues import IssuesScreen
 from seine.tui.overview import OverviewScreen
 from seine.tui.vendor import VendorScreen, VendorState
 from seine.tui.artifacts import ArtifactsScreen
-from seine.tui.render import (render_analyze, render_cache, render_doctor,
+from seine.tui.cache import render_cache
+from seine.tui.render import (render_analyze, render_doctor,
                               render_packages, render_plan)
 from seine.tui.remote_screen import RemoteScreen
 from seine.tui.target import TargetState

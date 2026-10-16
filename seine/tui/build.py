@@ -19,7 +19,7 @@ from seine.progress import elapsed
 from seine.tui.base import BaseScreen, StaticPane
 from seine.tui.download import redraw
 from seine.tui.reporter import TextualReporter
-from seine.tui.render import render_overview
+from seine.tui.overview import render_overview
 from seine.tui.sanitize import sanitize
 from seine.tui.spectree import SpecTree, branch_for, _item_label
 

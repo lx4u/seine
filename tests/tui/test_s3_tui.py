@@ -18,7 +18,7 @@ from textual.widgets import Input, Button
 from seine import doctor
 from seine.credentials import CredentialNotFound
 from seine.tui.credentials import CredentialModal, tui_prompt
-from seine.tui.render import render_s3_status, render_cache, render_cache_explain
+from seine.tui.cache import render_s3_status, render_cache, render_cache_explain
 from seine.tui.commands import _cache, CommandError
 
 
@@ -217,7 +217,7 @@ class TUICacheScreenTest(avocado.Test):
 
         # /cache explain ...: sets cache_text and shows cache
         app.show.reset_mock()
-        with mock.patch("seine.tui.render.render_cache_explain", return_value="recipe diff output"):
+        with mock.patch("seine.tui.cache.render_cache_explain", return_value="recipe diff output"):
             _cache(app, ["explain", "recipe1.recipe", "recipe2.recipe"])
             self.assertEqual(app.cache_text, "recipe diff output")
             app.show.assert_called_with("cache")
