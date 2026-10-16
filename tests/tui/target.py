@@ -400,7 +400,8 @@ class TargetCommand(avocado.Test):
         self.commands.dispatch(self.app, "/target status")
         self.assertEqual(self._client().calls,
                          [("target_status",), ("target_uptime",),
-                          ("storage_status",), ("usb_ports",)])
+                          ("storage_status",), ("usb_ports",),
+                          ("console_dump",)])
 
     def test_bare_target_switches_to_the_screen(self):
         self.commands.dispatch(self.app, "/target")

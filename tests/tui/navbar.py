@@ -46,7 +46,7 @@ class NavBarTest(avocado.Test):
 
     def test_diff_is_not_in_the_bar(self):
         names = [i.name for i in self.navbar.NAV_ITEMS]
-        self.assertEqual(len(names), 15)
+        self.assertEqual(len(names), 16)
         self.assertNotIn("diff", names)
         for item in self.navbar.NAV_ITEMS:
             self.assertEqual(len(item.icon), 1)
