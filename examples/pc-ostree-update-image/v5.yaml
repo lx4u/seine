@@ -1,0 +1,42 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Version 5 overlay for pc-ostree-update-image: simulates a poisoned
+# release by adding a failing systemd service that blocks boot,
+# triggering automatic watchdog rollback to version 4.
+#   seine build examples/pc-ostree-update-image/main.yaml examples/pc-ostree-update-image/v5.yaml
+
+image:
+    ostree:
+        version: "5"
+        payload:
+            deltas-from: ["4"]
+
+playbook:
+    - name: v5 packages
+      wave: packages
+      after: [base]
+      tasks:
+          - name: install htop, strace and chrony
+            apt:
+                name:
+                    - htop
+                    - strace
+                    - chrony
+                state: present
+
+    - name: an unhealthy system
+      priority: 950
+      tasks:
+          - name: add a unit that fails
+            copy:
+                dest: /etc/systemd/system/seine-test-fail.service
+                content: |
+                    [Service]
+                    ExecStart=/bin/false
+                    [Install]
+                    WantedBy=multi-user.target
+          - name: start it at boot
+            systemd:
+                name: seine-test-fail.service
+                enabled: true

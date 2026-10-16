@@ -1,0 +1,43 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Version 9 overlay for pc-ostree-update-image: adds iperf3, a custom
+# application binary, and a timesyncd drop-in configuration. Generates
+# static deltas against version 1 (long-jump) and version 5.1 (stepwise).
+#   seine build examples/pc-ostree-update-image/main.yaml examples/pc-ostree-update-image/v9.yaml
+
+image:
+    ostree:
+        version: "9"
+        payload:
+            deltas-from: ["1", "5.1"]
+
+playbook:
+    - name: v9 app and iperf3
+      wave: packages
+      after: [base]
+      tasks:
+          - name: install strace, python3-minimal and iperf3
+            apt:
+                name:
+                    - strace
+                    - python3-minimal
+                    - iperf3
+                state: present
+          - name: create timesyncd drop-in directory
+            file:
+                path: /etc/systemd/timesyncd.conf.d
+                state: directory
+          - name: configure timesyncd drop-in
+            copy:
+                dest: /etc/systemd/timesyncd.conf.d/test.conf
+                content: |
+                    [Time]
+                    NTP=pool.ntp.org
+          - name: install custom app binary
+            copy:
+                dest: /usr/bin/myapp
+                content: |
+                    #!/bin/sh
+                    echo 'myapp v9 running'
+                mode: "0755"
