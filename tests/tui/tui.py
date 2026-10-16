@@ -1804,10 +1804,12 @@ class App(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.app import (AnalyzeScreen, CacheScreen,
-                                       DiffScreen, DoctorScreen, IssuesScreen,
-                                       PackagesScreen, PlanScreen,
-                                       SeineApp)
+            from seine.tui.app import SeineApp
+            from seine.tui.cache import CacheScreen
+            from seine.tui.issues import IssuesScreen
+            from seine.tui.screens import (AnalyzeScreen, DiffScreen,
+                                           DoctorScreen, PackagesScreen,
+                                           PlanScreen)
             from seine.tui.artifacts import ArtifactsScreen
             from seine.tui.overview import OverviewScreen
         self.AnalyzeScreen = AnalyzeScreen
@@ -2564,7 +2566,9 @@ class BuildFollowsVendorScreen(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.app import BuildScreen, SeineApp, VendorScreen
+            from seine.tui.app import SeineApp
+            from seine.tui.build import BuildScreen
+            from seine.tui.vendor import VendorScreen
         self.BuildScreen = BuildScreen
         self.VendorScreen = VendorScreen
         self.SeineApp = SeineApp
@@ -3411,8 +3415,9 @@ class BuildScreenIntegration(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.image import Image
-            from seine.tui.app import DoctorScreen, SeineApp
+            from seine.tui.app import SeineApp
             from seine.tui.overview import OverviewScreen
+            from seine.tui.screens import DoctorScreen
             from seine.tui.build import BuildScreen
         self.Image = Image
         self.DoctorScreen = DoctorScreen

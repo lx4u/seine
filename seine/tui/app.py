@@ -10,15 +10,11 @@ import asyncio
 import contextlib
 import os
 import subprocess
-import socket
-import threading
 import time
-import json
 
 from textual import command
 from textual.app import App
 from textual.css.query import NoMatches
-from textual.widgets import Static
 
 from seine.tui import ai, commands
 from seine.tui.base import (BaseScreen, DownloadIndicator, Indicators, VendorIndicator,
@@ -34,51 +30,14 @@ from seine.tui.issues import IssuesScreen
 from seine.tui.overview import OverviewScreen
 from seine.tui.vendor import VendorScreen, VendorState
 from seine.tui.artifacts import ArtifactsScreen
-from seine.tui.cache import render_cache
-from seine.tui.render import (render_analyze, render_doctor,
-                              render_packages, render_plan)
+from seine.tui.cache import CacheScreen
+from seine.tui.screens import (AnalyzeScreen, DiffScreen, DoctorScreen,
+                               PackagesScreen, PlanScreen)
+from seine.tui.server import InteractionServer
 from seine.tui.remote_screen import RemoteScreen
 from seine.tui.target import TargetState
 from seine.tui.target_screen import TargetScreen
 from seine.tui.testing import TestScreen, TestState
-
-class PlanScreen(BaseScreen):
-    def update_body(self):
-        self.query_one("#body", Static).update(render_plan(self.app.context))
-
-
-class PackagesScreen(BaseScreen):
-    def update_body(self):
-        self.query_one("#body", Static).update(render_packages(self.app.context))
-
-class AnalyzeScreen(BaseScreen):
-    def update_body(self):
-        self.query_one("#body", Static).update(render_analyze(self.app.context))
-
-# Not spec-scoped: cache and environment are shared by every build.
-class CacheScreen(BaseScreen):
-    def update_body(self):
-        text = getattr(self.app, "cache_text", None)
-        if text:
-            self.query_one("#body", Static).update(text)
-        else:
-            self.query_one("#body", Static).update(render_cache(self.app.context))
-
-class DoctorScreen(BaseScreen):
-    def update_body(self):
-        options = {}
-        if self.app.context and self.app.context.active and self.app.context.builds:
-            options = getattr(self.app.context.builds[0], "options", {}) or {}
-            if "spec" not in options and hasattr(self.app.context.builds[0], "spec"):
-                options = dict(options, spec=self.app.context.builds[0].spec)
-        self.query_one("#body", Static).update(render_doctor(options=options))
-
-# What /diff last computed -- not spec-scoped, so reads app.diff_text.
-class DiffScreen(BaseScreen):
-    def update_body(self):
-        text = self.app.diff_text or (
-            "no diff yet -- '/diff OLD.spdx.json NEW.spdx.json'\n")
-        self.query_one("#body", Static).update(text)
 
 SCREENS = {"overview": OverviewScreen, "plan": PlanScreen, "build": BuildScreen,
           "artifacts": ArtifactsScreen, "filesystem": FilesystemScreen,
@@ -272,15 +231,9 @@ class SeineApp(App):
         self._no_spec_given = not files
         self._pending_files = files
         self._loading_spec = False
-        # Interaction socket, enabled via --interaction-socket: creates
-        # the socket (overwriting any stale file) and starts a background
-        # thread accepting newline-delimited JSON messages, dispatched
-        # via _handle_socket_message.
-        self._socket_path = interaction_socket
-        self._socket_clients: list[socket.socket] = []
-        self._socket_lock = threading.Lock()
-        if self._socket_path:
-            self._start_socket_server()
+        # Interaction socket server: delegates socket lifecycle and message
+        # broadcasting to InteractionServer.
+        self._server = InteractionServer(self, interaction_socket)
 
     @contextlib.asynccontextmanager
     async def run_test(self, *args, wait_for_spec=True, **kwargs):
@@ -299,120 +252,28 @@ class SeineApp(App):
         except (OSError, ValueError) as e:
             self._startup_error = str(e)
 
-    # Interaction-socket helpers, only reachable when --interaction-socket
-    # is passed. Run in background threads and marshal UI actions via
-    # self.call_from_thread().
-    def _start_socket_server(self) -> None:
-        path = self._socket_path
-        if not path:
-            return
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        try:
-            os.unlink(path)
-        except FileNotFoundError:
-            pass
-        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(path)
-        server.listen()
-        self._socket_server = server
-        threading.Thread(target=self._socket_accept_loop, daemon=True).start()
+    @property
+    def _socket_path(self):
+        return self._server.path if hasattr(self, "_server") else None
 
-    # Accepts connections, spinning a handler thread per client.
-    def _socket_accept_loop(self) -> None:
-        server: socket.socket = getattr(self, "_socket_server", None)
-        if server is None:
-            return
-        while True:
-            try:
-                conn, _ = server.accept()
-            except OSError:
-                break
-            with self._socket_lock:
-                self._socket_clients.append(conn)
-            threading.Thread(target=self._socket_client_handler, args=(conn,), daemon=True).start()
+    @property
+    def _socket_server(self):
+        return self._server.server if hasattr(self, "_server") else None
 
-    # Reads newline-delimited JSON messages from 'conn', handing each
-    # to _handle_socket_message. Closes on error or disconnect.
-    def _socket_client_handler(self, conn: socket.socket) -> None:
-        with conn:
-            buffer = b""
-            while True:
-                try:
-                    data = conn.recv(4096)
-                except OSError:
-                    break
-                if not data:
-                    break
-                buffer += data
-                while b"\n" in buffer:
-                    line, buffer = buffer.split(b"\n", 1)
-                    if not line:
-                        continue
-                    try:
-                        message = json.loads(line.decode())
-                    except json.JSONDecodeError:
-                        continue
-                    self._handle_socket_message(message)
-        # Clean up client list.
-        with self._socket_lock:
-            if conn in self._socket_clients:
-                self._socket_clients.remove(conn)
+    @property
+    def _socket_clients(self):
+        return self._server.clients if hasattr(self, "_server") else []
 
-    # Dispatches a JSON message from an external client: "input" types
-    # msg["text"] into the prompt and submits it; "ai_input" forwards
-    # msg["prompt"] straight to the AI chat.
-    def _handle_socket_message(self, msg: dict) -> None:
-        t = msg.get("type")
-        if t == "input":
-            text = msg.get("text", "")
-            if not isinstance(text, str):
-                return
-            # Runs on the app's own thread (via call_from_thread below),
-            # so action_submit() can just be awaited directly here.
-            async def type_and_submit():
-                try:
-                    prompt = self.screen.query_one(Prompt)
-                except NoMatches:
-                    return
-                prompt.value = ""
-                prompt.cursor_position = 0
-                for ch in text:
-                    prompt.value += ch
-                    prompt.cursor_position = len(prompt.value)
-                    await asyncio.sleep(0.02)
-                await prompt.action_submit()
-            self.call_from_thread(type_and_submit)
-        elif t == "ai_input":
-            p = msg.get("prompt")
-            if isinstance(p, str):
-                self.call_from_thread(ai.ask, self, p)
-
-    # Broadcasts a JSON message to all connected socket clients, dropping
-    # any that raise on send.
+    # Broadcasts a JSON message to all connected socket clients.
     def _socket_send(self, data: dict) -> None:
-        if not hasattr(self, "_socket_clients"):
-            return
-        raw = (json.dumps(data) + "\n").encode()
-        with self._socket_lock:
-            dead = []
-            for client in self._socket_clients:
-                try:
-                    client.sendall(raw)
-                except OSError:
-                    dead.append(client)
-            for client in dead:
-                try:
-                    client.close()
-                finally:
-                    self._socket_clients.remove(client)
+        if hasattr(self, "_server"):
+            self._server.send(data)
 
     # Emits new assistant messages not yet sent, called from
     # AIState.changed after persisting. Streaming chunks are omitted.
     def _socket_send_ai_messages(self) -> None:
-        msgs = self.ai_state._new_assistant_messages()
-        for msg in msgs:
-            self._socket_send({"type": "ai_message", "content": msg.get("content", "")})
-        self.ai_state._mark_sent()
+        if hasattr(self, "_server"):
+            self._server.send_ai_messages()
 
     # Whichever way the app is left, stop the downloads and forget the remote.
     def exit(self, *args, **kwargs):
@@ -423,6 +284,8 @@ class SeineApp(App):
                 self._load_worker.cancel()
         self.download_state.cancel()
         self.remote_session.disconnect()
+        if hasattr(self, "_server"):
+            self._server.close()
         super().exit(*args, **kwargs)
 
     # Releases any CredentialModal prompt still blocking a build worker,

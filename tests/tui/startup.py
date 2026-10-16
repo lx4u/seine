@@ -35,8 +35,9 @@ class StartupModalTest(avocado.Test):
     def setUp(self):
         try:
             from seine.tui import commands
-            from seine.tui.app import DoctorScreen, SeineApp
+            from seine.tui.app import SeineApp
             from seine.tui.overview import OverviewScreen
+            from seine.tui.screens import DoctorScreen
             from seine.tui.startup import PipeStream, StartupModal, ThreadOutputProxy
         except ImportError as e:
             self.cancel(f"the 'tui' extra (textual) is not installed: {e}")
@@ -118,7 +119,7 @@ class StartupModalTest(avocado.Test):
 
                     # Unblock worker and let spec finish loading
                     block_event.set()
-                    for _ in range(100):
+                    for _ in range(200):
                         if not app._loading_spec:
                             break
                         await asyncio.sleep(0.05)

@@ -143,12 +143,15 @@ class SocketServer(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.tui.app import SeineApp
+            from seine.tui.server import InteractionServer
         self.SeineApp = SeineApp
+        self.InteractionServer = InteractionServer
 
     def test_socket_file_created_when_path_given(self):
         async def scenario():
             path = _socket_path()
             app = self.SeineApp(interaction_socket=path)
+            self.assertIsInstance(app._server, self.InteractionServer)
             async with app.run_test():
                 self.assertTrue(os.path.exists(path))
                 self.assertTrue(stat.S_ISSOCK(os.stat(path).st_mode))
@@ -157,8 +160,10 @@ class SocketServer(avocado.Test):
     def test_no_socket_server_without_the_flag(self):
         async def scenario():
             app = self.SeineApp()
+            self.assertIsInstance(app._server, self.InteractionServer)
             async with app.run_test():
                 self.assertIsNone(getattr(app, "_socket_server", None))
+                self.assertIsNone(app._server.server)
                 # _socket_send() must stay a no-op with nothing listening,
                 # not raise for lack of a server.
                 app._socket_send({"type": "ai_message", "content": "x"})
@@ -353,7 +358,8 @@ class SocketAppEvents(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.image import Image
-            from seine.tui.app import PlanScreen, SeineApp
+            from seine.tui.app import SeineApp
+            from seine.tui.screens import PlanScreen
         self.Image = Image
         self.PlanScreen = PlanScreen
         self.SeineApp = SeineApp

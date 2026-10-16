@@ -5,11 +5,25 @@
 
 import re
 
+from textual.widgets import Static
+
 from seine import doctor
 from seine import packages
 from seine.cache import CACHES, CacheCmd
 from seine.sbuild import BuilderImage
+from seine.tui.base import BaseScreen
 from seine.tui.render import _captured
+
+
+# Not spec-scoped: cache and environment are shared by every build.
+class CacheScreen(BaseScreen):
+    def update_body(self):
+        text = getattr(self.app, "cache_text", None)
+        if text:
+            self.query_one("#body", Static).update(text)
+        else:
+            self.query_one("#body", Static).update(render_cache(self.app.context))
+
 
 def render_s3_status(context=None):
     options = {}
