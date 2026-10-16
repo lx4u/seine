@@ -722,7 +722,7 @@ class ArtifactsRendering(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.tui.context import Context
-            from seine.tui.render import render_artifacts
+            from seine.tui.artifacts import render_artifacts
         self.Context = Context
         self.render_artifacts = render_artifacts
 
@@ -798,7 +798,7 @@ class ArtifactsRendering(avocado.Test):
         return payload_dir
 
     def test_inspect_payload_extracts_uki_and_repo_details(self):
-        from seine.tui.render import inspect_payload
+        from seine.tui.artifacts import inspect_payload
         deploy = os.path.join(self.workdir, "deploy")
         os.makedirs(deploy, exist_ok=True)
         payload_dir = self._create_mock_payload(deploy)

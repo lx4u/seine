@@ -120,7 +120,11 @@ _tool_overview = _render_tool("render_overview")
 _tool_plan = _render_tool("render_plan")
 _tool_packages = _render_tool("render_packages")
 _tool_analyze = _render_tool("render_analyze")
-_tool_artifacts = _render_tool("render_artifacts")
+def _tool_artifacts(app, arguments):
+    from seine.tui.artifacts import render_artifacts
+    return str(render_artifacts(app.context))
+
+
 _tool_doctor = _render_tool("render_doctor", with_context=False)
 
 # Installed docs (seine/data/docs/) checked first; a checkout without a
