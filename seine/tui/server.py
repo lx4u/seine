@@ -4,8 +4,13 @@
 # The UNIX domain socket interaction server: accepts connections,
 # dispatches "input"/"ai_input" JSON commands to the running app,
 # and broadcasts UI events to connected clients.
+#
+# Also hosts the development HTTP server (PayloadServer) used by
+# '/serve' to serve update payloads to attached hardware and VMs.
 
 import asyncio
+import functools
+import http.server
 import json
 import os
 import socket
@@ -155,3 +160,60 @@ class InteractionServer:
                 os.unlink(self.path)
             except OSError:
                 pass
+
+
+class _PayloadHTTPHandler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, format, *args):
+        # Suppress stderr noise in TUI
+        pass
+
+    def translate_path(self, path):
+        translated = super().translate_path(path)
+        if os.path.exists(translated):
+            return translated
+        if os.path.isdir(self.directory):
+            rel = os.path.relpath(translated, self.directory)
+            for entry in sorted(os.listdir(self.directory)):
+                if entry.endswith("-payload"):
+                    candidate = os.path.join(self.directory, entry, rel)
+                    if os.path.exists(candidate):
+                        return candidate
+        return translated
+
+
+class _ReusableThreadingHTTPServer(http.server.ThreadingHTTPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
+class PayloadServer:
+    def __init__(self, directory: str, port: int = 8000, host: str = "0.0.0.0"):
+        self.directory = os.path.abspath(directory)
+        self.host = host
+        self.requested_port = port
+        self.port = port
+        self.httpd: _ReusableThreadingHTTPServer | None = None
+        self.thread: threading.Thread | None = None
+
+    @property
+    def running(self) -> bool:
+        return self.httpd is not None
+
+    def start(self) -> None:
+        if self.running:
+            return
+        os.makedirs(self.directory, exist_ok=True)
+        handler = functools.partial(_PayloadHTTPHandler, directory=self.directory)
+        self.httpd = _ReusableThreadingHTTPServer((self.host, self.requested_port), handler)
+        self.port = self.httpd.server_address[1]
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        if self.httpd:
+            self.httpd.shutdown()
+            self.httpd.server_close()
+            self.httpd = None
+        if self.thread:
+            self.thread.join(timeout=1.0)
+            self.thread = None

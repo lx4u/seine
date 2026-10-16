@@ -215,6 +215,16 @@ def power(app, state):
     client = get_client(app)
     return getattr(client, _POWER_VERBS[state])()
 
+def reset(app, settle=2.0):
+    power(app, "off")
+    try:
+        console_clear(app)
+    except Exception:
+        pass
+    if settle > 0:
+        time.sleep(settle)
+    return power(app, "on")
+
 # --- USB ---
 
 _USB_VERBS = {"on": "usb_on", "off": "usb_off", "toggle": "usb_toggle"}

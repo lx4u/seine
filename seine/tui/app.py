@@ -218,6 +218,8 @@ class SeineApp(App):
         self.remote_session.disconnect()
         if hasattr(self, "_server"):
             self._server.close()
+        if hasattr(self, "_payload_server") and self._payload_server:
+            self._payload_server.stop()
         super().exit(*args, **kwargs)
 
     # Releases any CredentialModal prompt still blocking a build worker,

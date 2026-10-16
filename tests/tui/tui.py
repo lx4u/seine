@@ -152,6 +152,13 @@ class CommandRegistry(avocado.Test):
     def test_q_is_a_quit_alias(self):
         self.assertIs(self.commands.REGISTRY["q"], self.commands.REGISTRY["quit"])
 
+    def test_serve_command_is_registered(self):
+        self.assertIn("serve", self.commands.REGISTRY)
+
+    def test_target_command_args_include_reset(self):
+        target_cmd = self.commands.REGISTRY["target"]
+        self.assertIn("reset", target_cmd.args)
+
     # '@' marks a path for the prompt's own filesystem completion
     # (seine/tui/paths.py) -- a command handler never sees it.
     def test_at_is_stripped_from_arguments_before_a_command_runs(self):
@@ -5099,6 +5106,98 @@ class UpdatesScreenIntegration(avocado.Test):
         self.assertEqual(artifacts_idx, updates_idx + 1)
         item = next(it for it in NAV_ITEMS if it.name == "updates")
         self.assertEqual(item.icon, "↑")
+
+
+class PayloadDevServerIntegration(avocado.Test):
+    """
+    :avocado: tags=tui
+    """
+    def setUp(self):
+        with _tui_required(self):
+            from seine.tui.app import SeineApp
+        self.SeineApp = SeineApp
+        os.environ["SEINE_CACHE_DIR"] = self.workdir
+        self.deploy = os.path.join(self.workdir, "deploy")
+        os.environ["SEINE_DEPLOY_DIR"] = self.deploy
+        _isolate_history(self)
+
+    def tearDown(self):
+        if os.path.isdir(self.workdir):
+            shutil.rmtree(self.workdir, ignore_errors=True)
+
+    def test_serve_command_lifecycle_and_http_fetch(self):
+        import urllib.request
+        from seine.tui import commands
+
+        trixie_dir = os.path.join(self.deploy, "trixie")
+        payload_dir = os.path.join(trixie_dir, "pc-ostree-update-payload")
+        uki_dir = os.path.join(payload_dir, "uki")
+        os.makedirs(uki_dir, exist_ok=True)
+        with open(os.path.join(trixie_dir, "sample.txt"), "w") as f:
+            f.write("hello from deploy")
+        with open(os.path.join(uki_dir, "debian-1.efi"), "w") as f:
+            f.write("uki-binary-content")
+
+        async def scenario():
+            app = self.SeineApp(files=[PC_OSTREE_UPDATE_IMAGE])
+            async with app.run_test() as pilot:
+                # 1. Check status when not running
+                commands.dispatch(app, "/serve status")
+                status = str(_content(app.screen.query_one("#status")))
+                self.assertIn("payload server is not running", status)
+
+                # 2. Start server on ephemeral port (port 0)
+                commands.dispatch(app, "/serve 0")
+                await pilot.pause()
+                self.assertIsNotNone(app._payload_server)
+                self.assertTrue(app._payload_server.running)
+                port = app._payload_server.port
+                self.assertGreater(port, 0)
+
+                # Verify status message
+                commands.dispatch(app, "/serve status")
+                status = str(_content(app.screen.query_one("#status")))
+                self.assertIn(f"serving {app._payload_server.directory} on port {port}", status)
+
+                # Fetch file directly from served payload dir
+                url_uki = f"http://127.0.0.1:{port}/uki/debian-1.efi"
+                with urllib.request.urlopen(url_uki) as resp:
+                    self.assertEqual(resp.read(), b"uki-binary-content")
+
+                # 3. Start server explicitly serving deploy root, testing payload fallback
+                commands.dispatch(app, f"/serve 0 {trixie_dir}")
+                await pilot.pause()
+                port2 = app._payload_server.port
+                # Direct file in trixie
+                url_direct = f"http://127.0.0.1:{port2}/sample.txt"
+                with urllib.request.urlopen(url_direct) as resp:
+                    self.assertEqual(resp.read(), b"hello from deploy")
+                # Fallback into pc-ostree-update-payload/uki/
+                url_fallback = f"http://127.0.0.1:{port2}/uki/debian-1.efi"
+                with urllib.request.urlopen(url_fallback) as resp:
+                    self.assertEqual(resp.read(), b"uki-binary-content")
+
+                # 4. Stop server
+                commands.dispatch(app, "/serve stop")
+                await pilot.pause()
+                self.assertIsNone(app._payload_server)
+                status = str(_content(app.screen.query_one("#status")))
+                self.assertIn("payload server stopped", status)
+
+                # Stopping again says not running
+                commands.dispatch(app, "/serve stop")
+                status = str(_content(app.screen.query_one("#status")))
+                self.assertIn("payload server is not running", status)
+
+                # 5. Invalid port handling
+                with self.assertRaises(commands.CommandError):
+                    commands.dispatch(app, "/serve notanumber")
+
+                with self.assertRaises(commands.CommandError):
+                    commands.dispatch(app, "/serve 99999")
+
+        _run(scenario)
+
 
 if __name__ == "__main__":
     avocado.main()
