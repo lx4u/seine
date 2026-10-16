@@ -25,7 +25,10 @@ from tests.testutils import RELEASE, prune_on_pass
 # Where the example serves its payload from (its update: url).
 PORT = 8000
 
-EXAMPLE = os.path.join(path_to_sources, "examples", "pc-ostree-update-image", "main.yaml")
+EXAMPLE_DIR = os.path.join(path_to_sources, "examples", "pc-ostree-update-image")
+EXAMPLE = os.path.join(EXAMPLE_DIR, "main.yaml")
+EXAMPLE_V2 = os.path.join(EXAMPLE_DIR, "v2.yaml")
+EXAMPLE_V3 = os.path.join(EXAMPLE_DIR, "v3.yaml")
 
 PLAN = os.environ.get("SEINE_TEST_PLAN", "")
 
@@ -47,6 +50,26 @@ class ExampleSpec(avocado.Test):
         build.load_all([EXAMPLE])
         esp = next(p for p in build.spec["image"]["partitions"] if p["label"] == "esp")
         self.assertEqual(esp["where"], "/efi")
+
+    def test_v2_overlay_sets_version_and_deltas(self):
+        build = BuildCmd()
+        build.load_all([EXAMPLE, EXAMPLE_V2])
+        ostree = build.spec["image"]["ostree"]
+        self.assertEqual(ostree["version"], "2")
+        self.assertEqual(ostree["payload"]["deltas-from"], ["1"])
+        tasks = [t for p in build.spec["playbook"] if p["name"] == "v2 packages" for t in p["tasks"]]
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["apt"]["name"], ["htop", "strace"])
+
+    def test_v3_overlay_sets_version_and_deltas(self):
+        build = BuildCmd()
+        build.load_all([EXAMPLE, EXAMPLE_V3])
+        ostree = build.spec["image"]["ostree"]
+        self.assertEqual(ostree["version"], "3")
+        self.assertEqual(ostree["payload"]["deltas-from"], ["1", "2"])
+        tasks = [t for p in build.spec["playbook"] if p["name"] == "v3 packages" for t in p["tasks"]]
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["apt"]["name"], ["chrony"])
 
 
 # The example as shipped, built with its payload served over HTTP, then

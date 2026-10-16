@@ -1,0 +1,23 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Version 3 overlay for pc-ostree-update-image: adds chrony, and
+# generates static deltas from versions 1 and 2.
+#   seine build examples/pc-ostree-update-image/main.yaml examples/pc-ostree-update-image/v3.yaml
+
+image:
+    ostree:
+        version: "3"
+        payload:
+            deltas-from: ["1", "2"]
+
+playbook:
+    - name: v3 packages
+      wave: packages
+      after: [base]
+      tasks:
+          - name: install chrony
+            apt:
+                name:
+                    - chrony
+                state: present

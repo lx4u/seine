@@ -1,0 +1,24 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Version 2 overlay for pc-ostree-update-image: adds htop and strace,
+# and generates a static delta from version 1.
+#   seine build examples/pc-ostree-update-image/main.yaml examples/pc-ostree-update-image/v2.yaml
+
+image:
+    ostree:
+        version: "2"
+        payload:
+            deltas-from: ["1"]
+
+playbook:
+    - name: v2 packages
+      wave: packages
+      after: [base]
+      tasks:
+          - name: install htop and strace
+            apt:
+                name:
+                    - htop
+                    - strace
+                state: present
