@@ -5002,7 +5002,7 @@ class UpdatesScreenIntegration(avocado.Test):
         if os.path.isdir(self.workdir):
             shutil.rmtree(self.workdir, ignore_errors=True)
 
-    def _setup_mock_payload(self, deploy_rel, stem="pc-ostree-update"):
+    def _setup_mock_payload(self, deploy_rel, stem="pc-ostree-update", include_v3=False):
         payload_dir = os.path.join(deploy_rel, f"{stem}-payload")
         uki_dir = os.path.join(payload_dir, "uki")
         repo_dir = os.path.join(payload_dir, "repo")
@@ -5016,12 +5016,17 @@ class UpdatesScreenIntegration(avocado.Test):
 
         with open(os.path.join(uki_dir, "SHA256SUMS"), "w") as f:
             f.write("hash1  debian-1.efi\nhash2  debian-2.efi\n")
+            if include_v3:
+                f.write("hash3  debian-3.efi\n")
         with open(os.path.join(uki_dir, "SHA256SUMS.gpg"), "wb") as f:
             f.write(b"signature")
         with open(os.path.join(uki_dir, "debian-1.efi"), "wb") as f:
             f.write(b"uki1" * 1024 * 1024)
         with open(os.path.join(uki_dir, "debian-2.efi"), "wb") as f:
             f.write(b"uki2" * 1024 * 1024)
+        if include_v3:
+            with open(os.path.join(uki_dir, "debian-3.efi"), "wb") as f:
+                f.write(b"uki3" * 1024 * 1024)
 
         with open(os.path.join(repo_dir, "summary"), "wb") as f:
             f.write(b"summary")
@@ -5033,6 +5038,9 @@ class UpdatesScreenIntegration(avocado.Test):
             f.write("8f2b31c9a07123456789abcdef0123456789abcdef0123456789abcdef012345\n")
         with open(os.path.join(heads_dir, "amd64.v2"), "w") as f:
             f.write("4c9811e5f2847c1b5a329d91cb61d8a391e0a98c5d3129841f3e790a12b8cd12\n")
+        if include_v3:
+            with open(os.path.join(heads_dir, "amd64.v3"), "w") as f:
+                f.write("3333333333333333333333333333333333333333333333333333333333333333\n")
 
         with open(os.path.join(obj_dir, "obj1"), "wb") as f:
             f.write(b"objects" * 1024 * 512)
@@ -5164,6 +5172,88 @@ class UpdatesScreenIntegration(avocado.Test):
 
                 with self.assertRaises(commands.CommandError):
                     commands.dispatch(app, "/delta badsubcmd")
+
+        _run(scenario)
+
+    def test_actionable_delta_matrix_cells(self):
+        from textual.widgets import DataTable
+        deploy_rel = os.path.join(self.deploy, "trixie")
+        os.makedirs(deploy_rel, exist_ok=True)
+        self._setup_mock_payload(deploy_rel, include_v3=True)
+
+        delta_calls = []
+        def fake_delta_runner(args, volumes):
+            delta_calls.append(args)
+
+        async def scenario():
+            app = self.SeineApp(files=[PC_OSTREE_UPDATE_IMAGE])
+            app._delta_runner = fake_delta_runner
+            async with app.run_test() as pilot:
+                app.show("updates")
+                await pilot.pause()
+
+                matrix_table = app.screen.query_one(self.DeltaMatrix)
+                banner = app.screen.query_one("#actions")
+
+                self.assertEqual(len(matrix_table.rows), 3)
+
+                # Focus matrix table
+                await pilot.press("tab")
+                await pilot.pause()
+                self.assertTrue(matrix_table.has_focus)
+
+                # Move cursor to (row 0, col 3): v1 -> v3 (unbuilt cell)
+                matrix_table.move_cursor(row=0, column=3)
+                await pilot.pause()
+                banner_text = str(_content(banner))
+                self.assertIn("Generate Delta (v1 -> v3)", banner_text)
+
+                # Press Enter on unbuilt cell -> triggers delta generation
+                await pilot.press("enter")
+                await pilot.pause()
+                self.assertEqual(len(delta_calls), 2)
+                self.assertIn("--from=debian/amd64.v1", delta_calls[0])
+                self.assertIn("--to=debian/amd64.v3", delta_calls[0])
+
+                # Move cursor to (row 0, col 2): v1 -> v2 (already built cell)
+                matrix_table.move_cursor(row=0, column=2)
+                await pilot.pause()
+                banner_text = str(_content(banner))
+                self.assertIn("Static Delta v1 -> v2 Built", banner_text)
+
+                # Press Enter on built cell -> reports already available, no generation
+                calls_before = len(delta_calls)
+                await pilot.press("enter")
+                await pilot.pause()
+                self.assertEqual(len(delta_calls), calls_before)
+                status = str(_content(app.screen.query_one("#status")))
+                self.assertIn("already available", status)
+
+                # Press G on built cell -> regenerates delta
+                await pilot.press("g")
+                await pilot.pause()
+                self.assertEqual(len(delta_calls), calls_before + 2)
+                self.assertIn("--from=debian/amd64.v1", delta_calls[-2])
+                self.assertIn("--to=debian/amd64.v2", delta_calls[-2])
+
+                # Move cursor to diagonal (row 0, col 1): v1 -> v1
+                matrix_table.move_cursor(row=0, column=1)
+                await pilot.pause()
+                await pilot.press("enter")
+                await pilot.pause()
+                status = str(_content(app.screen.query_one("#status")))
+                self.assertIn("source and target versions must differ", status)
+
+                # CellSelected event on unbuilt cell (row 1, col 3): v2 -> v3
+                calls_before = len(delta_calls)
+                matrix_table.move_cursor(row=1, column=3)
+                coord = matrix_table.cursor_coordinate
+                cell_key = matrix_table.coordinate_to_cell_key(coord)
+                matrix_table.post_message(DataTable.CellSelected(matrix_table, "missing", coord, cell_key))
+                await pilot.pause()
+                self.assertEqual(len(delta_calls), calls_before + 2)
+                self.assertIn("--from=debian/amd64.v2", delta_calls[-2])
+                self.assertIn("--to=debian/amd64.v3", delta_calls[-2])
 
         _run(scenario)
 
