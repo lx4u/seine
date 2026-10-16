@@ -373,6 +373,43 @@ class RemoteIndicator(Static):
         self.update(text)
         self.display = True
 
+# Persistent "[serve: <port>]" chip for the background payload HTTP server.
+# Click navigates to /updates and reports server status; hidden when stopped.
+class PayloadServerIndicator(Static):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("markup", False)
+        super().__init__(**kwargs)
+        self.display = False
+
+    def on_click(self, event):
+        try:
+            app = self.app
+        except Exception:
+            app = None
+        if not app:
+            return
+        server = getattr(app, "_payload_server", None)
+        if server and server.running:
+            if hasattr(app, "show") and "updates" in getattr(app, "SCREENS", {}):
+                app.show("updates")
+            msg = f"serving {server.directory} on port {server.port}"
+            if hasattr(app, "call_after_refresh"):
+                app.call_after_refresh(lambda: app.say(msg))
+            elif hasattr(app, "say"):
+                app.say(msg)
+
+    def refresh_text(self):
+        try:
+            app = self.app
+        except Exception:
+            app = None
+        server = getattr(app, "_payload_server", None)
+        if server is None or not server.running:
+            self.display = False
+            return
+        self.update(f"[serve: {server.port}]")
+        self.display = True
+
 class BaseScreen(Screen):
     # Without this, Textual's default auto-focus would land on
     # TargetScreen's ConsolePane (composed before the prompt) and fire
@@ -499,6 +536,7 @@ class BaseScreen(Screen):
             TargetIndicator(id="target-indicator"),
             DownloadIndicator(id="download-indicator"),
             RemoteIndicator(id="remote-indicator"),
+            PayloadServerIndicator(id="payload-server-indicator"),
             id="infobar",
         )
         yield Static(self.HINT, id="hint")
@@ -553,6 +591,7 @@ class BaseScreen(Screen):
             try:
                 self.query_one(DownloadIndicator).refresh_text()
                 self.query_one(RemoteIndicator).refresh_text()
+                self.query_one(PayloadServerIndicator).refresh_text()
             except NoMatches:
                 pass
             self.update_body()

@@ -17,8 +17,8 @@ from textual.css.query import NoMatches
 
 from seine.tui import ai, commands
 from seine.tui.commands import RegistryProvider
-from seine.tui.base import (BaseScreen, DownloadIndicator, Indicators, VendorIndicator,
-                            Prompt, RemoteIndicator, TargetIndicator)
+from seine.tui.base import (BaseScreen, DownloadIndicator, Indicators, PayloadServerIndicator,
+                            Prompt, RemoteIndicator, TargetIndicator, VendorIndicator)
 from seine.tui.download import DownloadState
 from seine.tui.remote_session import RemoteSession
 from seine.tui.build import BuildScreen, BuildState
@@ -106,6 +106,7 @@ class SeineApp(App):
     #target-indicator { color: $accent; padding: 0 2; height: 1; width: auto; }
     #download-indicator { color: $accent; padding: 0 2; height: 1; width: auto; }
     #remote-indicator { color: $accent; padding: 0 2; height: 1; width: auto; }
+    #payload-server-indicator { color: $warning; padding: 0 2; height: 1; width: auto; }
     #completions {
         height: auto;
         max-height: 5;
@@ -163,6 +164,7 @@ class SeineApp(App):
         self._no_spec_given = not files
         self._pending_files = files
         self._loading_spec = False
+        self._payload_server = None
         # Interaction socket server: delegates socket lifecycle and message
         # broadcasting to InteractionServer.
         self._server = InteractionServer(self, interaction_socket)
@@ -375,6 +377,7 @@ class SeineApp(App):
                 self.screen.query_one(TargetIndicator).refresh_text()
                 self.screen.query_one(DownloadIndicator).refresh_text()
                 self.screen.query_one(RemoteIndicator).refresh_text()
+                self.screen.query_one(PayloadServerIndicator).refresh_text()
             except NoMatches:
                 pass
 
