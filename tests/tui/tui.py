@@ -1788,9 +1788,10 @@ class App(avocado.Test):
         with _tui_required(self):
             from seine.tui.app import (AnalyzeScreen, CacheScreen,
                                        DiffScreen, DoctorScreen, IssuesScreen,
-                                       OverviewScreen, PackagesScreen, PlanScreen,
+                                       PackagesScreen, PlanScreen,
                                        SeineApp)
             from seine.tui.artifacts import ArtifactsScreen
+            from seine.tui.overview import OverviewScreen
         self.AnalyzeScreen = AnalyzeScreen
         self.ArtifactsScreen = ArtifactsScreen
         self.CacheScreen = CacheScreen
@@ -1904,7 +1905,7 @@ class App(avocado.Test):
     def test_show_log_swaps_the_left_pane_and_close_log_restores_it(self):
         async def scenario():
             from seine.tui.spectree import SpecTree
-            from seine.tui.app import LogViewer
+            from seine.tui.overview import LogViewer
             app = self.SeineApp(files=[NATIVE_IMAGE])
             async with app.run_test():
                 tree = app.screen.query_one(SpecTree)
@@ -2508,7 +2509,7 @@ class App(avocado.Test):
                     BuildScreen.query_one = real
         _run(scenario)
 
-# _read_log() (seine/tui/app.py): split out so the read-failure
+# _read_log() (seine/tui/overview.py): split out so the read-failure
 # fallback is testable on its own, without touching RichLog's
 # internal render state.
 class ReadLog(avocado.Test):
@@ -2517,7 +2518,7 @@ class ReadLog(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.app import _read_log
+            from seine.tui.overview import _read_log
         self._read_log = _read_log
 
     def test_reads_the_files_own_text(self):
@@ -2615,7 +2616,8 @@ class SettingsScreenIntegration(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.app import OverviewScreen, SeineApp
+            from seine.tui.app import SeineApp
+            from seine.tui.overview import OverviewScreen
             from seine.tui.settings import GeneralSettings, SettingsScreen, StartupCommands
         self.GeneralSettings = GeneralSettings
         self.OverviewScreen = OverviewScreen
@@ -3391,7 +3393,8 @@ class BuildScreenIntegration(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.image import Image
-            from seine.tui.app import DoctorScreen, OverviewScreen, SeineApp
+            from seine.tui.app import DoctorScreen, SeineApp
+            from seine.tui.overview import OverviewScreen
             from seine.tui.build import BuildScreen
         self.Image = Image
         self.DoctorScreen = DoctorScreen
@@ -4018,7 +4021,8 @@ class TestScreenIntegration(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.testing import runner
-            from seine.tui.app import SeineApp, TestScreen
+            from seine.tui.app import SeineApp
+            from seine.tui.testing import TestScreen
         self.runner = runner
         self.SeineApp = SeineApp
         self.TestScreen = TestScreen
@@ -4269,7 +4273,8 @@ class CastReplay(avocado.Test):
     """
     def setUp(self):
         with _tui_required(self):
-            from seine.tui.app import CastPane, OverviewScreen, SeineApp
+            from seine.tui.app import SeineApp
+            from seine.tui.overview import CastPane, OverviewScreen
             from seine.tui.spectree import SpecTree
         self.CastPane = CastPane
         self.OverviewScreen = OverviewScreen

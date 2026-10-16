@@ -1465,7 +1465,8 @@ class StartBuildNotifiesTheAI(avocado.Test):
     def setUp(self):
         with _tui_required(self):
             from seine.image import Image
-            from seine.tui.app import OverviewScreen, SeineApp
+            from seine.tui.app import SeineApp
+            from seine.tui.overview import OverviewScreen
             from seine.tui.ai import ConfirmAction
             from seine.tui.build import BuildScreen
             from seine.tui.chat import ChatScreen
