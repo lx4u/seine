@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+import contextlib
 import copy
 import os
 import re
@@ -321,7 +322,7 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
         ]
 
     def _prepare(self):
-        if self.source._image_current():
+        if not self.source.options.get("payload_only") and self.source._image_current():
             return
         # Scratch dir for the unpacked appliance/tools, not kept.
         self._output_dir = tempfile.mkdtemp(dir=ContainerEngine.scratch(),
@@ -329,6 +330,16 @@ class Imager(PartitionRebuild, OstreeSysroot, GptLayout, BootSigners, UkiAnchor,
         self._hypervisor_path = self._prepare_appliance(self._output_dir)
 
     def _build(self):
+        if self.source.options.get("payload_only"):
+            try:
+                self.create()
+            finally:
+                if self.source._image and os.path.exists(self.source._image):
+                    with contextlib.suppress(FileNotFoundError):
+                        os.unlink(self.source._image)
+                self.source._image = None
+            return
+
         digest = self.source._image_digest()
         if self.source._image_current(digest):
             print(f"disk image up to date ({utils.display_path(self.source._output)})")

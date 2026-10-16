@@ -209,8 +209,9 @@ def _build(app, argv):
     """
     try:
         opts, args = getopt.getopt(
-            argv, "j:", ["jobs=", "reproducible", "local", "remote", "release",
-                   "no-download", "project=", "shared-cache", "no-shared-cache"])
+            argv, "j:p", ["jobs=", "reproducible", "local", "remote", "release",
+                   "no-download", "project=", "shared-cache", "no-shared-cache",
+                   "payload-only"])
     except getopt.GetoptError as e:
         raise CommandError(str(e))
     jobs = None
@@ -221,6 +222,7 @@ def _build(app, argv):
     no_download = False
     project = None
     shared_cache = None
+    payload_only = False
     for o, a in opts:
         if o in ("-j", "--jobs"):
             # Same validation BuildCmd.main() applies to '-j'/'--jobs' on the CLI.
@@ -246,6 +248,8 @@ def _build(app, argv):
             shared_cache = True
         elif o == "--no-shared-cache":
             shared_cache = False
+        elif o in ("-p", "--payload-only"):
+            payload_only = True
     if local and (remote or release):
         raise CommandError("--local excludes --remote and --release")
     if len(args) > 0:
@@ -271,6 +275,7 @@ def _build(app, argv):
     if reproducible is not None:
         build.options["reproducible"] = reproducible
     build.options["shared_cache"] = shared_cache
+    build.options["payload_only"] = payload_only
     # TUI builds always write an SBOM: ai.py's packages/installed-packages
     # tools need one to read.
     build.options["sbom"] = True
@@ -320,6 +325,8 @@ _build_options = (
     ("--project NAME", "Remote build only: build in this project, this once."),
     ("--shared-cache, --no-shared-cache", "Use or skip the shared network "
      "cache. Unset, a remote dev build uses it and a release build does not."),
+    ("-p, --payload-only", "Build only the update payload (UKI, commits, "
+     "deltas, manifest) without creating the raw GPT disk image."),
 )
 
 def _vendor(app, argv):
@@ -1121,7 +1128,7 @@ REGISTRY["q"] = REGISTRY["quit"]
 # offers what _build() actually parses.
 OPTIONS = {
     "plan":  BuildCmd.LONG_OPTIONS,
-    "build": ["jobs=", "reproducible", "local", "remote", "release", "no-download", "project="],
+    "build": ["jobs=", "reproducible", "local", "remote", "release", "no-download", "project=", "payload-only"],
     "remote": ["disconnect", "status", "screen", "insecure", "ca-cert="],
     "project": ["default"],
     "cache": ["explain", "why"],

@@ -28,7 +28,7 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
     # Command name and its '-h' text. A variant of this command (see
     # PlanCmd) overrides these instead of copying main().
     NAME = "build"
-    SHORT_OPTIONS = "dDhj:kv"
+    SHORT_OPTIONS = "dDhj:kpv"
     LONG_OPTIONS = [
         "artifactory-endpoint=",
         "artifactory-repo=",
@@ -52,6 +52,7 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
         "min-arch-score=",
         "packages-only",
         "parallel=",
+        "payload-only",
         "prefer-native",
         "project=",
         "rebuild",
@@ -91,6 +92,7 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                          "min_arch_score": None,
                          "no_download": False, "offline": False,
                          "packages_only": False, "parallel": None,
+                         "payload_only": False,
                          "prefer_native": False,
                          "project": os.environ.get("SEINE_PROJECT"),
                          "rebuild": False, "release": False,
@@ -230,25 +232,27 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                     sys.exit(1)
             elif o in ("-k", "--keep"):
                 self.options["keep"] = True
-            elif o in ("--no-color"):
+            elif o in ("--no-color",):
                 self.options["color"] = False
-            elif o in ("--spec-only"):
+            elif o in ("--spec-only",):
                 self.options["tasks"] = False
-            elif o in ("--tasks-only"):
+            elif o in ("--tasks-only",):
                 self.options["spec"] = False
-            elif o in ("--packages-only"):
+            elif o in ("--packages-only",):
                 self.options["packages_only"] = True
-            elif o in ("--rootfs-only"):
+            elif o in ("--rootfs-only",):
                 self.options["rootfs_only"] = True
-            elif o in ("--target"):
+            elif o in ("-p", "--payload-only"):
+                self.options["payload_only"] = True
+            elif o in ("--target",):
                 # Validated later against the task graph (Image.tasks()), not
                 # here -- task names depend on the parsed spec, not just the CLI.
                 self.options["target"] = a
-            elif o in ("--dry-run"):
+            elif o in ("--dry-run",):
                 self.options["dry_run"] = True
             elif o in ("-D", "--dump"):
                 self.options["build"] = False
-            elif o in ("--parallel"):
+            elif o in ("--parallel",):
                 # Cores one package build may use. Left unset it follows
                 # --jobs, so raising --jobs divides the machine instead of
                 # multiplying it.
@@ -260,9 +264,9 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                 if self.options["parallel"] < 1:
                     sys.stderr.write("error: --parallel shall be at least 1\n")
                     sys.exit(1)
-            elif o in ("--require-hashes"):
+            elif o in ("--require-hashes",):
                 self.options["require_hashes"] = True
-            elif o in ("--resource"):
+            elif o in ("--resource",):
                 # A class no --resource names falls back to --jobs.
                 try:
                     self.options["resources"] = parse_resources(
@@ -270,9 +274,9 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                 except ValueError as e:
                     sys.stderr.write("error: --resource %s\n" % e)
                     sys.exit(1)
-            elif o in ("--rebuild"):
+            elif o in ("--rebuild",):
                 self.options["rebuild"] = True
-            elif o in ("--reproducible"):
+            elif o in ("--reproducible",):
                 self.options["reproducible"] = True
             elif o in ("--offline",):
                 self.options["offline"] = True
@@ -341,9 +345,9 @@ class BuildCmd(SpecLoader, SpecMerger, SpecDump, Cmd):
                 self.options["release"] = True
             elif o in ("--target-arch",):
                 self.options["target_arch"] = a
-            elif o in ("--sign-key"):
+            elif o in ("--sign-key",):
                 self.options["sign_key"] = a
-            elif o in ("--sbom"):
+            elif o in ("--sbom",):
                 self.options["sbom"] = True
             elif o in ("-v", "--verbose"):
                 self.options["verbose"] = True
@@ -487,6 +491,9 @@ Flags:
                         step's containers print goes to a file of its own
                         while more than one is running
   -k, --keep            keep temporary files
+  -p, --payload-only    build only the ostree update payload (UKI, commits,
+                        static deltas, and manifest) without allocating or
+                        writing the raw GPT disk image
       --no-color        print the specification of a '--dry-run' without
                         colour. NO_COLOR says the same thing, and a plan
                         going anywhere but a terminal is plain anyway
