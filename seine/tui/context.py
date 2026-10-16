@@ -116,3 +116,22 @@ class Context:
         if not self.active:
             return None
         return "+".join(multiconfig._label(build) for build in self.builds)
+
+
+class AppContext(Context):
+    def __init__(self, app):
+        super().__init__()
+        self._app = app
+        self._builds_val = None
+
+    @property
+    def builds(self):
+        if self._builds_val is None and not getattr(self._app, "is_running", False) and not getattr(self._app, "_loading_spec", False):
+            if getattr(self._app, "_pending_files", None):
+                self._app.load_pending_spec()
+        return self._builds_val
+
+    @builds.setter
+    def builds(self, value):
+        self._builds_val = value
+

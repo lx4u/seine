@@ -48,7 +48,7 @@ remote_ca_cert settings.
             print(self.USAGE)
             return
         try:
-            from seine.tui.app import run
+            from seine.tui.cli import run
         except ImportError as e:
             sys.stderr.write(
                 "error: the TUI needs the 'tui' extra "

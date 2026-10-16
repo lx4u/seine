@@ -10,6 +10,8 @@ import os
 import shlex
 from typing import NamedTuple
 
+from textual import command
+
 from seine import tasks
 from seine.build import BuildCmd
 from seine.tui.context import Context
@@ -1152,3 +1154,29 @@ def dispatch(app, line):
     if command is None:
         raise CommandError("unknown command '/%s' -- '/help' lists them" % name)
     command.run(app, argv)
+
+
+# Offers the command registry through Ctrl+P. Selecting one fills the
+# prompt rather than running it; a deliberate Enter runs it.
+class RegistryProvider(command.Provider):
+    async def discover(self):
+        for c in REGISTRY.values():
+            yield command.DiscoveryHit(c.name, self._fill(c.name), help=c.help)
+
+    async def search(self, query):
+        matcher = self.matcher(query)
+        for c in REGISTRY.values():
+            score = matcher.match(c.name)
+            if score > 0:
+                yield command.Hit(score, matcher.highlight(c.name),
+                                  self._fill(c.name), help=c.help)
+
+    def _fill(self, name):
+        def callback():
+            from seine.tui.base import Prompt
+            prompt = self.app.screen.query_one(Prompt)
+            prompt.value = "/" + name + " "
+            prompt.cursor_position = len(prompt.value)
+            prompt.focus()
+        return callback
+

@@ -12,18 +12,18 @@ import os
 import subprocess
 import time
 
-from textual import command
 from textual.app import App
 from textual.css.query import NoMatches
 
 from seine.tui import ai, commands
+from seine.tui.commands import RegistryProvider
 from seine.tui.base import (BaseScreen, DownloadIndicator, Indicators, VendorIndicator,
                             Prompt, RemoteIndicator, TargetIndicator)
 from seine.tui.download import DownloadState
 from seine.tui.remote_session import RemoteSession
 from seine.tui.build import BuildScreen, BuildState
 from seine.tui.chat import ChatScreen
-from seine.tui.context import Context
+from seine.tui.context import AppContext
 from seine.tui.filesystem import FilesystemScreen, FilesystemState
 from seine.tui.history import History
 from seine.tui.issues import IssuesScreen
@@ -46,45 +46,6 @@ SCREENS = {"overview": OverviewScreen, "plan": PlanScreen, "build": BuildScreen,
           "issues": IssuesScreen, "chat": ChatScreen, "target": TargetScreen,
           "test": TestScreen, "vendor": VendorScreen, "remote": RemoteScreen}
 
-# Offers the command registry through Ctrl+P. Selecting one fills the
-# prompt rather than running it; a deliberate Enter runs it.
-class RegistryProvider(command.Provider):
-    async def discover(self):
-        for c in commands.REGISTRY.values():
-            yield command.DiscoveryHit(c.name, self._fill(c.name), help=c.help)
-
-    async def search(self, query):
-        matcher = self.matcher(query)
-        for c in commands.REGISTRY.values():
-            score = matcher.match(c.name)
-            if score > 0:
-                yield command.Hit(score, matcher.highlight(c.name),
-                                  self._fill(c.name), help=c.help)
-
-    def _fill(self, name):
-        def callback():
-            prompt = self.app.screen.query_one(Prompt)
-            prompt.value = "/" + name + " "
-            prompt.cursor_position = len(prompt.value)
-            prompt.focus()
-        return callback
-
-class _AppContext(Context):
-    def __init__(self, app):
-        super().__init__()
-        self._app = app
-        self._builds_val = None
-
-    @property
-    def builds(self):
-        if self._builds_val is None and not getattr(self._app, "is_running", False) and not getattr(self._app, "_loading_spec", False):
-            if getattr(self._app, "_pending_files", None):
-                self._app.load_pending_spec()
-        return self._builds_val
-
-    @builds.setter
-    def builds(self, value):
-        self._builds_val = value
 
 class SeineApp(App):
     TITLE = "seine"
@@ -105,11 +66,11 @@ class SeineApp(App):
        glyphs some terminal fonts lack, breaking the border. */
     #spectree { width: 1fr; min-width: 30; max-width: 42; height: 100%; }
     #tail, #logviewer, #castpane { width: 2fr; height: 100%; }
-    #prompt, #spectree, #tail, #fslist, #previewpane, #logviewer, #castpane, #artifactpreviewpane {
+    #prompt, #spectree, #tail, #fslist, #previewpane, #logviewer, #castpane {
         border: round $foreground 40%;
     }
     #prompt:focus, #spectree:focus, #tail:focus, #fslist:focus,
-    #previewpane:focus, #logviewer:focus, #castpane:focus, #artifactpreviewpane:focus {
+    #previewpane:focus, #logviewer:focus, #castpane:focus {
         border: round $border;
     }
     /* Black like the target screen's console pane. Scrolls
@@ -122,10 +83,6 @@ class SeineApp(App):
     #prompt.startup > .input--placeholder { text-style: italic; }
     #cmd, #tasks { width: 2fr; height: 100%; border: round $foreground 40%; }
     #body { padding: 1 2; }
-    #artifactspath { height: 2; padding: 1 2 0 2; }
-    #artifactheader { height: 2; padding: 0 2; }
-    #artifactstree { width: 100%; height: 1fr; background: $background; padding: 0 1; }
-    #artifactpreviewpane { width: 100%; height: 1fr; background: $background; padding: 1 2; }
     /* Timeline up top, playing row's arguments below, 2:1 -- the
        arguments pane only shows while a replay with a timeline
        runs, leaving the full height otherwise. */
@@ -134,25 +91,8 @@ class SeineApp(App):
     #args { padding: 1 2; }
     #tasklist { padding: 1 2; }
     #tail, #logviewer { padding: 0 1; }
-    /* Vendor screen: own ids, 1fr:1fr both rows (others are 2fr:1fr). */
-    #vendormain, #vendorrow { height: 1fr; }
-    #vendorspectree, #vendortail, #vendorstatspane, #vendortaskspane {
-        width: 1fr; height: 100%; border: round $foreground 40%;
-    }
-    #vendorspectree:focus, #vendortail:focus {
-        border: round $border;
-    }
-    #vendorstats, #vendortasks { padding: 1 2; }
-    #vendortail { padding: 0 1; }
     #fslist { height: 1fr; }
     #previewpane { height: 1fr; padding: 1 2; }
-    #remotemain { width: 3fr; height: 100%; border: round $foreground 40%; }
-    #remotemain:focus { border: round $border; }
-    #remoteside { width: 1fr; min-width: 32; height: 100%; border: round $foreground 40%; }
-    #remotedetailpane { height: 2fr; }
-    #remotesidebar { height: 1fr; min-height: 16; border-top: solid $foreground 40%; }
-    #remotesidebar:focus { border-top: solid $border; }
-    #remotebody, #remotedetail, #sidebarbody { padding: 1 2; }
     #hint { color: $text-muted; padding: 0 2; }
     #infobar { height: 1; }
     #status { padding: 0 2; height: 1; width: 1fr; }
@@ -174,16 +114,6 @@ class SeineApp(App):
         background: $accent;
         color: $text;
     }
-    StartupModal { align: center middle; }
-    #startuppane {
-        width: 70%; height: 70%;
-        border: round $border;
-        background: $surface;
-        padding: 1 2;
-    }
-    #startuptitle { color: blue; text-style: bold; height: 1; }
-    #startuplog { height: 1fr; border: none; background: $surface; }
-    #startupstatus { height: auto; color: $text-muted; }
     """
 
     def __init__(self, files=None, interaction_socket=None, remote=None, connect_remote=False,
@@ -193,7 +123,7 @@ class SeineApp(App):
         self._connect_remote = connect_remote
         self._remote_insecure = remote_insecure
         self._remote_ca_cert = remote_ca_cert
-        self.context = _AppContext(self)
+        self.context = AppContext(self)
         self.history = History()
         self.build_state = BuildState()
         # "N build" chip's finish edge; the start edge is start_build()
@@ -558,66 +488,4 @@ def _is_markdown_retheme_race(error):
             return True
         tb = tb.tb_next
     return False
-
-# Entry point for the TUI. 'argv' may contain --interaction-socket
-# (or --interaction-socket=PATH), --remote[=URL] (with --insecure and
-# --ca-cert[=PATH] for the connection) followed by zero or
-# more spec files; flags are stripped before the rest are treated as specs.
-def run(argv=None):
-    # Manual parsing, consistent with the rest of the CLI's getopt use.
-    spec_files: list[str] = []
-    socket_path: str | None = None
-    remote_target: str | None = None
-    connect_remote: bool = False
-    remote_insecure: bool | None = None
-    remote_ca_cert: str | None = None
-    if argv:
-        args = list(argv)
-        idx = 0
-        while idx < len(args):
-            arg = args[idx]
-            idx += 1
-            if arg.startswith("--interaction-socket"):
-                if arg == "--interaction-socket":
-                    if idx >= len(args):
-                        raise ValueError("--interaction-socket requires a path")
-                    socket_path = args[idx]
-                    idx += 1
-                else:
-                    _, _, path = arg.partition("=")
-                    if not path:
-                        raise ValueError("--interaction-socket requires a path")
-                    socket_path = path
-                continue
-            if arg == "--insecure":
-                remote_insecure = True
-                continue
-            if arg.startswith("--ca-cert"):
-                if arg == "--ca-cert":
-                    if idx >= len(args):
-                        raise ValueError("--ca-cert requires a path")
-                    path = args[idx]
-                    idx += 1
-                else:
-                    _, _, path = arg.partition("=")
-                if not path:
-                    raise ValueError("--ca-cert requires a path")
-                from seine import settings
-                remote_ca_cert = settings.check_ca_cert(path)
-                continue
-            if arg.startswith("--remote"):
-                connect_remote = True
-                if arg == "--remote":
-                    if idx < len(args) and not args[idx].startswith("-") and not args[idx].endswith((".yaml", ".yml")):
-                        remote_target = args[idx]
-                        idx += 1
-                else:
-                    _, _, r_url = arg.partition("=")
-                    if r_url:
-                        remote_target = r_url
-                continue
-            spec_files.append(arg)
-    SeineApp(files=spec_files or None, interaction_socket=socket_path,
-             remote=remote_target, connect_remote=connect_remote,
-             remote_insecure=remote_insecure, remote_ca_cert=remote_ca_cert).run()
 
