@@ -240,7 +240,7 @@ class TargetScreen(BaseScreen):
                 # screen's rows actually fit right now, not the fixed
                 # CONSOLE_LINES ceiling.
                 available = max(1, self.query_one("#console-pane").size.height - 2)
-                text = target.render_console(adapter.screen, max_lines=available)
+                text = target.render_console(adapter.screen, max_lines=available, tail=True)
             self.query_one("#console", Static).update(text)
         except Exception as e:
             timer = getattr(self, "_console_timer", None)

@@ -636,6 +636,14 @@ class Console(avocado.Test):
         self.assertEqual(len(lines), 2)
         self.assertIn("line 0", lines[0])
 
+    def test_render_console_tail_shows_newest_output(self):
+        for i in range(5):
+            self.adapter.print("line %d\r\n" % i)
+        rendered = target.render_console(self.adapter.screen, max_lines=2, tail=True)
+        lines = rendered.plain.split("\n")
+        self.assertEqual(len(lines), 2)
+        self.assertIn("line 4", lines[1])
+
     def test_render_console_carries_colour_as_a_rich_style(self):
         self.adapter.print("\x1b[31mred\x1b[0m\r\n")
         rendered = target.render_console(self.adapter.screen)
@@ -999,6 +1007,30 @@ class TargetScreenIntegration(avocado.Test):
                     await asyncio.sleep(0.02)
                 self.assertIn("BOOTING",
                              app.screen.query_one("#console").renderable.plain)
+        _run(scenario)
+
+    def test_console_pane_renders_the_tail_of_output(self):
+        client = FakeClient()
+        client.agent.remote = "192.0.2.1"
+        sys.modules["mtda.client"].Client = lambda host=None: client
+
+        async def scenario():
+            app = self.SeineApp(files=[NATIVE_IMAGE])
+            async with app.run_test() as pilot:
+                app.show("target")
+                await pilot.pause()
+                for _ in range(50):
+                    if getattr(app, "_target_console", None) is not None:
+                        break
+                    await asyncio.sleep(0.02)
+                for i in range(40):
+                    app._target_console.print(f"boot line {i}\r\n".encode())
+                for _ in range(50):
+                    if "boot line 39" in app.screen.query_one("#console").renderable.plain:
+                        break
+                    await asyncio.sleep(0.02)
+                self.assertIn("boot line 39",
+                              app.screen.query_one("#console").renderable.plain)
         _run(scenario)
 
     def test_a_freeform_line_here_sends_to_the_console_not_ai_chat(self):
