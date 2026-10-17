@@ -24,6 +24,11 @@ playbook:
                     - strace
                     - chrony
                 state: present
+          - name: write image version to /etc/issue
+            copy:
+                dest: /etc/issue
+                content: |
+                    Debian GNU/Linux v5 \n \l
 
     - name: an unhealthy system
       priority: 950

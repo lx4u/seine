@@ -24,6 +24,11 @@ playbook:
                     - python3-minimal
                     - iperf3
                 state: present
+          - name: write image version to /etc/issue
+            copy:
+                dest: /etc/issue
+                content: |
+                    Debian GNU/Linux v9 \n \l
           - name: create timesyncd drop-in directory
             file:
                 path: /etc/systemd/timesyncd.conf.d

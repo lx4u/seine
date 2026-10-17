@@ -35,6 +35,15 @@ update:
     url: http://10.0.2.2:8000
 
 playbook:
+    - name: system identity
+      wave: base
+      tasks:
+          - name: write image version to /etc/issue
+            copy:
+                dest: /etc/issue
+                content: |
+                    Debian GNU/Linux v1 \n \l
+
     - name: dracut and ostree
       wave: initramfs
       after: [base]

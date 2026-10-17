@@ -55,6 +55,14 @@ class ExampleSpec(avocado.Test):
         esp = next(p for p in build.spec["image"]["partitions"] if p["label"] == "esp")
         self.assertEqual(esp["where"], "/efi")
 
+    def test_v1_writes_issue_version(self):
+        build = BuildCmd()
+        build.load_all([EXAMPLE])
+        tasks = [t for p in build.spec["playbook"] if p["name"] == "system identity" for t in p["tasks"]]
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]["copy"]["dest"], "/etc/issue")
+        self.assertIn("v1", tasks[0]["copy"]["content"])
+
     def test_v2_overlay_sets_version_and_deltas(self):
         build = BuildCmd()
         build.load_all([EXAMPLE, EXAMPLE_V2])
@@ -62,8 +70,10 @@ class ExampleSpec(avocado.Test):
         self.assertEqual(ostree["version"], "2")
         self.assertEqual(ostree["payload"]["deltas-from"], ["1"])
         tasks = [t for p in build.spec["playbook"] if p["name"] == "v2 packages" for t in p["tasks"]]
-        self.assertEqual(len(tasks), 1)
+        self.assertEqual(len(tasks), 2)
         self.assertEqual(tasks[0]["apt"]["name"], ["htop", "strace"])
+        self.assertEqual(tasks[1]["copy"]["dest"], "/etc/issue")
+        self.assertIn("v2", tasks[1]["copy"]["content"])
 
     def test_v3_overlay_sets_version_and_deltas(self):
         build = BuildCmd()
@@ -72,8 +82,10 @@ class ExampleSpec(avocado.Test):
         self.assertEqual(ostree["version"], "3")
         self.assertEqual(ostree["payload"]["deltas-from"], ["1", "2"])
         tasks = [t for p in build.spec["playbook"] if p["name"] == "v3 packages" for t in p["tasks"]]
-        self.assertEqual(len(tasks), 1)
+        self.assertEqual(len(tasks), 2)
         self.assertEqual(tasks[0]["apt"]["name"], ["chrony"])
+        self.assertEqual(tasks[1]["copy"]["dest"], "/etc/issue")
+        self.assertIn("v3", tasks[1]["copy"]["content"])
 
     def test_v4_overlay_sets_version_and_deltas(self):
         build = BuildCmd()
@@ -82,8 +94,10 @@ class ExampleSpec(avocado.Test):
         self.assertEqual(ostree["version"], "4")
         self.assertEqual(ostree["payload"]["deltas-from"], ["3"])
         tasks = [t for p in build.spec["playbook"] if p["name"] == "v4 daemon" for t in p["tasks"]]
-        self.assertEqual(len(tasks), 1)
+        self.assertEqual(len(tasks), 2)
         self.assertEqual(tasks[0]["apt"]["name"], ["htop", "strace", "chrony"])
+        self.assertEqual(tasks[1]["copy"]["dest"], "/etc/issue")
+        self.assertIn("v4", tasks[1]["copy"]["content"])
 
     def test_v5_overlay_sets_version_and_failing_unit(self):
         build = BuildCmd()
@@ -92,7 +106,10 @@ class ExampleSpec(avocado.Test):
         self.assertEqual(ostree["version"], "5")
         self.assertEqual(ostree["payload"]["deltas-from"], ["4"])
         pkg_tasks = [t for p in build.spec["playbook"] if p["name"] == "v5 packages" for t in p["tasks"]]
+        self.assertEqual(len(pkg_tasks), 2)
         self.assertEqual(pkg_tasks[0]["apt"]["name"], ["htop", "strace", "chrony"])
+        self.assertEqual(pkg_tasks[1]["copy"]["dest"], "/etc/issue")
+        self.assertIn("v5", pkg_tasks[1]["copy"]["content"])
         fail_tasks = [t for p in build.spec["playbook"] if p["name"] == "an unhealthy system" for t in p["tasks"]]
         self.assertEqual(len(fail_tasks), 2)
         self.assertEqual(fail_tasks[0]["copy"]["dest"], "/etc/systemd/system/seine-test-fail.service")
@@ -104,8 +121,10 @@ class ExampleSpec(avocado.Test):
         self.assertEqual(ostree["version"], "5.1")
         self.assertEqual(ostree["payload"]["deltas-from"], ["4"])
         tasks = [t for p in build.spec["playbook"] if p["name"] == "v5.1 hotfix packages" for t in p["tasks"]]
-        self.assertEqual(len(tasks), 1)
+        self.assertEqual(len(tasks), 2)
         self.assertEqual(tasks[0]["apt"]["name"], ["strace", "chrony"])
+        self.assertEqual(tasks[1]["copy"]["dest"], "/etc/issue")
+        self.assertIn("v5.1", tasks[1]["copy"]["content"])
 
     def test_v9_overlay_sets_version_deltas_and_custom_app(self):
         build = BuildCmd()
@@ -114,9 +133,11 @@ class ExampleSpec(avocado.Test):
         self.assertEqual(ostree["version"], "9")
         self.assertEqual(ostree["payload"]["deltas-from"], ["1", "5.1"])
         tasks = [t for p in build.spec["playbook"] if p["name"] == "v9 app and iperf3" for t in p["tasks"]]
-        self.assertEqual(len(tasks), 4)
+        self.assertEqual(len(tasks), 5)
         self.assertEqual(tasks[0]["apt"]["name"], ["strace", "python3-minimal", "iperf3"])
-        self.assertEqual(tasks[3]["copy"]["dest"], "/usr/bin/myapp")
+        self.assertEqual(tasks[1]["copy"]["dest"], "/etc/issue")
+        self.assertIn("v9", tasks[1]["copy"]["content"])
+        self.assertEqual(tasks[4]["copy"]["dest"], "/usr/bin/myapp")
 
 
 # The example as shipped, built with its payload served over HTTP, then
