@@ -21,3 +21,8 @@ playbook:
                 name:
                     - chrony
                 state: present
+          - name: write image version to /etc/issue
+            copy:
+                dest: /etc/issue
+                content: |
+                    Debian GNU/Linux v3 \n \l

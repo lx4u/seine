@@ -23,3 +23,8 @@ playbook:
                     - strace
                     - chrony
                 state: present
+          - name: write image version to /etc/issue
+            copy:
+                dest: /etc/issue
+                content: |
+                    Debian GNU/Linux v5.1 \n \l
