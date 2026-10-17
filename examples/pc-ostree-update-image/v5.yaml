@@ -32,6 +32,8 @@ playbook:
             copy:
                 dest: /etc/systemd/system/seine-test-fail.service
                 content: |
+                    [Unit]
+                    FailureAction=reboot-force
                     [Service]
                     ExecStart=/bin/false
                     [Install]
