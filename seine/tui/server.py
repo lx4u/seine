@@ -97,6 +97,7 @@ class InteractionServer:
             text = msg.get("text", "")
             if not isinstance(text, str):
                 return
+            pause = float(msg.get("pause", 0.0))
 
             async def type_and_submit():
                 try:
@@ -109,6 +110,8 @@ class InteractionServer:
                     prompt.value += ch
                     prompt.cursor_position = len(prompt.value)
                     await asyncio.sleep(0.02)
+                if pause > 0:
+                    await asyncio.sleep(pause)
                 await prompt.action_submit()
 
             self.app.call_from_thread(type_and_submit)
