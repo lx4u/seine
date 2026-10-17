@@ -228,6 +228,22 @@ class SocketProtocol(avocado.Test):
                     conn.close()
         _run(scenario)
 
+    def test_input_message_supports_pause(self):
+        async def scenario():
+            path = _socket_path()
+            app = self.SeineApp(interaction_socket=path)
+            async with app.run_test() as pilot:
+                conn = _connect(path)
+                try:
+                    conn.send({"type": "input", "text": "/nope", "pause": 0.1})
+                    lines = lambda: [e["line"] for e in app.history.entries(("commands",))]
+                    await _wait_until(pilot, lambda: "/nope" in lines())
+                    prompt = app.screen.query_one("#prompt", self.Prompt)
+                    self.assertEqual(prompt.value, "")
+                finally:
+                    conn.close()
+        _run(scenario)
+
     def test_ai_input_forwards_to_ai_ask(self):
         async def scenario():
             path = _socket_path()
