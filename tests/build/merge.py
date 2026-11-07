@@ -646,6 +646,24 @@ class VendorExcludeIsAdditive(avocado.Test):
         build.loads("vendor-exclude: [gcc-12, texlive]")
         self.assertEqual(build.spec["vendor-exclude"], ["gcc-12", "texlive"])
 
+# 'imager: packages:' is additive and deduplicated too; the other
+# 'imager:' settings still overwrite.
+class ImagerPackagesIsAdditive(avocado.Test):
+    def test(self):
+        build = BuildCmd()
+        build.loads("""
+                imager:
+                    kernel: linux-image-amd64
+                    packages: [runway-tools]
+        """)
+        build.loads("""
+                imager:
+                    kernel: linux-image-cloud-amd64
+                    packages: [runway-tools, mtools]
+        """)
+        self.assertEqual(build.spec["imager"]["kernel"], "linux-image-cloud-amd64")
+        self.assertEqual(build.spec["imager"]["packages"], ["runway-tools", "mtools"])
+
 # Unlike every other 'distribution:' setting (last-loaded wins),
 # 'architectures:' is additive and deduplicated, the same as
 # 'vendor-exclude:' above -- so a specification composing

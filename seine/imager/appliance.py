@@ -1,7 +1,9 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import hashlib
 import os
+import re
 
 from seine           import packages
 from seine.bootstrap import Bootstrap
@@ -137,7 +139,18 @@ class ImagerAppliance(Bootstrap):
             raise ValueError(
                 "'imager: rebuild:' must be one of missing, different, always "
                 "(got %r)" % self.rebuild)
+        self.packages = self._parse_packages(imager_spec.get("packages", []))
         super().__init__(distro, source.options)
+
+    # Debian package names, sorted and deduplicated so the order the
+    # specification lists them in does not change the appliance.
+    def _parse_packages(self, names):
+        if type(names) != type([]) or any(
+                type(n) != type("") or not re.fullmatch(r"[a-z0-9][a-z0-9+.-]+", n)
+                for n in names):
+            raise ValueError(
+                "'imager: packages:' shall be a list of Debian package names")
+        return sorted(set(names))
 
     def container_targets(self):
         targets = set()
@@ -181,10 +194,16 @@ class ImagerAppliance(Bootstrap):
     def memsize(self):
         return CONTAINER_MEMSIZE if self.has_containers() else None
 
+    # The extra packages are part of the name: a reused appliance
+    # ('rebuild: missing') would not have them.
     def defaultName(self):
+        slug = kernel_slug(self.package)
+        if self.packages:
+            digest = hashlib.sha256(" ".join(self.packages).encode()).hexdigest()[:8]
+            slug = f"{slug}-pkgs-{digest}"
         return os.path.join("imager-appliance", self.distro["source"],
                             self.distro["release"], self.distro["architecture"],
-                            kernel_slug(self.package))
+                            slug)
 
     def create(self):
         arch = self.distro["architecture"]
@@ -202,7 +221,6 @@ class ImagerAppliance(Bootstrap):
                 "bbolt-normalize binary for architecture '%s' is required to "
                 "normalize containerd storage but could not be built or found" % arch
             )
-        import hashlib
         with open(bbolt_bin, "rb") as bf:
             bbolt_hash = hashlib.sha256(bf.read()).hexdigest()
         options += ["-v", "%s:/seine-tools:ro" % os.path.dirname(bbolt_bin)]
@@ -223,6 +241,7 @@ class ImagerAppliance(Bootstrap):
         runtime_packages = (
             RUNTIME_APT_PACKAGES
             + (UKI_APT_PACKAGES if self.distro["release"] != "bookworm" else [])
+            + self.packages
         )
 
         entries = feed_auth_entries(self.distro, entries=release_feeds(self.distro))

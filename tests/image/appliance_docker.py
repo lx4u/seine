@@ -156,3 +156,36 @@ class ApplianceDockerTest(avocado.Test):
         self.assertIn("COPY --from=builder /appliance /appliance", runtime_stage)
         self.assertIn("COPY --from=builder /extra-tools /extra-tools", runtime_stage)
 
+    def test_imager_packages_join_the_runtime_stage_and_the_name(self):
+        spec = {
+            "distribution": {
+                "source": "debian",
+                "uri": "http://example.com/debian",
+                "release": "trixie",
+                "architecture": "amd64",
+            },
+        }
+        plain = ImagerAppliance(DummySource(spec))
+        extra = ImagerAppliance(DummySource(
+            dict(spec, imager={"packages": ["runway-tools", "mtools"]})))
+        reordered = ImagerAppliance(DummySource(
+            dict(spec, imager={"packages": ["mtools", "runway-tools", "mtools"]})))
+        self.assertNotEqual(extra.defaultName(), plain.defaultName())
+        self.assertEqual(extra.defaultName(), reordered.defaultName())
+        self.assertIn("-pkgs-", extra.defaultName())
+        runtime_stage = build_dockerfile(extra).split("FROM target-bootstrap:latest AS base")[1]
+        self.assertIn("runway-tools", runtime_stage)
+        self.assertNotIn("runway-tools", build_dockerfile(plain))
+
+    def test_imager_packages_must_be_debian_package_names(self):
+        spec = {
+            "distribution": {
+                "source": "debian",
+                "uri": "http://example.com/debian",
+                "release": "trixie",
+                "architecture": "amd64",
+            },
+        }
+        for bad in ("runway-tools", ["Runway Tools"], [1], ["x; rm -rf /"]):
+            with self.assertRaises(ValueError):
+                ImagerAppliance(DummySource(dict(spec, imager={"packages": bad})))

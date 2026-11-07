@@ -52,12 +52,21 @@ class SpecMerger:
             if arch not in archs:
                 archs.append(arch)
 
-    # direction: most-specific file wins (docs/merging.md).
+    # 'packages' is additive and deduplicated, like 'architectures'.
+    #
+    # direction: most-specific file wins, except 'packages': additive,
+    # deduplicated (docs/merging.md).
     def _merge_imager(self, spec):
         if "imager" in spec:
             if "imager" in self.spec:
                 for setting in spec["imager"]:
-                    self.spec["imager"][setting] = spec["imager"][setting]
+                    merged = self.spec["imager"].get(setting)
+                    new = spec["imager"][setting]
+                    if setting == "packages" and type(merged) == type([]) \
+                            and type(new) == type([]):
+                        merged += [p for p in new if p not in merged]
+                        continue
+                    self.spec["imager"][setting] = new
             else:
                 self.spec["imager"] = spec["imager"]
 

@@ -97,7 +97,7 @@ between two real files on disk.
 |---|---|---|---|
 | `redact` | exact pattern string | additive, deduplicated | order doesn't matter, only presence |
 | `distribution` | scalar setting | last-loaded wins | except `feeds`, merged by `suite` (a feed named by two files still ends up last-loaded-wins per field, via `dict.update`), and `architectures`, additive/deduplicated like `vendor-exclude` below (`architecture`, singular, still overwrites) |
-| `imager` | scalar setting | last-loaded wins | |
+| `imager` | scalar setting | last-loaded wins | except `packages`, additive and deduplicated like `distribution.architectures` |
 | `multiconfig` | group name | last-loaded wins | a group named again replaces its whole file list outright, the same as `imager`'s own settings -- not appended to |
 | `defaults` (`packages` only) | source package | last-loaded wins | deliberately the opposite of `packages` |
 | `defaults` (`extends`) | kind (`go`) | last-loaded wins | the settings of a kind are replaced together, never merged one by one |

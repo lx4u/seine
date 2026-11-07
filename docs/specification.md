@@ -1384,6 +1384,12 @@ as usual, while the imager itself is happy with a stock Debian kernel.
    with (e.g. `/usr/bin/qemu-system-aarch64`). Only needed when
    cross-building for an `architecture` other than the host's; defaults
    to a sensible binary for the target `architecture` if not specified.
+ * packages: Debian packages to install in the appliance's tools container,
+   which runs `ukify`, `objcopy` and the like. They may come from the
+   packages seine rebuilt (`packages:`). Fragments add to the list. Only the
+   top-level specification counts, not a `multiconfig:` group's. An
+   appliance with extra packages is cached under a name of its own, so the
+   one shipped by `seine-oci-<release>` still serves specifications without.
  * rebuild: when to rebuild the appliance image rather than reuse the one
    already tagged for this `release`/`architecture`/`kernel`. One of:
    `missing` (default) -- reuse whatever is tagged, even if the feeds it
