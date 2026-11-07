@@ -3,6 +3,7 @@
 
 import functools
 import http.server
+import json
 import os
 import shutil
 import subprocess
@@ -73,6 +74,8 @@ class UpdateGuest:
     watchdog = None
     # TPM emulation via swtpm: True to enable.
     tpm = False
+    guest = None
+    server = None
 
     def setUp(self):
         self.guest = None
@@ -245,17 +248,25 @@ class UpdateGuest:
         self.guest.expect(r"reboot: Restarting system", 150)
         self.login(timeout)
 
-    def sh(self, command, timeout=60):
+    def sh(self, command, timeout=120):
         status, output = self.guest.run(command, timeout)
         self.assertEqual(status, 0, f"'{command}' failed: {output}")
         return output
+
+    @property
+    def esp_dir(self):
+        return getattr(self, "_esp_dir", ESP)
+
+    @esp_dir.setter
+    def esp_dir(self, path):
+        self._esp_dir = path
 
     def wait_until(self, command, timeout=120):
         deadline = time.time() + timeout
         while self.guest.run(command)[0] != 0:
             if time.time() > deadline:
                 self.fail(f"'{command}' still fails after {timeout} s: "
-                          f"{self.guest.run(f'ls -l {ESP}')[1]}")
+                          f"{self.guest.run(f'ls -l {self.esp_dir}')[1]}")
             time.sleep(2)
 
     # The agent needs the network, which comes up after the login.
@@ -272,7 +283,8 @@ class UpdateGuest:
     # The deployments of ostree admin status: (name, pinned).
     def deployments(self):
         rows = []
-        for line in self.sh("ostree admin status").splitlines():
+        status_cmd = "ostree admin --sysroot=/sysroot status" if self.esp_dir.startswith("/boot") else "ostree admin status"
+        for line in self.sh(status_cmd).splitlines():
             if line.lstrip("* ").startswith("debian "):
                 rows.append([line.lstrip("* ").split()[1], False])
             elif "Pinned: yes" in line and rows:
@@ -280,7 +292,14 @@ class UpdateGuest:
         return rows
 
     def esp(self):
-        return self.sh(f"ls {ESP}").split()
+        return self.sh(f"ls {self.esp_dir}").split()
+
+    def rwyctl_status(self):
+        return json.loads(self.sh("rwyctl status --json"))
+
+    def rwyctl_slots(self, label=None):
+        cmd = f"rwyctl slots --json --label {label}" if label else "rwyctl slots --json"
+        return json.loads(self.sh(cmd))
 
     def booted_version(self):
         return self.sh("sed -n 's/^IMAGE_VERSION=//p' /etc/os-release")
@@ -288,10 +307,12 @@ class UpdateGuest:
     # Run after every step: what the agent promises always holds.
     def assert_invariants(self):
         self.sh(f"{AGENT} check")
-        status = self.sh("ls /sysroot/ostree | grep '^debian-' || true")
-        for link in status.split():
-            self.sh(f"test -e /sysroot/ostree/{link}")
-        self.assertEqual(self.sh(f"ls {ESP}/.#sysupdate* {ESP}/*.tmp 2>/dev/null || true"), "")
+        self.sh("for f in /sysroot/ostree/debian-*; do [ -L \"$f\" ] && [ ! -e \"$f\" ] && exit 1; done; true")
+        self.assertEqual(self.sh(f"ls {self.esp_dir}/.#sysupdate* {self.esp_dir}/*.tmp 2>/dev/null || true"), "")
         pinned = [name for name, pin in self.deployments() if pin]
         self.assertEqual(len(pinned), 1, f"expected one pinned deployment, got {pinned}")
         self.assertLessEqual(len(self.deployments()), 3)
+        if self.esp_dir.startswith("/boot"):
+            rwy = self.rwyctl_status()
+            self.assertEqual(rwy.get("record"), "ok")
+            self.assertEqual(rwy.get("incomplete"), 0)

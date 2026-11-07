@@ -220,7 +220,7 @@ class Guest(Console):
     # back garbled.
     def login(self, timeout=240):
         self.wait_shell(timeout, PROMPT)
-        self.send("export SYSTEMD_PAGER=cat; stty -echo cols 300; bind 'set enable-bracketed-paste off'; PS1=''\n")
+        self.send("export SYSTEMD_PAGER=cat; stty -echo cols 300; bind 'set enable-bracketed-paste off'; PS1=''; dmesg -n 1 2>/dev/null || true\n")
         self.wait_shell(30)
         if self.share:
             self.run("modprobe 9pnet_virtio 9p; mkdir -p %s; mount -t 9p host %s"

@@ -546,6 +546,9 @@ In a cross build they run emulated, like `ukify`. The only UKI is staged into th
 store, and `RUNWAY.EFI` is copied to `EFI/BOOT/BOOT<ARCH>.EFI` on the
 ESP. The OSTree repository config keeps `sysroot.bootloader` set to `none`.
 
+Runway needs Debian Forky (`ostree >= 2026.4`), where `ostree-system-generator`
+delegates `/boot` to `/etc/fstab`.
+
 In the running image, `examples/common/runway.yaml` installs `runway-tools`,
 `runway-fuse`, and `runway-bls`.
 At runtime, the `/boot` line of `/etc/fstab` makes systemd start `boot.mount`,
@@ -553,6 +556,17 @@ which mounts the store using `mount.runway auto` and exposes synthetic Boot Load
 `seine-update` stages UKIs into `/boot/EFI/Linux/<stem>+3.efi` on the transactional
 store, and `systemd-bless-boot` confirms slot activation by renaming the trial UKI
 to `/boot/EFI/Linux/<stem>.efi`.
+
+Runway's Copy-on-Write store and atomic slot publication make UKI staging and
+confirmation all-or-nothing:
+* An interrupted write leaves no partial binary or broken directory entry. On
+  reboot, uncommitted store blocks are dropped, and `seine-update reconcile`
+  cleans up any temporary state.
+* Slot confirmation by rename is atomic: the system boots either the prior
+  known-good version or the confirmed one.
+
+`rwyctl status --json` and `rwyctl slots --json` export store health, the active
+slot and the slot states as JSON for monitoring and scripts.
 
 ## Requirements
 
