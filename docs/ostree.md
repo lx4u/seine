@@ -546,6 +546,14 @@ In a cross build they run emulated, like `ukify`. The only UKI is staged into th
 store, and `RUNWAY.EFI` is copied to `EFI/BOOT/BOOT<ARCH>.EFI` on the
 ESP. The OSTree repository config keeps `sysroot.bootloader` set to `none`.
 
+In the running image, `examples/common/runway.yaml` installs `runway-tools`,
+`runway-fuse`, and `runway-bls`.
+At runtime, the `/boot` line of `/etc/fstab` makes systemd start `boot.mount`,
+which mounts the store using `mount.runway auto` and exposes synthetic Boot Loader Specification (BLS) Type 1 and Type 2 UKI trees.
+`seine-update` stages UKIs into `/boot/EFI/Linux/<stem>+3.efi` on the transactional
+store, and `systemd-bless-boot` confirms slot activation by renaming the trial UKI
+to `/boot/EFI/Linux/<stem>.efi`.
+
 ## Requirements
 
 The root file system needs `dracut`, `ostree` and `ostree-boot`, and no

@@ -78,3 +78,17 @@ class RunwayPackageSpec(avocado.Test):
     def test_runway_tools_go_into_the_imager_tools_container(self):
         spec = BuildCmd().load(RUNWAY_SPEC)
         self.assertEqual(spec["imager"]["packages"], ["runway-tools"])
+
+    def test_runway_playbook_installs_runtime_packages(self):
+        build = BuildCmd()
+        spec = build.load(RUNWAY_SPEC)
+        self.assertIn("playbook", spec)
+        playbook = spec["playbook"]
+        tasks = [t for p in playbook for t in p.get("tasks", [])]
+
+        apt_task = next(t for t in tasks if "apt" in t)
+        self.assertEqual(
+            apt_task["apt"]["name"],
+            ["runway-tools", "runway-fuse", "runway-bls"],
+        )
+        self.assertEqual(apt_task["apt"]["state"], "present")

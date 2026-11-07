@@ -13,7 +13,8 @@ CONF=${SEINE_UPDATE_CONF:-/etc/seine-update.conf}
 KEEP_FAILED=${KEEP_FAILED:-0}
 ESP=${SEINE_UPDATE_ESP:-${ESP:?}}
 SU=${SEINE_UPDATE_SYSUPDATE:-/usr/lib/systemd/systemd-sysupdate}
-OSTREE=${SEINE_UPDATE_OSTREE:-ostree}
+read -ra OSTREE <<< "${SEINE_UPDATE_OSTREE:-ostree}"
+OSTREE_ADMIN=("${OSTREE[@]}" admin)
 BOOTCTL=${SEINE_UPDATE_BOOTCTL:-bootctl}
 SYSROOT=${SEINE_UPDATE_SYSROOT:-/sysroot}
 STATE=${SEINE_UPDATE_STATE:-/var/lib/seine-update}
@@ -21,6 +22,15 @@ LOCK=${SEINE_UPDATE_LOCK:-/run/seine-update.lock}
 DEPLOYS=$SYSROOT/ostree/deploy/$STATEROOT/deploy
 ESP_SLACK=$((5 * 1024 * 1024))
 TOKEN_FILE=${SEINE_UPDATE_TOKEN_FILE:-${TOKEN_FILE:-$STATE/token}}
+
+if [[ ${BOOTLOADER:-} == runway ]]; then
+    # The Runway store at /boot is no real ESP or XBOOTLDR.
+    export SYSTEMD_RELAX_ESP_CHECKS=1 SYSTEMD_RELAX_XBOOTLDR_CHECKS=1
+    # With no /boot/loader link on the store, ostree needs the sysroot named.
+    if [[ ! -L /boot/loader && -L $SYSROOT/boot/loader ]]; then
+        OSTREE_ADMIN+=(--sysroot="$SYSROOT")
+    fi
+fi
 
 # A composefs root has /sysroot read-only. Like ostree, write to it from a
 # private mount namespace only.
@@ -97,7 +107,7 @@ uki_version() {   # debian-23+3.efi -> 23
 # One line per deployment of the stateroot: index name booted|- pinned|-
 # The index counts the deployments of all staterooots, as ostree does.
 status_rows() {
-    "$OSTREE" admin status | awk -v s="$STATEROOT" '
+    "${OSTREE_ADMIN[@]}" status | awk -v s="$STATEROOT" '
         function flush() {
             if (name != "") print idx - 1, name, (booted ? "booted" : "-"), (pinned ? "pinned" : "-")
             name = ""; booted = 0; pinned = 0
@@ -174,7 +184,7 @@ drop_deployment() {
     fi
     i=$(status_rows | awk -v n="$1" '$2 == n { print $1 }')
     [[ -n $i ]] || return 0
-    "$OSTREE" admin undeploy "$i" || fail "cannot undeploy $1"
+    "${OSTREE_ADMIN[@]}" undeploy "$i" || fail "cannot undeploy $1"
 }
 
 drop_dead_links() {
@@ -242,12 +252,12 @@ elect() {
     rows=$(status_rows)
     while read -r i n _ p; do
         if [[ $n == "$l" && $p != pinned ]]; then
-            "$OSTREE" admin pin "$i" || fail "cannot pin $n"
+            "${OSTREE_ADMIN[@]}" pin "$i" || fail "cannot pin $n"
         fi
     done <<< "$rows"
     while read -r i n _ p; do
         if [[ $n != "$l" && $p == pinned ]]; then
-            "$OSTREE" admin pin --unpin "$i" || fail "cannot unpin $n"
+            "${OSTREE_ADMIN[@]}" pin --unpin "$i" || fail "cannot unpin $n"
         fi
     done <<< "$rows"
     failpoint after-elect
@@ -256,7 +266,7 @@ elect() {
 # A failed UKI is denied for good, then removed with its deployment and link.
 cleanup_failed() {
     local u f fv d t
-    for u in "$ESP/$STATEROOT"-*+0-*.efi; do
+    for u in "$ESP/$STATEROOT"-*+0-*.efi "$ESP/$STATEROOT"-*+0.efi; do
         f=${u##*/}
         fv=$(uki_version "$f")
         t=$(uki_link "$f")
@@ -403,11 +413,11 @@ if [[ -n ${EXTRA_PULL_ARGS:-} ]]; then
     pull_args+=($EXTRA_PULL_ARGS)
 fi
 
-"$OSTREE" pull "${pull_args[@]}" "$REMOTE" "$REF" || fail "cannot pull $REMOTE:$REF"
+"${OSTREE[@]}" pull "${pull_args[@]}" "$REMOTE" "$REF" || fail "cannot pull $REMOTE:$REF"
 failpoint after-pull
-c=$("$OSTREE" rev-parse "$REMOTE:$REF") || fail "cannot read $REMOTE:$REF"
+c=$("${OSTREE[@]}" rev-parse "$REMOTE:$REF") || fail "cannot read $REMOTE:$REF"
 [[ $c =~ ^[0-9a-f]{64}$ ]] || fail "unexpected commit '$c'"
-cv=$("$OSTREE" show --print-metadata-key=version "$c" | tr -d "'") || cv=
+cv=$("${OSTREE[@]}" show --print-metadata-key=version "$c" | tr -d "'") || cv=
 [[ $cv == "$v" ]] || fail "commit version '$cv' differs from $v"
 
 # Keep the last-known-good (and the booted UKI), drop the rest before the deploy does.
@@ -422,7 +432,7 @@ if [[ -z $d ]]; then
         drop_file "$x"
         drop_file "$x.origin"
     done
-    "$OSTREE" admin deploy --os="$STATEROOT" "$c" || fail "cannot deploy $c"
+    "${OSTREE_ADMIN[@]}" deploy --os="$STATEROOT" "$c" || fail "cannot deploy $c"
     failpoint after-deploy
     d=$(status_rows | awk -v c="$c" '$2 ~ ("^" c "\\.") { print $2; exit }')
 fi

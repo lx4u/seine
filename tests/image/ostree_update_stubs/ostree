@@ -5,6 +5,12 @@
 d=$STUB_DIR
 root=$SEINE_UPDATE_SYSROOT/ostree/deploy/debian/deploy
 echo "ostree $*" >> "$d/calls"
+if [ "$1" = "admin" ] && [ "${2#--sysroot=}" != "$2" ]; then
+    shift 2
+    set -- admin "$@"
+elif [ "${1#--sysroot=}" != "$1" ]; then
+    shift
+fi
 booted=$(cat "$d/booted" 2>/dev/null)
 nth() { sed -n "$(($1 + 1))p" "$d/order"; }
 case "$1 $2" in

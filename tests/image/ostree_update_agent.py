@@ -88,7 +88,8 @@ class World:
         return full
 
     def uki(self, file, name):
-        self.write(f"esp/{file}", f"root=PARTUUID=1 rw ostree=/ostree/debian-{commit(name)}")
+        with open(os.path.join(self.esp, file), "w") as f:
+            f.write(f"root=PARTUUID=1 rw ostree=/ostree/debian-{commit(name)}")
 
     def offer(self, version, name, commit_version=None, uki_of=None):
         self.write("stub/new-version", version)
@@ -567,7 +568,7 @@ class UpdateAgent(avocado.Test):
         removers = [l for l in code if re.search(r"(^|[\s;|&(])(rm|unlink|shred|rmdir)\s", l)]
         self.assertEqual([l.strip() for l in removers], ['rm -rf "${1:?}"'])
         self.assertIn(removers[0], self.function_lines(text, "drop_file"))
-        undeploys = [l for l in code if re.search(r"\badmin undeploy\b", l)]
+        undeploys = [l for l in code if re.search(r"\b(admin\s+undeploy|OSTREE_ADMIN.*undeploy)\b", l)]
         self.assertEqual(len(undeploys), 1)
         self.assertIn(undeploys[0], self.function_lines(text, "drop_deployment"))
 
@@ -589,6 +590,55 @@ class UpdateAgent(avocado.Test):
         self.assert_ok(self.w.run())
         pulls = [c for c in self.w.calls() if c.startswith("ostree pull")]
         self.assertTrue(any("--http-header=Authorization=Bearer filetoken456" in c for c in pulls))
+
+    def test_runway_synthetic_bls_uki_staging_and_confirmation(self):
+        w = self.w
+        boot_linux = w.mkdir("boot/EFI/Linux")
+        w.esp = boot_linux
+        w.set_conf(f"ESP={boot_linux}\nBOOTLOADER=runway\n")
+        w.factory("21")
+        w.offer("22", "b")
+
+        # Staging the update creates the trial UKI in the synthetic BLS tree.
+        self.assert_ok(w.run())
+        res = w.result()
+        self.assertEqual(res["result"], "ok")
+        self.assertEqual(res["version"], "22")
+        self.assertIn("debian-22+3.efi", w.ukis())
+
+        # Unblessed trial boot preserves pin on previous version.
+        w.write("stub/booted", f"{commit('b')}.0")
+        self.assert_ok(w.run("reconcile"))
+        self.assertEqual(w.pinned(), [f"{commit('a')}.0"])
+
+        # systemd-bless-boot confirms slot by renaming trial UKI.
+        os.rename(
+            os.path.join(boot_linux, "debian-22+3.efi"),
+            os.path.join(boot_linux, "debian-22.efi"),
+        )
+        self.assert_ok(w.run("reconcile"))
+        self.assertEqual(w.pinned(), [f"{commit('b')}.0"])
+        self.assert_check()
+
+    def test_runway_failed_trial_uki_without_tries_done_is_cleaned(self):
+        w = self.w
+        boot_linux = w.mkdir("boot/EFI/Linux")
+        w.esp = boot_linux
+        w.set_conf(f"ESP={boot_linux}\nBOOTLOADER=runway\n")
+        w.deploy("a", booted=True, pinned=True)
+        w.deploy("b")
+        w.uki("debian-21.efi", "a")
+        # Runway presents failed slot as +0 without tries done suffix.
+        w.uki("debian-22+0.efi", "b")
+
+        self.assert_ok(w.run("reconcile"))
+        self.assertEqual(w.ukis(), ["debian-21.efi"])
+        self.assertEqual(w.deployments(), [f"{commit('a')}.0"])
+        with open(os.path.join(w.state, "failed")) as f:
+            fields = f.read().split()
+        self.assertEqual(fields[:2], ["22", f"{commit('b')}.0"])
+        self.assertEqual(w.result()["result"], "failed-update")
+        self.assert_check()
 
     def test_the_script_is_shellcheck_clean(self):
         if shutil.which("shellcheck") is None:

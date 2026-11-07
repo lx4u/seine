@@ -17,3 +17,16 @@ packages:
 imager:
     packages:
         - runway-tools
+
+playbook:
+    - name: install the Runway target packages
+      wave: services
+      after: [base]
+      tasks:
+          - name: install Runway runtime packages
+            apt:
+                name:
+                    - runway-tools
+                    - runway-fuse
+                    - runway-bls
+                state: present

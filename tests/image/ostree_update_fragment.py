@@ -77,7 +77,8 @@ class Fragment(Scratch):
     def test_the_device_settings_come_from_the_spec(self):
         conf = self.play("tell the script about this device")["copy"]["content"]
         self.assertEqual(conf.split(), ["STATEROOT=debian", "REF=debian/amd64",
-                                        "REMOTE=seine", "ESP=/efi/EFI/Linux"])
+                                        "REMOTE=seine", "ESP=/efi/EFI/Linux",
+                                        "BOOTLOADER="])
 
     def test_the_remote_checks_commits_and_summary(self):
         remote = self.play("add the remote")["copy"]["content"]

@@ -103,7 +103,8 @@ playbook:
                     STATEROOT=[[ image.ostree.stateroot ]]
                     REF=[[ image.ostree.ref ]]
                     REMOTE=seine
-                    ESP=/efi/EFI/Linux
+                    ESP=[[ '/boot/EFI/Linux' if image.ostree.get('bootloader') == 'runway' else '/efi/EFI/Linux' ]]
+                    BOOTLOADER=[[ image.ostree.get('bootloader', '') ]]
 
           - name: add the remote
             copy:
