@@ -1,6 +1,14 @@
 # seine - Slim Embedded Images Now Easy
 # SPDX-License-Identifier: Apache-2.0
 
+import os
+
+from seine.imager.appliance import ARCH_INFO
+
+# The Runway store is mounted at /boot by its FUSE driver.
+RUNWAY_FSTAB_LINE = ("auto /boot runway "
+                     "rw,nosuid,nodev,allow_other,default_permissions 0 0\n")
+
 # ext2 must load explicitly: part_gpt/fat come built into core.img,
 # but ext2 does not, and we need it to read another group's /boot.
 GRUB_CFG_HEADER = """insmod part_gpt
@@ -116,6 +124,42 @@ class SystemdBootBootloader(Bootloader):
                     f"{esp_mount}/EFI/systemd/systemd-bootaa64.efi"]
         return [f"{esp_mount}/EFI/BOOT/BOOTX64.EFI",
                 f"{esp_mount}/EFI/systemd/systemd-bootx64.efi"]
+
+
+# Never detected: an image opts in with 'ostree: bootloader: runway'.
+# The ESP only carries RUNWAY.EFI. The UKIs live in the Runway store.
+class RunwayBootloader(Bootloader):
+    def detect(self, g):
+        return False
+
+    def _boot_name(self):
+        return "BOOTAA64.EFI" if self.arch == "arm64" else "BOOTX64.EFI"
+
+    def install(self, g, esp_mount, **opts):
+        src = runway_path(g, self.arch or "amd64", "RUNWAY.EFI")
+        if src is None:
+            raise RuntimeError("RUNWAY.EFI not found in the root file-system")
+        for dst in (f"{esp_mount}/EFI/BOOT/{self._boot_name()}",
+                    f"{esp_mount}/EFI/RUNWAY/RUNWAY.EFI"):
+            g.mkdir_p(os.path.dirname(dst))
+            g.cp(src, dst)
+
+    def add_entry(self, g, **opts):
+        pass
+
+    def paths_to_sign(self, esp_mount):
+        return [f"{esp_mount}/EFI/BOOT/{self._boot_name()}",
+                f"{esp_mount}/EFI/RUNWAY/RUNWAY.EFI"]
+
+
+# Where the root file-system keeps a Runway file or directory, if it does.
+def runway_path(g, arch, name):
+    triplet = ARCH_INFO[arch]["triplet"]
+    for directory in (f"/usr/lib/{triplet}/runway", "/usr/lib/runway"):
+        path = f"{directory}/{name}"
+        if g.is_file(path) or g.is_dir(path):
+            return path
+    return None
 
 
 REGISTRY = [GrubBootloader, SystemdBootBootloader]

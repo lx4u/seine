@@ -512,6 +512,40 @@ The recipe builds for the target architecture. It also lists `runway-tools`
 in `imager: packages:`, so the imager tools container has `mkstore` and
 `rwyctl`.
 
+To enable Runway in an image:
+
+```yaml
+image:
+  table: gpt
+  ostree:
+    mode: standard
+    bootloader: runway
+  partitions:
+    - label: ESP
+      flags: [boot]
+      type: vfat
+      where: /efi
+      size: 64MiB
+    - label: store
+      type: runway
+      flags: [xbootldr]
+      size: 128MiB
+```
+
+The store partition has `type: runway` (the XBOOTLDR GPT type) and is
+never mounted: the Runway store starts at byte 0 of it, so FAT is off
+the boot write path. It is added at 256MiB when the spec has none. The
+ESP only carries `RUNWAY.EFI`. seine adds the `/boot` mount of the store
+to `/etc/fstab`.
+
+During imaging, the host formats the store with `mkstore`, reserving the
+loader area with `rwy-loader.efi` and the watchdog drivers. `mkstore` and
+`rwyctl` run in the imager tools container, which gets the `runway-tools`
+package through `imager: packages:` (`examples/common/runway.yaml` sets it).
+In a cross build they run emulated, like `ukify`. The only UKI is staged into the
+store, and `RUNWAY.EFI` is copied to `EFI/BOOT/BOOT<ARCH>.EFI` on the
+ESP. The OSTree repository config keeps `sysroot.bootloader` set to `none`.
+
 ## Requirements
 
 The root file system needs `dracut`, `ostree` and `ostree-boot`, and no

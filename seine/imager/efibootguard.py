@@ -162,6 +162,8 @@ class EfiBootGuard:
 
     def _install_efibootguard(self, g, bootloader, esp_path):
         ph = self.source.partitionHandler
+        if getattr(ph, "uses_runway", lambda: False)():
+            return
         if not (ph.watchdog and ph.watchdog > 0):
             return
         if not bootloader:

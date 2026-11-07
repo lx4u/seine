@@ -3,6 +3,7 @@
 
 import base64
 import configparser
+import hashlib
 import os
 import posixpath
 import re
@@ -13,8 +14,10 @@ import tempfile
 from seine.imager.appliance import DEVICE
 from seine.imager.appliance import SCRATCH_DEVICE
 from seine.imager.bootloader import detect as detect_bootloader
-from seine.imager.bootloader import GrubBootloader
+from seine.imager.bootloader import GrubBootloader, RunwayBootloader
+from seine.imager.bootloader import RUNWAY_FSTAB_LINE, runway_path
 from seine.imager import payload
+from seine.imager import runway
 
 # What an ostree sysroot needs from the rootfs: the tool, its initramfs
 # program and the dracut module that puts it in the initramfs.
@@ -575,6 +578,8 @@ class OstreeSysroot:
         kargs = ["root=PARTUUID=%s" % self._partuuid(g, part_index, root), "rw"]
         kargs += shlex.split(self._grub_cmdline(g))
         self._write_fstab(g, others, mount_devices, part_index)
+        if settings.get("bootloader") == "runway":
+            g.write_append("/etc/fstab", RUNWAY_FSTAB_LINE.encode())
         ukis = self._take_ukis(g)
         composefs = settings["mode"] == "composefs"
         composefs_key = settings.get("composefs-key")
@@ -614,7 +619,8 @@ class OstreeSysroot:
         deploy(g, stateroot, ref, kargs)
         print("  %s %s" % (ref, checksum))
         self._boot_ostree(g, source, mounts, mount_devices, stateroot,
-                          distro, boot_owner, boot_entries, ukis, version, osrel)
+                          distro, boot_owner, boot_entries, ukis, ph,
+                          part_devices, settings, version, osrel)
         if version:
             self._write_payload(g, settings, mounts, boot_entries[-1], ref,
                                 checksum)
@@ -761,8 +767,8 @@ class OstreeSysroot:
     # the boot loader and writes every group's menu on the shared ESP,
     # as _install_boot_entry() does for a plain layout.
     def _boot_ostree(self, g, source, mounts, mount_devices, stateroot,
-                     distro, boot_owner, boot_entries, ukis, version=None,
-                     osrel=None):
+                     distro, boot_owner, boot_entries, ukis, ph, part_devices,
+                     settings, version=None, osrel=None):
         root = next(m for m in mounts if m["_prefix"] == "/")
         boot = next((m for m in mounts if m["_prefix"] == "/boot/"), None)
         boot_device = mount_devices[id(boot or root)]
@@ -779,7 +785,10 @@ class OstreeSysroot:
         if source is not None and source != boot_owner:
             return
         arch = distro.get("architecture")
-        bootloader = detect_bootloader(g, DEVICE, arch=arch)
+        if settings.get("bootloader") == "runway":
+            bootloader = RunwayBootloader(DEVICE, arch=arch)
+        else:
+            bootloader = detect_bootloader(g, DEVICE, arch=arch)
         if bootloader is None:
             if ukis:
                 raise RuntimeError(
@@ -791,16 +800,21 @@ class OstreeSysroot:
                 "booting an ostree image is only supported on amd64 for now "
                 "(this one is '%s')" % distro["architecture"])
         esp = next((m for m in mounts if m["_prefix"] == ESP_PREFIX), None)
-        efi = "/usr/lib/grub/x86_64-efi" if isinstance(bootloader, GrubBootloader) \
-            else "/usr/lib/systemd/boot/efi"
-        if esp is None or not g.is_dir(efi):
+        if isinstance(bootloader, GrubBootloader):
+            efi = "/usr/lib/grub/x86_64-efi"
+        elif isinstance(bootloader, RunwayBootloader):
+            efi = runway_path(g, arch, "RUNWAY.EFI")
+        else:
+            efi = "/usr/lib/systemd/boot/efi"
+        if esp is None or not efi or not (g.is_dir(efi) or g.is_file(efi)):
             raise RuntimeError(
                 "booting an ostree image needs an '%s' partition and the "
                 "boot loader's EFI files (%s) in the root file-system" % (
                     ESP_PREFIX.rstrip("/"), efi))
         print("Installing boot loader and entries...")
         esp_path = self._guest_paths[id(esp)]
-        if any(group.get("ukis") for group in boot_entries):
+        runway_boot = isinstance(bootloader, RunwayBootloader)
+        if not runway_boot and any(group.get("ukis") for group in boot_entries):
             g.mkdir_p(esp_path + ESP_UKI_DIR)
             for group in boot_entries:
                 for name, workdir, result in group.get("built", ()):
@@ -811,11 +825,38 @@ class OstreeSysroot:
             bootloader.install(g, esp_path, boot_directory=esp_path, removable=True)
             g.write_append("%s/grub/grub.cfg" % esp_path,
                            grub_menuentries(ordered).encode())
+        elif runway_boot:
+            bootloader.install(g, esp_path)
+            self._provision_runway_store(g, ph, part_devices, boot_entries, arch)
         else:
             bootloader.install(g, esp_path, boot_path=None)
             self._write_systemd_boot(g, esp_path, ordered)
-        self._install_efibootguard(g, bootloader, esp_path)
+            self._install_efibootguard(g, bootloader, esp_path)
         self._sign_bootloader_files(g, bootloader, esp_path)
+
+    # The UKI of the image goes into the Runway store partition, which is
+    # not mounted: it is formatted on the host and written whole.
+    def _provision_runway_store(self, g, ph, part_devices, boot_entries, arch):
+        built = [b for group in boot_entries for b in group.get("built", ())]
+        if len(built) != 1:
+            raise RuntimeError(
+                f"booting with Runway needs exactly one UKI (found {len(built)})")
+        entry, uki_dir, uki = built[0]
+        store = next(p for p in ph.partitions if p["type"] == "runway")
+        seed = None
+        if self._pins_fat_serial():
+            seed = hashlib.sha256(
+                self._uuid_for("runway-seed", store["label"]).encode()).hexdigest()
+        with tempfile.TemporaryDirectory(dir=self._output_dir, prefix="runway-store-") as workdir:
+            def run(args):
+                self._run_tool(args, {workdir: runway.WORK}, workdir=runway.WORK)
+
+            runway.provision_store(
+                g, run, arch, workdir, part_devices[id(store)],
+                store["_size"] // (1024 * 1024),
+                self._uuid_for("fs", store["label"]),
+                os.path.join(uki_dir, uki), entry,
+                watchdog=ph.watchdog, seed=seed)
 
     # The ESP gets the entries and the kernel files of every sysroot.
     # The other sysroots are not mounted any more: mount them to read.

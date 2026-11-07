@@ -8,7 +8,7 @@ path_to_self    = os.path.realpath(__file__)
 path_to_sources = os.path.join(os.path.dirname(path_to_self), "..", "..")
 sys.path.append(path_to_sources)
 
-from seine.imager.bootloader import GrubBootloader, SystemdBootBootloader, detect
+from seine.imager.bootloader import GrubBootloader, RunwayBootloader, SystemdBootBootloader, detect
 
 # Plain Python, no guestfs appliance involved -- a fake stands in for 'g'
 # and records what was called against it.
@@ -34,6 +34,9 @@ class FakeGuestfs:
     def mv(self, src, dst):
         self.calls.append(("mv", src, dst))
 
+    def cp(self, src, dst):
+        self.calls.append(("cp", src, dst))
+
     def write(self, path, content):
         self.written[path] = content
 
@@ -41,6 +44,10 @@ class FakeGuestfs:
         self.written[path] = self.written.get(path, b"") + content
 
 class Detection(avocado.Test):
+    def test_runway_is_never_picked_by_detection(self):
+        g = FakeGuestfs(files=["/usr/bin/rwyctl", "/usr/lib/runway/RUNWAY.EFI"])
+        self.assertIsNone(detect(g, "/dev/sda"))
+
     def test_grub_is_picked_when_present(self):
         g = FakeGuestfs(files=["/usr/sbin/grub-install"])
         bootloader = detect(g, "/dev/sda")
@@ -51,6 +58,16 @@ class Detection(avocado.Test):
         self.assertIsNone(detect(g, "/dev/sda"))
 
 class PathsToSign(avocado.Test):
+    def test_runway_names_both_binaries_it_installs(self):
+        paths = RunwayBootloader("/dev/sda").paths_to_sign("/efi")
+        self.assertEqual(paths, ["/efi/EFI/BOOT/BOOTX64.EFI",
+                                 "/efi/EFI/RUNWAY/RUNWAY.EFI"])
+
+    def test_runway_names_both_binaries_for_arm64(self):
+        paths = RunwayBootloader("/dev/sda", arch="arm64").paths_to_sign("/efi")
+        self.assertEqual(paths, ["/efi/EFI/BOOT/BOOTAA64.EFI",
+                                 "/efi/EFI/RUNWAY/RUNWAY.EFI"])
+
     def test_grub_names_the_efi_binary_it_moves_onto_the_esp(self):
         paths = GrubBootloader("/dev/sda").paths_to_sign("/efi")
         self.assertEqual(paths, ["/efi/EFI/boot/bootx64.efi"])
@@ -68,6 +85,28 @@ class PathsToSign(avocado.Test):
         paths = SystemdBootBootloader("/dev/sda", arch="arm64").paths_to_sign("/efi")
         self.assertEqual(paths, ["/efi/EFI/BOOT/BOOTAA64.EFI",
                                  "/efi/EFI/systemd/systemd-bootaa64.efi"])
+
+class RunwayInstall(avocado.Test):
+    def test_runway_copies_binary_to_esp(self):
+        g = FakeGuestfs(files=["/usr/lib/x86_64-linux-gnu/runway/RUNWAY.EFI"])
+        RunwayBootloader("/dev/sda", arch="amd64").install(g, "/efi")
+        self.assertEqual(g.calls, [
+            ("mkdir_p", "/efi/EFI/BOOT"),
+            ("cp", "/usr/lib/x86_64-linux-gnu/runway/RUNWAY.EFI", "/efi/EFI/BOOT/BOOTX64.EFI"),
+            ("mkdir_p", "/efi/EFI/RUNWAY"),
+            ("cp", "/usr/lib/x86_64-linux-gnu/runway/RUNWAY.EFI", "/efi/EFI/RUNWAY/RUNWAY.EFI"),
+        ])
+
+    def test_runway_copies_binary_to_esp_arm64(self):
+        g = FakeGuestfs(files=["/usr/lib/aarch64-linux-gnu/runway/RUNWAY.EFI"])
+        RunwayBootloader("/dev/sda", arch="arm64").install(g, "/efi")
+        self.assertEqual(g.calls, [
+            ("mkdir_p", "/efi/EFI/BOOT"),
+            ("cp", "/usr/lib/aarch64-linux-gnu/runway/RUNWAY.EFI", "/efi/EFI/BOOT/BOOTAA64.EFI"),
+            ("mkdir_p", "/efi/EFI/RUNWAY"),
+            ("cp", "/usr/lib/aarch64-linux-gnu/runway/RUNWAY.EFI", "/efi/EFI/RUNWAY/RUNWAY.EFI"),
+        ])
+
 
 class GrubInstall(avocado.Test):
     def test_efi_reproduces_todays_inline_block(self):

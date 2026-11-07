@@ -16,7 +16,11 @@ from seine.imager.efibootguard import (
     EBG_CHAINLOAD_KERNEL,
     BGENV_FILENAME,
 )
-from seine.imager.bootloader import GrubBootloader, SystemdBootBootloader
+from seine.imager.bootloader import (
+    GrubBootloader,
+    RunwayBootloader,
+    SystemdBootBootloader,
+)
 from seine.imager.gpt import GPT_TYPE_BASIC_DATA
 from seine.imager.imager import Imager
 from seine.partition import PartitionHandler
@@ -300,6 +304,20 @@ class EfiBootGuardImager(avocado.Test):
             "partitionHandler": type("PH", (), {"watchdog": None})(),
         })()
         bootloader = SystemdBootBootloader("/dev/sda", arch="amd64")
+        g = MockGuestfs()
+        imager._install_efibootguard(g, bootloader, "/efi")
+        self.assertEqual(g.calls, [])
+
+    def test_install_efibootguard_noop_when_runway_used(self):
+        imager = Imager.__new__(Imager)
+        imager.source = type("Source", (), {
+            "spec": {"distribution": {"architecture": "amd64"}},
+            "partitionHandler": type("PH", (), {
+                "watchdog": 30,
+                "uses_runway": lambda *args: True,
+            })(),
+        })()
+        bootloader = RunwayBootloader("/dev/sda", arch="amd64")
         g = MockGuestfs()
         imager._install_efibootguard(g, bootloader, "/efi")
         self.assertEqual(g.calls, [])
