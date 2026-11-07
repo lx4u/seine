@@ -494,6 +494,24 @@ with the new key.
   from the future is refused), that the watchdog resets a hung boot, and
   that the ESP is big enough for three UKIs.
 
+## Transactional ESP with Runway
+
+Standard FAT has no atomicity on writes or renames and cannot host OSTree
+deployments directly. Runway provides a crash-safe transactional filesystem
+and boot manager (`RUNWAY.EFI`) with dual superblocks, CRC32C validation,
+and atomic slot publication.
+
+`examples/common/runway.yaml` provides the recipe to build Debian packages
+from source:
+* `runway-tools`: `rwyctl`, `fsck.runway`, `mkstore`, `RUNWAY.EFI`,
+  `rwy-loader.efi`, and watchdog drivers
+* `runway-fuse`: FUSE filesystem driver (`rwy-fuse`) and `boot.mount`
+* `runway-bls`: Boot Loader Specification integration for systemd-boot
+
+The recipe builds for the target architecture. It also lists `runway-tools`
+in `imager: packages:`, so the imager tools container has `mkstore` and
+`rwyctl`.
+
 ## Requirements
 
 The root file system needs `dracut`, `ostree` and `ostree-boot`, and no

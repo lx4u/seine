@@ -1,0 +1,19 @@
+# seine - Slim Embedded Images Now Easy
+# SPDX-License-Identifier: Apache-2.0
+
+# Runway: transactional ESP filesystem and boot manager (docs/ostree.md).
+# Builds binary packages (runway-tools, runway-fuse, runway-bls) for the
+# target. The imager tools container installs runway-tools, which holds
+# the mkstore and rwyctl it runs.
+# Signed with the shared custom-packages key by default.
+requires:
+    - custom-packages
+
+packages:
+    - source: git://github.com/lx4u/runway.git;protocol=https;branch=main;rev=cab5beff5745a87dfbd3facc6fa576daac21c463
+      profiles:
+          - nocheck
+
+imager:
+    packages:
+        - runway-tools
