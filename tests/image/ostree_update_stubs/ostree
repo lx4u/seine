@@ -25,8 +25,12 @@ case "$1 $2" in
     done < "$d/order"
     ;;
 "admin deploy")
-    k=0; while [ -e "$root/$3.$k" ]; do k=$((k + 1)); done
-    new=$3.$k
+    c=$3
+    if [ "${c#--os=}" != "$c" ]; then
+        c=$4
+    fi
+    k=0; while [ -e "$root/$c.$k" ]; do k=$((k + 1)); done
+    new=$c.$k
     mkdir -p "$root/$new"; : > "$root/$new.origin"
     { echo "$new"
       while read -r n; do

@@ -422,7 +422,7 @@ if [[ -z $d ]]; then
         drop_file "$x"
         drop_file "$x.origin"
     done
-    "$OSTREE" admin deploy "$c" || fail "cannot deploy $c"
+    "$OSTREE" admin deploy --os="$STATEROOT" "$c" || fail "cannot deploy $c"
     failpoint after-deploy
     d=$(status_rows | awk -v c="$c" '$2 ~ ("^" c "\\.") { print $2; exit }')
 fi
