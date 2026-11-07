@@ -20,6 +20,8 @@ NOLINK_FSTYPES = {"vfat", "msdos", "fat", "fat32"}
 # a '/' or '/usr' mount (the only types DPS gives an auto-discovered GUID).
 VERITY_HASH_TYPE = "verity-hash"
 
+GPT_TYPE_XBOOTLDR = "BC13C2FF-59E6-4262-A352-B275FD6F7172"
+
 OSTREE_MODES = ("disabled", "standard", "composefs")
 
 # These live in the commit as symlinks into /var (or, for composefs,

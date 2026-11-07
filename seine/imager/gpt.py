@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from seine.imager.appliance import DEVICE
-from seine.partition import VERITY_HASH_TYPE
+from seine.partition import GPT_TYPE_XBOOTLDR, VERITY_HASH_TYPE
 
 # GPT partition type GUIDs.
 GPT_TYPE_ESP = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B"
 GPT_TYPE_LVM = "E6D6D379-F507-44C2-A23C-238F2A3DF928"
-GPT_TYPE_XBOOTLDR = "BC13C2FF-59E6-4262-A352-B275FD6F7172"
 GPT_TYPE_BASIC_DATA = "EBD0A0A2-B9E5-4433-87C0-68B6B72699C7"
 
 # DPS: root and '/usr' GUIDs are arch-specific (auto-discovery must not
