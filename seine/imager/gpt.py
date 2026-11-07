@@ -93,7 +93,7 @@ class GptLayout:
                 g.part_set_gpt_type(DEVICE, index, GPT_TYPE_ESP)
             elif "lvm" in flags:
                 g.part_set_gpt_type(DEVICE, index, GPT_TYPE_LVM)
-            elif "xbootldr" in flags:
+            elif "xbootldr" in flags or part.get("type") == "runway":
                 g.part_set_gpt_type(DEVICE, index, GPT_TYPE_XBOOTLDR)
             elif "bgenv" in flags or part.get("label", "").lower().startswith("bgenv"):
                 g.part_set_gpt_type(DEVICE, index, GPT_TYPE_BASIC_DATA)
@@ -137,7 +137,7 @@ class GptLayout:
             part_index[id(part)] = index
             if part["_lvm"]:
                 g.pvcreate(dev)
-            elif part["type"] != VERITY_HASH_TYPE:
+            elif part["type"] not in (VERITY_HASH_TYPE, "runway"):
                 self._mkfs(g, part, dev)
             index = index + 1
         return part_devices, part_index, hash_part_for

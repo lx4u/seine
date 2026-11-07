@@ -157,6 +157,41 @@ class BootAndXbootldrRequireVfat(avocado.Test):
             """ % flag)
             build.parse()
 
+    def test_xbootldr_accepts_runway_type(self):
+        build = BuildCmd()
+        build.loads("""
+            image:
+                filename: simple-test.img
+                table: gpt
+                partitions:
+                    - label: store
+                      type: runway
+                      size: 64MiB
+                      flags: [xbootldr]
+                    - label: rootfs
+                      where: /
+        """)
+        build.parse()
+
+    def test_runway_type_without_size_is_refused(self):
+        try:
+            build = BuildCmd()
+            build.loads("""
+                image:
+                    filename: simple-test.img
+                    table: gpt
+                    partitions:
+                        - label: store
+                          type: runway
+                          flags: [xbootldr]
+                        - label: rootfs
+                          where: /
+            """)
+            build.parse()
+            self.fail("unmounted runway partition without size should have been refused")
+        except ValueError as e:
+            self.assertIn("'size' of unmounted partition 'store' was not defined", str(e))
+
 class RoFsOnGptTableIsAccepted(avocado.Test):
     def test(self):
         try:
@@ -593,6 +628,113 @@ class OstreeSpecification(avocado.Test):
         ph = PartitionHandler()
         ph.parse(ostree_spec())
         self.assertEqual(ph.ostree["mode"], "standard")
+
+    def test_bootloader_runway_is_accepted(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["bootloader"] = "runway"
+        ph = PartitionHandler()
+        ph.parse(spec)
+        self.assertEqual(ph.ostree["bootloader"], "runway")
+        xbootldrs = [p for p in ph.partitions if ph.is_xbootldr(p)]
+        self.assertEqual(len(xbootldrs), 1)
+        self.assertEqual(xbootldrs[0]["label"], "RUNWAY")
+        self.assertEqual(xbootldrs[0]["type"], "runway")
+        self.assertEqual(xbootldrs[0]["_size"], 256 * 1024 * 1024)
+
+    def test_bootloader_runway_accepts_declared_xbootldr(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["bootloader"] = "runway"
+        spec["image"]["partitions"].append({
+            "label": "custom-store",
+            "flags": ["xbootldr"],
+            "type": "runway",
+            "size": "128MiB",
+        })
+        ph = PartitionHandler()
+        ph.parse(spec)
+        xbootldrs = [p for p in ph.partitions if ph.is_xbootldr(p)]
+        self.assertEqual(len(xbootldrs), 1)
+        self.assertEqual(xbootldrs[0]["label"], "custom-store")
+        self.assertEqual(xbootldrs[0]["_size"], 128 * 1024 * 1024)
+
+    def test_bootloader_runway_requires_esp(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["bootloader"] = "runway"
+        spec["image"]["partitions"] = [
+            p for p in spec["image"]["partitions"] if p.get("where") != "/efi"
+        ]
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("requires an EFI system partition mounted at /efi", str(cm.exception))
+
+    def test_bootloader_runway_refuses_where_boot(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["bootloader"] = "runway"
+        spec["image"]["partitions"].append({
+            "label": "boot",
+            "where": "/boot",
+            "type": "ext4",
+            "size": "128MiB",
+        })
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("'/boot' is managed by Runway and must not be declared as a mounted partition", str(cm.exception))
+
+    def test_bootloader_runway_refuses_small_store(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["bootloader"] = "runway"
+        spec["image"]["partitions"].append({
+            "label": "store",
+            "flags": ["xbootldr"],
+            "type": "runway",
+            "size": "32MiB",
+        })
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("size is too small (minimum 64MiB)", str(cm.exception))
+
+    def test_bootloader_runway_refuses_a_vfat_store(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["bootloader"] = "runway"
+        spec["image"]["partitions"].append({
+            "label": "store",
+            "flags": ["xbootldr"],
+            "type": "vfat",
+            "size": "128MiB",
+        })
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("needs type 'runway'", str(cm.exception))
+
+    def test_bootloader_runway_refuses_mounted_store(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["bootloader"] = "runway"
+        spec["image"]["partitions"].append({
+            "label": "store",
+            "flags": ["xbootldr"],
+            "type": "runway",
+            "where": "/store",
+            "size": "128MiB",
+        })
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("is never mounted", str(cm.exception))
+
+    def test_bootloader_runway_with_watchdog_does_not_create_bgenv(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["bootloader"] = "runway"
+        spec["image"]["watchdog"] = "30s"
+        ph = PartitionHandler()
+        ph.parse(spec)
+        bgenvs = [p for p in ph.partitions if ph._is_bgenv(p)]
+        self.assertEqual(len(bgenvs), 0)
+
+    def test_bootloader_unknown_is_refused(self):
+        spec = ostree_spec()
+        spec["image"]["ostree"]["bootloader"] = "invalid"
+        with self.assertRaises(ValueError) as cm:
+            PartitionHandler().parse(spec)
+        self.assertIn("is not one of: runway", str(cm.exception))
 
     def test_disabled_is_the_default_and_checks_nothing(self):
         ph = PartitionHandler()

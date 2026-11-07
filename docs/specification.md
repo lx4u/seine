@@ -1804,6 +1804,7 @@ layout.
 | Attribute | Required | Description                                          |
 | --------- |:--------:| ----------------------------------------------------- |
 | mode      | no       | `disabled` (default), `standard` or `composefs`      |
+| bootloader | no      | `runway`: boot from a [Runway](ostree.md#transactional-esp-with-runway) store, otherwise the boot loader is detected from the root file system |
 | stateroot | no       | OSTree stateroot, defaults to the `multiconfig:` group name, else `debian` |
 | ref       | no       | Commit ref, defaults to `<stateroot>/<arch>`         |
 | gpg-key   | no       | `vault:<name>`: signs the commit with this vault pgp key, unsigned if unset |
@@ -1811,7 +1812,7 @@ layout.
 | version   | no       | Image version, a quoted string such as `"23"`: a digit first, then letters, digits, `.` or `_`, at most 64 characters. Needs `mode: standard` or `mode: composefs`, one stateroot, `gpg-key` and `manifest-key`. Not allowed in `sources:` |
 | manifest-key | no     | `vault:<name>`: signs the list of UKIs (`SHA256SUMS`) of the update payload. Needed with `version`. Not allowed in `sources:` |
 | payload   | no       | With `version`: `path` of the update payload directory, and `deltas-from`, the versions that get a static delta to this one (strings, lower than `version`). Not allowed in `sources:` |
-| sources   | no       | Per `multiconfig:` group overrides of `mode`, `stateroot`, `ref`, `gpg-key` and `composefs-key` |
+| sources   | no       | Per `multiconfig:` group overrides of `mode`, `bootloader`, `stateroot`, `ref`, `gpg-key` and `composefs-key` |
 
 When `mode` is not `disabled`, the build is refused unless:
 
@@ -1820,6 +1821,10 @@ When `mode` is not `disabled`, the build is refused unless:
  * with `composefs`, the root file system has `prepare-root.conf` with
    `[composefs] enabled = yes`, `verity` or `signed` in its initramfs (see [OSTree sysroots](ostree.md#composefs));
  * the partition `table` is `gpt`;
+ * with `bootloader: runway`, the image has an EFI system partition mounted
+   at `/efi` and a Runway store partition (`type: runway`, optionally with
+   `flags: [xbootldr]`, at least 64MiB, auto-created when omitted); `/boot` must not be declared
+   as a mounted partition;
  * each rooted source has an `ext4` `/` partition (the physical sysroot)
    and a `/var` partition, as OSTree keeps state there;
  * nothing is mounted at `/home`, `/srv`, `/root`, `/mnt`, `/opt` or

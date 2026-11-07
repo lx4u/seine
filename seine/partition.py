@@ -113,7 +113,8 @@ class PartitionHandler:
                     "never mounted -- drop its 'where'")
             if f == "lvm":
                 part["_lvm"] = True
-            if f in ("boot", "xbootldr") and part["type"] != "vfat":
+            runway_store = f == "xbootldr" and part["type"] == "runway"
+            if f in ("boot", "xbootldr") and part["type"] != "vfat" and not runway_store:
                 raise ValueError(
                     "partition '%s' has flag '%s', which UEFI firmware can "
                     "only read from a 'vfat' partition (this one is '%s')"
@@ -189,6 +190,11 @@ class PartitionHandler:
             part["type"] = "ext4"
 
         return part
+
+    def is_xbootldr(self, part):
+        return ("xbootldr" in part.get("flags", [])
+                or part.get("type") == "runway"
+                or part.get("type-guid", "").upper() == GPT_TYPE_XBOOTLDR)
 
     def _is_bgenv(self, part):
         if "bgenv" in part.get("flags", []):
@@ -282,8 +288,14 @@ class PartitionHandler:
                 f"partition '{label}' is an EFI Boot Guard config partition, "
                 "which is never mounted -- drop its 'where'")
 
+        if "where" in part and part.get("type") == "runway":
+            raise ValueError(
+                f"partition '{label}' is a Runway store partition, "
+                "which is never mounted -- drop its 'where'")
+
         if "where" not in part and part["_lvm"] == False and not is_verity_hash:
-            if "type-guid" in part or self._is_bgenv(part):
+            if ("type-guid" in part or self._is_bgenv(part)
+                    or self.is_xbootldr(part)):
                 if "size" not in part:
                     raise ValueError(
                         f"'size' of unmounted partition '{label}' was not defined")
@@ -660,7 +672,8 @@ class PartitionHandler:
     def _parse_ostree_settings(self, where, settings):
         if type(settings) != type({}):
             raise ValueError("'%s' shall be a mapping" % where)
-        allowed = ("mode", "stateroot", "ref", "gpg-key", "composefs-key")
+        allowed = ("mode", "stateroot", "ref", "gpg-key", "composefs-key",
+                   "bootloader")
         if where == "image: ostree":
             allowed += ("sources", "version", "manifest-key", "payload")
         for key in settings:
@@ -671,6 +684,10 @@ class PartitionHandler:
             raise ValueError(
                 "'%s: mode: %s' is not one of: %s"
                 % (where, mode, ", ".join(OSTREE_MODES)))
+        bootloader = settings.get("bootloader")
+        if bootloader is not None and bootloader != "runway":
+            raise ValueError(
+                "'%s: bootloader: %s' is not one of: runway" % (where, bootloader))
         for key in ("stateroot", "ref"):
             if key not in settings:
                 continue
@@ -748,6 +765,10 @@ class PartitionHandler:
             sources.setdefault(mount.get("source"), []).append(mount)
         return {name: mounts for name, mounts in sources.items()
                 if any(m["_prefix"] == "/" for m in mounts)}
+
+    def uses_runway(self):
+        return any(self.ostree_for(name).get("bootloader") == "runway"
+                   for name in self.rooted_sources())
 
     # With ostree on, each rooted source gets a physical sysroot ('/')
     # and a persistent '/var'; the commit itself holds no partition.
@@ -855,6 +876,41 @@ class PartitionHandler:
                     "'image: ostree' needs a '/var' partition or volume "
                     "for %s" % who)
 
+        if self.uses_runway():
+            for name in rooted:
+                settings = self.ostree_for(name)
+                if settings.get("bootloader") == "runway" and settings.get("mode") == "disabled":
+                    raise ValueError(
+                        "'bootloader: runway' needs 'mode: standard' or 'mode: composefs'")
+            has_esp = any(
+                p.get("where", "").rstrip("/") == "/efi" and p.get("type") == "vfat"
+                for p in self.partitions
+            )
+            if not has_esp:
+                raise ValueError(
+                    "'bootloader: runway' requires an EFI system partition mounted at /efi")
+            for part in self.partitions:
+                if part.get("where", "").rstrip("/") == "/boot":
+                    raise ValueError(
+                        "with 'bootloader: runway', '/boot' is managed by Runway and must not be declared as a mounted partition")
+            xbootldrs = [p for p in self.partitions if self.is_xbootldr(p)]
+            if not xbootldrs:
+                self._auto_create_xbootldr(spec.get("image", {}))
+                xbootldrs = [p for p in self.partitions if self.is_xbootldr(p)]
+            if len(xbootldrs) > 1:
+                raise ValueError(
+                    "image needs at most one XBOOTLDR partition for Runway")
+            for part in xbootldrs:
+                if "where" in part:
+                    raise ValueError(
+                        f"Runway XBOOTLDR partition '{part['label']}' is not mounted via fstab -- drop its 'where'")
+                if part["_size"] < 64 * 1024 * 1024:
+                    raise ValueError(
+                        f"Runway store partition '{part['label']}' size is too small (minimum 64MiB)")
+                if part.get("type") != "runway":
+                    raise ValueError(
+                        f"Runway store partition '{part['label']}' needs type 'runway'")
+
     # Each 'multiconfig:' group a mount's 'source:' names needs exactly
     # one root ('where: "/"') -- groups are side-by-side OSes, not
     # partitions of one, so zero or several roots is an error.
@@ -928,6 +984,17 @@ class PartitionHandler:
                 "'verity-hash' partition names them in 'verity-for:': %s"
                 % ", ".join(sorted(missing)))
 
+    def _auto_create_xbootldr(self, image):
+        cfg_part = {
+            "label": "RUNWAY",
+            "type": "runway",
+            "size": "256MiB",
+            "flags": ["xbootldr"],
+        }
+        parsed_cfg = self._parse_part(cfg_part)
+        self.partitions.append(parsed_cfg)
+        image["partitions"] = sorted(self.partitions, key=lambda p: p["priority"])
+
     def _auto_create_bgenv(self, image):
         for label in ("BGENV1", "BGENV2"):
             cfg_part = {
@@ -942,6 +1009,13 @@ class PartitionHandler:
         image["partitions"] = sorted(self.partitions, key=lambda p: p["priority"])
 
     def _validate_watchdog(self, spec, image):
+        if self.uses_runway():
+            bgenv_partitions = [p for p in self.partitions if self._is_bgenv(p)]
+            if bgenv_partitions:
+                raise ValueError(
+                    "EFI Boot Guard config partitions cannot be used with Runway bootloader")
+            return
+
         bgenv_partitions = [p for p in self.partitions if self._is_bgenv(p)]
         if self.watchdog and self.watchdog > 0:
             has_esp = any(
