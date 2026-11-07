@@ -31,6 +31,53 @@ image:
         bootloader: runway
 """
 
+RUNWAY_WATCHDOG_SPEC = f"""
+requires:
+    - stdlib:debian/forky.yml
+    - {RUNWAY_SPEC_STEM}
+
+image:
+    watchdog: 30s
+    ostree:
+        bootloader: runway
+"""
+
+RUNWAY_FREEZE_SPEC = RUNWAY_WATCHDOG_SPEC + """
+playbook:
+    - name: freeze early boot
+      wave: initramfs
+      tasks:
+          - name: make the directory of the dracut module
+            file:
+                path: /usr/lib/dracut/modules.d/99seine-freeze
+                state: directory
+          - name: add a dracut module that freezes the boot
+            copy:
+                dest: "{{ item.dest }}"
+                mode: "{{ item.mode }}"
+                content: "{{ item.content }}"
+            loop:
+                - dest: /usr/lib/dracut/modules.d/99seine-freeze/module-setup.sh
+                  mode: "0755"
+                  content: |
+                      #!/bin/bash
+                      check() { return 0; }
+                      depends() { return 0; }
+                      install() { inst_hook pre-udev 99 "$moddir/freeze.sh"; }
+                - dest: /usr/lib/dracut/modules.d/99seine-freeze/freeze.sh
+                  mode: "0755"
+                  content: |
+                      #!/bin/sh
+                      while true; do
+                          echo "seine-test: FREEZING EARLY BOOT FOR WATCHDOG" > /dev/console
+                          sleep 1 2>/dev/null || true
+                      done
+                - dest: /etc/dracut.conf.d/90-seine-freeze.conf
+                  mode: "0644"
+                  content: |
+                      add_dracutmodules+=" seine-freeze "
+"""
+
 FAILPOINTS = (
     ("after-link", "update", "1", "ok"),
     ("after-uki", "update", "2", "nothing"),
@@ -93,6 +140,15 @@ image:
             "",
         )
         self.assertIn("ESP=/boot/EFI/Linux", agent_conf)
+
+    def test_runway_spec_with_watchdog_parses_timeout(self):
+        build = BuildCmd()
+        peer = os.path.join(self.workdir, "runway-watchdog.yml")
+        with open(peer, "w") as f:
+            f.write(RUNWAY_WATCHDOG_SPEC)
+        build.load_all([EXAMPLE, peer])
+        build.parse()
+        self.assertEqual(build.image.partitionHandler.watchdog, 30)
 
 
 # Verifies transactional Copy-on-Write and fault injection atomicity.
@@ -234,3 +290,57 @@ class RunwayQemuBootAndPowerCut(UpdateGuest, avocado.Test):
     def test_power_cut_at_failpoints(self):
         for point, kind, booted_version, expected_result in FAILPOINTS:
             self.run_failpoint(point, kind, booted_version, expected_result)
+
+
+# Verifies that an early boot hang causes the Runway watchdog driver
+# to expire and reset the machine, causing Runway to decrement tries
+# and fall back to the last-known-good version.
+class RunwayUpdateWatchdogReset(UpdateGuest, avocado.Test):
+    """
+    :avocado: tags=full,container
+    """
+    timeout = 7200
+    watchdog = True
+
+    def setUp(self):
+        super().setUp()
+        self.esp_dir = "/boot/EFI/Linux"
+        self.disk_1 = self.build("1", extra=RUNWAY_WATCHDOG_SPEC)
+        os.remove(self.build("2", extra=RUNWAY_FREEZE_SPEC))
+
+    def test_runway_watchdog_resets_on_early_boot_hang_and_falls_back(self):
+        self.start(self.disk_1)
+        self.assertEqual(self.booted_version(), "1")
+        self.wait_for_network()
+
+        # Update to version 2 (staged, waiting for reboot)
+        res = self.update()
+        self.assertEqual((res.get("result"), res.get("version")), ("ok", "2"))
+
+        # Reboot into the trial UKI
+        self.guest.send("systemctl reboot\n")
+        self.guest.expect(r"reboot: Restarting system", 150)
+
+        # Each try arms the watchdog, freezes in early boot, and resets
+        for _ in range(3):
+            self.guest.expect("RUNWAY: WATCHDOG 30s armed by I6300ESB.EFI", timeout=120)
+            self.guest.expect("seine-test: FREEZING EARLY BOOT FOR WATCHDOG", timeout=120)
+
+        # After tries are exhausted, Runway skips failed CONFIG2 and boots CONFIG1
+        self.guest.expect("RUNWAY: CONFIG2 FAILED, skipped", timeout=120)
+        self.guest.expect("RUNWAY: booting CONFIG1", timeout=120)
+
+        # System falls back and boots version 1
+        self.login(timeout=180)
+        self.assertEqual(self.booted_version(), "1")
+
+        # Reconcile cleans up the failed update
+        self.sh(f"{AGENT} reconcile")
+        self.assert_invariants()
+        self.assertEqual(self.esp(), ["debian-1.efi"])
+        self.sh("awk '$1 == 2 { found = 1 } END { exit !found }' /var/lib/seine-update/failed")
+
+        # Further updates to version 2 are denied
+        res = self.update()
+        self.assertEqual(res.get("result"), "nothing")
+        self.assertIn("denied", res.get("message", ""))

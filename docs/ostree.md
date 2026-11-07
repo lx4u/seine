@@ -568,6 +568,15 @@ confirmation all-or-nothing:
 `rwyctl status --json` and `rwyctl slots --json` export store health, the active
 slot and the slot states as JSON for monitoring and scripts.
 
+When `image: watchdog` is enabled with Runway, Runway arms the hardware
+watchdog using its standalone UEFI drivers (such as `I6300ESB.EFI` on PC
+targets) before jumping to the UKI. If an updated UKI freezes during early
+boot, the watchdog timer expires and resets the system. Runway decrements
+the slot try counter on each reset until tries are exhausted, then marks
+the slot failed and falls back to the last-known-good version.
+`tests/image/ostree_update_runway.py` verifies this reset and rollback
+under QEMU with an emulated watchdog.
+
 ## Requirements
 
 The root file system needs `dracut`, `ostree` and `ostree-boot`, and no
