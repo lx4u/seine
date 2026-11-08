@@ -308,9 +308,6 @@ class SbuildChroot:
 
 BUILDER_IMAGE_SCRIPT = """
 FROM {0}
-RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.sources \
-           /etc/apt/sources.list.d/*.list && \
-    {3}
 RUN{8} --mount=type=cache,target=/var/cache/apt/archives,id={4},sharing=locked \
      apt-get update -qqy{9} &&                       \
      apt-get install -qqy{9} --no-install-recommends \
@@ -318,6 +315,9 @@ RUN{8} --mount=type=cache,target=/var/cache/apt/archives,id={4},sharing=locked \
          dpkg-dev devscripts quilt git            \
          ca-certificates curl iproute2 openssh-client \
          debhelper python3-jinja2 python3-dacite kernel-wedge
+RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/*.sources \
+           /etc/apt/sources.list.d/*.list && \
+    {3}
 # openssh-client: git needs it for a ';protocol=ssh' source (only a
 # Recommends of git, not installed above). The last four are for kernel
 # rebuilds -- jinja2/kernel-wedge/dh_listpackages back the kernel's own
