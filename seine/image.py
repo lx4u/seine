@@ -277,12 +277,14 @@ class Image:
             self._tarball = self._rootfs
             return
 
+        has_packages = len(self.spec.get("playbook", [])) > 0 and packages.has_packages(distro)
         runner = AnsibleContainerRunner(
             self._from, distro, self.options, verbose=self._verbose,
             vendor_digest=vendor_digest,
             epoch=self._epoch(), host_image=self.hostBootstrap.name,
             locales=self._locales_override(),
-            install_recommends=self._install_recommends())
+            install_recommends=self._install_recommends(),
+            has_packages=has_packages)
         self._cid = runner.run(self.spec["playbook"])
         self._export(digest, recipe=self._rootfs_recipe(vendor_digest))
         self._tarball = self._rootfs
@@ -293,8 +295,9 @@ class Image:
         distro = self.spec["distribution"]
         base = ContainerEngine.imageLabel(self._from, INPUTS_LABEL) \
                or ContainerEngine.imageId(self._from) or ""
+        has_playbook = len(self.spec.get("playbook", [])) > 0
         index = os.path.join(packages.repository(distro), "Packages")
-        built = utils.file_digest(index) if os.path.isfile(index) else ""
+        built = utils.file_digest(index) if (has_playbook and os.path.isfile(index)) else ""
         spec = {key: value for key, value in self.spec.items()
                 if key not in DISK_ONLY}
         recipe = [
@@ -469,6 +472,8 @@ class Image:
              tarfile.open(fixed.name, "w", format=src.format) as dst:
             for member in src.getmembers():
                 if member.isreg() and member.name.removeprefix("./") == "etc/resolv.conf":
+                    continue
+                if member.isdir() and member.name.removeprefix("./") == "packages":
                     continue
                 if member.mtime >= self._started:
                     member.mtime = epoch

@@ -49,6 +49,14 @@ class CleanTarball(avocado.Test):
             tar, "etc/resolv.conf", "../run/systemd/resolve/stub-resolv.conf"))
         self.assertEqual(list(members), ["etc/resolv.conf"])
 
+    def test_a_packages_mountpoint_directory_is_dropped(self):
+        for name in ["packages", "./packages"]:
+            info = tarfile.TarInfo(name)
+            info.type = tarfile.DIRTYPE
+            members = self.clean(lambda tar: (tar.addfile(info),
+                                              add_file(tar, "etc/hostname")))
+            self.assertEqual(list(members), ["etc/hostname"], name)
+
     def test_other_members_are_kept_and_recent_ones_get_the_epoch(self):
         recent = int(time.time()) + 60
         members = self.clean(lambda tar: (add_file(tar, "etc/resolv.conf.bak"),

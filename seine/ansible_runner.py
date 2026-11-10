@@ -59,7 +59,8 @@ class AnsibleContainerRunner:
     # locales is 'overrides: locales:', defaulting to English alone.
     # install_recommends is 'defaults: apt: install_recommends:'.
     def __init__(self, baseline, distro, options, verbose=False, vendor_digest=None,
-                epoch=None, host_image=None, locales=None, install_recommends=True):
+                epoch=None, host_image=None, locales=None, install_recommends=True,
+                has_packages=None):
         self.baseline = baseline
         self.distro = distro
         self.options = options
@@ -74,6 +75,8 @@ class AnsibleContainerRunner:
         # a bind mount, never as filesystem content, so it never reaches
         # the shipped image (see run()).
         self._netrc_path = None
+        self._has_packages = (has_packages if has_packages is not None
+                              else packages.has_packages(distro))
 
     def _exec(self, args, check=True):
         return ContainerEngine.run(["container", "exec", self.cid] + args, check=check)
@@ -95,7 +98,7 @@ class AnsibleContainerRunner:
                 os.path.dirname(self._netrc_path), os.path.dirname(NETRC_MOUNT))]
         # Packages rebuilt from the spec's 'packages' section (if any), so
         # playbooks can install them via a plain apt task.
-        if packages.has_packages(self.distro):
+        if self._has_packages:
             volumes += ["-v", "%s:%s" % (packages.repository(self.distro),
                                          packages.REPOSITORY)]
         # 'vendor:'s delivered repository for this release, read-only:
@@ -186,7 +189,7 @@ class AnsibleContainerRunner:
                 # cache dirs) back to a fixed epoch.
                 self._exec(["touch", "/.ansible-marker"])
                 self._exec(["sh", "-c", f"printf '{HOSTS_FILE}' > /etc/hosts; chmod 0644 /etc/hosts"])
-                if packages.has_packages(self.distro):
+                if self._has_packages:
                     self._exec(["sh", "-c", packages.apt_configuration(
                         packages.REPOSITORY,
                         keyring=packages.keyring(self.distro))])
@@ -279,7 +282,7 @@ class AnsibleContainerRunner:
         # The 'apt' action plugin's own container only bind-mounts the
         # target root file-system, not this repository -- without it, a
         # 'file:/packages' source there would find nothing.
-        if packages.has_packages(self.distro):
+        if self._has_packages:
             env["SEINE_APT_PACKAGES_DIR"] = packages.repository(self.distro)
 
         try:
