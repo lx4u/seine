@@ -1,3 +1,40 @@
+seine (0.6-1) unstable; urgency=medium
+
+  * Add Runway bootloader support for OSTree images, booting from a
+    dedicated store partition with RUNWAY.EFI rather than UKIs on
+    the ESP, and add the 'imager: packages:' setting for build-time
+    appliance tools. Test boot, power-cut resilience, hardware
+    watchdog resets and automatic rollback under QEMU.
+  * Add Composefs OSTree mode with a read-only root overlay, optional
+    fsverity ('enabled = verity') and ed25519 commit signature checks
+    ('enabled = signed') backed by Vault keys, and allow updating
+    composefs deployments in a private mount namespace.
+  * Add the Debian forky release, guarantee byte-identical rootfs
+    tarballs across builds, plan and copy hardlinks crossing separate
+    mounts, and use the appliance tar over 9p during extraction.
+  * Add branches to distributed builds, cumulative per-branch OSTree
+    history in storage with atomic tip updates, and publish update
+    payloads alongside disk images to an updates bucket. Add the
+    '--payload-only' build option to skip raw disk synthesis.
+  * Add an updates and lifecycle screen to the TUI (/updates) with
+    release lineage, live target deployment badges, and interactive
+    delta compression matrices with on-demand generation. Add a dev
+    HTTP payload server (/serve) and a /target reset command.
+  * Add the /overlay command with prompt autocompletion, context-aware
+    target console prompts, tree inspection of payloads in artifacts,
+    granular progress milestones during deployment, and optimize the
+    overview screen layout for wide terminals.
+  * Support debian-only quilt patches, authenticated updates with TPM
+    emulation, and multi-version lifecycle examples with static deltas.
+  * Refactor the TUI application and renderers into dedicated screen
+    and domain modules.
+  * Fix installing sbuild packages before spec snapshot sources,
+    unneeded package repository mounts for images without playbooks,
+    open SQLite connections from ended threads in the server, target
+    console scrolling and newline mode, and update OpenBao plugins.
+
+ -- Cedric Hombourger <chombourger@gmail.com>  Tue, 10 Nov 2026 06:15:00 +0100
+
 seine (0.5-1) unstable; urgency=medium
 
   * Add OSTree image modes: commit and deploy a sysroot from the
